@@ -14,13 +14,32 @@ installation, no backend, no Python environment, and no build step.
 
 ![Demo](demo/demo.gif)
 
-> **Project Lead:** Prof Rino Lovreglio, PhD — Massey University
->
 > **Disclaimer:** No responsibility is taken for the use or output of this tool.
 > All results must be independently verified by a qualified fire safety engineer
 > before use in any design or regulatory context.
 
 ---
+
+## Project team
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/ProfRino">
+        <img src="https://github.com/ProfRino.png?size=100" width="100" alt="Prof Rino Lovreglio"><br>
+        <strong>Prof Rino Lovreglio</strong>
+      </a><br>
+      Project lead and developer
+    </td>
+    <td align="center">
+      <a href="https://github.com/resilienceengineer">
+        <img src="https://github.com/resilienceengineer.png?size=100" width="100" alt="resilienceengineer"><br>
+        <strong>resilienceengineer</strong>
+      </a><br>
+      Project collaborator
+    </td>
+  </tr>
+</table>
 
 ## Features
 
