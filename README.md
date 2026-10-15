@@ -113,22 +113,67 @@ model.
 
 ### C. Local web server
 
-Serving the folder over loopback enables the parallel worker path and is the
-recommended way to run on big IFCs:
+### C. Local web server with Verified IfcOpenShell backend (Recommended)
+
+Serving the folder with the verified Python backend provides authoritative OpenCASCADE BRep booleans, MEP graph extraction, and 3-tier independent validation:
 
 ```powershell
-python -m http.server 8765
+pip install -e .
+python -m ifc_to_fds serve --port 8000
 ```
 
-Then open `http://127.0.0.1:8765/index.html`.
+Then open `http://127.0.0.1:8000/index.html`. The web interface will automatically detect the backend and enable **Verified Conversion (Audit)**.
 
-### D. Convert from the command line
+### D. Verified CLI batch conversion and auditing
 
-The conversion pipeline also runs under Node — handy for batch jobs or CI:
+Run authoritative conversions directly from the command line:
+
+```powershell
+# 1. Complete element inventory check
+ifc_to_fds inventory examples/AC20-FZK-Haus.ifc
+
+# 2. Authoritative conversion with 3-tier validation audit
+ifc_to_fds convert examples/AC20-FZK-Haus.ifc -o out/fzk.fds --cell-size 0.2
+
+# 3. Storey-scoped conversion
+ifc_to_fds convert examples/AC20-FZK-Haus.ifc -o out/erdg.fds --storey Erdgeschoss
+```
+
+Outputs produced:
+- `.fds` simulation namelist with inlined `! IFC_SOURCE(...)` provenance
+- `_manifest.json` and `_manifest.csv` bidirectional mapping records
+- `_acceptance_report.md` and `_acceptance_report.json` with `VERIFIED` / `REJECTED` verdict
+
+### E. Convert from Node.js (Legacy client-side engine)
+
+The JavaScript client-side conversion pipeline also runs under Node for quick testing:
 
 ```powershell
 node scripts/test-ifc-conversion.js
 ```
+
+---
+
+## Verified Architecture & Dual-Mode Engine
+
+The repository implements a **dual-mode conversion pipeline**:
+
+1. **Browser Client Workbench (`js/`)**:
+   - Ultra-fast zero-install preview and interactive inspection.
+   - Built-in opening carving and inverse coordinate transformations (`invertTransform()`).
+   - Three view modes, walk-mode camera, and interactive clipping planes.
+2. **Authoritative Python Engine (`ifc_to_fds/`)**:
+   - **Canonical Intermediate Model**: Decoupled Pydantic v2 schemas (`CanonicalElement`, `CanonicalModel`).
+   - **Watertight OpenCASCADE BRep Geometry**: Full boolean subtractions for door/window openings via `IfcOpenShell`.
+   - **MEP & Fire Protection Graph**: Systems classification (`VENTILATION`, `SMOKE_EXTRACT`, `FIRE_SUPPRESSION`) and port topology.
+   - **Spatial Scoping**: Storey and 3D bounding box filtering with vertical connectivity preservation.
+   - **Independent 3-Tier Validation Engine**:
+     - *Tier 1*: IFC source to Canonical inventory completeness & unit scale audit.
+     - *Tier 2*: Canonical to FDS syntax and primitive traceability audit via independent regex parsing.
+     - *Tier 3*: Effective geometry and opening retention audit with 3D IoU verification.
+   - **Strict Acceptance Gating**: Automatic `VERIFIED` vs `REJECTED` verdict based on zero unmitigated P0/P1 defects.
+
+---
 
 ## Bundled examples
 
@@ -145,9 +190,18 @@ exercised end-to-end without any external download. See
 ## Repository layout
 
 ```text
-index.html              Entry page, wires the workbench together
+index.html              Entry page, wires the browser workbench together
 guide.html              Single-column docs page (linked from the ? icon)
 css/                    app.css + guide.css
+docs/                   Audit baseline, verified architecture, and risk register
+ifc_to_fds/             Authoritative Python geometry & validation framework
+  core/                 Canonical model, unit normalization, element inventory
+  geometry/             IfcOpenShell OpenCASCADE engine, mesh manifoldness
+  mep/                  MEP classifier and distribution systems graph
+  mapping/              Spatial scoping, mapping policies, manifests, FDS serializer
+  validation/           Metrics (IoU), strict acceptance gates, 3-tier validation audit
+  cli.py                Command-line interface (convert, inventory, serve)
+  server.py             FastAPI local service and web workbench mount
 js/
   core/                 namespace + diagnostics
   ifc/                  IFC parser + meta builder + display loader
@@ -157,8 +211,9 @@ js/
   vendor/               earcut.min.js
   compare/              Conversion sanity checks
   app-controller.js     UI wiring, conversion orchestration
+tests/                  Automated test suite (pytest)
 examples/               Three open IFC test models
-scripts/                Node test harness + bundle generators
+scripts/                Node & Python test harness + bundle generators
 demo/                   Demo video + sibling reference viewer
 ```
 

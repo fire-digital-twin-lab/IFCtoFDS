@@ -24,7 +24,11 @@
         exportRequestId: 0,
         exportWorker: null,
         exportWorkerUrl: null,
-        helpTrigger: null
+        helpTrigger: null,
+        lastAuditReport: null,
+        lastManifest: null,
+        backendOnline: false,
+        currentIfcFile: null
     };
 
     var els = {};
@@ -48,6 +52,8 @@
         if (window.lucide) window.lucide.createIcons();
         bindEvents();
         clearFdsModel();
+        checkBackendHealth();
+        window.addEventListener('focus', checkBackendHealth);
     });
 
     function cacheElements() {
@@ -91,6 +97,14 @@
         els.openCredits = document.getElementById('open-credits');
         els.creditsModal = document.getElementById('credits-modal');
         els.closeCredits = document.getElementById('close-credits');
+        els.openAudit = document.getElementById('open-audit');
+        els.saveManifest = document.getElementById('save-manifest');
+        els.convertVerified = document.getElementById('convert-verified');
+        els.auditModal = document.getElementById('audit-modal');
+        els.closeAudit = document.getElementById('close-audit');
+        els.auditBody = document.getElementById('audit-body');
+        els.backendStatusIndicator = document.getElementById('backend-status-indicator');
+        els.backendStatusText = document.getElementById('backend-status-text');
         els.ifcLoading = document.getElementById('ifc-loading');
         els.ifcLoadingTitle = document.getElementById('ifc-loading-title');
         els.ifcLoadingPercent = document.getElementById('ifc-loading-percent');
@@ -312,14 +326,23 @@
         if (els.closeCredits) els.closeCredits.addEventListener('click', closeCredits);
         if (els.creditsModal) els.creditsModal.querySelector('[data-close-credits]').addEventListener('click', closeCredits);
 
+        if (els.openAudit) els.openAudit.addEventListener('click', openAudit);
+        if (els.closeAudit) els.closeAudit.addEventListener('click', closeAudit);
+        if (els.auditModal) {
+            var auditBackdrop = els.auditModal.querySelector('[data-close-audit]');
+            if (auditBackdrop) auditBackdrop.addEventListener('click', closeAudit);
+        }
+
         window.addEventListener('keydown', function (event) {
             if (event.key === 'Escape' && !els.helpModal.hidden) closeHelp();
             if (event.key === 'Escape' && els.creditsModal && !els.creditsModal.hidden) closeCredits();
+            if (event.key === 'Escape' && els.auditModal && !els.auditModal.hidden) closeAudit();
         });
 
         els.ifcFile.addEventListener('change', function (event) {
             var file = event.target.files[0];
             if (!file) return;
+            state.currentIfcFile = file;
             cancelPendingExport();
             clearGeneratedFds();
             clearFdsModel();
@@ -396,6 +419,12 @@
         els.convertIfc.addEventListener('click', function () {
             exportIfc('convert');
         });
+
+        if (els.convertVerified) {
+            els.convertVerified.addEventListener('click', function () {
+                exportVerified();
+            });
+        }
 
         els.convertSelectedObst.addEventListener('click', function () {
             var stepIds = selectedGeneratedGeomStepIds(state.selection);
@@ -494,6 +523,14 @@
             if (!state.generatedFdsText || !state.generatedFdsName) return;
             downloadText(state.generatedFdsName, state.generatedFdsText);
         });
+
+        if (els.saveManifest) {
+            els.saveManifest.addEventListener('click', function () {
+                if (!state.lastManifest) return;
+                var base = (state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
+                downloadText(base + '_manifest.json', JSON.stringify(state.lastManifest, null, 2));
+            });
+        }
 
         if (els.saveProcessed) {
             els.saveProcessed.addEventListener('click', function () {
@@ -759,6 +796,9 @@
 
     function refreshConversionActions() {
         els.convertIfc.disabled = state.exportBusy || !state.exportEnabled;
+        if (els.convertVerified) {
+            els.convertVerified.disabled = state.exportBusy || !state.exportEnabled;
+        }
         els.convertSelectedObst.disabled = state.exportBusy || !selectedGeneratedGeomStepIds(state.selection).length;
         if (els.deleteSelected) {
             var split = splitSelectionForDelete(state.selection);
@@ -766,6 +806,12 @@
         }
         if (els.undoLast) {
             els.undoLast.disabled = state.exportBusy || !state.undoStack.length;
+        }
+        if (els.openAudit) {
+            els.openAudit.disabled = !state.lastAuditReport;
+        }
+        if (els.saveManifest) {
+            els.saveManifest.disabled = !state.lastManifest;
         }
     }
 
@@ -798,6 +844,16 @@
         state.exportBusy = !!busy;
         state.exportAction = state.exportBusy ? action : null;
         els.convertIfc.classList.toggle('is-busy', state.exportBusy && action === 'convert');
+        if (els.convertVerified) {
+            els.convertVerified.classList.toggle('is-busy', state.exportBusy && action === 'convert-verified');
+            els.convertVerified.setAttribute('aria-busy', state.exportBusy && action === 'convert-verified' ? 'true' : 'false');
+            var span = els.convertVerified.querySelector('span');
+            if (span) {
+                span.textContent = (state.exportBusy && action === 'convert-verified')
+                    ? 'Verifying...'
+                    : 'Verified Conversion (Audit)';
+            }
+        }
         els.convertSelectedObst.classList.toggle('is-busy', state.exportBusy && action === 'voxelize');
         els.convertIfc.setAttribute('aria-busy', state.exportBusy && action === 'convert' ? 'true' : 'false');
         els.convertSelectedObst.setAttribute('aria-busy', state.exportBusy && action === 'voxelize' ? 'true' : 'false');
@@ -928,7 +984,8 @@
     }
 
     function addExportDiagnostic(message) {
-        if (!state.ifcModel || !state.ifcModel.diagnostics) return;
+        if (!state.ifcModel) state.ifcModel = { diagnostics: [] };
+        if (!state.ifcModel.diagnostics) state.ifcModel.diagnostics = [];
         state.ifcModel.diagnostics.push(
             new ns.core.Diagnostic('error', 'FDS export failed', message)
         );
@@ -951,7 +1008,172 @@
     function clearGeneratedFds() {
         state.generatedFdsText = null;
         state.generatedFdsName = null;
+        state.lastAuditReport = null;
+        state.lastManifest = null;
         if (els.saveFds) els.saveFds.disabled = true;
+        if (els.openAudit) els.openAudit.disabled = true;
+        if (els.saveManifest) els.saveManifest.disabled = true;
+    }
+
+    function exportVerified() {
+        if (state.exportBusy) return;
+        if (!state.ifcSourceText && !state.currentIfcFile) {
+            addExportDiagnostic('IFC source not in memory — please reopen the file.');
+            return;
+        }
+
+        var fileLabel = (state.ifcFileName || (state.ifcModel && state.ifcModel.fileName) || 'IFC model');
+        showLoading('Verified Conversion: ' + fileLabel, 'Processing with IfcOpenShell & OpenCASCADE...');
+        setExportBusy(true, 'convert-verified');
+
+        var formData = new FormData();
+        var blob = state.currentIfcFile || new Blob([state.ifcSourceText], { type: 'text/plain' });
+        formData.append('file', blob, state.ifcFileName || 'model.ifc');
+        formData.append('cell_size', (els.meshCellSize && els.meshCellSize.value) ? els.meshCellSize.value : '0.2');
+        formData.append('all_geom', 'true');
+        var includeReview = (els.includeReviewSolids && els.includeReviewSolids.checked) ? 'true' : 'false';
+        formData.append('include_review', includeReview);
+
+        var apiUrl = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+            ? '/api/convert'
+            : 'http://127.0.0.1:8000/api/convert';
+
+        fetch(apiUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(function (res) {
+            if (!res.ok) {
+                return res.json().then(function (err) {
+                    throw new Error(err.detail || ('HTTP ' + res.status));
+                }).catch(function (fallback) {
+                    throw new Error('HTTP ' + res.status + ': ' + (fallback.message || fallback));
+                });
+            }
+            return res.json();
+        })
+        .then(function (data) {
+            hideLoading();
+            setExportBusy(false);
+            if (!data || !data.fds_text) {
+                throw new Error('Empty response from verified conversion service.');
+            }
+
+            var base = (state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
+            var fileName = base + '_verified.fds';
+
+            state.generatedFdsText = data.fds_text;
+            state.generatedFdsName = fileName;
+            state.lastAuditReport = data.report;
+            state.lastManifest = data.manifest;
+
+            if (els.saveFds) els.saveFds.disabled = false;
+            if (els.openAudit) els.openAudit.disabled = false;
+            if (els.saveManifest) els.saveManifest.disabled = false;
+
+            loadFdsText(data.fds_text, fileName);
+            setupClippingForBounds(boundsForClipping());
+            if (viewer && viewer.playConversionReveal) viewer.playConversionReveal();
+
+            renderAuditReport(data.report);
+            openAudit();
+        })
+        .catch(function (err) {
+            hideLoading();
+            setExportBusy(false);
+            var msg = err && err.message ? err.message : String(err);
+            addExportDiagnostic('Verified conversion failed: ' + msg + '. Verify local server is running (python -m ifc_to_fds serve).');
+        });
+    }
+
+    function renderAuditReport(report) {
+        if (!els.auditBody) return;
+        if (!report) {
+            els.auditBody.innerHTML = '<p>No audit report available. Run <strong>Verified Conversion</strong> to generate a complete 3-tier audit.</p>';
+            return;
+        }
+        var isVerified = report.status === 'VERIFIED';
+        var verdictClass = isVerified ? 'verdict-verified' : 'verdict-rejected';
+        var html = '';
+
+        html += '<div class="audit-verdict-banner ' + verdictClass + '">';
+        html += '<div><span style="font-size:16px;">Overall Verdict: <strong>' + report.status + '</strong></span><br><small style="color:inherit;opacity:0.85;">' + (isVerified ? 'Strict acceptance gating passed (0 unmitigated P0/P1 defects).' : 'Acceptance gate blocked: P0/P1 defects require review.') + '</small></div>';
+        html += '<span style="font-size:18px;">' + (isVerified ? '✓ PASS' : '✗ REJECTED') + '</span>';
+        html += '</div>';
+
+        html += '<div class="audit-summary-grid">';
+        html += '<div class="audit-summary-item"><div class="label" style="font-size:11px;color:var(--muted)">Accounted Solids</div><div class="audit-summary-num" style="color:var(--ok)">' + (report.matched_count || 0) + ' / ' + (report.total_elements_checked || 0) + '</div></div>';
+        html += '<div class="audit-summary-item"><div class="label" style="font-size:11px;color:var(--muted)">Missing Solids</div><div class="audit-summary-num" style="color:' + ((report.missing_count || 0) > 0 ? 'var(--danger)' : 'var(--ok)') + '">' + (report.missing_count || 0) + '</div></div>';
+        html += '<div class="audit-summary-item"><div class="label" style="font-size:11px;color:var(--muted)">P0 Blockers</div><div class="audit-summary-num" style="color:' + (((report.summary && report.summary.P0) || 0) > 0 ? 'var(--danger)' : 'var(--ok)') + '">' + ((report.summary && report.summary.P0) || 0) + '</div></div>';
+        html += '<div class="audit-summary-item"><div class="label" style="font-size:11px;color:var(--muted)">P1 Majors</div><div class="audit-summary-num" style="color:' + (((report.summary && report.summary.P1) || 0) > 0 ? 'var(--warn)' : 'var(--ok)') + '">' + ((report.summary && report.summary.P1) || 0) + '</div></div>';
+        html += '<div class="audit-summary-item"><div class="label" style="font-size:11px;color:var(--muted)">P2 Minors</div><div class="audit-summary-num" style="color:var(--muted-2)">' + ((report.summary && report.summary.P2) || 0) + '</div></div>';
+        html += '</div>';
+
+        html += '<section style="margin-top:16px;"><h3 style="margin-bottom:8px;font-size:14px;">Audit Findings (' + (report.findings ? report.findings.length : 0) + ')</h3>';
+        if (!report.findings || report.findings.length === 0) {
+            html += '<p style="color:var(--ok);font-size:13px;">✓ Zero defects or geometric deviations identified across Tier 1 (Inventory), Tier 2 (Syntax/Traceability), and Tier 3 (Geometry/Openings).</p>';
+        } else {
+            html += '<table class="audit-table">';
+            html += '<thead><tr><th style="width:70px">Severity</th><th style="width:140px">Category</th><th style="width:200px">Title</th><th>Detail</th></tr></thead><tbody>';
+            report.findings.forEach(function (f) {
+                var badgeClass = 'badge-' + (f.severity || 'p2').toLowerCase();
+                html += '<tr>';
+                html += '<td><span class="' + badgeClass + '">' + f.severity + '</span></td>';
+                html += '<td>' + (f.category || '') + '</td>';
+                html += '<td><strong>' + (f.title || '') + '</strong></td>';
+                html += '<td style="color:var(--muted);">' + (f.detail || '') + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+        }
+        html += '</section>';
+
+        els.auditBody.innerHTML = html;
+    }
+
+    function openAudit() {
+        if (!els.auditModal) return;
+        renderAuditReport(state.lastAuditReport);
+        els.auditModal.hidden = false;
+    }
+
+    function closeAudit() {
+        if (!els.auditModal) return;
+        els.auditModal.hidden = true;
+    }
+
+    function checkBackendHealth() {
+        var apiUrl = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+            ? '/api/health'
+            : 'http://127.0.0.1:8000/api/health';
+
+        fetch(apiUrl, { method: 'GET' })
+            .then(function (res) {
+                if (res.ok) return res.json();
+                throw new Error('HTTP ' + res.status);
+            })
+            .then(function (data) {
+                if (data && data.status === 'ok') {
+                    state.backendOnline = true;
+                    if (els.backendStatusIndicator) {
+                        els.backendStatusIndicator.className = 'status-indicator online';
+                    }
+                    if (els.backendStatusText) {
+                        els.backendStatusText.textContent = 'Backend: Online (IfcOpenShell v' + (data.version || '0.2.0') + ')';
+                    }
+                    refreshConversionActions();
+                }
+            })
+            .catch(function () {
+                state.backendOnline = false;
+                if (els.backendStatusIndicator) {
+                    els.backendStatusIndicator.className = 'status-indicator offline';
+                }
+                if (els.backendStatusText) {
+                    els.backendStatusText.textContent = 'Backend: Offline (Run: python -m ifc_to_fds serve)';
+                }
+                refreshConversionActions();
+            });
     }
 
     function downloadText(fileName, text) {

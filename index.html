@@ -31,6 +31,12 @@
                 <button id="reset-camera" class="icon-button" type="button" title="Reset camera">
                     <i data-lucide="scan"></i>
                 </button>
+                <button id="open-audit" class="icon-button" type="button" title="View Acceptance Audit Report" disabled>
+                    <i data-lucide="file-check"></i>
+                </button>
+                <button id="save-manifest" class="icon-button" type="button" title="Save Mapping Manifest (JSON)" disabled>
+                    <i data-lucide="file-spreadsheet"></i>
+                </button>
                 <button id="save-processed" class="icon-button" type="button" title="Save processed IFC for instant reopen" disabled>
                     <i data-lucide="hard-drive-download"></i>
                 </button>
@@ -241,9 +247,18 @@
                         <span>Include furniture, MEP and proxy solids</span>
                     </label>
 
+                    <div class="backend-status-row" id="backend-status-row">
+                        <span class="status-indicator offline" id="backend-status-indicator"></span>
+                        <span id="backend-status-text">Backend: Checking...</span>
+                    </div>
+
                     <button id="convert-ifc" class="button primary conversion-action" type="button" title="Convert IFC to FDS geometry" disabled>
                         <i data-lucide="refresh-cw"></i>
                         <span>Convert to FDS</span>
+                    </button>
+                    <button id="convert-verified" class="button conversion-action secondary-action" type="button" title="Convert using authoritative IfcOpenShell backend with independent 3-tier validation audit" disabled>
+                        <i data-lucide="shield-check"></i>
+                        <span>Verified Conversion (Audit)</span>
                     </button>
                     <button id="convert-selected-obst" class="button conversion-action secondary-action" type="button" title="Voxelize the selected generated GEOM objects into OBST geometry" disabled>
                         <i data-lucide="box"></i>
@@ -287,6 +302,26 @@
                     <p>&copy; Prof Rino Lovreglio, PhD &mdash; Massey University</p>
                     <p style="margin-top:8px;color:var(--muted);font-size:13px;line-height:1.5"><em>No responsibility is taken for the use or output of these tools.</em></p>
                 </section>
+            </div>
+        </article>
+    </section>
+
+    <section id="audit-modal" class="help-modal" role="dialog" aria-modal="true" aria-labelledby="audit-title" hidden>
+        <div class="help-backdrop" data-close-audit></div>
+        <article class="help-card audit-card">
+            <header class="help-header">
+                <div>
+                    <h2 id="audit-title">Acceptance Audit Report</h2>
+                    <p id="audit-subtitle" style="margin:2px 0 0;font-size:12px;color:var(--muted)">Independent 3-Tier Validation &amp; Provenance Analysis</p>
+                </div>
+                <button id="close-audit" class="icon-button" type="button" title="Close audit report" aria-label="Close">
+                    <i data-lucide="x"></i>
+                </button>
+            </header>
+            <div class="help-body" id="audit-body">
+                <div id="audit-summary-box">
+                    <p>No audit report available. Run <strong>Verified Conversion</strong> to generate a complete 3-tier audit.</p>
+                </div>
             </div>
         </article>
     </section>

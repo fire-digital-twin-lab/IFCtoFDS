@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ifc-to-fds"
+version = "0.2.0"
+description = "Verified IFC-to-FDS mapping and validation framework"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-or-later" }
+authors = [
+    { name = "Fire Digital Twin Lab" }
+]
+dependencies = [
+    "ifcopenshell>=0.8.0",
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "numpy>=1.22.0",
+    "shapely>=2.0.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ifc_to_fds*"]
+
+[tool.pyright]
+include = ["ifc_to_fds", "tests"]
+extraPaths = ["."]
+pythonVersion = "3.12"
