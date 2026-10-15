@@ -21,7 +21,18 @@
         IFCPIPESEGMENT: true,
         IFCAIRTERMINAL: true,
         IFCELEMENTASSEMBLY: true,
-        IFCSPACE: true
+        IFCSPACE: true,
+        IFCCOVERING: true,
+        IFCFOOTING: true,
+        IFCRAMP: true,
+        IFCRAMPFLIGHT: true,
+        IFCFLOWCONTROLLER: true,
+        IFCFLOWMOVINGDEVICE: true,
+        IFCFLOWSTORAGEDEVICE: true,
+        IFCFLOWMETER: true,
+        IFCFIRESUPPRESSIONTERMINAL: true,
+        IFCDISTRIBUTIONCHAMBERELEMENT: true,
+        IFCDISTRIBUTIONPORT: true
     };
     var REVIEW_TYPES = {
         IFCBUILDINGELEMENTPROXY: 'Building element proxy',
@@ -33,7 +44,18 @@
         IFCPIPESEGMENT: 'Pipe segment',
         IFCAIRTERMINAL: 'Air terminal',
         IFCELEMENTASSEMBLY: 'Element assembly',
-        IFCRAILING: 'Railing'
+        IFCRAILING: 'Railing',
+        IFCCOVERING: 'Covering',
+        IFCFOOTING: 'Footing',
+        IFCRAMP: 'Ramp',
+        IFCRAMPFLIGHT: 'Ramp flight',
+        IFCFLOWCONTROLLER: 'Flow controller (valve / damper)',
+        IFCFLOWMOVINGDEVICE: 'Flow moving device (fan / pump)',
+        IFCFLOWSTORAGEDEVICE: 'Flow storage device (tank)',
+        IFCFLOWMETER: 'Flow meter',
+        IFCFIRESUPPRESSIONTERMINAL: 'Fire suppression terminal (sprinkler)',
+        IFCDISTRIBUTIONCHAMBERELEMENT: 'Distribution chamber',
+        IFCDISTRIBUTIONPORT: 'Distribution port'
     };
 
     function IfcAdapter() {}
@@ -954,6 +976,10 @@
         }
 
         var mappedTransform = composeTransform(productTransform, target);
+        if (!isIdentityish(origin)) {
+            var invOrigin = invertTransform(origin);
+            mappedTransform = composeTransform(mappedTransform, invOrigin);
+        }
         items.forEach(function (mappedItem) {
             appendMesh(mesh, meshForRepresentationItem(step, mappedItem, mappedTransform, diagnostics, unsupported));
         });
@@ -1748,6 +1774,23 @@
             xAxis: transformVector(a, b.xAxis),
             yAxis: transformVector(a, b.yAxis),
             zAxis: transformVector(a, b.zAxis)
+        };
+    }
+
+    function invertTransform(t) {
+        var invX = [t.xAxis[0], t.yAxis[0], t.zAxis[0]];
+        var invY = [t.xAxis[1], t.yAxis[1], t.zAxis[1]];
+        var invZ = [t.xAxis[2], t.yAxis[2], t.zAxis[2]];
+        var invOrigin = [
+            -(invX[0] * t.origin[0] + invX[1] * t.origin[1] + invX[2] * t.origin[2]),
+            -(invY[0] * t.origin[0] + invY[1] * t.origin[1] + invY[2] * t.origin[2]),
+            -(invZ[0] * t.origin[0] + invZ[1] * t.origin[1] + invZ[2] * t.origin[2])
+        ];
+        return {
+            origin: invOrigin,
+            xAxis: invX,
+            yAxis: invY,
+            zAxis: invZ
         };
     }
 
