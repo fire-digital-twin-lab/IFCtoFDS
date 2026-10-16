@@ -3,6 +3,8 @@
 from playwright.sync_api import sync_playwright
 from pathlib import Path
 import json
+import sys
+import time
 
 with sync_playwright() as p:
     browser = p.chromium.launch(
@@ -15,7 +17,11 @@ with sync_playwright() as p:
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto("http://127.0.0.1:8765/", wait_until="networkidle")
     page.locator("#verified-sources").set_input_files(
-        str(Path("scripts/out/golden-ui/tiny.ifc").resolve())
+        str(
+            Path(
+                sys.argv[1] if len(sys.argv) > 1 else "scripts/out/golden-ui/tiny.ifc"
+            ).resolve()
+        )
     )
     page.locator("#verified-inventory").click()
     page.wait_for_function(
@@ -34,11 +40,36 @@ with sync_playwright() as p:
     }.items():
         page.locator("#verified-domain-" + key).fill(str(value))
     page.locator("#convert-verified").click()
+    expected = (
+        "INCONCLUSIVE"
+        if len(sys.argv) > 2 and sys.argv[2] == "reference"
+        else "MAPPING_VERIFIED"
+    )
     page.wait_for_function(
-        "document.getElementById('verified-progress').textContent === 'MAPPING_VERIFIED'",
+        "expected => document.getElementById('verified-progress').textContent === expected",
+        arg=expected,
         timeout=60000,
     )
     page.wait_for_selector("#audit-body", state="visible", timeout=20000)
+    if len(sys.argv) > 2 and sys.argv[2] == "reference":
+        requested = []
+        page.on("request", lambda request: requested.append(request.url))
+        page.locator("#close-audit").click()
+        started = time.monotonic()
+        with page.expect_response(
+            lambda r: "/geometry/" in r.url and r.status == 200
+        ) as loaded:
+            page.locator("#verified-show-reference").check()
+        payload = loaded.value.body()
+        print(
+            json.dumps(
+                dict(
+                    reference_payload_bytes=len(payload),
+                    first_payload_load_s=time.monotonic() - started,
+                )
+            )
+        )
+        page.locator("#verified-show-reference").uncheck()
     page.screenshot(path="scripts/out/golden-ui/mapping.png", full_page=True)
     result = dict(
         errors=errors,

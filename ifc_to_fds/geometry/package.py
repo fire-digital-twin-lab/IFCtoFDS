@@ -112,8 +112,14 @@ def audit_package(model, package, report, config):
         gate.reason = "No saved geometry package supplied; metadata is insufficient"
         return
     try:
-        verify_package(package)
-    except (ValueError, TypeError) as exc:
+        from .storage import DiskPackage
+
+        if isinstance(package, DiskPackage):
+            package.verify_index()
+            verify_package(package.index)
+        else:
+            verify_package(package)
+    except (ValueError, TypeError, OSError) as exc:
         fail("", str(exc))
         return
     expected_sources = [

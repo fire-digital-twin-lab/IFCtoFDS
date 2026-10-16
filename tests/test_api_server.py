@@ -45,6 +45,15 @@ def test_api_convert_job(tiny_ifc):
     manifest = client.get(result["artifacts"]["manifest"]["url"]).json()
     assert manifest["acceptance_status"] == result["status"]
     assert client.get("/api/jobs/" + jid + "/artifacts/fds").status_code == 200
+    index = client.get(result["artifacts"]["geometry"]["url"]).json()
+    ref = next(e["mesh"] for e in index["elements"].values() if e["mesh"])
+    payload = client.get("/api/jobs/" + jid + "/geometry/" + ref["payload"])
+    import hashlib
+
+    assert hashlib.sha256(payload.content).hexdigest() == ref["payload"]
+    assert client.get("/api/jobs/" + jid + "/geometry/" + "0" * 64).status_code == 404
+    assert "_geometry_payloads" not in client.get("/api/jobs/" + jid).json()
+    assert client.get(result["artifacts"]["geometry_archive"]["url"]).status_code == 200
 
 
 @pytest.mark.parametrize("cell", ["0", "-1", "nan", "inf"])
@@ -107,3 +116,28 @@ def test_reference_paths_are_operator_registered(monkeypatch):
     assert configuration_value('{"reference_case":"basement"}')[
         "reference_case"
     ].endswith("basement-b1-b2")
+
+
+def test_research_recognition_does_not_select_or_accept_profile(monkeypatch):
+    from ifc_to_fds.results import research_context
+
+    monkeypatch.setattr(
+        "ifc_to_fds.results.registered_cases",
+        lambda: [
+            dict(
+                id="basement",
+                name="B1/B2",
+                source_hashes=["a", "b"],
+                approval_status="DRAFT",
+            )
+        ],
+    )
+    partial = research_context([dict(file_hash_sha256="a")], {"profile": "mapping"})
+    assert partial["known_cases"][0]["source_match"] == "PARTIAL"
+    assert partial["parity_status"] == "NOT_RUN"
+    assert partial["research_acceptance"] == "NOT_RUN"
+    exact = research_context(
+        [dict(file_hash_sha256=x) for x in ("a", "b")], {"profile": "mapping"}
+    )
+    assert exact["known_cases"][0]["source_match"] == "EXACT"
+    assert exact["research_acceptance"] == "NOT_RUN"

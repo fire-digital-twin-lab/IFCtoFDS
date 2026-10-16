@@ -86,3 +86,36 @@ def test_rehashed_index_role_mutation_fails(box_model, tmp_path):
     audit_package(box_model, read_package(path), report, AuditConfig())
     assert report.gates["geometry_preservation"].status == "FAIL"
     assert any(f.element_id == "fixture:1" for f in report.findings)
+
+
+def test_original_v04_geometry_hash_is_preserved(box_model, tmp_path):
+    from ifc_to_fds.geometry.package import build_package
+
+    old = build_package(box_model)
+    old["schema_version"] = "0.4.0"
+    old = seal(old)
+    path = tmp_path / "old.json"
+    original = json.dumps(old).encode()
+    path.write_bytes(original)
+    loaded = read_package(path)
+    verify_package(loaded)
+    assert path.read_bytes() == original
+    assert loaded["sha256"] == old["sha256"]
+
+
+@pytest.mark.parametrize("mutation", ["missing", "corrupt"])
+def test_bad_payload_reports_geometry_gate_and_entity(box_model, tmp_path, mutation):
+    path = tmp_path / "geometry.json"
+    write_package(box_model, path)
+    payload = next(payload_dir(path).glob("*.bin"))
+    if mutation == "missing":
+        payload.unlink()
+    else:
+        payload.write_bytes(payload.read_bytes()[:-1])
+    report = AcceptanceReport()
+    audit_package(box_model, read_package(path), report, AuditConfig())
+    assert report.gates["geometry_preservation"].status == "FAIL"
+    assert any(
+        f.element_id == "fixture:1" and f.category == "geometry_preservation"
+        for f in report.findings
+    )

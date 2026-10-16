@@ -123,12 +123,15 @@ class DiskPackage(dict):
             has_consistent_normals=ref.get("has_consistent_normals", False),
         )
 
-    def verify(self):
+    def verify_index(self):
         if (
             self.index.get("storage_format") != "float64-uint32-le-v1"
             or self.index.get("sha256") != seal(self.index)["sha256"]
         ):
             raise ValueError("Geometry index checksum/format mismatch")
+
+    def verify(self):
+        self.verify_index()
         for entry in self.index["elements"].values():
             for ref in [entry.get("mesh"), *entry.get("openings", {}).values()]:
                 self.mesh(ref)
