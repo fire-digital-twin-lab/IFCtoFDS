@@ -24,7 +24,10 @@ The full local Python suite passed **89 tests**, with one real-solver test
 intentionally deselected. Existing trimesh zero-volume warnings and the Starlette
 TestClient deprecation remain visible. Ruff format/check and git diff checks passed.
 JavaScript workflow, export completeness/opening rays, GEOM openings and export
-worker regressions passed; regenerated worker bundles match committed sources.
+worker regressions passed. A Linux CI failure exposed embedded CRLF differences
+in generated worker strings; generators now normalize source newlines and a
+regression asserts identical output for LF/CRLF inputs. Regenerated worker bundles
+match their sources.
 
 The live Edge headless check selected a qualified storey and fixed domain, ran an
 isolated job, displayed MAPPING_VERIFIED / simulation INCONCLUSIVE, and exposed

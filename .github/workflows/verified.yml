@@ -34,6 +34,7 @@ jobs:
           node-version: '22'
       - run: node --check js/app-controller.js
       - run: node --check js/verified-workflow.js
+      - run: node scripts/test-worker-bundle-parity.js
       - run: node scripts/test-golden-workflow.js
       - run: node scripts/test-verified-regressions.js
       - run: node scripts/test-geom-opening-regression.js
