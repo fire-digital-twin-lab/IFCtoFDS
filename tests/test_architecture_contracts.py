@@ -140,3 +140,32 @@ def test_validation_evaluator_produces_immutable_report(box_model):
     assert report.findings[0].id == "FND-0001"
 
 
+def test_artifact_repository_port_and_adapter(box_model, tmp_path):
+    """ArtifactRepositoryPort is implemented by LocalFilesystemArtifactRepository."""
+    from ifc_to_fds.adapters.storage.filesystem import LocalFilesystemArtifactRepository
+    from ifc_to_fds.application.ports.storage import ArtifactRepositoryPort
+    from ifc_to_fds.geometry.storage import write_package
+    from ifc_to_fds.mapping.manifest import build_manifest
+
+    repo = LocalFilesystemArtifactRepository()
+    assert isinstance(repo, ArtifactRepositoryPort)
+    manifest = build_manifest(box_model, fds_text="&OBST XB=0,2,0,1,0,3 /")
+    dummy_result = {
+        "fds_text": "&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n&OBST XB=0,2,0,1,0,3 /",
+        "manifest": manifest.model_dump(mode="json"),
+        "report": {"status": "INCONCLUSIVE", "gates": {}},
+        "inventory": {"elements": []},
+        "mep_graph": {"systems": [], "connections": []},
+        "configuration": {},
+        "timings": {},
+        "parity_report": {},
+        "markdown_report": "# Test Report",
+        "geometry_package": write_package(box_model, tmp_path / "pkg.json"),
+    }
+    checksums = repo.save_run_artifacts(dummy_result, tmp_path / "model.fds")
+    assert isinstance(checksums, dict)
+    assert len(checksums) > 0
+
+
+
+

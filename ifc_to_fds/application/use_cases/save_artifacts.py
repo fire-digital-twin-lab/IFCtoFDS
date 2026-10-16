@@ -1,51 +1,22 @@
 """SaveArtifacts use case: persists conversion and validation artifacts to storage."""
 
-import json
 from pathlib import Path
-from typing import Any, Dict, Union
-
-from ifc_to_fds.domain.mapping import MappingManifest
-from ifc_to_fds.geometry.storage import archive_package, copy_package, file_hash
+from typing import Any, Dict, Optional, Union
+from ifc_to_fds.application.ports.storage import ArtifactRepositoryPort
 
 
 class SaveArtifactsUseCase:
-    """Persists all conversion artifacts, checksums, and geometry packages to disk."""
+    """Persists all conversion artifacts, checksums, and geometry packages."""
+
+    def __init__(self, repository: Optional[ArtifactRepositoryPort] = None):
+        self._repository = repository
+
+    @property
+    def repository(self) -> ArtifactRepositoryPort:
+        if self._repository is None:
+            from ifc_to_fds.bootstrap.container import get_default_artifact_repository
+            self._repository = get_default_artifact_repository()
+        return self._repository
 
     def execute(self, result: Dict[str, Any], output: Union[str, Path]) -> Dict[str, str]:
-        path = Path(output)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(result["fds_text"].encode("utf-8"))
-        base = path.with_suffix("")
-        for suffix, key in (
-            ("_manifest.json", "manifest"),
-            ("_acceptance_report.json", "report"),
-            ("_inventory.json", "inventory"),
-            ("_mep_graph.json", "mep_graph"),
-            ("_configuration.json", "configuration"),
-            ("_timings.json", "timings"),
-            ("_parity.json", "parity_report"),
-        ):
-            Path(str(base) + suffix).write_text(
-                json.dumps(result[key], ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-        Path(str(base) + "_manifest.csv").write_text(
-            MappingManifest.model_validate(result["manifest"]).to_csv(),
-            encoding="utf-8",
-        )
-        Path(str(base) + "_acceptance_report.md").write_text(
-            result["markdown_report"], encoding="utf-8"
-        )
-
-        geometry_path = Path(str(base) + "_geometry.json")
-        copy_package(result["geometry_package"], geometry_path)
-        archive_package(geometry_path, Path(str(base) + "_geometry.zip"))
-
-        checksums = {
-            f.name: file_hash(f)
-            for f in path.parent.glob(base.name + "*")
-            if f.is_file() and not f.name.endswith("_checksums.json")
-        }
-        Path(str(base) + "_checksums.json").write_text(
-            json.dumps(checksums, indent=2), encoding="utf-8"
-        )
-        return checksums
+        return self.repository.save_run_artifacts(result=result, output=output)

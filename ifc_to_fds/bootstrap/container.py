@@ -14,6 +14,17 @@ class Container:
         if self.config is None:
             self.config = {}
 
+    def get_artifact_repository(self):
+        from ifc_to_fds.adapters.storage.filesystem import LocalFilesystemArtifactRepository
+        return LocalFilesystemArtifactRepository()
+
+
+_default_container = Container()
+
+
+def get_default_artifact_repository():
+    return _default_container.get_artifact_repository()
+
 
 def create_container(config: Optional[dict[str, Any]] = None) -> Container:
     """Create and configure application container."""
