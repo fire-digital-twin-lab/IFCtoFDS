@@ -86,7 +86,7 @@ def test_malformed_or_unsupported_never_pass(box_model, suffix):
 
 def test_gate_truth_table():
     for status, verdict in [
-        ("PASS", "VERIFIED"),
+        ("PASS", "MAPPING_VERIFIED"),
         ("NOT_RUN", "INCONCLUSIVE"),
         ("INCONCLUSIVE", "INCONCLUSIVE"),
         ("FAIL", "REJECTED"),

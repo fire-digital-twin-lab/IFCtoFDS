@@ -1,0 +1,52 @@
+{
+  "simulation_domain": null,
+  "geometry_package_sha256": "",
+  "mapping_acceptance": "INCONCLUSIVE",
+  "simulation_acceptance": "INCONCLUSIVE",
+  "output_complete": false,
+  "schema_version": "0.4.0",
+  "source_filename": "ALL_FDS_2027.ifc",
+  "source_sha256": "a54ba512754efe1f82b87d7fb1853361889ad00d59be5a7a14ecac075e2cc7af",
+  "sources": [
+    {
+      "source_id": "a54ba512754efe1f82b87d7fb1853361889ad00d59be5a7a14ecac075e2cc7af",
+      "filename": "ALL_FDS_2027.ifc",
+      "file_path": "EXTERNAL_FIXTURE_RESOLVED_BY_SHA256",
+      "file_hash_sha256": "a54ba512754efe1f82b87d7fb1853361889ad00d59be5a7a14ecac075e2cc7af",
+      "file_size_bytes": 31645383,
+      "schema_version": "IFC2X3",
+      "unit_length_name": "FOOT",
+      "unit_scale_to_meters": 0.3048,
+      "world_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "total_elements_accounted": 0,
+  "total_primitives_emitted": 0,
+  "records": [],
+  "primitive_to_ifc": {},
+  "auxiliary_primitives": {},
+  "fds_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configuration": {
+    "profile": "research-basement",
+    "scope": {},
+    "simulation_domain": null
+  },
+  "acceptance_status": "INCONCLUSIVE"
+}

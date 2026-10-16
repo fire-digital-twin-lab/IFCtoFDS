@@ -28,7 +28,9 @@ def apply_spatial_scope(model, scope):
         elevations = sorted(
             x.elevation_m
             for x in model.storey_references
-            if x.source_id == s.source_id and x.elevation_m is not None
+            if x.source_id == s.source_id
+            and x.building_id == s.building_id
+            and x.elevation_m is not None
         )
         upper = next(
             (
@@ -39,7 +41,8 @@ def apply_spatial_scope(model, scope):
             None,
         )
         if s.elevation_m is not None and model.model_bounds:
-            intervals.append((s.elevation_m, upper or model.model_bounds.zmax))
+            if upper is not None:
+                intervals.append((s, s.elevation_m, upper))
     selected_ids = {s.storey_id for s in selected}
     model.requested_scope = scope.model_dump(mode="json")
     for e in model.elements:
@@ -56,7 +59,12 @@ def apply_spatial_scope(model, scope):
         if selected and regions:
             clipped = []
             for region in regions:
-                for low, high in intervals:
+                for owner, low, high in intervals:
+                    if (
+                        e.building_id != owner.building_id
+                        or e.source_id != owner.source_id
+                    ):
+                        continue
                     zlo, zhi = max(region.zmin, low), min(region.zmax, high)
                     if zhi > zlo:
                         clipped.append(
@@ -72,7 +80,7 @@ def apply_spatial_scope(model, scope):
                         hit = hit or intersects_box(e.mesh, region)
                     except Exception:
                         uncertain = True
-        elif e.has_3d_geometry and (direct or not selected):
+        elif e.has_3d_geometry and e.role == "PHYSICAL":
             uncertain = True
         if (
             selected

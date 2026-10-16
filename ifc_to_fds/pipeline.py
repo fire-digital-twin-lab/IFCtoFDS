@@ -10,6 +10,11 @@ from .mapping.exporter import serialize_fds
 from .mapping.manifest import build_manifest, MappingManifest
 from .validation.acceptance import AuditConfig, GateResult, GateStatus
 from .validation.engine import run_independent_validation
+from .core.canonical import BoundingBox
+from .geometry.package import build_package, audit_package
+from .validation.golden import golden_gate
+from .core.compare import normalize
+from .mapping.policy import validate_decisions
 
 
 def validate_configuration(value):
@@ -27,9 +32,28 @@ def validate_configuration(value):
         "include_review",
         "cell_size",
         "mep_graph",
+        "simulation_domain",
+        "profile",
+        "reference_case",
+        "decisions",
+        "intentional_deltas",
+        "geometry_package_sha256",
     }
     if unknown:
         raise ValueError(f"Unknown configuration fields: {sorted(unknown)}")
+    if config.get("profile", "mapping") not in (
+        "mapping",
+        "research-basement",
+        "simulation",
+    ):
+        raise ValueError("Unknown acceptance profile")
+    if config.get("reference_case") is not None and not isinstance(
+        config["reference_case"], str
+    ):
+        raise ValueError("reference_case must be a case directory or registered ID")
+    if config.get("simulation_domain") is not None:
+        BoundingBox.model_validate(config["simulation_domain"])
+    validate_decisions(config.get("decisions", {}))
     SpatialScope.model_validate(config.get("scope", {}))
     AuditConfig.model_validate(config.get("audit", {}))
     sources = config.get("sources", {})
@@ -62,10 +86,19 @@ def prepare(paths, configuration, reference=False):
         apply_spatial_scope(model, scope)
     else:
         model.requested_scope = scope.model_dump(mode="json")
+    if configuration.get("simulation_domain"):
+        model.simulation_domain = BoundingBox.model_validate(
+            configuration["simulation_domain"]
+        )
+        model.domain_origin = "EXPLICIT_CONFIGURATION"
+    elif not scope.storeys and not scope.bounding_box:
+        model.simulation_domain = model.model_bounds
+        model.domain_origin = "FULL_MODEL"
     plan_mapping(
         model,
         configuration.get("all_geom", False),
         configuration.get("include_review", False),
+        configuration.get("decisions", {}),
     )
     included = {
         e.entity_key
@@ -79,7 +112,7 @@ def prepare(paths, configuration, reference=False):
     return model
 
 
-def audit(paths, fds_text, manifest, configuration=None):
+def audit(paths, fds_text, manifest, configuration=None, geometry_package=None):
     configuration = (
         configuration if configuration is not None else manifest.configuration
     )
@@ -89,6 +122,42 @@ def audit(paths, fds_text, manifest, configuration=None):
     model = prepare(paths, configuration, reference=True)
     config = AuditConfig.model_validate(configuration.get("audit", {}))
     report = run_independent_validation(model, fds_text, manifest, config)
+    report.requested_level = (
+        "simulation" if configuration.get("profile") == "simulation" else "mapping"
+    )
+    audit_package(model, geometry_package, report, config)
+    model_by_key = {e.entity_key: e for e in model.elements}
+    for record in manifest.records:
+        reference_element = model_by_key.get(record.entity_key)
+        if (
+            reference_element
+            and record.geometry_preservation == "PRESERVED"
+            and reference_element.geometry_preservation != "PRESERVED"
+        ):
+            report.gates["geometry_preservation"] = GateResult(
+                status=GateStatus.FAIL,
+                reason=f"Unsubstantiated preservation claim: {record.entity_key}",
+            )
+    if manifest.schema_version != "0.4.0":
+        report.gates["schema_migration"] = GateResult(
+            status=GateStatus.INCONCLUSIVE,
+            reason="Legacy artifact requires 0.4 policy review; old VERIFIED is not mapping verification",
+        )
+    if (
+        geometry_package is not None
+        and manifest.geometry_package_sha256 != geometry_package.get("sha256")
+    ):
+        report.gates["geometry_preservation"] = GateResult(
+            status=GateStatus.FAIL,
+            reason="Manifest geometry package hash differs from saved package",
+        )
+    if manifest.simulation_domain != (
+        model.simulation_domain.model_dump() if model.simulation_domain else None
+    ):
+        report.gates["domain"] = GateResult(
+            status=GateStatus.FAIL,
+            reason="Manifest domain differs from independent configuration",
+        )
     fields = (
         "source_id",
         "file_hash_sha256",
@@ -124,7 +193,7 @@ def audit(paths, fds_text, manifest, configuration=None):
         report.gates["mep"] = GateResult(
             status=GateStatus.INCONCLUSIVE, reason="No serialized MEP graph supplied"
         )
-    elif saved != model.mep_graph.model_dump(mode="json"):
+    elif normalize(saved) != normalize(model.mep_graph.model_dump(mode="json")):
         report.gates["mep"] = GateResult(
             status=GateStatus.FAIL,
             reason="Saved MEP graph differs from IFC source relationships",
@@ -143,13 +212,21 @@ def audit(paths, fds_text, manifest, configuration=None):
             if e.mep_category == category and e.classification_evidence
         ]
         per_system[category] = {
+            "reference_geometry": sum(
+                report.element_statuses.get(e.entity_key) == "REFERENCE_PRESERVED"
+                for e in members
+            ),
+            "fds_obstacles": sum(e.fds_representation != "NONE" for e in members),
+            "operational_configured": 0,
             "source_count": len(members),
             "in_scope": sum(
                 e.scope_decision.value in ("IN_SCOPE", "BOUNDARY_RETAINED")
                 for e in members
             ),
             "geometry_verified": sum(
-                report.element_statuses.get(e.entity_key) == "MATCHED" for e in members
+                report.element_statuses.get(e.entity_key)
+                in ("MATCHED", "REFERENCE_PRESERVED")
+                for e in members
             ),
             "semantic_only": sum(
                 report.element_statuses.get(e.entity_key) == "SEMANTIC_ONLY"
@@ -178,6 +255,28 @@ def audit(paths, fds_text, manifest, configuration=None):
         if s.storey_id in selectors or s.name in selectors
     ]
     report.configuration["scope"] = model.requested_scope
+    report.configuration["simulation_domain"] = (
+        model.simulation_domain.model_dump() if model.simulation_domain else None
+    )
+    report.coverage["representation"] = {
+        role: sum(
+            e.simulation_role == role and e.scope_decision.value != "OUT_OF_SCOPE"
+            for e in model.elements
+        )
+        for role in ("REFERENCE_GEOMETRY", "PASSIVE_OBSTACLE", "OPERATIONAL_MEP")
+    }
+    report.coverage["boundary_pending"] = [
+        e.entity_key
+        for e in model.elements
+        if e.boundary_treatment == "PENDING_VALIDATION"
+    ]
+    golden_gate(report, model, manifest, geometry_package, configuration, fds_text)
+    if report.requested_level == "simulation":
+        for name in ("physics", "scenario", "mesh_resolution", "operational_model"):
+            report.gates[name] = GateResult(
+                status=GateStatus.NOT_RUN,
+                reason="Simulation verification is not implemented by this mapping stage",
+            )
     report.finalize()
     final = build_manifest(model, fds_text, configuration, report)
     return model, final, report
@@ -190,9 +289,15 @@ def convert(paths, configuration=None):
     prepared = perf_counter()
     fds, manifest = serialize_fds(model, cell_size=configuration.get("cell_size", 0.2))
     serialized = perf_counter()
+    # JSON round trip ensures audits consume a saved artifact representation.
+    geometry_package = json.loads(json.dumps(build_package(model), allow_nan=False))
+    configuration["geometry_package_sha256"] = geometry_package["sha256"]
+    manifest.geometry_package_sha256 = geometry_package["sha256"]
     configuration["mep_graph"] = model.mep_graph.model_dump(mode="json")
     manifest.configuration = configuration
-    audited, manifest, report = audit(paths, fds, manifest, configuration)
+    audited, manifest, report = audit(
+        paths, fds, manifest, configuration, geometry_package
+    )
     timings = dict(
         **model.timings,
         prepare_s=prepared - start,
@@ -206,6 +311,11 @@ def convert(paths, configuration=None):
     )
     return dict(
         status=report.status.value,
+        mapping_status=report.mapping_status.value,
+        simulation_status=report.simulation_status.value,
+        output_complete=manifest.output_complete,
+        geometry_package=geometry_package,
+        parity_report=report.gates["golden_reference_parity"].model_dump(mode="json"),
         fds_text=fds,
         manifest=manifest.model_dump(mode="json"),
         report=report.model_dump(mode="json"),
@@ -236,6 +346,8 @@ def save_artifacts(result, output):
         ("_mep_graph.json", "mep_graph"),
         ("_configuration.json", "configuration"),
         ("_timings.json", "timings"),
+        ("_geometry.json", "geometry_package"),
+        ("_parity.json", "parity_report"),
     ):
         Path(str(base) + suffix).write_text(
             json.dumps(result[key], ensure_ascii=False, indent=2), encoding="utf-8"
@@ -245,4 +357,15 @@ def save_artifacts(result, output):
     )
     Path(str(base) + "_acceptance_report.md").write_text(
         result["markdown_report"], encoding="utf-8"
+    )
+
+    import hashlib
+
+    checksums = {
+        f.name: hashlib.sha256(f.read_bytes()).hexdigest()
+        for f in path.parent.glob(base.name + "*")
+        if f.is_file() and not f.name.endswith("_checksums.json")
+    }
+    Path(str(base) + "_checksums.json").write_text(
+        json.dumps(checksums, indent=2), encoding="utf-8"
     )

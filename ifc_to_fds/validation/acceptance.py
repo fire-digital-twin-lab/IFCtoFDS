@@ -2,7 +2,7 @@
 
 from enum import Enum
 from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 from ifc_to_fds.core.canonical import SCHEMA_VERSION
 
 
@@ -14,7 +14,8 @@ class Severity(str, Enum):
 
 
 class AcceptanceStatus(str, Enum):
-    VERIFIED = "VERIFIED"
+    MAPPING_VERIFIED = "MAPPING_VERIFIED"
+    SIMULATION_VERIFIED = "SIMULATION_VERIFIED"
     REJECTED = "REJECTED"
     INCONCLUSIVE = "INCONCLUSIVE"
 
@@ -35,6 +36,7 @@ class GateResult(BaseModel):
 
 
 class AuditConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     surface_tolerance_m: float = Field(0.001, gt=0, allow_inf_nan=False)
     relative_volume_tolerance: float = Field(0.001, ge=0, lt=1, allow_inf_nan=False)
     min_solid_iou: float = Field(0.999, gt=0, le=1, allow_inf_nan=False)
@@ -44,6 +46,7 @@ class AuditConfig(BaseModel):
 
 
 class Finding(BaseModel):
+    verification_level: str = "mapping"
     id: str
     severity: Severity
     category: str
@@ -54,6 +57,9 @@ class Finding(BaseModel):
 
 
 class AcceptanceReport(BaseModel):
+    requested_level: str = "mapping"
+    mapping_status: AcceptanceStatus = AcceptanceStatus.INCONCLUSIVE
+    simulation_status: AcceptanceStatus = AcceptanceStatus.INCONCLUSIVE
     schema_version: str = SCHEMA_VERSION
     status: AcceptanceStatus = AcceptanceStatus.INCONCLUSIVE
     total_elements_checked: int = 0
@@ -70,20 +76,66 @@ class AcceptanceReport(BaseModel):
     configuration: dict[str, Any] = Field(default_factory=dict)
     coverage: dict[str, Any] = Field(default_factory=dict)
 
+    @model_validator(mode="before")
+    @classmethod
+    def read_legacy_report(cls, value):
+        if isinstance(value, dict) and value.get("schema_version") == "0.3.0":
+            value = dict(value)
+            value["status"] = "INCONCLUSIVE"
+            value["mapping_status"] = "INCONCLUSIVE"
+            value["simulation_status"] = "INCONCLUSIVE"
+            value["gates"] = {
+                **value.get("gates", {}),
+                "schema_migration": dict(
+                    status="INCONCLUSIVE",
+                    reason="Legacy report requires independent audit under schema 0.4",
+                ),
+            }
+        return value
+
     def finalize(self):
-        required = [g for g in self.gates.values() if g.required]
-        if any(g.status == GateStatus.FAIL for g in required) or any(
-            f.severity in (Severity.P0, Severity.P1) for f in self.findings
-        ):
-            self.status = AcceptanceStatus.REJECTED
+        simulation = {
+            "solver",
+            "effective_geometry",
+            "physics",
+            "scenario",
+            "mesh_resolution",
+            "operational_model",
+        }
+        required = [
+            g for name, g in self.gates.items() if g.required and name not in simulation
+        ]
+        failed = any(g.status == GateStatus.FAIL for g in required) or any(
+            f.severity in (Severity.P0, Severity.P1)
+            and f.verification_level == "mapping"
+            for f in self.findings
+        )
+        if failed:
+            self.mapping_status = AcceptanceStatus.REJECTED
         elif required and all(
             g.status in (GateStatus.PASS, GateStatus.NOT_APPLICABLE)
             and (g.status != GateStatus.NOT_APPLICABLE or g.reason)
             for g in required
         ):
-            self.status = AcceptanceStatus.VERIFIED
+            self.mapping_status = AcceptanceStatus.MAPPING_VERIFIED
         else:
-            self.status = AcceptanceStatus.INCONCLUSIVE
+            self.mapping_status = AcceptanceStatus.INCONCLUSIVE
+        sim_failed = any(
+            g.status == GateStatus.FAIL
+            for name, g in self.gates.items()
+            if name in simulation
+        )
+        self.simulation_status = (
+            AcceptanceStatus.REJECTED
+            if sim_failed or failed
+            else AcceptanceStatus.INCONCLUSIVE
+        )
+        # Operational/physics/scenario evidence is not implemented by this stage.
+        self.status = (
+            self.simulation_status
+            if self.requested_level == "simulation"
+            else self.mapping_status
+        )
         self.summary = {
             s.value: sum(f.severity == s for f in self.findings) for s in Severity
         }
@@ -97,6 +149,7 @@ class AcceptanceReport(BaseModel):
             "# IFCtoFDS Conversion Acceptance Report",
             "",
             f"**Overall Verdict:** `{self.status.value}`",
+            f"Mapping: `{self.mapping_status.value}`; simulation: `{self.simulation_status.value}`",
             "",
             f"Accounted elements: {self.total_elements_checked}; matched solids: {self.matched_count}",
             "",

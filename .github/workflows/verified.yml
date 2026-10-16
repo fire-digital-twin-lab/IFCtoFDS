@@ -3,6 +3,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      research:
+        description: Run private externally configured research acceptance
+        type: boolean
+        default: false
 
 jobs:
   python:
@@ -29,6 +34,8 @@ jobs:
           node-version: '22'
       - run: node --check js/app-controller.js
       - run: node --check js/verified-workflow.js
+      - run: node scripts/test-worker-bundle-parity.js
+      - run: node scripts/test-golden-workflow.js
       - run: node scripts/test-verified-regressions.js
       - run: node scripts/test-geom-opening-regression.js
       - run: node scripts/test-background-export-worker.js
@@ -50,3 +57,16 @@ jobs:
         with:
           name: solver-evidence
           path: scripts/out/solver-evidence/
+
+  research:
+    if: github.event_name == 'workflow_dispatch' && inputs.research
+    runs-on: [self-hosted, ifc-research]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e ".[test]"
+      - name: Verify external reference (missing data must not pass)
+        shell: pwsh
+        run: python scripts/run-external-reference.py --case "$env:IFCFDS_RESEARCH_CASE" --source-map "$env:IFCFDS_RESEARCH_SOURCE_MAP" --config "$env:IFCFDS_RESEARCH_CONFIG" --output .local-reference-cases/research-run

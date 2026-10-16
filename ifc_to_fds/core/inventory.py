@@ -68,9 +68,18 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     schema = ifc_file.schema
     unit_name, unit_scale = get_length_unit_scale(ifc_file)
 
+    original_filename = os.path.basename(file_path)
+    # Job uploads use safe local names; preserve the client filename as metadata.
+    from pathlib import Path
+    import json
+
+    upload_names = Path(file_path).parent / "upload-names.json"
+    if upload_names.is_file():
+        names = json.loads(upload_names.read_text(encoding="utf-8"))
+        original_filename = names.get(os.path.basename(file_path), original_filename)
     source_meta = SourceMetadata(
         source_id=file_hash,
-        filename=os.path.basename(file_path),
+        filename=original_filename,
         file_path=os.path.abspath(file_path),
         file_hash_sha256=file_hash,
         file_size_bytes=file_size,
@@ -78,6 +87,23 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
         unit_length_name=unit_name,
         unit_scale_to_meters=unit_scale,
     )
+
+    def ancestry(item):
+        result = []
+        seen = set()
+        while item is not None and item.id() not in seen:
+            seen.add(item.id())
+            result.append(item)
+            item = ifcopenshell.util.element.get_aggregate(item)
+        return result
+
+    def building_and_path(item):
+        chain = ancestry(item)
+        building = next((x for x in chain if x.is_a("IfcBuilding")), None)
+        return (
+            f"{file_hash}:{building.id()}" if building else None,
+            [f"{file_hash}:{x.id()}" for x in chain],
+        )
 
     storey_refs = []
     for s in ifc_file.by_type("IfcBuildingStorey"):
@@ -95,6 +121,8 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
             elevation = float(s.Elevation) * unit_scale
         storey_refs.append(
             StoreyReference(
+                building_id=building_and_path(s)[0],
+                spatial_ancestry=building_and_path(s)[1],
                 storey_id=f"{file_hash}:{s.id()}",
                 source_id=file_hash,
                 name=s.Name or s.GlobalId,
@@ -160,6 +188,13 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
         has_geom = bool(getattr(prod, "Representation", None))
 
         elem = CanonicalElement(
+            building_id=building_and_path(container)[0] if container else None,
+            spatial_ancestry=building_and_path(container)[1] if container else [],
+            type_class=(
+                ifcopenshell.util.element.get_type(prod).is_a()
+                if ifcopenshell.util.element.get_type(prod)
+                else None
+            ),
             source_id=file_hash,
             entity_key=f"{file_hash}:{step_id}",
             storey_id=f"{file_hash}:{container.id()}"
@@ -169,6 +204,16 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
             if prod.is_a("IfcOpeningElement")
             else "PORT"
             if prod.is_a("IfcDistributionPort")
+            else "SPATIAL"
+            if prod.is_a()
+            in (
+                "IfcSite",
+                "IfcBuilding",
+                "IfcBuildingStorey",
+                "IfcSpace",
+                "IfcAnnotation",
+                "IfcVirtualElement",
+            )
             else "PHYSICAL",
             predefined_type=ifcopenshell.util.element.get_predefined_type(prod),
             global_id=guid,

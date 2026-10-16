@@ -529,7 +529,7 @@
         if (els.saveManifest) {
             els.saveManifest.addEventListener('click', function () {
                 if (!state.lastManifest) return;
-                var base = (state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
+                var base = ((state.lastManifest || {}).source_filename || state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
                 downloadText(base + '_manifest.json', JSON.stringify(state.lastManifest, null, 2));
             });
         }
@@ -1037,8 +1037,8 @@
                 throw new Error('Empty response from verified conversion service.');
             }
 
-            var base = (state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
-            var fileName = base + (data.status === 'VERIFIED' ? '_verified.fds' : '_converted.fds');
+            var base = ((data.manifest || {}).source_filename || state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
+            var fileName = base + (data.status === 'MAPPING_VERIFIED' ? '_mapping_verified.fds' : '_converted.fds');
 
             state.generatedFdsText = data.fds_text;
             state.generatedFdsName = fileName;
@@ -1050,6 +1050,7 @@
             if (els.saveManifest) els.saveManifest.disabled = false;
 
             loadFdsText(data.fds_text, fileName);
+            if (data.geometry_package && viewer.loadVerifiedGeometry) viewer.loadVerifiedGeometry(data.geometry_package, data.manifest);
             setupClippingForBounds(boundsForClipping());
             if (viewer && viewer.playConversionReveal) viewer.playConversionReveal();
 
@@ -1078,6 +1079,12 @@
             return node;
         }
         line('h3', 'Acceptance: ' + report.status);
+        line('p', 'Mapping: ' + report.mapping_status + '; simulation: ' + report.simulation_status);
+        var roles = (report.coverage || {}).representation || {};
+        line('p', 'Reference objects: ' + (roles.REFERENCE_GEOMETRY || 0) + '; passive obstacles: ' + (roles.PASSIVE_OBSTACLE || 0) + '; operational objects: ' + (roles.OPERATIONAL_MEP || 0));
+        line('p', 'Pending boundary treatment: ' + (((report.coverage || {}).boundary_pending || []).join(', ') || 'None'));
+        var domain = (report.configuration || {}).simulation_domain;
+        if (domain) line('p', 'Fixed domain (m): X ' + domain.xmin + ' to ' + domain.xmax + '; Y ' + domain.ymin + ' to ' + domain.ymax + '; Z ' + domain.zmin + ' to ' + domain.zmax);
         line('p', 'Matched solids: ' + report.matched_count + ' / accounted entities: ' + report.total_elements_checked);
         var scope = (report.configuration || {}).scope || {};
         var storeys = (((report.coverage || {}).scope || {}).selected_storeys || []);

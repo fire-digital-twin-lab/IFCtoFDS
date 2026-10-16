@@ -54,19 +54,11 @@ def compute_mesh_grid(
 ) -> Tuple[List[int], List[float]]:
     if not math.isfinite(cell_size) or cell_size <= 0:
         raise ValueError("cell_size must be finite and positive")
-    pad = 0.4
-    xb = [
-        math.floor((bounds.xmin - pad) / cell_size) * cell_size,
-        math.ceil((bounds.xmax + pad) / cell_size) * cell_size,
-        math.floor((bounds.ymin - pad) / cell_size) * cell_size,
-        math.ceil((bounds.ymax + pad) / cell_size) * cell_size,
-        math.floor((bounds.zmin - pad) / cell_size) * cell_size,
-        math.ceil((bounds.zmax + pad) / cell_size) * cell_size,
-    ]
+    xb = bounds.to_xb()
     ijk = [
-        max(1, int(round((xb[1] - xb[0]) / cell_size))),
-        max(1, int(round((xb[3] - xb[2]) / cell_size))),
-        max(1, int(round((xb[5] - xb[4]) / cell_size))),
+        max(1, math.ceil((xb[1] - xb[0]) / cell_size)),
+        max(1, math.ceil((xb[3] - xb[2]) / cell_size)),
+        max(1, math.ceil((xb[5] - xb[4]) / cell_size)),
     ]
     return ijk, xb
 
@@ -96,11 +88,22 @@ def serialize_fds(
         and valid_solid(e.mesh)
     ]
     bounds = bounds_for_vertices([v for e in active for v in e.mesh.vertices])
-    if bounds is None:
-        raise ValueError("No valid export geometry in selected scope")
     model.exported_bounds = bounds
-    ijk, mesh_xb = compute_mesh_grid(bounds, cell_size=cell_size)
-    lines.append(f"&MESH IJK={ijk[0]},{ijk[1]},{ijk[2]}, XB={format_xb(mesh_xb)} /")
+    # Unscoped legacy callers may freeze a full-model domain. Scoped conversion
+    # requires a separately declared domain, never the extent of retained solids.
+    if model.simulation_domain is None and not (
+        model.requested_scope.get("storeys")
+        or model.requested_scope.get("bounding_box")
+    ):
+        model.simulation_domain = model.model_bounds or bounds
+        model.domain_origin = "FULL_MODEL"
+    if model.simulation_domain:
+        ijk, mesh_xb = compute_mesh_grid(model.simulation_domain, cell_size=cell_size)
+        lines.append(
+            f"&MESH IJK={ijk[0]},{ijk[1]},{ijk[2]}, XB={','.join(format(v, '.15g') for v in mesh_xb)} /"
+        )
+    else:
+        lines.append("! INCOMPLETE: simulation domain has not been declared")
     lines.append("")
 
     # Default Surfaces
@@ -119,6 +122,8 @@ def serialize_fds(
             ScopeDecision.OUT_OF_SCOPE,
             ScopeDecision.UNRESOLVED,
         ):
+            continue
+        if strategy in (MappingStrategy.NONE, MappingStrategy.EXCLUDED_SCOPE):
             continue
         if strategy in (MappingStrategy.GEOM, MappingStrategy.OBST) and (
             not elem.mesh or not valid_solid(elem.mesh)

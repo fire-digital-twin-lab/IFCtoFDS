@@ -15,10 +15,12 @@ The workbench has two modes:
 - **Verified Conversion** uses a local Python/IfcOpenShell service, explicit export scope,
   multiple IFC sources, provenance manifests and independent audit gates.
 
-An audit may return `VERIFIED`, `REJECTED` or `INCONCLUSIVE`. The effective FDS geometry
-adapter currently supports a single-mesh OBST subset. GEOM cut-cell verification
-remains incomplete, so building conversions using GEOM remain inconclusive unless another required gate fails. See
-[Verified conversion guide and limitations](docs/verified-conversion.md).
+Mapping audit returns `MAPPING_VERIFIED`, `REJECTED` or `INCONCLUSIVE`, with a
+separate simulation result. Research acceptance additionally requires an approved
+golden reference. Scoped domains stay fixed, boundary elements require evidence,
+and MEP defaults to reference geometry outside FDS. Simulation verification and
+GEOM cut-cell evidence remain incomplete. See
+[Current mapping guide and limitations](docs/golden-mapping-parity.md).
 
 ```powershell
 python -m venv .venv

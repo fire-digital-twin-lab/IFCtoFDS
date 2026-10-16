@@ -30,7 +30,7 @@ async def lifespan(app):
 
 
 app = FastAPI(
-    title="IFCtoFDS local conversion and audit", version="0.3.0", lifespan=lifespan
+    title="IFCtoFDS local conversion and audit", version="0.4.0", lifespan=lifespan
 )
 
 app.add_middleware(BodyLimitMiddleware, maximum=MAX_TOTAL + 1024**2)
@@ -53,9 +53,14 @@ async def origin_guard(request: Request, call_next):
     return await call_next(request)
 
 
+@app.get("/api/reference-cases")
+def reference_cases():
+    return {"cases": list(json.loads(os.getenv("IFCFDS_REFERENCE_CASES", "{}")))}
+
+
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "ifc_to_fds", "version": "0.3.0"}
+    return {"status": "ok", "service": "ifc_to_fds", "version": "0.4.0"}
 
 
 def configuration_value(
@@ -82,6 +87,14 @@ def configuration_value(
         config["cell_size"] = cell
         SpatialScope.model_validate(config.get("scope", {}))
         AuditConfig.model_validate(config.get("audit", {}))
+        case = config.get("reference_case")
+        if case:
+            registered = json.loads(os.getenv("IFCFDS_REFERENCE_CASES", "{}"))
+            if case not in registered:
+                raise ValueError(
+                    "Choose a registered reference case ID; server paths are not accepted"
+                )
+            config["reference_case"] = str(Path(registered[case]).resolve())
         # Executables are local operator configuration, never selectable by an upload.
         if config.get("audit", {}).get("solver_executable"):
             raise ValueError(
@@ -107,6 +120,7 @@ async def store_uploads(uploads):
     directory.mkdir()
     total = 0
     paths = []
+    original_names = {}
     try:
         for index, upload in enumerate(uploads):
             if not (upload.filename or "").lower().endswith(".ifc"):
@@ -128,6 +142,10 @@ async def store_uploads(uploads):
             if size == 0:
                 raise HTTPException(422, "Empty IFC file")
             paths.append(path)
+            original_names[path.name] = Path(upload.filename.replace("\\", "/")).name
+        (directory / "upload-names.json").write_text(
+            json.dumps(original_names), encoding="utf-8"
+        )
         return directory, paths
     except Exception:
         shutil.rmtree(directory)
@@ -211,6 +229,9 @@ ARTIFACTS = {
     "inventory": "model_inventory.json",
     "mep": "model_mep_graph.json",
     "configuration": "model_configuration.json",
+    "geometry": "model_geometry.json",
+    "parity": "model_parity.json",
+    "checksums": "model_checksums.json",
 }
 
 

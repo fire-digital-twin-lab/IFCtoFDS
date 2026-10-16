@@ -24,11 +24,44 @@ MEP_TYPES = HVAC_TYPES | {
 }
 
 
-def classify_mep_element(ifc_type, name, system_name="", predefined_type=""):
-    t = (ifc_type or "").upper()
+def classify_mep_element(
+    ifc_type,
+    name,
+    system_name="",
+    predefined_type="",
+    type_class="",
+    property_sets=None,
+):
+    t = (type_class or ifc_type or "").upper()
+    if t.endswith("TYPE"):
+        t = t[:-4]
     sys = str(system_name or "").upper()
     p = str(predefined_type or "").upper()
     n = str(name or "").upper()
+    explicit_property_values = []
+    for properties in (property_sets or {}).values():
+        if isinstance(properties, dict):
+            explicit_property_values.extend(
+                str(value).upper()
+                for key, value in properties.items()
+                if key.replace(" ", "").lower()
+                in ("systemtype", "systemclassification", "servicetype")
+            )
+    if any(
+        value in ("FIREPROTECTION", "FIRE PROTECTION", "FIRE_SUPPRESSION", "SPRINKLER")
+        for value in explicit_property_values
+    ):
+        return "FIRE_SUPPRESSION", True
+    if any(
+        value in ("SMOKEEXHAUST", "SMOKE EXTRACT", "SMOKECONTROL")
+        for value in explicit_property_values
+    ):
+        return "SMOKE_EXTRACT", True
+    if any(
+        value in ("VENTILATION", "AIRCONDITIONING", "EXHAUST")
+        for value in explicit_property_values
+    ):
+        return "VENTILATION", False
     if p in ("SMOKEEXHAUST", "SMOKECONTROL", "PRESSURISATION") or any(
         w in sys for w in ("SMOKE", "HUT_KHOI", "TANG_AP", "PRESSURIZATION")
     ):

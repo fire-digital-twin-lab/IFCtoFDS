@@ -20,7 +20,7 @@
             inventory.storey_references.forEach(function (storey) {
                 var option = document.createElement('option');
                 option.value = storey.storey_id;
-                option.textContent = storey.name + ' [' + storey.source_id.slice(0, 8) + ']';
+                option.textContent = storey.name + ' [' + storey.source_id.slice(0, 8) + ' / ' + (storey.building_id || 'unassigned').split(':').pop() + ' / #' + storey.storey_id.split(':').pop() + ']';
                 get('storeys').appendChild(option);
             });
             progress(inventory.total_elements + ' entities in ' + inventory.sources.length + ' sources');
@@ -45,6 +45,12 @@
         hasFiles: function () { return files().length > 0; },
         setFallback: function (file) { fallback = file; },
         init: function () {
+            fetch('/api/reference-cases').then(response).then(function (data) {
+                data.cases.forEach(function (id) {
+                    var option = document.createElement('option'); option.value = id; option.textContent = id;
+                    get('reference-case').appendChild(option);
+                });
+            }).catch(function () {});
             get('sources').addEventListener('change', function () {
                 transformInputs(); get('storeys').replaceChildren();
                 document.getElementById('convert-verified').disabled = !selectedFiles().length;
@@ -55,11 +61,19 @@
                 if (jobId) fetch('/api/jobs/' + jobId, {method: 'DELETE'}).then(response).then(function () { progress('Cancelled'); }).catch(function (err) { progress(err.message); });
             });
         },
-        run: function (file, configuration) {
+        run: async function (file, configuration) {
             fallback = file; stopped = false; jobId = null;
             if (location.protocol === 'file:') return Promise.reject(new Error('Open http://127.0.0.1:8000 for Verified Conversion'));
             var sources = selectedFiles();
             if (!sources.length) return Promise.reject(new Error('Select IFC sources first'));
+            configuration.profile = get('profile').value;
+            if (get('reference-case').value) configuration.reference_case = get('reference-case').value;
+            if (get('decisions').files.length) configuration.decisions = JSON.parse(await get('decisions').files[0].text());
+            if (get('deltas').files.length) configuration.intentional_deltas = JSON.parse(await get('deltas').files[0].text());
+            if (get('use-domain').checked) {
+                configuration.simulation_domain = {};
+                ['xmin','xmax','ymin','ymax','zmin','zmax'].forEach(function (key) { configuration.simulation_domain[key] = Number(get('domain-' + key).value); });
+            }
             configuration.scope = {storeys: Array.prototype.filter.call(get('storeys').options, function (o) { return o.selected; }).map(function (o) { return o.value; })};
             if (get('use-bounds').checked) {
                 configuration.scope.bounding_box = {};
@@ -92,7 +106,13 @@
                 jobId = job.id;
                 if (stopped) return fetch('/api/jobs/' + jobId, {method:'DELETE'}).then(function () { throw new Error('Conversion cancelled'); });
                 return poll();
-            }).then(function (result) { progress(result.status); return result; })
+            }).then(function (result) { progress(result.status);
+                get('artifacts').replaceChildren();
+                ['fds','geometry','manifest','report','parity','mep','checksums'].forEach(function (name) {
+                    var link = document.createElement('a'); link.href = '/api/jobs/' + jobId + '/artifacts/' + name;
+                    link.textContent = 'Download ' + name; link.download = ''; link.style.display = 'block'; get('artifacts').appendChild(link);
+                });
+                return result; })
                 .finally(function () { get('cancel').disabled = true; });
         }
     };

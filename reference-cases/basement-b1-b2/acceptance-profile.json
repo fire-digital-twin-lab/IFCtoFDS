@@ -1,0 +1,10 @@
+{
+  "schema_version": "0.4.0",
+  "configuration": {
+    "profile": "research-basement",
+    "scope": {},
+    "simulation_domain": null
+  },
+  "status": "DRAFT",
+  "origin": "AUTOMATIC_CANDIDATE_NOT_GROUND_TRUTH"
+}

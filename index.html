@@ -253,9 +253,11 @@
                     </div>
 
                     <fieldset id="verified-options">
-                        <legend>Verified conversion scope</legend>
+                        <legend>Mapping verification</legend>
+                        <label>Acceptance profile<select id="verified-profile"><option value="mapping">Mapping</option><option value="research-basement">Research reference</option><option value="simulation">Simulation (evidence required)</option></select></label>
+                        <label>Reference case<select id="verified-reference-case"><option value="">None</option></select></label>
                         <label>IFC sources <input id="verified-sources" type="file" accept=".ifc" multiple></label>
-                        <p>Uses the open IFC when no additional sources are selected. MEP geometry is preserved.</p>
+                        <p>Uses the open IFC when no additional sources are selected. MEP geometry is preserved separately; it becomes an FDS obstacle only through a reviewed policy.</p>
                         <button id="verified-inventory" type="button" class="button">Read sources and storeys</button>
                         <label>Storeys (none = full model)<select id="verified-storeys" multiple aria-label="Export storeys"></select></label>
                         <label><input id="verified-common" type="checkbox"> Sources share a confirmed coordinate system</label>
@@ -270,7 +272,13 @@
                             <label>zmin<input id="verified-zmin" type="number" step="any" value="0"></label>
                             <label>zmax<input id="verified-zmax" type="number" step="any" value="3"></label>
                         </div>
-                        <p>Whole elements crossing the volume are retained and reported. Viewer clipping only changes the view.</p>
+                        <label><input id="verified-use-domain" type="checkbox"> Set fixed simulation domain (metres)</label>
+                        <div class="verified-bounds"><label>xmin<input id="verified-domain-xmin" type="number" step="any" value="0"></label><label>xmax<input id="verified-domain-xmax" type="number" step="any" value="10"></label><label>ymin<input id="verified-domain-ymin" type="number" step="any" value="0"></label><label>ymax<input id="verified-domain-ymax" type="number" step="any" value="10"></label><label>zmin<input id="verified-domain-zmin" type="number" step="any" value="0"></label><label>zmax<input id="verified-domain-zmax" type="number" step="any" value="3"></label></div>
+                        <p>Crossing elements retain their full source geometry. The domain stays fixed; unresolved boundary treatment blocks acceptance.</p>
+                        <label>Reviewed entity decisions (optional JSON)<input id="verified-decisions" type="file" accept=".json"></label>
+                        <label>Approved reference changes (optional JSON)<input id="verified-deltas" type="file" accept=".json"></label>
+                        <label><input id="verified-show-reference" type="checkbox" checked> Show reference geometry (outside FDS)</label>
+                        <div id="verified-artifacts"></div>
                         <button id="verified-cancel" type="button" class="button" disabled>Cancel conversion</button>
                         <span id="verified-progress" role="status"></span>
                     </fieldset>
@@ -335,7 +343,7 @@
             <header class="help-header">
                 <div>
                     <h2 id="audit-title">Acceptance Audit Report</h2>
-                    <p id="audit-subtitle" style="margin:2px 0 0;font-size:12px;color:var(--muted)">Independent 3-Tier Validation &amp; Provenance Analysis</p>
+                    <p id="audit-subtitle" style="margin:2px 0 0;font-size:12px;color:var(--muted)">Mapping, Reference Parity &amp; Simulation Evidence</p>
                 </div>
                 <button id="close-audit" class="icon-button" type="button" title="Close audit report" aria-label="Close">
                     <i data-lucide="x"></i>
