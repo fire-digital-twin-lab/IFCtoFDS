@@ -21,6 +21,52 @@ def calculate_bbox_iou(b1, b2):
     return float(intersection / (b1.volume + b2.volume - intersection))
 
 
+def same_surface_partition(a, b):
+    """Prove equality of coplanar polygon unions despite vertex/triangle order.
+
+    Only identical supporting planes are admitted. Unsupported near-coplanar
+    surfaces fall through to sampled/inconclusive measurements.
+    """
+
+    def triangle_set(mesh):
+        return sorted(
+            tuple(sorted(tuple(float(x) for x in point) for point in triangle))
+            for triangle in mesh.triangles
+        )
+
+    if triangle_set(a) == triangle_set(b):
+        return True
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+
+    def patches(mesh):
+        groups = {}
+        for triangle, normal in zip(mesh.triangles, mesh.face_normals):
+            normal = normal.copy()
+            axis = int(np.argmax(np.abs(normal)))
+            if normal[axis] < 0:
+                normal *= -1
+            distance = float(np.dot(normal, triangle[0]))
+            key = tuple(np.round(np.r_[normal, distance], 10))
+            groups.setdefault(key, []).append((triangle, normal, distance, axis))
+        return groups
+
+    left, right = patches(a), patches(b)
+    if left.keys() != right.keys():
+        return False
+    for key in left:
+        pieces = left[key] + right[key]
+        _, normal, distance, axis = pieces[0]
+        if any(not np.array_equal(n, normal) or d != distance for _, n, d, _ in pieces):
+            return False
+        axes = [i for i in range(3) if i != axis]
+        one = unary_union([Polygon(t[:, axes]) for t, _, _, _ in left[key]])
+        two = unary_union([Polygon(t[:, axes]) for t, _, _, _ in right[key]])
+        if not one.equals(two):
+            return False
+    return True
+
+
 def compare_solids(reference, outputs):
     if (
         not valid_solid(reference)
@@ -54,7 +100,12 @@ def compare_solids(reference, outputs):
         and is_axis_aligned_box(reference)
         and is_axis_aligned_box(outputs[0])
     )
-    if correspondence:
+    partition_equivalent = False
+    if not correspondence and not box_equivalent:
+        partition_equivalent = same_surface_partition(a, b)
+    if partition_equivalent:
+        surface = 0.0
+    elif correspondence:
         surface = float(np.linalg.norm(a.vertices - b.vertices, axis=1).max())
     elif box_equivalent:
         surface = float(np.linalg.norm(a.bounds - b.bounds, axis=1).max())
@@ -72,7 +123,7 @@ def compare_solids(reference, outputs):
         relative_volume_error=abs(float(a.volume - b.volume)) / float(a.volume),
         relative_area_error=abs(float(a.area - b.area)) / float(a.area),
         surface_distance_m=surface,
-        surface_proven=bool(correspondence or box_equivalent),
+        surface_proven=bool(correspondence or box_equivalent or partition_equivalent),
         reference_components=len(a.split(only_watertight=False)),
         output_components=len(b.split(only_watertight=False)),
     )

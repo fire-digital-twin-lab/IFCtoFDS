@@ -37,7 +37,8 @@ def test_api_convert_job(tiny_ifc):
         time.sleep(0.1)
     assert job["state"] == "COMPLETED", job
     result = client.get("/api/jobs/" + jid + "/result").json()
-    assert result["status"] == "INCONCLUSIVE"
+    assert result["status"] == "MAPPING_VERIFIED"
+    assert result["simulation_status"] == "INCONCLUSIVE"
     assert result["report"]["gates"]["source_inventory"]["status"] == "PASS"
     assert result["report"]["gates"]["geometry"]["status"] == "PASS"
     assert result["manifest"]["acceptance_status"] == result["report"]["status"]
@@ -77,6 +78,7 @@ def test_cross_origin_and_upload_limit(monkeypatch):
         '{"all_geom":"false"}',
         '{"sources":{"common_coordinates":"yes"}}',
         '{"skip_validation":true}',
+        '{"audit":{"surface_tolernce_m":1.0}}',
     ],
 )
 def test_unknown_or_mistyped_configuration_rejected(configuration):
@@ -86,3 +88,18 @@ def test_unknown_or_mistyped_configuration_rejected(configuration):
         data={"configuration": configuration},
     )
     assert response.status_code == 422
+
+
+def test_reference_paths_are_operator_registered(monkeypatch):
+    from ifc_to_fds.server import configuration_value
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException):
+        configuration_value('{"reference_case":"C:/private/model"}')
+    monkeypatch.setenv(
+        "IFCFDS_REFERENCE_CASES", '{"basement":"reference-cases/basement-b1-b2"}'
+    )
+    assert client.get("/api/reference-cases").json() == {"cases": ["basement"]}
+    assert configuration_value('{"reference_case":"basement"}')[
+        "reference_case"
+    ].endswith("basement-b1-b2")

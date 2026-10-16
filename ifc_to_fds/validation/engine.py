@@ -37,6 +37,9 @@ def run_independent_validation(
             "geometry",
             "openings",
             "mep",
+            "representation",
+            "boundary",
+            "domain",
         )
     }
     report.gates["source_inventory"] = GateResult(
@@ -64,7 +67,13 @@ def run_independent_validation(
 
     parsed = parse_fds(fds_text)
     for error in parsed.errors:
-        finding("syntax", error, severity=Severity.P0)
+        if error == "Missing MESH" and model.simulation_domain is None:
+            unknown(
+                "syntax",
+                "Incomplete diagnostic artifact: simulation domain is not configured",
+            )
+        else:
+            finding("syntax", error, severity=Severity.P0)
     for error in parsed.unsupported:
         unknown("syntax", error)
     records = manifest.records if manifest else []
@@ -78,6 +87,30 @@ def run_independent_validation(
             "geometry",
             "Multiple computational meshes need an explicit domain-union audit",
         )
+    if model.simulation_domain is None:
+        unknown("domain", "Explicit simulation domain missing for selected scope")
+    elif len(domains) != 1 or any(
+        abs(float(a) - b) > 1e-8
+        for a, b in zip(domains[0], model.simulation_domain.to_xb())
+    ):
+        finding("domain", "Serialized MESH differs from declared simulation domain")
+    else:
+        mesh_record = next(r for r in parsed.records if r.kind == "MESH")
+        grid = mesh_record.values.get("IJK", [])
+        if len(grid) == 3 and all(float(x).is_integer() and x > 0 for x in grid):
+            report.metrics["actual_cell_size_m"] = [
+                d / n
+                for d, n in zip(
+                    (
+                        model.simulation_domain.dx,
+                        model.simulation_domain.dy,
+                        model.simulation_domain.dz,
+                    ),
+                    grid,
+                )
+            ]
+        else:
+            finding("domain", "Invalid computational mesh IJK")
     for p in parsed.primitives:
         actual_ids.add(p.id)
         key = p.source.get("entity_key", "")
@@ -111,6 +144,12 @@ def run_independent_validation(
         if e.scope_decision == ScopeDecision.OUT_OF_SCOPE:
             finding(
                 "scope", f"Out-of-scope element exported as {p.id}", key, Severity.P0
+            )
+        if e.simulation_role == "REFERENCE_GEOMETRY" or e.fds_representation == "NONE":
+            finding(
+                "representation",
+                f"Object without obstacle authorization emitted as {p.id}",
+                key,
             )
         if e.role != "PHYSICAL":
             finding("traceability", f"Nonphysical entity emitted as solid: {p.id}", key)
@@ -204,6 +243,60 @@ def run_independent_validation(
                     "Manifest decision/provenance differs from source policy",
                     key,
                 )
+        if key in by_key and manifest.schema_version == "0.4.0":
+            record = by_key[key]
+            for field in (
+                "source_presence",
+                "simulation_role",
+                "operational_status",
+                "fds_representation",
+                "review_status",
+                "boundary_treatment",
+                "decision",
+                "system_ids",
+                "classification_evidence",
+                "ports",
+                "openings",
+            ):
+                expected_value = getattr(e, field)
+                if field == "ports":
+                    expected_value = [p.model_dump(mode="json") for p in e.ports]
+                elif field == "openings":
+                    expected_value = [
+                        o.model_dump(
+                            mode="json",
+                            exclude={
+                                "mesh",
+                                "bounding_box",
+                                "is_subtracted",
+                                "verification_status",
+                            },
+                        )
+                        for o in e.openings
+                    ]
+                if getattr(record, field) != expected_value:
+                    finding(
+                        "representation",
+                        f"Manifest {field} differs from independent policy",
+                        key,
+                    )
+        if (
+            e.review_status == "REVIEW_REQUIRED"
+            and e.scope_decision != ScopeDecision.OUT_OF_SCOPE
+        ):
+            unknown("representation", f"Review decision required for {key}")
+        if e.boundary_treatment == "PENDING_VALIDATION":
+            unknown(
+                "boundary",
+                f"{key}: boundary treatment requires independent solver/effective-geometry evidence",
+            )
+            report.element_statuses[key] = "INCONCLUSIVE"
+        if strategy == MappingStrategy.EXCLUDED_SCOPE.value:
+            report.excluded_count += 1
+            report.element_statuses[key] = "EXCLUDED_SCOPE"
+            if key in primitives:
+                finding("scope", "Scope-excluded element emitted", key)
+            continue
         if strategy == MappingStrategy.EXCLUDED_APPROVED.value:
             report.excluded_count += 1
             report.element_statuses[key] = "EXCLUDED_APPROVED"
@@ -217,6 +310,13 @@ def run_independent_validation(
                 finding(
                     "traceability", "Semantic-only element emitted as geometry", key
                 )
+            continue
+        if strategy == MappingStrategy.NONE.value:
+            report.element_statuses[key] = (
+                "REVIEW_REQUIRED"
+                if e.review_status == "REVIEW_REQUIRED"
+                else "INCONCLUSIVE"
+            )
             continue
         meshes = primitives.get(key, [])
         if not meshes:
@@ -359,4 +459,6 @@ def run_independent_validation(
         report.gates["effective_geometry"] = GateResult(
             status=GateStatus.NOT_RUN, reason="Syntax gate did not pass"
         )
+    report.gates["solver"].required = False
+    report.gates["effective_geometry"].required = False
     return report.finalize()

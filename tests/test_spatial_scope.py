@@ -21,7 +21,7 @@ def test_scope_survives_mapping_and_serialization(box_model):
     apply_spatial_scope(box_model, SpatialScope(bounding_box=original.bounding_box))
     assert outside.scope_decision == ScopeDecision.OUT_OF_SCOPE
     plan_mapping(box_model, force_all_geom=True)
-    assert outside.mapping_strategy == "EXCLUDED_APPROVED"
+    assert outside.mapping_strategy == "EXCLUDED_SCOPE"
     text, manifest = serialize_fds(box_model)
     assert not outside.fds_primitive_ids
     assert all(

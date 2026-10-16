@@ -10,7 +10,12 @@ from .mapping.manifest import MappingManifest
 
 
 def exit_status(status):
-    return {"VERIFIED": 0, "REJECTED": 1, "INCONCLUSIVE": 2}[str(status)]
+    return {
+        "MAPPING_VERIFIED": 0,
+        "SIMULATION_VERIFIED": 0,
+        "REJECTED": 1,
+        "INCONCLUSIVE": 2,
+    }[str(status)]
 
 
 def main(argv=None):
@@ -35,12 +40,34 @@ def main(argv=None):
     p.add_argument("--include-review", action="store_true", default=None)
     p.add_argument("--common-coordinates", action="store_true")
     p.add_argument("--solver")
+    p.add_argument("--profile", choices=["mapping", "research-basement", "simulation"])
+    p.add_argument("--reference-case")
+    p.add_argument("--decisions", help="Explicit entity decisions JSON")
+    p.add_argument("--intentional-deltas", help="Approved delta JSON")
+    p.add_argument("--domain", nargs=6, type=float)
     p = commands.add_parser("audit")
     p.add_argument("input_ifc", nargs="+")
     p.add_argument("--fds", required=True)
     p.add_argument("--manifest", required=True)
+    p.add_argument("--geometry-package")
+    p.add_argument("--profile", choices=["mapping", "research-basement", "simulation"])
+    p.add_argument("--reference-case")
+    p.add_argument("--intentional-deltas")
     p.add_argument("--config")
     p.add_argument("-o", "--output", required=True, help="Audit report JSON")
+    p = commands.add_parser("reference-candidate")
+    p.add_argument("input_ifc", nargs="+")
+    p.add_argument("--config", required=True)
+    p.add_argument("-o", "--output", required=True)
+    p = commands.add_parser("reference-check")
+    p.add_argument("directory")
+    p = commands.add_parser("reference-resolve")
+    p.add_argument("directory")
+    p.add_argument(
+        "--source-map",
+        required=True,
+        help="Local JSON mapping source SHA256 to file path",
+    )
     p = commands.add_parser("inventory")
     p.add_argument("input_ifc")
     p.add_argument("--json", action="store_true")
@@ -53,6 +80,25 @@ def main(argv=None):
             import uvicorn
 
             uvicorn.run("ifc_to_fds.server:app", host=args.host, port=args.port)
+            return 0
+        if args.command == "reference-check":
+            from .validation.golden import inspect_case
+
+            checksum, approval, _ = inspect_case(args.directory)
+            print(json.dumps(dict(bundle_sha256=checksum, approval=approval), indent=2))
+            return (
+                0
+                if approval.get("status") == "APPROVED"
+                and all(approval.get(k) for k in ("reviewer", "rationale", "evidence"))
+                else 2
+            )
+        if args.command == "reference-resolve":
+            from .validation.golden import resolve_sources
+
+            mapping = json.loads(Path(args.source_map).read_text(encoding="utf-8"))
+            print(
+                json.dumps([str(p) for p in resolve_sources(args.directory, mapping)])
+            )
             return 0
         if args.command == "inventory":
             model, _ = extract_inventory(args.input_ifc)
@@ -67,15 +113,58 @@ def main(argv=None):
             if args.config
             else {}
         )
+        if args.command == "reference-candidate":
+            from .validation.golden import create_candidate
+            from .pipeline import prepare
+
+            result = convert(args.input_ifc, config)
+            manifest = MappingManifest.model_validate(result["manifest"])
+            from .validation.acceptance import AcceptanceReport
+
+            model = prepare(args.input_ifc, config, reference=True)
+            print(
+                create_candidate(
+                    args.output,
+                    model,
+                    manifest,
+                    result["geometry_package"],
+                    AcceptanceReport.model_validate(result["report"]),
+                    config,
+                )
+            )
+            return 2  # Candidate generation is never approval.
+        for name in ("profile", "reference_case"):
+            if getattr(args, name, None):
+                config[name] = getattr(args, name)
+        for name in ("decisions", "intentional_deltas"):
+            if getattr(args, name, None):
+                config[name] = json.loads(
+                    Path(getattr(args, name)).read_text(encoding="utf-8")
+                )
         if args.command == "audit":
             manifest = MappingManifest.model_validate_json(
                 Path(args.manifest).read_text(encoding="utf-8")
             )
+            geometry_path = (
+                Path(args.geometry_package)
+                if args.geometry_package
+                else Path(args.fds)
+                .with_suffix("")
+                .with_name(Path(args.fds).stem + "_geometry.json")
+            )
+            package = (
+                json.loads(geometry_path.read_text(encoding="utf-8"))
+                if geometry_path.is_file()
+                else None
+            )
+            if not args.config:
+                config = {**manifest.configuration, **config}
             _, final, report = audit(
                 args.input_ifc,
                 Path(args.fds).read_text(encoding="utf-8"),
                 manifest,
-                config if args.config else None,
+                config,
+                package,
             )
             output = Path(args.output)
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -86,6 +175,10 @@ def main(argv=None):
         for key in ("cell_size", "all_geom", "include_review"):
             if getattr(args, key) is not None:
                 config[key] = getattr(args, key)
+        if args.domain:
+            config["simulation_domain"] = dict(
+                zip(("xmin", "xmax", "ymin", "ymax", "zmin", "zmax"), args.domain)
+            )
         if args.storey:
             config.setdefault("scope", {})["storeys"] = args.storey
         if args.bbox:

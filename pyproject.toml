@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ifc-to-fds"
-version = "0.3.0"
+version = "0.4.0"
 description = "Verified IFC-to-FDS mapping and validation framework"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,6 +34,7 @@ test = ["pytest>=8", "httpx>=0.27"]
 ifc-to-fds = "ifc_to_fds.cli:main"
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 addopts = "-m 'not solver'"
 markers = ["solver: requires an installed FDS solver"]
 

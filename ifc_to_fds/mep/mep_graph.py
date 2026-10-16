@@ -131,16 +131,29 @@ def extract_mep_graph(model, file):
         )
         connected.update((a.owner_key, b.owner_key))
     for e in model.elements:
-        if e.ifc_type.upper() not in MEP_TYPES:
+        if e.role != "PHYSICAL":
+            continue
+        if (
+            e.ifc_type.upper() not in MEP_TYPES
+            and not e.system_ids
+            and not e.ports
+            and e.ifc_type.upper() != "IFCBUILDINGELEMENTPROXY"
+        ):
             continue
         system_types = [systems[s].system_type for s in e.system_ids]
         explicit = next((x for x in system_types if x != "OTHER"), "")
         category, _ = classify_mep_element(
-            e.ifc_type, e.name, " ".join(e.system_names), e.predefined_type
+            e.ifc_type,
+            e.name,
+            " ".join(e.system_names),
+            e.predefined_type,
+            e.type_class,
+            e.property_sets,
         )
         e.mep_category = explicit or category
         e.classification_evidence = [
             f"IFC class: {e.ifc_type}",
+            f"IFC type class: {e.type_class}",
             f"PredefinedType: {e.predefined_type}",
             *e.system_ids,
         ]

@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
 import math
 
-SCHEMA_VERSION = "0.3.0"
+SCHEMA_VERSION = "0.4.0"
 
 
 class ScopeDecision(str, Enum):
@@ -30,6 +30,9 @@ class GeometryStatus(str, Enum):
 
 
 class MappingStatus(str, Enum):
+    EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
+    REFERENCE_PRESERVED = "REFERENCE_PRESERVED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
     MATCHED = "MATCHED"
     DEVIATED = "DEVIATED"
     MISSING = "MISSING"
@@ -41,6 +44,8 @@ class MappingStatus(str, Enum):
 
 
 class MappingStrategy(str, Enum):
+    NONE = "NONE"
+    EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
     OBST = "OBST"
     OBST_HOLE = "OBST_HOLE"
     GEOM = "GEOM"
@@ -170,6 +175,17 @@ class PortReference(BaseModel):
 
 
 class CanonicalElement(BaseModel):
+    building_id: Optional[str] = None
+    spatial_ancestry: List[str] = Field(default_factory=list)
+    type_class: Optional[str] = None
+    source_presence: str = "CONFIRMED"
+    geometry_preservation: str = "NOT_RUN"
+    simulation_role: str = "PASSIVE_OBSTACLE"
+    operational_status: str = "NOT_APPLICABLE"
+    fds_representation: str = "NONE"
+    review_status: str = "NOT_REQUIRED"
+    boundary_treatment: str = "NOT_APPLICABLE"
+    decision: Dict[str, Any] = Field(default_factory=dict)
     source_id: str = ""
     entity_key: str = ""
     global_id: str
@@ -243,6 +259,8 @@ class MEPGraph(BaseModel):
 
 
 class StoreyReference(BaseModel):
+    building_id: Optional[str] = None
+    spatial_ancestry: List[str] = Field(default_factory=list)
     storey_id: str
     source_id: str
     name: str
@@ -250,6 +268,8 @@ class StoreyReference(BaseModel):
 
 
 class CanonicalModel(BaseModel):
+    simulation_domain: Optional[BoundingBox] = None
+    domain_origin: str = "UNRESOLVED"
     schema_version: str = SCHEMA_VERSION
     source: SourceMetadata
     sources: List[SourceMetadata] = Field(default_factory=list)
