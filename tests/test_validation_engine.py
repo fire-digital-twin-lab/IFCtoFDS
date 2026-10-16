@@ -25,7 +25,7 @@ def test_no_solver_is_inconclusive(box_model):
 def test_shifted_wall_rejected_with_same_ids(box_model):
     text, _ = serialize_fds(box_model)
     text = text.replace(
-        "XB=0.0000,2.0000,0.0000,1.0000,0.0000,3.0000",
+        "XB=0,2,0,1,0,3",
         "XB=2.0000,4.0000,0.0000,1.0000,0.0000,3.0000",
     )
     report = audit(box_model, text)

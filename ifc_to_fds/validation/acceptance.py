@@ -42,6 +42,8 @@ class AuditConfig(BaseModel):
     min_solid_iou: float = Field(0.999, gt=0, le=1, allow_inf_nan=False)
     solver_executable: str | None = None
     solver_version: str = "6.11.1"
+    solver_evidence_directory: str | None = None
+    boundary_fixture_certificate: str | None = None
     solver_timeout_s: float = Field(120, gt=0, allow_inf_nan=False)
 
 
@@ -150,6 +152,7 @@ class AcceptanceReport(BaseModel):
             "",
             f"**Overall Verdict:** `{self.status.value}`",
             f"Mapping: `{self.mapping_status.value}`; simulation: `{self.simulation_status.value}`",
+            f"Research: `{self.configuration.get('research', {}).get('research_acceptance', 'NOT_RUN')}`",
             "",
             f"Accounted elements: {self.total_elements_checked}; matched solids: {self.matched_count}",
             "",

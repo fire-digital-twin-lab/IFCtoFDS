@@ -640,7 +640,7 @@ def test_golden_compares_actual_fds_to_accepted_fds(box_model, tmp_path):
         xmin=-1, xmax=3, ymin=-1, ymax=2, zmin=-1, zmax=4
     )
     text, _ = serialize_fds(box_model)
-    original = "XB=0.0000,2.0000,0.0000,1.0000,0.0000,3.0000"
+    original = "XB=0,2,0,1,0,3"
     baseline = text.replace(original, "XB=0.00075,2.00075,0,1,0,3")
     actual = text.replace(original, "XB=-0.00075,1.99925,0,1,0,3")
     _, manifest, package, report, config = checked(box_model, text=baseline)

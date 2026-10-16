@@ -48,5 +48,5 @@ with sync_playwright() as p:
     )
     print(json.dumps(result))
     assert not errors
-    assert result["downloads"] == 7
+    assert result["downloads"] == 12
     browser.close()

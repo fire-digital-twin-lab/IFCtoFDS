@@ -6,7 +6,7 @@ function element() { return {value:'',checked:false,files:[],options:[],children
 const doc={getElementById(id){return elements[id] || (elements[id]=element());},createElement(){return element();}};
 const ns={viewer:{}};
 let submitted;
-const output={status:'MAPPING_VERIFIED',manifest:{records:[]},geometry_package:{elements:{}}};
+const output={status:'MAPPING_VERIFIED',artifacts:Object.fromEntries(['fds','geometry','manifest','report','parity','mep','checksums'].map(k=>[k,{url:'/api/jobs/job1/artifacts/'+k}]))};
 const context=vm.createContext({window:{IfcFds:ns},document:doc,location:{protocol:'http:'},isFinite,Math,Number,Array,JSON,Promise,
     FormData:class {constructor(){this.values={};}append(k,v){this.values[k]=v;}},
     fetch:async(url,options)=>({ok:true,json:async()=>{

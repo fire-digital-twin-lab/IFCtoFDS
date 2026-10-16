@@ -73,9 +73,9 @@ def determine_element_strategy(
         return MappingStrategy.SEMANTIC_ONLY
     if element.review_status == "EXCLUDED_APPROVED":
         return MappingStrategy.EXCLUDED_APPROVED
-    if (
-        element.simulation_role == "REFERENCE_GEOMETRY"
-        or element.boundary_treatment == "PENDING_VALIDATION"
+    if element.simulation_role == "REFERENCE_GEOMETRY" or (
+        element.boundary_treatment == "PENDING_VALIDATION"
+        and element.representation_bounds is None
     ):
         return MappingStrategy.NONE
     if not element.mesh or not valid_solid(element.mesh):
@@ -90,7 +90,11 @@ def determine_element_strategy(
 
 
 def plan_mapping(
-    model, force_all_geom=False, include_review_solids=False, decisions=None
+    model,
+    force_all_geom=False,
+    include_review_solids=False,
+    decisions=None,
+    boundary_policy=None,
 ):
     decisions = decisions or {}
     validate_decisions(decisions)
@@ -132,6 +136,9 @@ def plan_mapping(
                     else "NOT_APPLICABLE"
                 )
         e.boundary_treatment = "NOT_APPLICABLE"
+        e.boundary_policy = None
+        e.boundary_evidence = {}
+        e.representation_bounds = None
         if (
             e.scope_decision
             in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
@@ -145,6 +152,13 @@ def plan_mapping(
                 for i in range(6)
             ):
                 e.boundary_treatment = "PENDING_VALIDATION"
+                from .boundary import POLICY, eligible_bounds
+
+                if boundary_policy == POLICY:
+                    bounds = eligible_bounds(e, model, force_all_geom)
+                    if bounds:
+                        e.boundary_policy = POLICY
+                        e.representation_bounds = bounds
         e.mapping_strategy = determine_element_strategy(
             e, force_all_geom, include_review_solids
         )

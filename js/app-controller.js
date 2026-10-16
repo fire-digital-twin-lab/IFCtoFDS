@@ -528,6 +528,10 @@
 
         if (els.saveManifest) {
             els.saveManifest.addEventListener('click', function () {
+                if (state.lastArtifactLinks) {
+                    var link = document.createElement('a'); link.href = state.lastArtifactLinks.manifest.url;
+                    link.download = ''; link.click(); return;
+                }
                 if (!state.lastManifest) return;
                 var base = ((state.lastManifest || {}).source_filename || state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
                 downloadText(base + '_manifest.json', JSON.stringify(state.lastManifest, null, 2));
@@ -813,7 +817,7 @@
             els.openAudit.disabled = !state.lastAuditReport;
         }
         if (els.saveManifest) {
-            els.saveManifest.disabled = !state.lastManifest;
+            els.saveManifest.disabled = !state.lastManifest && !state.lastArtifactLinks;
         }
     }
 
@@ -1007,6 +1011,8 @@
     function clearGeneratedFds() {
         state.generatedFdsText = null;
         state.generatedFdsName = null;
+        if (viewer.cancelVerifiedLoad) viewer.cancelVerifiedLoad();
+        state.lastArtifactLinks = null;
         state.lastAuditReport = null;
         state.lastManifest = null;
         if (els.saveFds) els.saveFds.disabled = true;
@@ -1030,32 +1036,26 @@
             cell_size: Number(els.meshCellSize.value || 0.2), all_geom: true,
             include_review: !!(els.includeReviewSolids && els.includeReviewSolids.checked)
         })
-        .then(function (data) {
-            hideLoading();
-            setExportBusy(false);
-            if (!data || !data.fds_text) {
-                throw new Error('Empty response from verified conversion service.');
-            }
-
-            var base = ((data.manifest || {}).source_filename || state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
-            var fileName = base + (data.status === 'MAPPING_VERIFIED' ? '_mapping_verified.fds' : '_converted.fds');
-
-            state.generatedFdsText = data.fds_text;
-            state.generatedFdsName = fileName;
-            state.lastAuditReport = data.report;
-            state.lastManifest = data.manifest;
-
-            if (els.saveFds) els.saveFds.disabled = false;
+        .then(async function (data) {
+            hideLoading(); setExportBusy(false);
+            if (!data || !data.artifacts) throw new Error('Missing conversion artifacts');
+            state.lastArtifactLinks = data.artifacts;
+            var summary = Object.assign({}, data, {configuration: {}, matched_count: (data.coverage || {}).matched || 0});
+            state.lastAuditReport = summary;
+            state.lastManifest = null;
             if (els.openAudit) els.openAudit.disabled = false;
             if (els.saveManifest) els.saveManifest.disabled = false;
-
-            loadFdsText(data.fds_text, fileName);
-            if (data.geometry_package && viewer.loadVerifiedGeometry) viewer.loadVerifiedGeometry(data.geometry_package, data.manifest);
+            if (viewer.bindVerifiedArtifacts) viewer.bindVerifiedArtifacts(data.artifacts);
+            renderAuditReport(summary); openAudit();
+            var response = await fetch(data.artifacts.fds.url);
+            if (!response.ok) throw new Error('FDS artifact unavailable');
+            var text = await response.text();
+            var base = (data.source_filename || state.ifcFileName || 'model').replace(/\.[^.]+$/, '');
+            var fileName = base + (data.status === 'MAPPING_VERIFIED' ? '_mapping_verified.fds' : '_diagnostic.fds');
+            state.generatedFdsText = text; state.generatedFdsName = fileName;
+            loadFdsText(text, fileName);
+            if (els.saveFds) els.saveFds.disabled = false;
             setupClippingForBounds(boundsForClipping());
-            if (viewer && viewer.playConversionReveal) viewer.playConversionReveal();
-
-            renderAuditReport(data.report);
-            openAudit();
         })
         .catch(function (err) {
             hideLoading();
@@ -1082,12 +1082,15 @@
         line('p', 'Mapping: ' + report.mapping_status + '; simulation: ' + report.simulation_status);
         var roles = (report.coverage || {}).representation || {};
         line('p', 'Reference objects: ' + (roles.REFERENCE_GEOMETRY || 0) + '; passive obstacles: ' + (roles.PASSIVE_OBSTACLE || 0) + '; operational objects: ' + (roles.OPERATIONAL_MEP || 0));
-        line('p', 'Pending boundary treatment: ' + (((report.coverage || {}).boundary_pending || []).join(', ') || 'None'));
+        var pending = (report.coverage || {}).boundary_pending || 0;
+        line('p', 'Pending boundary treatment: ' + (Array.isArray(pending) ? pending.length : pending));
+        if (report.research) line('p', 'Research acceptance: ' + report.research.research_acceptance + '; reference parity: ' + report.research.parity_status);
         var domain = (report.configuration || {}).simulation_domain;
         if (domain) line('p', 'Fixed domain (m): X ' + domain.xmin + ' to ' + domain.xmax + '; Y ' + domain.ymin + ' to ' + domain.ymax + '; Z ' + domain.zmin + ' to ' + domain.zmax);
-        line('p', 'Matched solids: ' + report.matched_count + ' / accounted entities: ' + report.total_elements_checked);
+        if (report.total_elements_checked !== undefined) line('p', 'Matched solids: ' + report.matched_count + ' / accounted entities: ' + report.total_elements_checked);
         var scope = (report.configuration || {}).scope || {};
         var storeys = (((report.coverage || {}).scope || {}).selected_storeys || []);
+        if (!Array.isArray(storeys)) storeys = [String(storeys) + ' selected (see configuration artifact)'];
         line('p', 'Export storeys: ' + (storeys.length ? storeys.join(', ') : 'All storeys'));
         if (scope.bounding_box) line('p', 'Export volume (m): ' + ['xmin','xmax','ymin','ymax','zmin','zmax'].map(function (key) { return key + ': ' + scope.bounding_box[key]; }).join(', '));
         line('p', 'Retained crossing elements: ' + (((report.coverage || {}).scope || {}).BOUNDARY_RETAINED || 0));

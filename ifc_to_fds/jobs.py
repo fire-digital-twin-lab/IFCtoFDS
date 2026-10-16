@@ -66,7 +66,7 @@ class JobManager:
             return {
                 k: v
                 for k, v in self.jobs[jid].items()
-                if k not in ("process", "directory")
+                if k not in ("process", "directory") and not k.startswith("_")
             }
 
     def result(self, jid):
@@ -74,9 +74,12 @@ class JobManager:
             job = self.jobs[jid]
             if job["state"] != "COMPLETED":
                 raise ValueError("Job has no completed result")
-            return json.loads(
+            result = json.loads(
                 Path(job["directory"], "result.json").read_text(encoding="utf-8")
             )
+            for name, artifact in result.get("artifacts", {}).items():
+                artifact["url"] = f"/api/jobs/{jid}/artifacts/{name}"
+            return result
 
     @staticmethod
     def _stop(process):
@@ -213,8 +216,15 @@ def run_worker(directory):
                 sources=[m.source.model_dump() for m in models],
             )
         else:
-            result = convert(request["paths"], request["configuration"])
+            result = convert(request["paths"], request["configuration"], directory)
             save_artifacts(result, directory / "model.fds")
+            from .results import public_result
+
+            result = public_result(result)
+        if request.get("mode") == "inventory":
+            from .results import research_context
+
+            result["research"] = research_context(result["sources"], {})
         (directory / "result.json").write_text(json.dumps(result), encoding="utf-8")
         return 0
     except Exception as exc:

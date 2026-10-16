@@ -70,6 +70,13 @@ def effective_obstructions(fds_text, smv_text):
             indices = [int(v) for v in lines[start + count + i].split()[:6]]
             if not marker or len(indices) != 6 or label.strip() in actual:
                 raise ValueError("Ambiguous SMV obstruction identity")
+            if any(
+                indices[2 * axis + side] < 0
+                or indices[2 * axis + side] >= len(grids[axis])
+                for axis in range(3)
+                for side in range(2)
+            ):
+                raise ValueError("SMV obstruction index outside coordinate grid")
             actual[label.strip()] = [
                 grids[axis][indices[2 * axis + side]]
                 for axis in range(3)
@@ -88,6 +95,18 @@ def effective_obstructions(fds_text, smv_text):
         )
     for pid, bounds in actual.items():
         for axis in range(3):
+            domain = meshes[0].values["XB"]
+            if not np.allclose(
+                grids[axis],
+                np.linspace(domain[2 * axis], domain[2 * axis + 1], len(grids[axis])),
+                atol=1e-7,
+                rtol=0,
+            ):
+                return GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason="Nonuniform/unmatched solver grid is unsupported",
+                    evidence=evidence,
+                )
             low, high = bounds[2 * axis : 2 * axis + 2]
             if high <= low:
                 return GateResult(
@@ -96,6 +115,23 @@ def effective_obstructions(fds_text, smv_text):
                     evidence=evidence,
                 )
             half_cell = max(np.diff(grids[axis])) * 0.5 + 1e-8
+            for side in (0, 1):
+                distances = np.abs(
+                    np.asarray(grids[axis]) - expected[pid][2 * axis + side]
+                )
+                nearest = np.flatnonzero(np.abs(distances - distances.min()) < 1e-8)
+                if len(nearest) != 1:
+                    return GateResult(
+                        status=GateStatus.INCONCLUSIVE,
+                        reason=f"Unproved half-cell rounding tie: {pid}",
+                        evidence=evidence,
+                    )
+                if abs(bounds[2 * axis + side] - grids[axis][nearest[0]]) > 1e-7:
+                    return GateResult(
+                        status=GateStatus.FAIL,
+                        reason=f"Unexpected effective cell occupancy: {pid}",
+                        evidence=evidence,
+                    )
             if any(
                 abs(bounds[2 * axis + s] - expected[pid][2 * axis + s]) > half_cell
                 for s in (0, 1)

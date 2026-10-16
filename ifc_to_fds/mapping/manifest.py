@@ -19,6 +19,11 @@ class ManifestRecord(BaseModel):
     fds_representation: str = "NONE"
     review_status: str = "NOT_REQUIRED"
     boundary_treatment: str = "NOT_APPLICABLE"
+    boundary_policy: str | None = None
+    boundary_evidence: dict[str, Any] = Field(default_factory=dict)
+    representation_bounds: dict[str, float] | None = None
+    source_bounds: dict[str, float] | None = None
+    placement: dict[str, Any] = Field(default_factory=dict)
     building_id: str | None = None
     type_class: str | None = None
     decision: dict[str, Any] = Field(default_factory=dict)
@@ -88,6 +93,13 @@ def build_manifest(model, fds_text="", configuration=None, report=None):
             else e.mapping_status.value
         )
         r = ManifestRecord(
+            source_bounds=e.bounding_box.model_dump() if e.bounding_box else None,
+            boundary_policy=e.boundary_policy,
+            boundary_evidence=e.boundary_evidence,
+            representation_bounds=e.representation_bounds.model_dump()
+            if e.representation_bounds
+            else None,
+            placement=e.placement,
             system_ids=e.system_ids,
             classification_evidence=e.classification_evidence,
             ports=[p.model_dump(mode="json") for p in e.ports],

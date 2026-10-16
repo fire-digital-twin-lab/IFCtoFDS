@@ -89,6 +89,10 @@ def load_sources(paths, source_options=None, reference=False):
                 "Source transform must be a finite rigid transform, without reflection or scale"
             )
         model.source.world_transform = matrix.ravel().tolist()
+        from .placement import federate_placement
+
+        for e in model.elements:
+            federate_placement(e, matrix)
         if not np.allclose(matrix, np.eye(4)):
             for e in model.elements:
                 for mesh in [e.mesh, *[o.mesh for o in e.openings]]:

@@ -11,6 +11,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from .jobs import JobManager
+from .results import ARTIFACTS
 from .http_limits import BodyLimitMiddleware
 from .mapping.scope import SpatialScope
 from .validation.acceptance import AuditConfig
@@ -30,7 +31,7 @@ async def lifespan(app):
 
 
 app = FastAPI(
-    title="IFCtoFDS local conversion and audit", version="0.4.0", lifespan=lifespan
+    title="IFCtoFDS local conversion and audit", version="0.5.0", lifespan=lifespan
 )
 
 app.add_middleware(BodyLimitMiddleware, maximum=MAX_TOTAL + 1024**2)
@@ -55,12 +56,14 @@ async def origin_guard(request: Request, call_next):
 
 @app.get("/api/reference-cases")
 def reference_cases():
-    return {"cases": list(json.loads(os.getenv("IFCFDS_REFERENCE_CASES", "{}")))}
+    from .results import registered_cases
+
+    return {"cases": registered_cases()}
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "ifc_to_fds", "version": "0.4.0"}
+    return {"status": "ok", "service": "ifc_to_fds", "version": "0.5.0"}
 
 
 def configuration_value(
@@ -94,15 +97,29 @@ def configuration_value(
                 raise ValueError(
                     "Choose a registered reference case ID; server paths are not accepted"
                 )
-            config["reference_case"] = str(Path(registered[case]).resolve())
+            entry = registered[case]
+            config["reference_case"] = str(
+                Path(entry if isinstance(entry, str) else entry["path"]).resolve()
+            )
         # Executables are local operator configuration, never selectable by an upload.
-        if config.get("audit", {}).get("solver_executable"):
+        if any(
+            config.get("audit", {}).get(k)
+            for k in (
+                "solver_executable",
+                "solver_evidence_directory",
+                "boundary_fixture_certificate",
+            )
+        ):
             raise ValueError(
                 "Solver executable must be configured by the local operator"
             )
         if os.getenv("IFCFDS_SOLVER"):
             config.setdefault("audit", {})["solver_executable"] = os.environ[
                 "IFCFDS_SOLVER"
+            ]
+        if os.getenv("IFCFDS_BOUNDARY_CERTIFICATE"):
+            config.setdefault("audit", {})["boundary_fixture_certificate"] = os.environ[
+                "IFCFDS_BOUNDARY_CERTIFICATE"
             ]
         from .pipeline import validate_configuration
 
@@ -220,21 +237,6 @@ def result(jid: str):
         raise HTTPException(409, str(exc))
 
 
-ARTIFACTS = {
-    "fds": "model.fds",
-    "manifest": "model_manifest.json",
-    "manifest_csv": "model_manifest.csv",
-    "report": "model_acceptance_report.json",
-    "markdown": "model_acceptance_report.md",
-    "inventory": "model_inventory.json",
-    "mep": "model_mep_graph.json",
-    "configuration": "model_configuration.json",
-    "geometry": "model_geometry.json",
-    "parity": "model_parity.json",
-    "checksums": "model_checksums.json",
-}
-
-
 @app.get("/api/jobs/{jid}/artifacts/{artifact}")
 def artifact(jid: str, artifact: str):
     if artifact not in ARTIFACTS:
@@ -249,6 +251,34 @@ def artifact(jid: str, artifact: str):
         if not path.exists():
             raise HTTPException(404, "Artifact not produced by this job")
         return FileResponse(path, filename=ARTIFACTS[artifact])
+
+
+@app.get("/api/jobs/{jid}/geometry/{payload}")
+def geometry_payload(jid: str, payload: str):
+    if len(payload) != 64 or any(c not in "0123456789abcdef" for c in payload):
+        raise HTTPException(404, "Unknown geometry payload")
+    with manager.lock:
+        job = manager.jobs.get(jid)
+        if not job:
+            raise HTTPException(404, "Unknown job")
+        if job["state"] != "COMPLETED":
+            raise HTTPException(409, "Job is not complete")
+        index_path = Path(job["directory"]) / "model_geometry.json"
+        if "_geometry_payloads" not in job:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            job["_geometry_payloads"] = {
+                ref["payload"]
+                for entry in index["elements"].values()
+                for ref in [entry.get("mesh"), *entry.get("openings", {}).values()]
+                if ref
+            }
+        linked = job["_geometry_payloads"]
+        if payload not in linked:
+            raise HTTPException(404, "Unlinked geometry payload")
+        path = index_path.with_suffix(".payloads") / (payload + ".bin")
+        if not path.is_file():
+            raise HTTPException(404, "Missing geometry payload")
+        return FileResponse(path, media_type="application/octet-stream")
 
 
 @app.post("/api/convert")

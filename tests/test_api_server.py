@@ -39,9 +39,11 @@ def test_api_convert_job(tiny_ifc):
     result = client.get("/api/jobs/" + jid + "/result").json()
     assert result["status"] == "MAPPING_VERIFIED"
     assert result["simulation_status"] == "INCONCLUSIVE"
-    assert result["report"]["gates"]["source_inventory"]["status"] == "PASS"
-    assert result["report"]["gates"]["geometry"]["status"] == "PASS"
-    assert result["manifest"]["acceptance_status"] == result["report"]["status"]
+    assert result["gates"]["source_inventory"]["status"] == "PASS"
+    assert result["gates"]["geometry"]["status"] == "PASS"
+    assert "geometry_package" not in result and "fds_text" not in result
+    manifest = client.get(result["artifacts"]["manifest"]["url"]).json()
+    assert manifest["acceptance_status"] == result["status"]
     assert client.get("/api/jobs/" + jid + "/artifacts/fds").status_code == 200
 
 
@@ -99,7 +101,9 @@ def test_reference_paths_are_operator_registered(monkeypatch):
     monkeypatch.setenv(
         "IFCFDS_REFERENCE_CASES", '{"basement":"reference-cases/basement-b1-b2"}'
     )
-    assert client.get("/api/reference-cases").json() == {"cases": ["basement"]}
+    cases = client.get("/api/reference-cases").json()["cases"]
+    assert cases[0]["id"] == "basement" and cases[0]["approval_status"] == "DRAFT"
+    assert "path" not in cases[0]
     assert configuration_value('{"reference_case":"basement"}')[
         "reference_case"
     ].endswith("basement-b1-b2")

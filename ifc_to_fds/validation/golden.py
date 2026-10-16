@@ -11,6 +11,9 @@ from .metrics import compare_solids, passage_metrics
 from .acceptance import GateResult, GateStatus, Finding, Severity
 
 FIELDS = (
+    "placement",
+    "boundary_policy",
+    "representation_bounds",
     "system_ids",
     "ports",
     "openings",
@@ -230,6 +233,11 @@ def create_candidate(
             or e.boundary_treatment == "PENDING_VALIDATION"
         ],
     }
+    from ifc_to_fds.geometry.storage import DiskPackage, copy_package
+
+    if isinstance(package, DiskPackage):
+        copy_package(package, directory / "geometry-package.json")
+        values.pop("geometry-package.json")
     for name, value in values.items():
         (directory / name).write_text(
             json.dumps(value, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -267,23 +275,36 @@ def inspect_case(directory):
         name: json.loads((directory / name).read_text(encoding="utf-8"))
         for name in FILES
     }
-    if values["acceptance-profile.json"].get("schema_version") != SCHEMA_VERSION:
+    if values["acceptance-profile.json"].get("schema_version") not in (
+        SCHEMA_VERSION,
+        "0.4.0",
+    ):
         raise ValueError("Unsupported reference schema")
+    from ifc_to_fds.geometry.storage import read_package
+
+    values["geometry-package.json"] = read_package(directory / "geometry-package.json")
     verify_package(values["geometry-package.json"])
     inventory = values["expected-inventory.json"]
     fds_evidence = values["fds-geometry.json"]
-    if fds_evidence.get("schema_version") != SCHEMA_VERSION or not isinstance(
-        fds_evidence.get("entries"), dict
-    ):
+    if fds_evidence.get("schema_version") not in (
+        SCHEMA_VERSION,
+        "0.4.0",
+    ) or not isinstance(fds_evidence.get("entries"), dict):
         raise ValueError("Invalid golden FDS geometry evidence")
     for key, meshes in fds_evidence["entries"].items():
         if key not in inventory or not isinstance(meshes, list):
             raise ValueError("Golden FDS geometry inventory conflicts")
         for mesh in meshes:
             TriangleMesh.model_validate(mesh)
-    if inventory != snapshot(
+    expected_snapshot = snapshot(
         MappingManifest.model_validate(values["golden-manifest.json"])
-    ):
+    )
+    if values["golden-manifest.json"].get("schema_version") == "0.4.0":
+        expected_snapshot = {
+            key: {k: v for k, v in record.items() if k in inventory.get(key, {})}
+            for key, record in expected_snapshot.items()
+        }
+    if inventory != expected_snapshot:
         raise ValueError("Reference inventory conflicts with golden manifest")
     for name in (
         "structural-reference.json",
@@ -351,6 +372,11 @@ def golden_gate(report, model, manifest, package, configuration, fds_text=None):
     if not approved:
         unknown("Reference is DRAFT or lacks human approval evidence")
         return
+    if values["acceptance-profile.json"].get("schema_version") == "0.4.0":
+        unknown(
+            "Legacy reference requires a new reviewed revision for placement and boundary contracts"
+        )
+        return
     expected = copy.deepcopy(values["expected-inventory.json"])
     reference_package = copy.deepcopy(values["geometry-package.json"])
     reference_fds = copy.deepcopy(values["fds-geometry.json"])
@@ -405,6 +431,10 @@ def golden_gate(report, model, manifest, package, configuration, fds_text=None):
                 fail(key, "delta.before", target.get(field_key), change.get("before"))
                 continue
             target[field_key] = change.get("after")
+            from ifc_to_fds.geometry.storage import DiskPackage
+
+            if field == "geometry" and isinstance(reference_package, DiskPackage):
+                reference_package.overrides[key] = target
     actual = snapshot(manifest)
     for key in sorted(set(expected) | set(actual)):
         if key not in actual or key not in expected:

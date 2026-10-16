@@ -244,7 +244,26 @@ def run_independent_validation(
                     "Manifest decision/provenance differs from source policy",
                     key,
                 )
-        if key in by_key and manifest.schema_version == "0.4.0":
+        if key in by_key and manifest.schema_version == "0.5.0":
+            record = by_key[key]
+            expected_bounds = (
+                e.representation_bounds.model_dump()
+                if e.representation_bounds
+                else None
+            )
+            if (
+                record.boundary_policy != e.boundary_policy
+                or record.representation_bounds != expected_bounds
+                or record.placement != e.placement
+                or record.source_bounds
+                != (e.bounding_box.model_dump() if e.bounding_box else None)
+            ):
+                finding(
+                    "representation",
+                    "Boundary plan or placement differs from independent IFC policy",
+                    key,
+                )
+        if key in by_key and manifest.schema_version in ("0.4.0", "0.5.0"):
             record = by_key[key]
             for field in (
                 "source_presence",
@@ -252,7 +271,6 @@ def run_independent_validation(
                 "operational_status",
                 "fds_representation",
                 "review_status",
-                "boundary_treatment",
                 "decision",
                 "system_ids",
                 "classification_evidence",
@@ -286,7 +304,10 @@ def run_independent_validation(
             and e.scope_decision != ScopeDecision.OUT_OF_SCOPE
         ):
             unknown("representation", f"Review decision required for {key}")
-        if e.boundary_treatment == "PENDING_VALIDATION":
+        if (
+            e.boundary_treatment == "PENDING_VALIDATION"
+            and e.representation_bounds is None
+        ):
             unknown(
                 "boundary",
                 f"{key}: boundary treatment requires independent solver/effective-geometry evidence",
@@ -339,7 +360,9 @@ def run_independent_validation(
             )
             continue
         try:
-            metrics = compare_solids(e.mesh, meshes)
+            from ifc_to_fds.mapping.boundary import target_mesh
+
+            metrics = compare_solids(target_mesh(e), meshes)
             report.metrics[key] = metrics
             fail = (
                 metrics["surface_distance_m"] > config.surface_tolerance_m
@@ -451,6 +474,9 @@ def run_independent_validation(
         openings=opening_count,
         mep=model.mep_graph.coverage,
     )
+    from time import perf_counter
+
+    solver_start = perf_counter()
     if report.gates["syntax"].status == GateStatus.PASS:
         report.gates["solver"], report.gates["effective_geometry"] = solver_gates(
             fds_text, config
@@ -462,6 +488,7 @@ def run_independent_validation(
         report.gates["effective_geometry"] = GateResult(
             status=GateStatus.NOT_RUN, reason="Syntax gate did not pass"
         )
+    report.metrics["solver_s"] = perf_counter() - solver_start
     report.gates["solver"].required = False
     report.gates["effective_geometry"].required = False
     return report.finalize()

@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
 import math
 
-SCHEMA_VERSION = "0.4.0"
+SCHEMA_VERSION = "0.5.0"
 
 
 class ScopeDecision(str, Enum):
@@ -185,6 +185,9 @@ class CanonicalElement(BaseModel):
     fds_representation: str = "NONE"
     review_status: str = "NOT_REQUIRED"
     boundary_treatment: str = "NOT_APPLICABLE"
+    boundary_policy: str | None = None
+    boundary_evidence: Dict[str, Any] = Field(default_factory=dict)
+    representation_bounds: Optional[BoundingBox] = None
     decision: Dict[str, Any] = Field(default_factory=dict)
     source_id: str = ""
     entity_key: str = ""
@@ -208,6 +211,7 @@ class CanonicalElement(BaseModel):
 
     # Transform: 4x4 matrix row-major in world coordinates
     transform: Optional[List[float]] = None
+    placement: Dict[str, Any] = Field(default_factory=dict)
 
     # Geometric representation
     bounding_box: Optional[BoundingBox] = None

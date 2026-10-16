@@ -275,9 +275,11 @@
                         <label><input id="verified-use-domain" type="checkbox"> Set fixed simulation domain (metres)</label>
                         <div class="verified-bounds"><label>xmin<input id="verified-domain-xmin" type="number" step="any" value="0"></label><label>xmax<input id="verified-domain-xmax" type="number" step="any" value="10"></label><label>ymin<input id="verified-domain-ymin" type="number" step="any" value="0"></label><label>ymax<input id="verified-domain-ymax" type="number" step="any" value="10"></label><label>zmin<input id="verified-domain-zmin" type="number" step="any" value="0"></label><label>zmax<input id="verified-domain-zmax" type="number" step="any" value="3"></label></div>
                         <p>Crossing elements retain their full source geometry. The domain stays fixed; unresolved boundary treatment blocks acceptance.</p>
+                        <label><input id="verified-boundary-obst" type="checkbox"> Validate structural box boundaries with FDS (single mesh only)</label>
                         <label>Reviewed entity decisions (optional JSON)<input id="verified-decisions" type="file" accept=".json"></label>
                         <label>Approved reference changes (optional JSON)<input id="verified-deltas" type="file" accept=".json"></label>
-                        <label><input id="verified-show-reference" type="checkbox" checked> Show reference geometry (outside FDS)</label>
+                        <label><input id="verified-show-reference" type="checkbox"> Show reference geometry (outside FDS)</label>
+                        <p id="verified-research-notice" role="status"></p>
                         <div id="verified-artifacts"></div>
                         <button id="verified-cancel" type="button" class="button" disabled>Cancel conversion</button>
                         <span id="verified-progress" role="status"></span>

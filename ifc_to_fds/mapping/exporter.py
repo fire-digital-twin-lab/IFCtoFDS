@@ -33,7 +33,7 @@ def clean_fds_id(name: str, fallback: str) -> str:
 
 
 def format_xb(xb: List[float]) -> str:
-    return f"{xb[0]:.4f},{xb[1]:.4f},{xb[2]:.4f},{xb[3]:.4f},{xb[4]:.4f},{xb[5]:.4f}"
+    return ",".join(format(v, ".15g") for v in xb)
 
 
 def format_source_comment(elem: CanonicalElement) -> str:
@@ -146,7 +146,7 @@ def serialize_fds(
 
             lines.append(format_source_comment(elem))
             lines.append(
-                f"&OBST ID='{prim_id}', XB={format_xb(elem.bounding_box.to_xb())}, SURF_ID='CONCRETE' /"
+                f"&OBST ID='{prim_id}', XB={format_xb((elem.representation_bounds or elem.bounding_box).to_xb())}, SURF_ID='CONCRETE' /"
             )
 
         elif (

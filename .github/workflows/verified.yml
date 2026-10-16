@@ -43,20 +43,27 @@ jobs:
       - run: node scripts/generate-inline-export-worker.js
       - run: git diff --exit-code -- js/workers/*-inline.js
   solver:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, fds-6.11.1]
+    runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python -m pip install -e ".[test]"
-      - run: python -m pytest -q -m solver
+      - run: python scripts/install-fds.py
+      - name: Real pinned FDS and boundary fixtures
+        shell: pwsh
+        run: |
+          $env:IFCFDS_SOLVER = (Resolve-Path '.deps/fds-6.11.1/firemodels/FDS6/bin/fds_openmp.exe').Path
+          python -m pytest -q -m solver
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: solver-evidence
-          path: scripts/out/solver-evidence/
+          path: |
+            scripts/out/solver-evidence/
+            .cache/solver-evidence/
 
   research:
     if: github.event_name == 'workflow_dispatch' && inputs.research

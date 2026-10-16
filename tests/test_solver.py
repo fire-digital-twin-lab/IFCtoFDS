@@ -34,3 +34,58 @@ def test_pinned_fds_initialization(box_model):
     assert solver.status == "PASS", solver.reason
     # This fixture uses the supported single-mesh OBST subset.
     assert effective.status == "PASS", effective.reason
+
+
+@pytest.mark.solver
+def test_real_boundary_pipeline_and_changed_output(tiny_ifc, tmp_path):
+    from ifc_to_fds.validation.boundary_fixtures import certify
+    from ifc_to_fds.mapping.boundary import POLICY, certificate_valid
+    from ifc_to_fds.pipeline import convert, audit
+    from ifc_to_fds.mapping.manifest import MappingManifest
+    import hashlib
+
+    executable = os.environ.get("IFCFDS_SOLVER") or shutil.which("fds")
+    assert executable, "Solver suite requires FDS 6.11.1"
+    certificate = os.environ.get("IFCFDS_BOUNDARY_CERTIFICATE")
+    if not certificate:
+        certificate, passed = certify(
+            executable, Path("scripts/out/solver-evidence/boundary-fixtures")
+        )
+        assert passed
+    valid, reason = certificate_valid(
+        certificate, hashlib.sha256(Path(executable).read_bytes()).hexdigest()
+    )
+    assert valid, reason
+    config = dict(
+        boundary_policy=POLICY,
+        simulation_domain=dict(xmin=0.4, xmax=4, ymin=-0.2, ymax=1, zmin=-0.2, zmax=4),
+        audit=dict(
+            solver_executable=executable,
+            boundary_fixture_certificate=str(certificate),
+            solver_evidence_directory=str(
+                Path("scripts/out/solver-evidence/pipeline").resolve()
+            ),
+        ),
+    )
+    result = convert([tiny_ifc[0]], config)
+    assert result["status"] == "MAPPING_VERIFIED", result["report"]
+    manifest = MappingManifest.model_validate(result["manifest"])
+    wall = next(r for r in manifest.records if r.ifc_type == "IfcWall")
+    assert wall.boundary_treatment == "VALIDATED"
+    assert (
+        wall.boundary_evidence["fds_sha256"]
+        == hashlib.sha256(result["fds_text"].encode()).hexdigest()
+    )
+    text = result["fds_text"].replace("XB=0.4,2,0,1,0,3", "XB=0.6,2,0,1,0,3")
+    assert text != result["fds_text"]
+    manifest.fds_sha256 = hashlib.sha256(text.encode()).hexdigest()
+    _, _, report = audit(
+        [tiny_ifc[0]], text, manifest, config, result["geometry_package"]
+    )
+    assert report.status == "REJECTED"
+    assert report.gates["boundary"].status == "FAIL"
+    assert any(
+        f.element_id == wall.entity_key
+        for f in report.findings
+        if f.category == "geometry"
+    )

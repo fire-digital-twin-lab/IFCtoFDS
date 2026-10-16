@@ -21,6 +21,7 @@ from .canonical import (
     StoreyReference,
 )
 from .units import get_length_unit_scale
+from .placement import extract_placement
 
 
 def compute_file_sha256(file_path: str) -> str:
@@ -188,6 +189,7 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
         has_geom = bool(getattr(prod, "Representation", None))
 
         elem = CanonicalElement(
+            placement=extract_placement(prod, source_meta.unit_scale_to_meters),
             building_id=building_and_path(container)[0] if container else None,
             spatial_ancestry=building_and_path(container)[1] if container else [],
             type_class=(

@@ -36,6 +36,7 @@ def build_package(model):
                     source_id=e.source_id,
                     global_id=e.global_id,
                     transform=e.transform,
+                    placement=e.placement,
                     ports=[p.model_dump(mode="json") for p in e.ports],
                     mesh=e.mesh.model_dump(mode="json") if e.mesh else None,
                     openings={
@@ -52,13 +53,18 @@ def build_package(model):
 
 
 def verify_package(package):
+    from .storage import DiskPackage
+
+    if isinstance(package, DiskPackage):
+        package.verify()
+        package = package.index
     if (
         not isinstance(package, dict)
         or package.get("sha256") != seal(package)["sha256"]
     ):
         raise ValueError("Geometry package checksum mismatch")
     if (
-        package.get("schema_version") != SCHEMA_VERSION
+        package.get("schema_version") not in (SCHEMA_VERSION, "0.4.0")
         or package.get("units") != "METRE"
         or package.get("coordinate_frame") != "COMMON_WORLD"
     ):
@@ -120,16 +126,36 @@ def audit_package(model, package, report, config):
     if set(entries) != {e.entity_key for e in model.elements}:
         fail("", "Geometry package inventory differs from IFC")
     for e in model.elements:
-        entry = entries.get(e.entity_key)
+        try:
+            entry = entries.get(e.entity_key)
+        except (ValueError, OSError, KeyError) as exc:
+            fail(e.entity_key, str(exc))
+            continue
         if not entry:
             fail(e.entity_key, "Missing source geometry package entry")
             continue
         if (
             entry.get("source_id") != e.source_id
             or entry.get("global_id") != e.global_id
-            or entry.get("transform") != e.transform
+            or (
+                package.get("schema_version") != "0.4.0"
+                and entry.get("transform") != e.transform
+            )
+            or (
+                package.get("schema_version") != "0.4.0"
+                and entry.get("placement") != e.placement
+            )
         ):
             fail(e.entity_key, "Geometry package identity/transform differs")
+        if package.get("storage_format") and any(
+            entry.get(field) != expected
+            for field, expected in (
+                ("simulation_role", e.simulation_role),
+                ("scope_decision", e.scope_decision.value),
+                ("ifc_type", e.ifc_type),
+            )
+        ):
+            fail(e.entity_key, "Geometry index role/scope/type differs")
         from ifc_to_fds.core.compare import normalize
 
         if normalize(entry.get("ports", [])) != normalize(

@@ -177,7 +177,9 @@ def main(argv=None):
                 .with_name(Path(args.fds).stem + "_geometry.json")
             )
             package = (
-                json.loads(geometry_path.read_text(encoding="utf-8"))
+                __import__(
+                    "ifc_to_fds.geometry.storage", fromlist=["read_package"]
+                ).read_package(geometry_path)
                 if geometry_path.is_file()
                 else None
             )

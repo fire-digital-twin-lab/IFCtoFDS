@@ -24,6 +24,7 @@
                 get('storeys').appendChild(option);
             });
             progress(inventory.total_elements + ' entities in ' + inventory.sources.length + ' sources');
+            get('research-notice').textContent = (inventory.research.known_cases || []).map(function (c) { return c.name + ' [' + c.source_match + '] — research parity NOT RUN. Choose research profile and reference to compare.'; }).join(' ');
         }).catch(function (err) { progress(err.message); });
     }
     function transformInputs() {
@@ -46,8 +47,9 @@
         setFallback: function (file) { fallback = file; },
         init: function () {
             fetch('/api/reference-cases').then(response).then(function (data) {
-                data.cases.forEach(function (id) {
-                    var option = document.createElement('option'); option.value = id; option.textContent = id;
+                data.cases.forEach(function (entry) {
+                    var id = entry.id;
+                    var option = document.createElement('option'); option.value = id; option.textContent = entry.name + ' (' + entry.approval_status + ')';
                     get('reference-case').appendChild(option);
                 });
             }).catch(function () {});
@@ -67,6 +69,7 @@
             var sources = selectedFiles();
             if (!sources.length) return Promise.reject(new Error('Select IFC sources first'));
             configuration.profile = get('profile').value;
+            if (get('boundary-obst').checked) configuration.boundary_policy = 'VALIDATED_BOUNDARY_OBST_SINGLE_MESH';
             if (get('reference-case').value) configuration.reference_case = get('reference-case').value;
             if (get('decisions').files.length) configuration.decisions = JSON.parse(await get('decisions').files[0].text());
             if (get('deltas').files.length) configuration.intentional_deltas = JSON.parse(await get('deltas').files[0].text());
@@ -108,8 +111,8 @@
                 return poll();
             }).then(function (result) { progress(result.status);
                 get('artifacts').replaceChildren();
-                ['fds','geometry','manifest','report','parity','mep','checksums'].forEach(function (name) {
-                    var link = document.createElement('a'); link.href = '/api/jobs/' + jobId + '/artifacts/' + name;
+                Object.keys(result.artifacts || {}).forEach(function (name) {
+                    var link = document.createElement('a'); link.href = result.artifacts[name].url;
                     link.textContent = 'Download ' + name; link.download = ''; link.style.display = 'block'; get('artifacts').appendChild(link);
                 });
                 return result; })
