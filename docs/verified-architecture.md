@@ -1,7 +1,7 @@
 # Verified IFC-to-FDS Mapping Framework: System Architecture
 
-**Version:** 0.2.0-dev  
-**Status:** Active Design & Implementation  
+**Version:** 0.3.0-dev
+**Status:** Development; GEOM effective geometry remains incomplete. See [current limitations](verified-conversion.md).
 **Base Repository:** `fire-digital-twin-lab/IFCtoFDS`  
 **Upstream:** `ProfRino/IFCtoFDS`  
 
@@ -59,7 +59,7 @@
                     │         FDS Mapping Policy Engine            │
                     │ - OBST (Prisms & Flat Slabs)                 │
                     │ - OBST + HOLE (Axis-aligned walls/windows)   │
-                    │ - GEOM (Curved / Non-manifold / Complex)     │
+                    │ - GEOM (Valid Complex Solids)     │
                     │ - SEMANTIC_ONLY (Flow graphs, metadata)      │
                     │ - EXCLUDED_APPROVED (Documented exclusions)  │
                     └──────────────────────┬───────────────────────┘
@@ -84,7 +84,7 @@
                         ▼                                     ▼
      ┌────────────────────────────────────┐ ┌────────────────────────────────────┐
      │       Acceptance Gate & Report     │ │     Web UI & Visualization         │
-     │ - VERIFIED vs REJECTED status      │ │ - Overlay View & Diff Highlighting │
+     │ - VERIFIED / REJECTED / INCONCLUSIVE      │ │ - Overlay View & Diff Highlighting │
      │ - IoU, Deviation, Topology metrics │ │ - Element Provenance Inspector     │
      │ - Detailed Findings (P0-P3)        │ │ - Export FDS + Manifest + Report   │
      └────────────────────────────────────┘ └────────────────────────────────────┘

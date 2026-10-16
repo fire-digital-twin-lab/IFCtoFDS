@@ -51,6 +51,7 @@
         applyTheme(readSavedTheme());
         if (window.lucide) window.lucide.createIcons();
         bindEvents();
+        ns.verified.init();
         clearFdsModel();
         checkBackendHealth();
         window.addEventListener('focus', checkBackendHealth);
@@ -343,6 +344,7 @@
             var file = event.target.files[0];
             if (!file) return;
             state.currentIfcFile = file;
+            ns.verified.setFallback(file);
             cancelPendingExport();
             clearGeneratedFds();
             clearFdsModel();
@@ -797,7 +799,7 @@
     function refreshConversionActions() {
         els.convertIfc.disabled = state.exportBusy || !state.exportEnabled;
         if (els.convertVerified) {
-            els.convertVerified.disabled = state.exportBusy || !state.exportEnabled;
+            els.convertVerified.disabled = state.exportBusy || (!state.exportEnabled && !ns.verified.hasFiles());
         }
         els.convertSelectedObst.disabled = state.exportBusy || !selectedGeneratedGeomStepIds(state.selection).length;
         if (els.deleteSelected) {
@@ -880,16 +882,13 @@
     // ifc-adapter parse (placements, void carving, classifications). We do it on demand
     // the first time the user clicks Convert, and cache the result for repeated exports.
     function ensureFullModel() {
-        if (state.fullModel) return Promise.resolve(state.fullModel);
+        if (state.fullModel && !state.fullModel.elements.some(function (e) { return e.exportGeometryComplete === false; })) return Promise.resolve(state.fullModel);
         if (!state.ifcSourceText) {
             return Promise.reject(new Error('IFC source not in memory — please reopen the file.'));
         }
         showLoading('Preparing FDS conversion', 'Parsing entities…');
-        // When web-ifc rendered the preview, the heavy box-subtracted displayMesh built by
-        // ifc-adapter is never shown, so we can skip that per-wall CSG pass for a 5–10×
-        // parse speed-up. The watertight export mesh is unaffected.
-        var displayMeshesAvailable = !!(state.lastDisplayMeshes && state.lastDisplayMeshes.length);
-        var parseOptions = displayMeshesAvailable ? { skipBoxOpenings: true } : undefined;
+        // Export completes openings independently of the preview source.
+        var parseOptions = { skipBoxOpenings: false };
         var parsePromise = ifcAdapter.parseAsync(state.ifcSourceText, state.ifcFileName, function (fraction) {
             setLoadingProgress(fraction, 'Parsing entities…');
         }, parseOptions);
@@ -1017,7 +1016,7 @@
 
     function exportVerified() {
         if (state.exportBusy) return;
-        if (!state.ifcSourceText && !state.currentIfcFile) {
+        if (!state.ifcSourceText && !state.currentIfcFile && !ns.verified.hasFiles()) {
             addExportDiagnostic('IFC source not in memory — please reopen the file.');
             return;
         }
@@ -1026,31 +1025,10 @@
         showLoading('Verified Conversion: ' + fileLabel, 'Processing with IfcOpenShell & OpenCASCADE...');
         setExportBusy(true, 'convert-verified');
 
-        var formData = new FormData();
-        var blob = state.currentIfcFile || new Blob([state.ifcSourceText], { type: 'text/plain' });
-        formData.append('file', blob, state.ifcFileName || 'model.ifc');
-        formData.append('cell_size', (els.meshCellSize && els.meshCellSize.value) ? els.meshCellSize.value : '0.2');
-        formData.append('all_geom', 'true');
-        var includeReview = (els.includeReviewSolids && els.includeReviewSolids.checked) ? 'true' : 'false';
-        formData.append('include_review', includeReview);
-
-        var apiUrl = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
-            ? '/api/convert'
-            : 'http://127.0.0.1:8000/api/convert';
-
-        fetch(apiUrl, {
-            method: 'POST',
-            body: formData
-        })
-        .then(function (res) {
-            if (!res.ok) {
-                return res.json().then(function (err) {
-                    throw new Error(err.detail || ('HTTP ' + res.status));
-                }).catch(function (fallback) {
-                    throw new Error('HTTP ' + res.status + ': ' + (fallback.message || fallback));
-                });
-            }
-            return res.json();
+        var blob = state.currentIfcFile || new File([state.ifcSourceText || ''], state.ifcFileName || 'model.ifc');
+        ns.verified.run(blob, {
+            cell_size: Number(els.meshCellSize.value || 0.2), all_geom: true,
+            include_review: !!(els.includeReviewSolids && els.includeReviewSolids.checked)
         })
         .then(function (data) {
             hideLoading();
@@ -1060,7 +1038,7 @@
             }
 
             var base = (state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
-            var fileName = base + '_verified.fds';
+            var fileName = base + (data.status === 'VERIFIED' ? '_verified.fds' : '_converted.fds');
 
             state.generatedFdsText = data.fds_text;
             state.generatedFdsName = fileName;
@@ -1092,43 +1070,26 @@
             els.auditBody.innerHTML = '<p>No audit report available. Run <strong>Verified Conversion</strong> to generate a complete 3-tier audit.</p>';
             return;
         }
-        var isVerified = report.status === 'VERIFIED';
-        var verdictClass = isVerified ? 'verdict-verified' : 'verdict-rejected';
-        var html = '';
-
-        html += '<div class="audit-verdict-banner ' + verdictClass + '">';
-        html += '<div><span style="font-size:16px;">Overall Verdict: <strong>' + report.status + '</strong></span><br><small style="color:inherit;opacity:0.85;">' + (isVerified ? 'Strict acceptance gating passed (0 unmitigated P0/P1 defects).' : 'Acceptance gate blocked: P0/P1 defects require review.') + '</small></div>';
-        html += '<span style="font-size:18px;">' + (isVerified ? '✓ PASS' : '✗ REJECTED') + '</span>';
-        html += '</div>';
-
-        html += '<div class="audit-summary-grid">';
-        html += '<div class="audit-summary-item"><div class="label" style="font-size:11px;color:var(--muted)">Accounted Solids</div><div class="audit-summary-num" style="color:var(--ok)">' + (report.matched_count || 0) + ' / ' + (report.total_elements_checked || 0) + '</div></div>';
-        html += '<div class="audit-summary-item"><div class="label" style="font-size:11px;color:var(--muted)">Missing Solids</div><div class="audit-summary-num" style="color:' + ((report.missing_count || 0) > 0 ? 'var(--danger)' : 'var(--ok)') + '">' + (report.missing_count || 0) + '</div></div>';
-        html += '<div class="audit-summary-item"><div class="label" style="font-size:11px;color:var(--muted)">P0 Blockers</div><div class="audit-summary-num" style="color:' + (((report.summary && report.summary.P0) || 0) > 0 ? 'var(--danger)' : 'var(--ok)') + '">' + ((report.summary && report.summary.P0) || 0) + '</div></div>';
-        html += '<div class="audit-summary-item"><div class="label" style="font-size:11px;color:var(--muted)">P1 Majors</div><div class="audit-summary-num" style="color:' + (((report.summary && report.summary.P1) || 0) > 0 ? 'var(--warn)' : 'var(--ok)') + '">' + ((report.summary && report.summary.P1) || 0) + '</div></div>';
-        html += '<div class="audit-summary-item"><div class="label" style="font-size:11px;color:var(--muted)">P2 Minors</div><div class="audit-summary-num" style="color:var(--muted-2)">' + ((report.summary && report.summary.P2) || 0) + '</div></div>';
-        html += '</div>';
-
-        html += '<section style="margin-top:16px;"><h3 style="margin-bottom:8px;font-size:14px;">Audit Findings (' + (report.findings ? report.findings.length : 0) + ')</h3>';
-        if (!report.findings || report.findings.length === 0) {
-            html += '<p style="color:var(--ok);font-size:13px;">✓ Zero defects or geometric deviations identified across Tier 1 (Inventory), Tier 2 (Syntax/Traceability), and Tier 3 (Geometry/Openings).</p>';
-        } else {
-            html += '<table class="audit-table">';
-            html += '<thead><tr><th style="width:70px">Severity</th><th style="width:140px">Category</th><th style="width:200px">Title</th><th>Detail</th></tr></thead><tbody>';
-            report.findings.forEach(function (f) {
-                var badgeClass = 'badge-' + (f.severity || 'p2').toLowerCase();
-                html += '<tr>';
-                html += '<td><span class="' + badgeClass + '">' + f.severity + '</span></td>';
-                html += '<td>' + (f.category || '') + '</td>';
-                html += '<td><strong>' + (f.title || '') + '</strong></td>';
-                html += '<td style="color:var(--muted);">' + (f.detail || '') + '</td>';
-                html += '</tr>';
-            });
-            html += '</tbody></table>';
+        els.auditBody.replaceChildren();
+        function line(tag, text, parent) {
+            var node = document.createElement(tag);
+            node.textContent = text;
+            (parent || els.auditBody).appendChild(node);
+            return node;
         }
-        html += '</section>';
-
-        els.auditBody.innerHTML = html;
+        line('h3', 'Acceptance: ' + report.status);
+        line('p', 'Matched solids: ' + report.matched_count + ' / accounted entities: ' + report.total_elements_checked);
+        var scope = (report.configuration || {}).scope || {};
+        var storeys = (((report.coverage || {}).scope || {}).selected_storeys || []);
+        line('p', 'Export storeys: ' + (storeys.length ? storeys.join(', ') : 'All storeys'));
+        if (scope.bounding_box) line('p', 'Export volume (m): ' + ['xmin','xmax','ymin','ymax','zmin','zmax'].map(function (key) { return key + ': ' + scope.bounding_box[key]; }).join(', '));
+        line('p', 'Retained crossing elements: ' + (((report.coverage || {}).scope || {}).BOUNDARY_RETAINED || 0));
+        var list = line('ul', '');
+        Object.keys(report.gates || {}).forEach(function (name) {
+            var gate = report.gates[name];
+            line('li', name + ': ' + gate.status + (gate.reason ? ' — ' + gate.reason : ''), list);
+        });
+        (report.findings || []).forEach(function (f) { line('p', f.severity + ' — ' + f.element_id + ': ' + f.detail); });
     }
 
     function openAudit() {

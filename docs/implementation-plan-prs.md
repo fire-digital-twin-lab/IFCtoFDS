@@ -1,4 +1,7 @@
-# Verified IFC-to-FDS Framework: Implementation & PR Roadmap
+# Verified IFC-to-FDS Framework: Initial Implementation & PR Roadmap
+
+Historical framework roadmap. Implementation claims here are not acceptance evidence.
+See [review remediation status](review-remediation.md) and [current workflow/limitations](verified-conversion.md).
 
 This document outlines the sequential Pull Request roadmap, technical scope, and strict acceptance criteria for each phase.
 

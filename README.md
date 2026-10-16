@@ -5,12 +5,28 @@
 [![License: AGPL-3.0](https://img.shields.io/github/license/ProfRino/IFCtoFDS?label=License&color=yellow)](LICENSE)
 
 IFCtoFDS turns an **IFC** building model — the format every modern BIM tool
-exports — into a ready-to-run **Fire Dynamics Simulator (FDS)** input file,
+exports — into a **Fire Dynamics Simulator (FDS)** geometry input file with a separate acceptance report,
 so fire-safety engineers can move from architectural geometry to a simulation
 mesh without rebuilding the model by hand.
 
-The whole workbench runs **entirely in your web browser**. There is no
-installation, no backend, no Python environment, and no build step.
+The workbench has two modes:
+
+- **Quick Conversion** runs in the browser for preview and preliminary conversion.
+- **Verified Conversion** uses a local Python/IfcOpenShell service, explicit export scope,
+  multiple IFC sources, provenance manifests and independent audit gates.
+
+An audit may return `VERIFIED`, `REJECTED` or `INCONCLUSIVE`. The effective FDS geometry
+adapter currently supports a single-mesh OBST subset. GEOM cut-cell verification
+remains incomplete, so building conversions using GEOM remain inconclusive unless another required gate fails. See
+[Verified conversion guide and limitations](docs/verified-conversion.md).
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python -m pip install -e ".[test]"
+.venv\Scripts\python -m ifc_to_fds serve
+```
+
+Open `http://127.0.0.1:8000`. Verified Conversion uses this backend's same-origin page.
 
 ![Demo](demo/demo.gif)
 
@@ -43,8 +59,7 @@ installation, no backend, no Python environment, and no build step.
 
 ## Features
 
-Pure client-side — no installation, no build step, no backend. The entire
-workbench runs from a single `index.html` and a folder of static `.js` modules.
+Quick mode uses `index.html` and static JavaScript modules. Verified mode additionally requires the local Python service described above.
 
 * **Native IFC parser.** Handles `IfcExtrudedAreaSolid`, `IfcFacetedBrep`,
   `IfcTriangulatedFaceSet`, `IfcFaceBasedSurfaceModel`, planar
@@ -82,8 +97,8 @@ workbench runs from a single `index.html` and a folder of static `.js` modules.
 > **👉 [Run it now in your browser — profrino.github.io/IFCtoFDS](https://profrino.github.io/IFCtoFDS/)**
 >
 > No installation, no local server, no account. Just click *Open IFC* and load
-> an `.ifc` model. The hosted page and a local clone are byte-identical — both
-> are fully offline-capable once the page has loaded.
+> an `.ifc` model. The hosted upstream demo provides Quick Conversion.
+> Verified Conversion uses the local Python service described above.
 
 For a versioned snapshot, download the [latest release zip](https://github.com/ProfRino/IFCtoFDS/releases/latest)
 — a clean zip with no git history (recommended). All releases with

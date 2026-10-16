@@ -252,9 +252,32 @@
                         <span id="backend-status-text">Backend: Checking...</span>
                     </div>
 
+                    <fieldset id="verified-options">
+                        <legend>Verified conversion scope</legend>
+                        <label>IFC sources <input id="verified-sources" type="file" accept=".ifc" multiple></label>
+                        <p>Uses the open IFC when no additional sources are selected. MEP geometry is preserved.</p>
+                        <button id="verified-inventory" type="button" class="button">Read sources and storeys</button>
+                        <label>Storeys (none = full model)<select id="verified-storeys" multiple aria-label="Export storeys"></select></label>
+                        <label><input id="verified-common" type="checkbox"> Sources share a confirmed coordinate system</label>
+                        <div id="verified-transforms"></div>
+                        <label><input id="verified-transform-confirm" type="checkbox"> I have checked the source offsets and rotations above</label>
+                        <label><input id="verified-use-bounds" type="checkbox"> Limit export to volume (metres)</label>
+                        <div class="verified-bounds">
+                            <label>xmin<input id="verified-xmin" type="number" step="any" value="0"></label>
+                            <label>xmax<input id="verified-xmax" type="number" step="any" value="10"></label>
+                            <label>ymin<input id="verified-ymin" type="number" step="any" value="0"></label>
+                            <label>ymax<input id="verified-ymax" type="number" step="any" value="10"></label>
+                            <label>zmin<input id="verified-zmin" type="number" step="any" value="0"></label>
+                            <label>zmax<input id="verified-zmax" type="number" step="any" value="3"></label>
+                        </div>
+                        <p>Whole elements crossing the volume are retained and reported. Viewer clipping only changes the view.</p>
+                        <button id="verified-cancel" type="button" class="button" disabled>Cancel conversion</button>
+                        <span id="verified-progress" role="status"></span>
+                    </fieldset>
+
                     <button id="convert-ifc" class="button primary conversion-action" type="button" title="Convert IFC to FDS geometry" disabled>
                         <i data-lucide="refresh-cw"></i>
-                        <span>Convert to FDS</span>
+                        <span>Quick Conversion</span>
                     </button>
                     <button id="convert-verified" class="button conversion-action secondary-action" type="button" title="Convert using authoritative IfcOpenShell backend with independent 3-tier validation audit" disabled>
                         <i data-lucide="shield-check"></i>
@@ -424,6 +447,7 @@
     <script src="js/ifc/processed-file.js"></script>
     <script src="js/compare/checks.js"></script>
     <script src="js/viewer/scene-viewer.js"></script>
+    <script src="js/verified-workflow.js"></script>
     <script src="js/app-controller.js"></script>
 
 </body>
