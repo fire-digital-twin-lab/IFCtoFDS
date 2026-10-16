@@ -1,67 +1,50 @@
-"""MEP and Fire Safety System Semantic Classifier.
-
-Categorizes building services into Ventilation, Smoke Extraction,
-Fire Protection, and general distribution systems.
-"""
-
-from typing import Tuple
-
+"""Prefer explicit IFC type/system semantics to names."""
 
 HVAC_TYPES = {
     "IFCDUCTSEGMENT",
     "IFCDUCTFITTING",
     "IFCAIRTERMINAL",
     "IFCAIRTERMINALBOX",
-    "IFCFLOWCONTROLLER",
-    "IFCFLOWMOVINGDEVICE",
     "IFCDUCTSILENCER",
+    "IFCFAN",
+    "IFCDAMPER",
+    "IFCFLOWMOVINGDEVICE",
+    "IFCFLOWCONTROLLER",
 }
-
-FP_TYPES = {
-    "IFCFIRESUPPRESSIONTERMINAL",
+MEP_TYPES = HVAC_TYPES | {
     "IFCPIPESEGMENT",
     "IFCPIPEFITTING",
     "IFCVALVE",
+    "IFCPUMP",
+    "IFCFIRESUPPRESSIONTERMINAL",
+    "IFCFLOWSEGMENT",
+    "IFCFLOWFITTING",
+    "IFCFLOWTERMINAL",
+    "IFCUNITARYEQUIPMENT",
 }
 
 
-def classify_mep_element(ifc_type: str, name: str, system_name: str = "") -> Tuple[str, bool]:
-    """Classifies an element into system category and fire-safety criticality.
-
-    Returns:
-        (category, is_fire_safety_critical)
-        category in {"VENTILATION", "SMOKE_EXTRACT", "FIRE_SUPPRESSION", "PLUMBING", "OTHER"}
-    """
-    type_upper = ifc_type.upper()
-    name_upper = (name or "").upper()
-    sys_upper = (system_name or "").upper()
-
-    # 1. Fire Suppression & Sprinklers
-    if (
-        type_upper == "IFCFIRESUPPRESSIONTERMINAL"
-        or "SPRINKLER" in name_upper
-        or "PCCC" in sys_upper
-        or "FIRE" in sys_upper
-        or "CHUA_CHAY" in sys_upper
-    ):
-        return "FIRE_SUPPRESSION", True
-
-    # 2. Smoke Extraction & Pressurization
-    if (
-        "SMOKE" in sys_upper
-        or "SMOKE" in name_upper
-        or "HUT_KHOI" in sys_upper
-        or "TANG_AP" in sys_upper
-        or "PRESSURIZATION" in sys_upper
+def classify_mep_element(ifc_type, name, system_name="", predefined_type=""):
+    t = (ifc_type or "").upper()
+    sys = str(system_name or "").upper()
+    p = str(predefined_type or "").upper()
+    n = str(name or "").upper()
+    if p in ("SMOKEEXHAUST", "SMOKECONTROL", "PRESSURISATION") or any(
+        w in sys for w in ("SMOKE", "HUT_KHOI", "TANG_AP", "PRESSURIZATION")
     ):
         return "SMOKE_EXTRACT", True
-
-    # 3. Ventilation & Ductwork
-    if type_upper in HVAC_TYPES or "DUCT" in name_upper or "THONG_GIO" in sys_upper:
+    if (
+        t == "IFCFIRESUPPRESSIONTERMINAL"
+        or p in ("FIREPROTECTION", "SPRINKLER", "FIREHYDRANT")
+        or any(w in sys for w in ("PCCC", "FIRE", "SPRINKLER", "CHUA_CHAY"))
+    ):
+        return "FIRE_SUPPRESSION", True
+    if p in ("VENTILATION", "AIRCONDITIONING", "EXHAUST") or t in HVAC_TYPES:
         return "VENTILATION", False
-
-    # 4. Pipework / Plumbing
-    if type_upper in {"IFCPIPESEGMENT", "IFCPIPEFITTING"}:
+    if t in ("IFCPIPESEGMENT", "IFCPIPEFITTING"):
         return "PLUMBING", False
-
+    if "SMOKE" in n:
+        return "SMOKE_EXTRACT", True
+    if "SPRINKLER" in n:
+        return "FIRE_SUPPRESSION", True
     return "OTHER", False
