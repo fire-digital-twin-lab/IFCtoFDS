@@ -208,6 +208,7 @@ class CanonicalModel(BaseModel):
     requested_scope: Dict[str, Any] = Field(default_factory=dict)
     exported_bounds: Optional[BoundingBox] = None
     timings: Dict[str, float] = Field(default_factory=dict)
+    mapping_plan: Optional[Any] = None
 
     def get_element_by_guid(self, guid: str) -> Optional[CanonicalElement]:
         matches = [el for el in self.elements if el.global_id == guid]
