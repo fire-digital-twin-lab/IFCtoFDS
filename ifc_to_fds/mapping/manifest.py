@@ -2,9 +2,24 @@
 
 import csv
 import io
+import json
 from typing import Any
 from pydantic import BaseModel, Field
 from ifc_to_fds.core.canonical import SCHEMA_VERSION
+
+
+def _serialize_csv_value(value: Any) -> Any:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        if not value:
+            return ""
+        if all(isinstance(item, str) for item in value):
+            return ";".join(value)
+        return json.dumps(value, sort_keys=True)
+    if isinstance(value, dict):
+        return json.dumps(value, sort_keys=True)
+    return value
 
 
 class ManifestRecord(BaseModel):
@@ -72,12 +87,7 @@ class MappingManifest(BaseModel):
         writer.writerow(fields)
         for record in self.records:
             values = record.model_dump()
-            writer.writerow(
-                [
-                    ";".join(values[k]) if isinstance(values[k], list) else values[k]
-                    for k in fields
-                ]
-            )
+            writer.writerow([_serialize_csv_value(values[k]) for k in fields])
         return output.getvalue()
 
 

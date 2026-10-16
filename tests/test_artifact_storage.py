@@ -119,3 +119,113 @@ def test_bad_payload_reports_geometry_gate_and_entity(box_model, tmp_path, mutat
         f.element_id == "fixture:1" and f.category == "geometry_preservation"
         for f in report.findings
     )
+
+
+def test_manifest_to_csv_with_openings_and_ports(box_model, tmp_path):
+    import csv
+    from ifc_to_fds.core.canonical import OpeningReference, PortReference, BoundingBox
+    from ifc_to_fds.mapping.manifest import build_manifest
+    from ifc_to_fds.pipeline import save_artifacts
+
+    elem = box_model.elements[0]
+    elem.openings = [
+        OpeningReference(
+            opening_global_id="op-1",
+            opening_step_id=101,
+            opening_name="Window Void",
+            bounding_box=BoundingBox(
+                xmin=0.1, xmax=0.5, ymin=0.1, ymax=0.5, zmin=0.1, zmax=0.5
+            ),
+            is_subtracted=True,
+        )
+    ]
+    elem.ports = [
+        PortReference(
+            port_global_id="port-1",
+            port_step_id=201,
+            name="Inlet",
+            flow_direction="SOURCE",
+            local_position=[0.0, 0.0, 0.0],
+            world_position=[1.0, 2.0, 3.0],
+            port_key="fixture:port-1",
+        )
+    ]
+    elem.system_ids = ["SYS_VENT_1", "SYS_SMOKE_2"]
+    manifest = build_manifest(box_model, fds_text="&OBST XB=0,1,0,1,0,1 /")
+
+    # Verify to_csv executes without TypeError
+    csv_text = manifest.to_csv()
+    assert isinstance(csv_text, str)
+
+    # Parse CSV and verify structured fields are valid JSON and string lists are semicolon-separated
+    reader = csv.DictReader(csv_text.splitlines())
+    rows = list(reader)
+    assert len(rows) == 1
+    row = rows[0]
+
+    # Semicolon joined string lists
+    assert row["system_ids"] == "SYS_VENT_1;SYS_SMOKE_2"
+
+    # JSON serialized list of dicts for openings
+    openings_data = json.loads(row["openings"])
+    assert isinstance(openings_data, list) and len(openings_data) == 1
+    assert openings_data[0]["opening_global_id"] == "op-1"
+    assert openings_data[0]["opening_name"] == "Window Void"
+
+    # JSON serialized list of dicts for ports
+    ports_data = json.loads(row["ports"])
+    assert isinstance(ports_data, list) and len(ports_data) == 1
+    assert ports_data[0]["port_global_id"] == "port-1"
+    assert ports_data[0]["name"] == "Inlet"
+
+    # Verify save_artifacts writes _manifest.csv and all expected artifacts
+    dummy_result = {
+        "fds_text": "&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n&OBST XB=0,2,0,1,0,3 /",
+        "manifest": manifest.model_dump(mode="json"),
+        "report": {"status": "INCONCLUSIVE", "gates": {}},
+        "inventory": box_model.model_dump(
+            mode="json", exclude={"elements": {"__all__": {"mesh": True}}}
+        ),
+        "mep_graph": box_model.mep_graph.model_dump(mode="json"),
+        "configuration": {},
+        "timings": {},
+        "parity_report": {},
+        "markdown_report": "# Test Report",
+        "geometry_package": write_package(box_model, tmp_path / "pkg.json"),
+    }
+    out_file = tmp_path / "model.fds"
+    save_artifacts(dummy_result, out_file)
+    csv_file = tmp_path / "model_manifest.csv"
+    assert csv_file.is_file()
+    assert len(csv_file.read_text(encoding="utf-8")) > 0
+
+
+def test_fzk_haus_e2e_conversion_and_artifacts(tmp_path):
+    from pathlib import Path
+    from ifc_to_fds.pipeline import convert, save_artifacts
+
+    fzk_path = Path("examples/AC20-FZK-Haus.ifc")
+    assert fzk_path.is_file()
+    result = convert(
+        [str(fzk_path)],
+        configuration={"scope": {"storeys": ["Erdgeschoss"]}},
+        output_directory=tmp_path,
+    )
+    output_fds = tmp_path / "fzk.fds"
+    save_artifacts(result, output_fds)
+
+    assert output_fds.is_file()
+    assert (tmp_path / "fzk_manifest.json").is_file()
+    csv_file = tmp_path / "fzk_manifest.csv"
+    assert csv_file.is_file()
+    assert csv_file.stat().st_size > 0
+    assert (tmp_path / "fzk_acceptance_report.json").is_file()
+    assert (tmp_path / "fzk_acceptance_report.md").is_file()
+    assert (tmp_path / "fzk_geometry.json").is_file()
+    assert (tmp_path / "fzk_geometry.zip").is_file()
+    assert (tmp_path / "fzk_checksums.json").is_file()
+    manifest_data = result["manifest"]
+    assert isinstance(manifest_data, dict)
+    assert len(manifest_data["records"]) > 0
+
+
