@@ -113,7 +113,8 @@
             var elementMode = strategyForElement(summary.mode, element, options);
             if (elementMode === 'geom') {
                 summary.geoms += 1;
-                summary.triangles += element.mesh && element.mesh.faces ? element.mesh.faces.length : 0;
+                var gMesh = element.geomExportMesh || element.displayMesh || element.mesh;
+                summary.triangles += gMesh && gMesh.faces ? gMesh.faces.length : 0;
             } else if (elementMode === 'voxel') {
                 var voxelized = voxelizeElement(element, voxelSize, openingThickening, openingVoxelPolicy);
                 summary.obsts += voxelized.boxes.length;
@@ -354,10 +355,12 @@
         var verts = [];
         var faces = [];
         var id = allocatedId || cleanId(element.name, index);
-        element.mesh.vertices.forEach(function (v) {
+        if (element.exportGeometryComplete === false) throw new Error('Incomplete opening processing: ' + element.name);
+        var targetMesh = element.geomExportMesh || element.displayMesh || element.mesh;
+        targetMesh.vertices.forEach(function (v) {
             verts.push(formatNumber(v[0]), formatNumber(v[1]), formatNumber(v[2]));
         });
-        element.mesh.faces.forEach(function (face) {
+        targetMesh.faces.forEach(function (face) {
             faces.push(face[0] + 1, face[1] + 1, face[2] + 1, 1);
         });
 

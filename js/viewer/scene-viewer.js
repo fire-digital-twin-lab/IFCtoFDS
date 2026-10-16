@@ -185,6 +185,87 @@
         this.applyFdsClipVisibility();
     };
 
+    SceneViewer.prototype.bindVerifiedArtifacts = function (artifacts) {
+        var self = this, generation = 0, controller;
+        if (this.cancelVerifiedLoad) this.cancelVerifiedLoad();
+        function reset() {
+            generation++;
+            if (controller) controller.abort();
+            if (self.verifiedReferenceGroup) clearGroup(self.verifiedReferenceGroup);
+        }
+        this.cancelVerifiedLoad = reset;
+        var toggle = document.getElementById('verified-show-reference');
+        toggle.checked = false;
+        toggle.onchange = async function () {
+            reset();
+            if (!toggle.checked) return;
+            controller = new AbortController();
+            var token = generation, signal = controller.signal;
+            try {
+                var response = await fetch(artifacts.geometry.url, {signal:signal});
+                if (!response.ok) throw new Error('Geometry index unavailable');
+                var index = await response.json();
+                if (token !== generation) return;
+                if (self.verifiedReferenceGroup) self.ifcGroup.remove(self.verifiedReferenceGroup);
+                self.verifiedReferenceGroup = new THREE.Group();
+                self.ifcGroup.add(self.verifiedReferenceGroup);
+                var entries = Object.values(index.elements).filter(function (entry) {
+                    return entry.mesh && entry.simulation_role === 'REFERENCE_GEOMETRY' && entry.scope_decision !== 'OUT_OF_SCOPE';
+                });
+                var next = 0;
+                async function worker() {
+                    while (next < entries.length && token === generation) {
+                        var entry = entries[next++], ref = entry.mesh;
+                        var url = artifacts.geometry.url.replace(/\/artifacts\/geometry$/, '/geometry/' + ref.payload);
+                        var res = await fetch(url, {signal:signal});
+                        if (!res.ok) throw new Error('Geometry payload unavailable: ' + entry.entity_key);
+                        var buffer = await res.arrayBuffer();
+                        var hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))).map(function (x) {return x.toString(16).padStart(2, '0');}).join('');
+                        if (hash !== ref.payload || buffer.byteLength !== ref.byte_length) throw new Error('Geometry payload checksum mismatch');
+                        var view = new DataView(buffer), vertices = [], faces = [];
+                        for (var i=0; i<ref.vertex_count; i++) vertices.push([0,1,2].map(function (axis) {return view.getFloat64(i*24+axis*8,true);}));
+                        for (var j=0; j<ref.face_count; j++) faces.push([0,1,2].map(function (axis) {return view.getUint32(ref.faces_offset+j*12+axis*4,true);}));
+                        if (token !== generation) return;
+                        var mesh = self.makeIfcElement({mesh:{vertices:vertices,faces:faces}, ifcType:entry.ifc_type,
+                            name:entry.name, globalId:entry.global_id, stepId:entry.step_id, convertible:false, fdsRole:entry.simulation_role});
+                        mesh.userData.entityKey = entry.entity_key;
+                        self.verifiedReferenceGroup.add(mesh);
+                    }
+                }
+                await Promise.all([worker(), worker()]);
+            } catch (error) {
+                if (error.name !== 'AbortError' && token === generation) {
+                    reset(); toggle.checked = false;
+                    document.getElementById('verified-progress').textContent = error.message;
+                }
+            }
+        };
+    };
+
+    SceneViewer.prototype.loadVerifiedGeometry = function (packageData, manifest) {
+        if (this.verifiedReferenceGroup) {
+            clearGroup(this.verifiedReferenceGroup);
+            this.ifcGroup.remove(this.verifiedReferenceGroup);
+        }
+        this.verifiedReferenceGroup = new THREE.Group();
+        this.verifiedReferenceGroup.name = 'Verified source reference (not FDS obstacles)';
+        this.ifcGroup.add(this.verifiedReferenceGroup);
+        var entries = (packageData || {}).elements || {}, self = this;
+        (manifest.records || []).forEach(function (record) {
+            var entry = entries[record.entity_key];
+            if (!entry || !entry.mesh || record.simulation_role !== 'REFERENCE_GEOMETRY' || record.scope_decision === 'OUT_OF_SCOPE') return;
+            var mesh = self.makeIfcElement({mesh: entry.mesh, ifcType: record.ifc_type, name: record.name,
+                globalId: record.global_id, stepId: record.step_id, convertible: false,
+                fdsRole: record.simulation_role, raw: record});
+            mesh.userData.entityKey = record.entity_key;
+            mesh.userData.simulationRole = record.simulation_role;
+            self.verifiedReferenceGroup.add(mesh);
+        });
+        this.verifiedReferenceGroup.visible = document.getElementById('verified-show-reference').checked;
+        var group = this.verifiedReferenceGroup;
+        document.getElementById('verified-show-reference').onchange = function (event) { group.visible = event.target.checked; };
+    };
+
     SceneViewer.prototype.loadIfcModel = function (model, displayMeshes) {
         this.setNavigationMode('orbit');
         this.setSelectedObjects([]);

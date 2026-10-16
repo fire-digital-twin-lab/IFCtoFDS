@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ifc-to-fds"
+version = "0.5.0"
+description = "Verified IFC-to-FDS mapping and validation framework"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-or-later" }
+authors = [
+    { name = "Fire Digital Twin Lab" }
+]
+dependencies = [
+    "ifcopenshell>=0.8.0",
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "numpy>=1.22.0",
+    "scipy>=1.11,<2",
+    "shapely>=2.0.0",
+    "python-multipart>=0.0.18",
+    "trimesh>=4.6,<6",
+    "manifold3d>=3,<4",
+    "rtree>=1.3,<2",
+    "psutil>=6,<8"
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+ifc-to-fds = "ifc_to_fds.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not solver'"
+markers = ["solver: requires an installed FDS solver"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ifc_to_fds*"]
+
+[tool.pyright]
+include = ["ifc_to_fds", "tests"]
+extraPaths = ["."]
+pythonVersion = "3.12"

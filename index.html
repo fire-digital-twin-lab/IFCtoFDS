@@ -31,6 +31,12 @@
                 <button id="reset-camera" class="icon-button" type="button" title="Reset camera">
                     <i data-lucide="scan"></i>
                 </button>
+                <button id="open-audit" class="icon-button" type="button" title="View Acceptance Audit Report" disabled>
+                    <i data-lucide="file-check"></i>
+                </button>
+                <button id="save-manifest" class="icon-button" type="button" title="Save Mapping Manifest (JSON)" disabled>
+                    <i data-lucide="file-spreadsheet"></i>
+                </button>
                 <button id="save-processed" class="icon-button" type="button" title="Save processed IFC for instant reopen" disabled>
                     <i data-lucide="hard-drive-download"></i>
                 </button>
@@ -241,9 +247,51 @@
                         <span>Include furniture, MEP and proxy solids</span>
                     </label>
 
+                    <div class="backend-status-row" id="backend-status-row">
+                        <span class="status-indicator offline" id="backend-status-indicator"></span>
+                        <span id="backend-status-text">Backend: Checking...</span>
+                    </div>
+
+                    <fieldset id="verified-options">
+                        <legend>Mapping verification</legend>
+                        <label>Acceptance profile<select id="verified-profile"><option value="mapping">Mapping</option><option value="research-basement">Research reference</option><option value="simulation">Simulation (evidence required)</option></select></label>
+                        <label>Reference case<select id="verified-reference-case"><option value="">None</option></select></label>
+                        <label>IFC sources <input id="verified-sources" type="file" accept=".ifc" multiple></label>
+                        <p>Uses the open IFC when no additional sources are selected. MEP geometry is preserved separately; it becomes an FDS obstacle only through a reviewed policy.</p>
+                        <button id="verified-inventory" type="button" class="button">Read sources and storeys</button>
+                        <label>Storeys (none = full model)<select id="verified-storeys" multiple aria-label="Export storeys"></select></label>
+                        <label><input id="verified-common" type="checkbox"> Sources share a confirmed coordinate system</label>
+                        <div id="verified-transforms"></div>
+                        <label><input id="verified-transform-confirm" type="checkbox"> I have checked the source offsets and rotations above</label>
+                        <label><input id="verified-use-bounds" type="checkbox"> Limit export to volume (metres)</label>
+                        <div class="verified-bounds">
+                            <label>xmin<input id="verified-xmin" type="number" step="any" value="0"></label>
+                            <label>xmax<input id="verified-xmax" type="number" step="any" value="10"></label>
+                            <label>ymin<input id="verified-ymin" type="number" step="any" value="0"></label>
+                            <label>ymax<input id="verified-ymax" type="number" step="any" value="10"></label>
+                            <label>zmin<input id="verified-zmin" type="number" step="any" value="0"></label>
+                            <label>zmax<input id="verified-zmax" type="number" step="any" value="3"></label>
+                        </div>
+                        <label><input id="verified-use-domain" type="checkbox"> Set fixed simulation domain (metres)</label>
+                        <div class="verified-bounds"><label>xmin<input id="verified-domain-xmin" type="number" step="any" value="0"></label><label>xmax<input id="verified-domain-xmax" type="number" step="any" value="10"></label><label>ymin<input id="verified-domain-ymin" type="number" step="any" value="0"></label><label>ymax<input id="verified-domain-ymax" type="number" step="any" value="10"></label><label>zmin<input id="verified-domain-zmin" type="number" step="any" value="0"></label><label>zmax<input id="verified-domain-zmax" type="number" step="any" value="3"></label></div>
+                        <p>Crossing elements retain their full source geometry. The domain stays fixed; unresolved boundary treatment blocks acceptance.</p>
+                        <label><input id="verified-boundary-obst" type="checkbox"> Validate structural box boundaries with FDS (single mesh only)</label>
+                        <label>Reviewed entity decisions (optional JSON)<input id="verified-decisions" type="file" accept=".json"></label>
+                        <label>Approved reference changes (optional JSON)<input id="verified-deltas" type="file" accept=".json"></label>
+                        <label><input id="verified-show-reference" type="checkbox"> Show reference geometry (outside FDS)</label>
+                        <p id="verified-research-notice" role="status"></p>
+                        <div id="verified-artifacts"></div>
+                        <button id="verified-cancel" type="button" class="button" disabled>Cancel conversion</button>
+                        <span id="verified-progress" role="status"></span>
+                    </fieldset>
+
                     <button id="convert-ifc" class="button primary conversion-action" type="button" title="Convert IFC to FDS geometry" disabled>
                         <i data-lucide="refresh-cw"></i>
-                        <span>Convert to FDS</span>
+                        <span>Quick Conversion</span>
+                    </button>
+                    <button id="convert-verified" class="button conversion-action secondary-action" type="button" title="Convert using authoritative IfcOpenShell backend with independent 3-tier validation audit" disabled>
+                        <i data-lucide="shield-check"></i>
+                        <span>Verified Conversion (Audit)</span>
                     </button>
                     <button id="convert-selected-obst" class="button conversion-action secondary-action" type="button" title="Voxelize the selected generated GEOM objects into OBST geometry" disabled>
                         <i data-lucide="box"></i>
@@ -287,6 +335,26 @@
                     <p>&copy; Prof Rino Lovreglio, PhD &mdash; Massey University</p>
                     <p style="margin-top:8px;color:var(--muted);font-size:13px;line-height:1.5"><em>No responsibility is taken for the use or output of these tools.</em></p>
                 </section>
+            </div>
+        </article>
+    </section>
+
+    <section id="audit-modal" class="help-modal" role="dialog" aria-modal="true" aria-labelledby="audit-title" hidden>
+        <div class="help-backdrop" data-close-audit></div>
+        <article class="help-card audit-card">
+            <header class="help-header">
+                <div>
+                    <h2 id="audit-title">Acceptance Audit Report</h2>
+                    <p id="audit-subtitle" style="margin:2px 0 0;font-size:12px;color:var(--muted)">Mapping, Reference Parity &amp; Simulation Evidence</p>
+                </div>
+                <button id="close-audit" class="icon-button" type="button" title="Close audit report" aria-label="Close">
+                    <i data-lucide="x"></i>
+                </button>
+            </header>
+            <div class="help-body" id="audit-body">
+                <div id="audit-summary-box">
+                    <p>No audit report available. Run <strong>Verified Conversion</strong> to generate a complete 3-tier audit.</p>
+                </div>
             </div>
         </article>
     </section>
@@ -389,6 +457,7 @@
     <script src="js/ifc/processed-file.js"></script>
     <script src="js/compare/checks.js"></script>
     <script src="js/viewer/scene-viewer.js"></script>
+    <script src="js/verified-workflow.js"></script>
     <script src="js/app-controller.js"></script>
 
 </body>

@@ -24,7 +24,11 @@
         exportRequestId: 0,
         exportWorker: null,
         exportWorkerUrl: null,
-        helpTrigger: null
+        helpTrigger: null,
+        lastAuditReport: null,
+        lastManifest: null,
+        backendOnline: false,
+        currentIfcFile: null
     };
 
     var els = {};
@@ -47,7 +51,10 @@
         applyTheme(readSavedTheme());
         if (window.lucide) window.lucide.createIcons();
         bindEvents();
+        ns.verified.init();
         clearFdsModel();
+        checkBackendHealth();
+        window.addEventListener('focus', checkBackendHealth);
     });
 
     function cacheElements() {
@@ -91,6 +98,14 @@
         els.openCredits = document.getElementById('open-credits');
         els.creditsModal = document.getElementById('credits-modal');
         els.closeCredits = document.getElementById('close-credits');
+        els.openAudit = document.getElementById('open-audit');
+        els.saveManifest = document.getElementById('save-manifest');
+        els.convertVerified = document.getElementById('convert-verified');
+        els.auditModal = document.getElementById('audit-modal');
+        els.closeAudit = document.getElementById('close-audit');
+        els.auditBody = document.getElementById('audit-body');
+        els.backendStatusIndicator = document.getElementById('backend-status-indicator');
+        els.backendStatusText = document.getElementById('backend-status-text');
         els.ifcLoading = document.getElementById('ifc-loading');
         els.ifcLoadingTitle = document.getElementById('ifc-loading-title');
         els.ifcLoadingPercent = document.getElementById('ifc-loading-percent');
@@ -312,14 +327,24 @@
         if (els.closeCredits) els.closeCredits.addEventListener('click', closeCredits);
         if (els.creditsModal) els.creditsModal.querySelector('[data-close-credits]').addEventListener('click', closeCredits);
 
+        if (els.openAudit) els.openAudit.addEventListener('click', openAudit);
+        if (els.closeAudit) els.closeAudit.addEventListener('click', closeAudit);
+        if (els.auditModal) {
+            var auditBackdrop = els.auditModal.querySelector('[data-close-audit]');
+            if (auditBackdrop) auditBackdrop.addEventListener('click', closeAudit);
+        }
+
         window.addEventListener('keydown', function (event) {
             if (event.key === 'Escape' && !els.helpModal.hidden) closeHelp();
             if (event.key === 'Escape' && els.creditsModal && !els.creditsModal.hidden) closeCredits();
+            if (event.key === 'Escape' && els.auditModal && !els.auditModal.hidden) closeAudit();
         });
 
         els.ifcFile.addEventListener('change', function (event) {
             var file = event.target.files[0];
             if (!file) return;
+            state.currentIfcFile = file;
+            ns.verified.setFallback(file);
             cancelPendingExport();
             clearGeneratedFds();
             clearFdsModel();
@@ -396,6 +421,12 @@
         els.convertIfc.addEventListener('click', function () {
             exportIfc('convert');
         });
+
+        if (els.convertVerified) {
+            els.convertVerified.addEventListener('click', function () {
+                exportVerified();
+            });
+        }
 
         els.convertSelectedObst.addEventListener('click', function () {
             var stepIds = selectedGeneratedGeomStepIds(state.selection);
@@ -494,6 +525,18 @@
             if (!state.generatedFdsText || !state.generatedFdsName) return;
             downloadText(state.generatedFdsName, state.generatedFdsText);
         });
+
+        if (els.saveManifest) {
+            els.saveManifest.addEventListener('click', function () {
+                if (state.lastArtifactLinks) {
+                    var link = document.createElement('a'); link.href = state.lastArtifactLinks.manifest.url;
+                    link.download = ''; link.click(); return;
+                }
+                if (!state.lastManifest) return;
+                var base = ((state.lastManifest || {}).source_filename || state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
+                downloadText(base + '_manifest.json', JSON.stringify(state.lastManifest, null, 2));
+            });
+        }
 
         if (els.saveProcessed) {
             els.saveProcessed.addEventListener('click', function () {
@@ -759,6 +802,9 @@
 
     function refreshConversionActions() {
         els.convertIfc.disabled = state.exportBusy || !state.exportEnabled;
+        if (els.convertVerified) {
+            els.convertVerified.disabled = state.exportBusy || (!state.exportEnabled && !ns.verified.hasFiles());
+        }
         els.convertSelectedObst.disabled = state.exportBusy || !selectedGeneratedGeomStepIds(state.selection).length;
         if (els.deleteSelected) {
             var split = splitSelectionForDelete(state.selection);
@@ -766,6 +812,12 @@
         }
         if (els.undoLast) {
             els.undoLast.disabled = state.exportBusy || !state.undoStack.length;
+        }
+        if (els.openAudit) {
+            els.openAudit.disabled = !state.lastAuditReport;
+        }
+        if (els.saveManifest) {
+            els.saveManifest.disabled = !state.lastManifest && !state.lastArtifactLinks;
         }
     }
 
@@ -798,6 +850,16 @@
         state.exportBusy = !!busy;
         state.exportAction = state.exportBusy ? action : null;
         els.convertIfc.classList.toggle('is-busy', state.exportBusy && action === 'convert');
+        if (els.convertVerified) {
+            els.convertVerified.classList.toggle('is-busy', state.exportBusy && action === 'convert-verified');
+            els.convertVerified.setAttribute('aria-busy', state.exportBusy && action === 'convert-verified' ? 'true' : 'false');
+            var span = els.convertVerified.querySelector('span');
+            if (span) {
+                span.textContent = (state.exportBusy && action === 'convert-verified')
+                    ? 'Verifying...'
+                    : 'Verified Conversion (Audit)';
+            }
+        }
         els.convertSelectedObst.classList.toggle('is-busy', state.exportBusy && action === 'voxelize');
         els.convertIfc.setAttribute('aria-busy', state.exportBusy && action === 'convert' ? 'true' : 'false');
         els.convertSelectedObst.setAttribute('aria-busy', state.exportBusy && action === 'voxelize' ? 'true' : 'false');
@@ -824,16 +886,13 @@
     // ifc-adapter parse (placements, void carving, classifications). We do it on demand
     // the first time the user clicks Convert, and cache the result for repeated exports.
     function ensureFullModel() {
-        if (state.fullModel) return Promise.resolve(state.fullModel);
+        if (state.fullModel && !state.fullModel.elements.some(function (e) { return e.exportGeometryComplete === false; })) return Promise.resolve(state.fullModel);
         if (!state.ifcSourceText) {
             return Promise.reject(new Error('IFC source not in memory — please reopen the file.'));
         }
         showLoading('Preparing FDS conversion', 'Parsing entities…');
-        // When web-ifc rendered the preview, the heavy box-subtracted displayMesh built by
-        // ifc-adapter is never shown, so we can skip that per-wall CSG pass for a 5–10×
-        // parse speed-up. The watertight export mesh is unaffected.
-        var displayMeshesAvailable = !!(state.lastDisplayMeshes && state.lastDisplayMeshes.length);
-        var parseOptions = displayMeshesAvailable ? { skipBoxOpenings: true } : undefined;
+        // Export completes openings independently of the preview source.
+        var parseOptions = { skipBoxOpenings: false };
         var parsePromise = ifcAdapter.parseAsync(state.ifcSourceText, state.ifcFileName, function (fraction) {
             setLoadingProgress(fraction, 'Parsing entities…');
         }, parseOptions);
@@ -928,7 +987,8 @@
     }
 
     function addExportDiagnostic(message) {
-        if (!state.ifcModel || !state.ifcModel.diagnostics) return;
+        if (!state.ifcModel) state.ifcModel = { diagnostics: [] };
+        if (!state.ifcModel.diagnostics) state.ifcModel.diagnostics = [];
         state.ifcModel.diagnostics.push(
             new ns.core.Diagnostic('error', 'FDS export failed', message)
         );
@@ -951,7 +1011,140 @@
     function clearGeneratedFds() {
         state.generatedFdsText = null;
         state.generatedFdsName = null;
+        if (viewer.cancelVerifiedLoad) viewer.cancelVerifiedLoad();
+        state.lastArtifactLinks = null;
+        state.lastAuditReport = null;
+        state.lastManifest = null;
         if (els.saveFds) els.saveFds.disabled = true;
+        if (els.openAudit) els.openAudit.disabled = true;
+        if (els.saveManifest) els.saveManifest.disabled = true;
+    }
+
+    function exportVerified() {
+        if (state.exportBusy) return;
+        if (!state.ifcSourceText && !state.currentIfcFile && !ns.verified.hasFiles()) {
+            addExportDiagnostic('IFC source not in memory — please reopen the file.');
+            return;
+        }
+
+        var fileLabel = (state.ifcFileName || (state.ifcModel && state.ifcModel.fileName) || 'IFC model');
+        showLoading('Verified Conversion: ' + fileLabel, 'Processing with IfcOpenShell & OpenCASCADE...');
+        setExportBusy(true, 'convert-verified');
+
+        var blob = state.currentIfcFile || new File([state.ifcSourceText || ''], state.ifcFileName || 'model.ifc');
+        ns.verified.run(blob, {
+            cell_size: Number(els.meshCellSize.value || 0.2), all_geom: true,
+            include_review: !!(els.includeReviewSolids && els.includeReviewSolids.checked)
+        })
+        .then(async function (data) {
+            hideLoading(); setExportBusy(false);
+            if (!data || !data.artifacts) throw new Error('Missing conversion artifacts');
+            state.lastArtifactLinks = data.artifacts;
+            var summary = Object.assign({}, data, {configuration: {}, matched_count: (data.coverage || {}).matched || 0});
+            state.lastAuditReport = summary;
+            state.lastManifest = null;
+            if (els.openAudit) els.openAudit.disabled = false;
+            if (els.saveManifest) els.saveManifest.disabled = false;
+            if (viewer.bindVerifiedArtifacts) viewer.bindVerifiedArtifacts(data.artifacts);
+            renderAuditReport(summary); openAudit();
+            var response = await fetch(data.artifacts.fds.url);
+            if (!response.ok) throw new Error('FDS artifact unavailable');
+            var text = await response.text();
+            var base = (data.source_filename || state.ifcFileName || 'model').replace(/\.[^.]+$/, '');
+            var fileName = base + (data.status === 'MAPPING_VERIFIED' ? '_mapping_verified.fds' : '_diagnostic.fds');
+            state.generatedFdsText = text; state.generatedFdsName = fileName;
+            loadFdsText(text, fileName);
+            if (els.saveFds) els.saveFds.disabled = false;
+            setupClippingForBounds(boundsForClipping());
+        })
+        .catch(function (err) {
+            hideLoading();
+            setExportBusy(false);
+            var msg = err && err.message ? err.message : String(err);
+            addExportDiagnostic('Verified conversion failed: ' + msg + '. Verify local server is running (python -m ifc_to_fds serve).');
+        });
+    }
+
+    function renderAuditReport(report) {
+        if (!els.auditBody) return;
+        if (!report) {
+            els.auditBody.innerHTML = '<p>No audit report available. Run <strong>Verified Conversion</strong> to generate a complete 3-tier audit.</p>';
+            return;
+        }
+        els.auditBody.replaceChildren();
+        function line(tag, text, parent) {
+            var node = document.createElement(tag);
+            node.textContent = text;
+            (parent || els.auditBody).appendChild(node);
+            return node;
+        }
+        line('h3', 'Acceptance: ' + report.status);
+        line('p', 'Mapping: ' + report.mapping_status + '; simulation: ' + report.simulation_status);
+        var roles = (report.coverage || {}).representation || {};
+        line('p', 'Reference objects: ' + (roles.REFERENCE_GEOMETRY || 0) + '; passive obstacles: ' + (roles.PASSIVE_OBSTACLE || 0) + '; operational objects: ' + (roles.OPERATIONAL_MEP || 0));
+        var pending = (report.coverage || {}).boundary_pending || 0;
+        line('p', 'Pending boundary treatment: ' + (Array.isArray(pending) ? pending.length : pending));
+        if (report.research) line('p', 'Research acceptance: ' + report.research.research_acceptance + '; reference parity: ' + report.research.parity_status);
+        var domain = (report.configuration || {}).simulation_domain;
+        if (domain) line('p', 'Fixed domain (m): X ' + domain.xmin + ' to ' + domain.xmax + '; Y ' + domain.ymin + ' to ' + domain.ymax + '; Z ' + domain.zmin + ' to ' + domain.zmax);
+        if (report.total_elements_checked !== undefined) line('p', 'Matched solids: ' + report.matched_count + ' / accounted entities: ' + report.total_elements_checked);
+        var scope = (report.configuration || {}).scope || {};
+        var storeys = (((report.coverage || {}).scope || {}).selected_storeys || []);
+        if (!Array.isArray(storeys)) storeys = [String(storeys) + ' selected (see configuration artifact)'];
+        line('p', 'Export storeys: ' + (storeys.length ? storeys.join(', ') : 'All storeys'));
+        if (scope.bounding_box) line('p', 'Export volume (m): ' + ['xmin','xmax','ymin','ymax','zmin','zmax'].map(function (key) { return key + ': ' + scope.bounding_box[key]; }).join(', '));
+        line('p', 'Retained crossing elements: ' + (((report.coverage || {}).scope || {}).BOUNDARY_RETAINED || 0));
+        var list = line('ul', '');
+        Object.keys(report.gates || {}).forEach(function (name) {
+            var gate = report.gates[name];
+            line('li', name + ': ' + gate.status + (gate.reason ? ' — ' + gate.reason : ''), list);
+        });
+        (report.findings || []).forEach(function (f) { line('p', f.severity + ' — ' + f.element_id + ': ' + f.detail); });
+    }
+
+    function openAudit() {
+        if (!els.auditModal) return;
+        renderAuditReport(state.lastAuditReport);
+        els.auditModal.hidden = false;
+    }
+
+    function closeAudit() {
+        if (!els.auditModal) return;
+        els.auditModal.hidden = true;
+    }
+
+    function checkBackendHealth() {
+        var apiUrl = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+            ? '/api/health'
+            : 'http://127.0.0.1:8000/api/health';
+
+        fetch(apiUrl, { method: 'GET' })
+            .then(function (res) {
+                if (res.ok) return res.json();
+                throw new Error('HTTP ' + res.status);
+            })
+            .then(function (data) {
+                if (data && data.status === 'ok') {
+                    state.backendOnline = true;
+                    if (els.backendStatusIndicator) {
+                        els.backendStatusIndicator.className = 'status-indicator online';
+                    }
+                    if (els.backendStatusText) {
+                        els.backendStatusText.textContent = 'Backend: Online (IfcOpenShell v' + (data.version || '0.2.0') + ')';
+                    }
+                    refreshConversionActions();
+                }
+            })
+            .catch(function () {
+                state.backendOnline = false;
+                if (els.backendStatusIndicator) {
+                    els.backendStatusIndicator.className = 'status-indicator offline';
+                }
+                if (els.backendStatusText) {
+                    els.backendStatusText.textContent = 'Backend: Offline (Run: python -m ifc_to_fds serve)';
+                }
+                refreshConversionActions();
+            });
     }
 
     function downloadText(fileName, text) {

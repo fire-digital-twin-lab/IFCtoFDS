@@ -1,0 +1,32 @@
+{
+  "schema_version": "0.4.0",
+  "sources": [
+    {
+      "source_id": "a54ba512754efe1f82b87d7fb1853361889ad00d59be5a7a14ecac075e2cc7af",
+      "filename": "ALL_FDS_2027.ifc",
+      "file_hash_sha256": "a54ba512754efe1f82b87d7fb1853361889ad00d59be5a7a14ecac075e2cc7af",
+      "file_size_bytes": 31645383,
+      "schema_version": "IFC2X3",
+      "unit_length_name": "FOOT",
+      "unit_scale_to_meters": 0.3048,
+      "world_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ]
+}
