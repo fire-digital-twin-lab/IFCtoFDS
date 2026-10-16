@@ -110,14 +110,21 @@ def main():
                     output_bytes=fds.stat().st_size if fds.exists() else None,
                 )
                 if method == "quick" and fds.exists():
-                    # Audit Quick output too; unsupported provenance is a measured limitation.
-                    from ifc_to_fds.pipeline import prepare
-                    from ifc_to_fds.validation.engine import run_independent_validation
-
-                    reference = prepare([str(source)], {}, reference=True)
-                    text = fds.read_text(encoding="utf-8")
-                    report = run_independent_validation(reference, text, None)
-                    row["audit"] = report.model_dump(mode="json")
+                    quick_report = directory / "quick_audit.json"
+                    row["audit_execution"] = measured(
+                        [
+                            sys.executable,
+                            "scripts/benchmark-audit.py",
+                            str(source),
+                            str(fds),
+                            str(quick_report),
+                        ],
+                        args.timeout,
+                    )
+                    if quick_report.exists():
+                        row["audit"] = json.loads(
+                            quick_report.read_text(encoding="utf-8")
+                        )
                 elif (directory / "model_acceptance_report.json").exists():
                     row["audit"] = json.loads(
                         (directory / "model_acceptance_report.json").read_text(
@@ -131,7 +138,20 @@ def main():
                     )
                 rows.append(row)
                 result = dict(
-                    platform=platform.platform(), python=sys.version, rows=rows
+                    platform=platform.platform(),
+                    python=sys.version,
+                    rows=rows,
+                    commit=subprocess.check_output(
+                        ["git", "rev-parse", "HEAD"], text=True
+                    ).strip(),
+                    dirty=bool(
+                        subprocess.check_output(
+                            ["git", "diff", "--name-only"], text=True
+                        ).strip()
+                    ),
+                    warmups=args.warmup,
+                    measured_repeats=args.repeat,
+                    method_limits="Quick retains legacy representation policy; compare fidelity and coverage, not time alone",
                 )
                 (output / "results.json").write_text(
                     json.dumps(result, indent=2), encoding="utf-8"
