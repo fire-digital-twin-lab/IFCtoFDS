@@ -1,0 +1,38 @@
+# Files and SHA-256 for IFCtoFDS context package
+
+Generated: 2026-10-16 | Files: 32
+
+| File | Bytes | SHA-256 |
+|---|---:|---|
+| `AGENTS.md` | 4,279 | `74ed6ae3fed11b55c2daa02be6435e58eaa7d7e3a2bf941acf9cd10ddc6c6c72` |
+| `README.md` | 5,682 | `6ee6da7f5c40c81f3237d9f4175212b6af757478ad7028f0e7e97d58c46466c4` |
+| `START_AGENT_PROMPT.md` | 2,619 | `b6a35f582e71a51107a6a88646d387a32f069bb55a415c3bdffdb0de107b947f` |
+| `docs/MASTER_PROMPT_IFCtoFDS_IfcOpenShell_End_to_End.md` | 33,293 | `19f1f3b72817691528fcf09abda9b5ba515fa362c131d9e8ddefc15007be9cbf` |
+| `docs/context/00_PROJECT_BRIEF.md` | 3,673 | `2329c10d6f4864cac7f7ede0e2e318b75472f46e07141b57bad1075d680fb272` |
+| `docs/context/01_REQUIREMENTS.md` | 5,391 | `7046a0cff4afac53c59269204b0a4bc9b3fea4e884fd8eae20a8c619b3e02d58` |
+| `docs/context/02_SCOPE_AND_NON_GOALS.md` | 3,315 | `5b6685fd305b6d67f0678eee8efc1d59e5d2c47c87e8b5afdddad8a2b70a7e50` |
+| `docs/context/03_HISTORY_AND_DECISIONS.md` | 4,344 | `2e282bb4b133f4812b0eb4ec34dbc0c942b4d247364b81503d753b95dd10477d` |
+| `docs/context/04_DOMAIN_GLOSSARY.md` | 4,440 | `7de8f768d8630772c9d162382aafd4a2c0056119d2c278d465e22069583d931c` |
+| `docs/context/05_AS_IS_CODEBASE.md` | 3,944 | `0762b8ad25607aeb394a6b2bd6ec1bc5d68f317589f9838e0c25dd13fa14618e` |
+| `docs/context/06_CONFIRMED_AUDIT_FINDINGS.md` | 3,711 | `6225336160297e545d701ab1db82155f0bfb2470b87b86ea9ecb633d888f6d9b` |
+| `docs/context/07_TARGET_ARCHITECTURE.md` | 4,476 | `8bad8568dd63f81560093a6bbf3a671e3f552fffe368211f6a2714860c457fb1` |
+| `docs/context/08_CANONICAL_DATA_MODEL.md` | 5,090 | `a20d9d728bd127c145adeea016a716d054c6f21ace1b3b168e4f0425db9231ae` |
+| `docs/context/09_GEOMETRY_AND_FDS_MAPPING.md` | 5,293 | `82975c710a89b2d7c6a9410d50a3b645c8e1fd9803e2b42e07ed75c3eb6549ba` |
+| `docs/context/10_MEP_HVAC_PCCC.md` | 4,655 | `faba0f8f80cfda34cc7256304aabed8fd9501b2664c08470c6ad4367b5317f53` |
+| `docs/context/11_MULTIFILE_FEDERATION_SCOPE.md` | 2,976 | `3c2864114d72f52be72bb582024bdeb3043bdbb72b5775c239762bafd5dec5ad` |
+| `docs/context/12_PROVENANCE_AND_ALIAS.md` | 2,743 | `4b5f175390dc152acc1729c15b4436354450e62c5bf0a520b84c06e7ea86d9c3` |
+| `docs/context/13_VALIDATION_METHODS.md` | 4,604 | `9974d5ad1a4f5da94ffcc6ee35f9361bc11ceb709abbfe9ada2970fe663afaf4` |
+| `docs/context/14_UI_AND_WORKFLOWS.md` | 3,199 | `0ee977e5f15c0502af066cac4fb5bb00592f899603cd3f58717aedcb3f9f1a0a` |
+| `docs/context/15_API_AND_INTEGRATION.md` | 3,721 | `7077d32e18085d1f292c65a34cb881aaf795898555ec8cb73423e9c6c7236428` |
+| `docs/context/16_TEST_AND_BENCHMARK.md` | 4,167 | `75399b2ee4bfea753afff63fb00dddf718160c27cfee6e7759efa178b086bdbf` |
+| `docs/context/17_ACCEPTANCE_GATES.md` | 3,754 | `6e081c09bd899a0bdda3716f2cf80cd56d17b9cb59023abdc8475646c36752ca` |
+| `docs/context/18_IMPLEMENTATION_ROADMAP.md` | 3,188 | `cdbdcf12f456b489ed253594989c55dc11068023ddac3164af72f2ce356d4a19` |
+| `docs/context/19_AGENT_EXECUTION_RULES.md` | 3,297 | `6530bf1bfd6a1a456fd53742fa848c1da4eb451f19373a53975e1f2ae4edc5cb` |
+| `docs/context/20_SOURCE_EVIDENCE_REGISTER.md` | 3,112 | `b3e6040be3c336fce628c426c2564f86abc42ba9dc5d5e8ad0713722be598e98` |
+| `docs/context/21_BASEMENT_CASE_STUDY.md` | 3,363 | `d0249aa8d2d63243787c93c3ff2eecefe3bc41337a6bf2998df46cb8792992f4` |
+| `docs/context/22_RESEARCH_METHOD.md` | 2,817 | `8657dc6e7e5aff72aa313a3dd772e825c1e4dcbe333325404c88e56e5f69c8b4` |
+| `docs/context/23_RISKS_AND_OPEN_QUESTIONS.md` | 3,476 | `1b5d5af442dafed7c3dcf86d7066ca9c3bf4896b005e5e2e5721b66cc823e5ac` |
+| `docs/context/24_TRACEABILITY_MATRIX.md` | 2,620 | `f18d1aefb682f998bd9e19af6c141510890a434e009725ad537c008a9e71d234` |
+| `docs/context/25_DELIVERABLES.md` | 3,065 | `244613b8566dc3d016d8c8c67237d21615cf73ba7b0bf9b1022a89c33d09fa19` |
+| `docs/reference/CODE_AUDIT_2026-10-15.md` | 10,526 | `50e35b76ea4bb01050f42c11e44c1aaa60dd063c62624cdde2e3b1d5ab35bf23` |
+| `docs/reference/IMPLEMENTATION_PLAN_PREVIOUS.md` | 14,140 | `731479703aa1913801e52f64dd400a0dab7a9d2646e37315492da7651b78172a` |
