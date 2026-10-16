@@ -1,3 +1,6 @@
+> This is the historical 0.3 remediation record. Current 0.4 status and changed
+> acceptance/domain/MEP policies: [Golden mapping delivery](golden-remediation-status.md).
+
 # Review remediation status — 2026-10-16
 
 Base: `feature/verified-ifc-fds-framework`, `bcd23aefc1810f90a58bed4fc79f25481844fe25`.

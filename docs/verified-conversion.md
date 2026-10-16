@@ -1,3 +1,10 @@
+# Historical schema 0.3 conversion guide
+
+**Superseded by [schema 0.4 mapping profiles and golden parity](golden-mapping-parity.md).**
+The text below records previous behavior; its expanding-domain, MEP-export and
+VERIFIED rules do not describe current conversion. Use the linked guide for CLI,
+configuration, acceptance and artifact contracts.
+
 # Verified conversion: usage and evidence limits
 
 This development branch separates conversion from acceptance. Creating an FDS file,
