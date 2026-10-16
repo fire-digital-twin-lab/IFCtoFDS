@@ -14,6 +14,65 @@ from ifc_to_fds.validation.acceptance import AcceptanceReport
 from ifc_to_fds.validation.golden import create_candidate
 
 
+def write_boundary_precheck(model, root):
+    from ifc_to_fds.geometry.mesh import valid_solid, is_axis_aligned_box
+
+    fields = (
+        "entity_key",
+        "ifc_type",
+        "simulation_role",
+        "source_box_candidate",
+        "blockers",
+        "reviewer",
+    )
+    with (root / "boundary-precheck.csv").open(
+        "w", encoding="utf-8-sig", newline=""
+    ) as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        for e in model.elements:
+            if e.scope_decision.value != "BOUNDARY_RETAINED":
+                continue
+            reasons = []
+            if e.ifc_type.upper() not in (
+                "IFCCOLUMN",
+                "IFCWALL",
+                "IFCWALLSTANDARDCASE",
+                "IFCBEAM",
+                "IFCSLAB",
+            ):
+                reasons.append("UNSUPPORTED_STRUCTURAL_CLASS")
+            if (
+                e.simulation_role != "PASSIVE_OBSTACLE"
+                or e.classification_evidence
+                or e.system_ids
+                or e.ports
+            ):
+                reasons.append("REFERENCE_OR_MEP_OR_UNRESOLVED_ROLE")
+            if e.openings:
+                reasons.append("SOURCE_OPENINGS")
+            if not e.mesh or not valid_solid(e.mesh) or not is_axis_aligned_box(e.mesh):
+                reasons.append("NOT_PROVED_CLOSED_AXIS_ALIGNED_BOX")
+            if e.review_status not in ("NOT_REQUIRED", "APPROVED"):
+                reasons.append("ENTITY_REVIEW_REQUIRED")
+            candidate = not reasons
+            reasons += [
+                "DOMAIN_NOT_APPROVED",
+                "DOMAIN_INTERSECTION_NOT_EVALUATED",
+                "EXACT_FDS_SOLVER_EVIDENCE_NOT_RUN",
+            ]
+            writer.writerow(
+                dict(
+                    entity_key=e.entity_key,
+                    ifc_type=e.ifc_type,
+                    simulation_role=e.simulation_role,
+                    source_box_candidate=candidate,
+                    blockers=";".join(reasons),
+                    reviewer="",
+                )
+            )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("source")
@@ -193,6 +252,7 @@ def main():
         "# New B1/B2 baseline — DRAFT\n\nReview entity-review.csv, source sections and domain-review.json. Section elevations are inspection planes only. Nothing here approves scope, domain, exclusion, classification or historical parity.\n",
         encoding="utf-8",
     )
+    write_boundary_precheck(model, root)
     progress("DRAFT_READY")
     print(json.dumps(summary))
 

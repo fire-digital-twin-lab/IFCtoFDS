@@ -111,6 +111,7 @@ def test_probe_timeout_is_inconclusive_and_retains_evidence(
                 raise subprocess.TimeoutExpired("probe", timeout)
             return b"partial version output", None
 
+    monkeypatch.setattr(adapter.platform, "platform", lambda: "fixture-platform")
     monkeypatch.setattr(adapter.subprocess, "Popen", Probe)
     monkeypatch.setattr(adapter, "stop_tree", lambda process: stopped.append(process))
     text, _ = serialize_fds(box_model)
