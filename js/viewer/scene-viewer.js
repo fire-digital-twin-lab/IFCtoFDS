@@ -185,6 +185,30 @@
         this.applyFdsClipVisibility();
     };
 
+    SceneViewer.prototype.loadVerifiedGeometry = function (packageData, manifest) {
+        if (this.verifiedReferenceGroup) {
+            clearGroup(this.verifiedReferenceGroup);
+            this.ifcGroup.remove(this.verifiedReferenceGroup);
+        }
+        this.verifiedReferenceGroup = new THREE.Group();
+        this.verifiedReferenceGroup.name = 'Verified source reference (not FDS obstacles)';
+        this.ifcGroup.add(this.verifiedReferenceGroup);
+        var entries = (packageData || {}).elements || {}, self = this;
+        (manifest.records || []).forEach(function (record) {
+            var entry = entries[record.entity_key];
+            if (!entry || !entry.mesh || record.simulation_role !== 'REFERENCE_GEOMETRY' || record.scope_decision === 'OUT_OF_SCOPE') return;
+            var mesh = self.makeIfcElement({mesh: entry.mesh, ifcType: record.ifc_type, name: record.name,
+                globalId: record.global_id, stepId: record.step_id, convertible: false,
+                fdsRole: record.simulation_role, raw: record});
+            mesh.userData.entityKey = record.entity_key;
+            mesh.userData.simulationRole = record.simulation_role;
+            self.verifiedReferenceGroup.add(mesh);
+        });
+        this.verifiedReferenceGroup.visible = document.getElementById('verified-show-reference').checked;
+        var group = this.verifiedReferenceGroup;
+        document.getElementById('verified-show-reference').onchange = function (event) { group.visible = event.target.checked; };
+    };
+
     SceneViewer.prototype.loadIfcModel = function (model, displayMeshes) {
         this.setNavigationMode('orbit');
         this.setSelectedObjects([]);
