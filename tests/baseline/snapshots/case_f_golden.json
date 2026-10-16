@@ -1,0 +1,104 @@
+{
+  "case_id": "case_f_golden",
+  "status": "INCONCLUSIVE",
+  "mapping_status": "INCONCLUSIVE",
+  "simulation_status": "INCONCLUSIVE",
+  "output_complete": false,
+  "elements_count": 2,
+  "elements": [
+    {
+      "entity_key": "be56d4d95fbe3c9f857180975c8788c1e352614b10051ffeccc59813d118f430:10",
+      "ifc_type": "IfcBuildingStorey",
+      "name": "Ground",
+      "storey": null,
+      "scope_decision": "IN_SCOPE",
+      "mapping_strategy": "SEMANTIC_ONLY",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "operational_status": "NOT_APPLICABLE",
+      "fds_representation": "NONE",
+      "review_status": "NOT_REQUIRED",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "boundary_policy": null,
+      "has_3d_geometry": false,
+      "openings_count": 0,
+      "ports_count": 0,
+      "system_names": [],
+      "fds_primitive_ids": []
+    },
+    {
+      "entity_key": "be56d4d95fbe3c9f857180975c8788c1e352614b10051ffeccc59813d118f430:12",
+      "ifc_type": "IfcWall",
+      "name": "Wall",
+      "storey": "Ground",
+      "scope_decision": "IN_SCOPE",
+      "mapping_strategy": "OBST",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "operational_status": "NOT_APPLICABLE",
+      "fds_representation": "OBST",
+      "review_status": "NOT_REQUIRED",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "boundary_policy": null,
+      "has_3d_geometry": true,
+      "openings_count": 0,
+      "ports_count": 0,
+      "system_names": [],
+      "fds_primitive_ids": [
+        "OBST_1_Wall"
+      ]
+    }
+  ],
+  "records_count": 2,
+  "records": [
+    {
+      "entity_key": "be56d4d95fbe3c9f857180975c8788c1e352614b10051ffeccc59813d118f430:10",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "fds_primitive_ids": [],
+      "openings_count": 0,
+      "ports_count": 0
+    },
+    {
+      "entity_key": "be56d4d95fbe3c9f857180975c8788c1e352614b10051ffeccc59813d118f430:12",
+      "mapping_status": "MATCHED",
+      "mapping_strategy": "OBST",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "fds_primitive_ids": [
+        "OBST_1_Wall"
+      ],
+      "openings_count": 0,
+      "ports_count": 0
+    }
+  ],
+  "mep_systems_count": 0,
+  "mep_connections_count": 0,
+  "fds_summary": {
+    "obst_count": 1,
+    "geom_count": 0,
+    "mesh_count": 1,
+    "total_primitives": 1
+  },
+  "gates": {
+    "syntax": "PASS",
+    "source_inventory": "PASS",
+    "traceability": "PASS",
+    "scope": "PASS",
+    "geometry": "PASS",
+    "openings": "NOT_APPLICABLE",
+    "mep": "PASS",
+    "representation": "PASS",
+    "boundary": "PASS",
+    "domain": "PASS",
+    "solver": "INCONCLUSIVE",
+    "effective_geometry": "INCONCLUSIVE",
+    "geometry_preservation": "PASS",
+    "placement": "PASS",
+    "golden_reference_parity": "INCONCLUSIVE"
+  },
+  "findings_count": 0,
+  "findings": [],
+  "geometry_package_sha256": "6e57b6400834707659a515fc208b55dac2c10649479574de22d0573816983e64",
+  "manifest_csv_sha256": "18f688574dfd5d09ace383ee086ac623794e9c7bf4dc8de02bdf5dac21952d4d"
+}
