@@ -1,0 +1,30 @@
+{
+  "schema_version": "0.4.0",
+  "units": "METRE",
+  "coordinate_frame": "COMMON_WORLD",
+  "sources": [
+    {
+      "source_id": "a54ba512754efe1f82b87d7fb1853361889ad00d59be5a7a14ecac075e2cc7af",
+      "world_transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "elements": {},
+  "sha256": "0824e50ea87787433edaaf350702f7e2394315e72117457929abe6d719f7e673"
+}

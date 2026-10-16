@@ -39,3 +39,7 @@ advetising/
 # The 40 MB source video for the demo lives locally; the public repo only ships
 # the smaller demo.gif that the README embeds.
 demo/demo.mp4
+
+# Local research fixtures and model-derived private evidence
+.local-reference-cases/
+*.source-map.local.json
