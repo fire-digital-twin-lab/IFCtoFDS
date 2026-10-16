@@ -21,6 +21,7 @@ golden reference. Scoped domains stay fixed, boundary elements require evidence,
 and MEP defaults to reference geometry outside FDS. Simulation verification and
 GEOM cut-cell evidence remain incomplete. See
 [Current mapping guide and limitations](docs/golden-mapping-parity.md).
+For the 0.5 compact API, binary geometry package and narrow solver-backed OBST boundary policy, see [artifact and boundary guide](docs/artifact-boundary-v05.md).
 
 ```powershell
 python -m venv .venv
