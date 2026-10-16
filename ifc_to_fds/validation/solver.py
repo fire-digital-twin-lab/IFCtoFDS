@@ -14,6 +14,19 @@ from .acceptance import GateResult, GateStatus
 from .effective import effective_obstructions
 
 
+def stop_tree(process):
+    try:
+        parent = psutil.Process(process.pid)
+        for child in parent.children(recursive=True):
+            try:
+                child.kill()
+            except psutil.NoSuchProcess:
+                pass
+        parent.kill()
+    except psutil.NoSuchProcess:
+        pass
+
+
 def solver_gates(fds_text, config):
     executable = config.solver_executable or shutil.which("fds")
     effective = GateResult(
@@ -62,17 +75,27 @@ def solver_gates(fds_text, config):
             "OMP_NUM_THREADS": "1",
             "PATH": str(path.parent / "mpi") + os.pathsep + os.environ.get("PATH", ""),
         }
-        version_run = subprocess.run(
+        probe = subprocess.Popen(
             [str(path)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             env=runtime,
             cwd=directory,
-            timeout=min(15, config.solver_timeout_s),
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        (directory / "version.log").write_bytes(version_run.stdout)
+        try:
+            version_output, _ = probe.communicate(
+                timeout=min(15, config.solver_timeout_s)
+            )
+        except subprocess.TimeoutExpired:
+            stop_tree(probe)
+            version_output, _ = probe.communicate()
+            (directory / "version.log").write_bytes(version_output)
+            raise subprocess.TimeoutExpired(
+                [str(path)], min(15, config.solver_timeout_s)
+            )
+        (directory / "version.log").write_bytes(version_output)
         process = subprocess.Popen(
             command,
             cwd=directory,
@@ -93,16 +116,7 @@ def solver_gates(fds_text, config):
             stdout, stderr = process.communicate(timeout=config.solver_timeout_s)
         except subprocess.TimeoutExpired:
             timeout = True
-            try:
-                parent = psutil.Process(process.pid)
-                for child in parent.children(recursive=True):
-                    try:
-                        child.kill()
-                    except psutil.NoSuchProcess:
-                        pass
-                parent.kill()
-            except psutil.NoSuchProcess:
-                pass
+            stop_tree(process)
             stdout, stderr = process.communicate()
         (directory / "stdout.log").write_bytes(stdout)
         (directory / "stderr.log").write_bytes(stderr)
@@ -114,7 +128,7 @@ def solver_gates(fds_text, config):
         )
         versions = re.findall(
             r"(?:FDS[-\s]+|FDS\s+Version\s*[:=]?\s*)(\d+\.\d+\.\d+)",
-            version_run.stdout.decode(errors="replace") + combined,
+            version_output.decode(errors="replace") + combined,
             re.I,
         )
         evidence["reported_versions"] = versions

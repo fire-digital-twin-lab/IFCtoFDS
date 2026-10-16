@@ -71,3 +71,35 @@ def test_unsupported_boundary_keeps_pending(box_model, kind):
     assert e.boundary_treatment == "PENDING_VALIDATION"
     assert e.representation_bounds is None
     assert e.fds_representation == "NONE"
+
+
+@pytest.mark.parametrize(
+    "source, expected",
+    [
+        ([-1, 1, 1, 2, 1, 2], [0, 1, 1, 2, 1, 2]),
+        ([3, 5, 1, 2, 1, 2], [3, 4, 1, 2, 1, 2]),
+        ([1, 2, -1, 1, 1, 2], [1, 2, 0, 1, 1, 2]),
+        ([1, 2, 3, 5, 1, 2], [1, 2, 3, 4, 1, 2]),
+        ([1, 2, 1, 2, -1, 1], [1, 2, 1, 2, 0, 1]),
+        ([1, 2, 1, 2, 3, 5], [1, 2, 1, 2, 3, 4]),
+        ([-1, 1, -1, 1, -1, 1], [0, 1, 0, 1, 0, 1]),
+    ],
+)
+def test_analytic_source_intersections_keep_fixed_domain(box_model, source, expected):
+    from ifc_to_fds.geometry.mesh import box_mesh
+
+    keys = ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
+    e = box_model.elements[0]
+    e.bounding_box = BoundingBox(**dict(zip(keys, source)))
+    e.mesh = box_mesh(e.bounding_box)
+    original = copy.deepcopy(e.mesh)
+    box_model.simulation_domain = BoundingBox(
+        xmin=0, xmax=4, ymin=0, ymax=4, zmin=0, zmax=4
+    )
+    box_model.domain_origin = "EXPLICIT_CONFIGURATION"
+    plan_mapping(box_model, boundary_policy=POLICY)
+    assert e.mesh == original
+    assert e.representation_bounds.to_xb() == expected
+    text, _ = serialize_fds(box_model)
+    assert "IJK=20,20,20, XB=0,4,0,4,0,4" in text
+    assert e.boundary_treatment == "PENDING_VALIDATION"

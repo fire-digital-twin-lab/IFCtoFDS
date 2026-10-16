@@ -41,3 +41,24 @@ def test_unknown_effective_output_is_inconclusive(box_model):
     plan_mapping(box_model, force_all_geom=True)
     text, _ = serialize_fds(box_model)
     assert effective_obstructions(text, "").status == "INCONCLUSIVE"
+
+
+def test_unsupported_effective_syntax_and_bad_indices_never_pass(box_model):
+    import re
+
+    text, _ = serialize_fds(box_model)
+    text = re.sub(r"&MESH[^/]+/", "&MESH IJK=20,20,20, XB=0,4,0,4,0,4 /", text)
+    pid = box_model.elements[0].fds_primitive_ids[0]
+    smv = smv_for_box(pid, [0, 10, 0, 5, 0, 15])
+    for extra in (
+        "&HOLE ID='h', XB=0,1,0,1,0,1 /",
+        "&VENT ID='v', XB=0,0,0,1,0,1 /",
+        "&MESH IJK=20,20,20, XB=4,8,0,4,0,4 /",
+    ):
+        assert effective_obstructions(text + extra, smv).status == "INCONCLUSIVE"
+    invalid = effective_obstructions(text, smv_for_box(pid, [-1, 10, 0, 5, 0, 15]))
+    assert invalid.status == "INCONCLUSIVE"
+    assert "outside" in invalid.reason
+    tie = text.replace("XB=0,2,0,1,0,3", "XB=0.1,2,0,1,0,3")
+    assert tie != text
+    assert effective_obstructions(tie, smv).status == "INCONCLUSIVE"

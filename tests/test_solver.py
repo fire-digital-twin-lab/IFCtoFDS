@@ -89,3 +89,41 @@ def test_real_boundary_pipeline_and_changed_output(tiny_ifc, tmp_path):
         for f in report.findings
         if f.category == "geometry"
     )
+
+
+def test_probe_timeout_is_inconclusive_and_retains_evidence(
+    box_model, tmp_path, monkeypatch
+):
+    import subprocess
+    import sys
+    import json
+    import ifc_to_fds.validation.solver as adapter
+
+    stopped = []
+
+    class Probe:
+        def __init__(self, *args, **kwargs):
+            self.calls = 0
+
+        def communicate(self, timeout=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise subprocess.TimeoutExpired("probe", timeout)
+            return b"partial version output", None
+
+    monkeypatch.setattr(adapter.subprocess, "Popen", Probe)
+    monkeypatch.setattr(adapter, "stop_tree", lambda process: stopped.append(process))
+    text, _ = serialize_fds(box_model)
+    gate, effective = solver_gates(
+        text,
+        AuditConfig(
+            solver_executable=sys.executable, solver_evidence_directory=str(tmp_path)
+        ),
+    )
+    assert gate.status == effective.status == "INCONCLUSIVE"
+    assert len(stopped) == 1
+    directory = Path(gate.evidence["directory"])
+    saved = json.loads((directory / "run.json").read_text(encoding="utf-8"))
+    assert saved["timed_out"]
+    assert (directory / "version.log").read_bytes() == b"partial version output"
+    assert (directory / "audit.fds").read_bytes() == text.encode()
