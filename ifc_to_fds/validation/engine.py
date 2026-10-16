@@ -12,6 +12,7 @@ from .acceptance import (
 from .parser import parse_fds
 from .metrics import compare_solids, opening_residual, passage_metrics
 from .solver import solver_gates
+from ifc_to_fds.core.compare import normalize
 from ifc_to_fds.core.canonical import MappingStrategy, ScopeDecision
 from ifc_to_fds.geometry.mesh import valid_solid, as_trimesh, bounds_for_vertices
 
@@ -274,7 +275,7 @@ def run_independent_validation(
                         )
                         for o in e.openings
                     ]
-                if getattr(record, field) != expected_value:
+                if normalize(getattr(record, field)) != normalize(expected_value):
                     finding(
                         "representation",
                         f"Manifest {field} differs from independent policy",
@@ -426,7 +427,9 @@ def run_independent_validation(
             reason="No mapped host has source openings",
         )
     if expected_mep is not None:
-        if model.mep_graph.model_dump() != expected_mep.model_dump():
+        if normalize(model.mep_graph.model_dump()) != normalize(
+            expected_mep.model_dump()
+        ):
             finding(
                 "mep", "MEP graph differs from independently re-read IFC relationships"
             )

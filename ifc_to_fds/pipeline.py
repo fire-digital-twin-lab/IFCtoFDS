@@ -13,6 +13,7 @@ from .validation.engine import run_independent_validation
 from .core.canonical import BoundingBox
 from .geometry.package import build_package, audit_package
 from .validation.golden import golden_gate
+from .core.compare import normalize
 from .mapping.policy import validate_decisions
 
 
@@ -192,7 +193,7 @@ def audit(paths, fds_text, manifest, configuration=None, geometry_package=None):
         report.gates["mep"] = GateResult(
             status=GateStatus.INCONCLUSIVE, reason="No serialized MEP graph supplied"
         )
-    elif saved != model.mep_graph.model_dump(mode="json"):
+    elif normalize(saved) != normalize(model.mep_graph.model_dump(mode="json")):
         report.gates["mep"] = GateResult(
             status=GateStatus.FAIL,
             reason="Saved MEP graph differs from IFC source relationships",
@@ -269,7 +270,7 @@ def audit(paths, fds_text, manifest, configuration=None, geometry_package=None):
         for e in model.elements
         if e.boundary_treatment == "PENDING_VALIDATION"
     ]
-    golden_gate(report, model, manifest, geometry_package, configuration)
+    golden_gate(report, model, manifest, geometry_package, configuration, fds_text)
     if report.requested_level == "simulation":
         for name in ("physics", "scenario", "mesh_resolution", "operational_model"):
             report.gates[name] = GateResult(

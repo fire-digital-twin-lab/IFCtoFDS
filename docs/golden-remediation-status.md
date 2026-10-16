@@ -14,13 +14,13 @@ Branch: codex/golden-mapping-parity. The base was fetched before branch creation
 - Geometry package with identity/transform/opening/port evidence and checksums.
 - Mapping and simulation outcomes separated; boundary evidence still blocks mapping.
 - Content-bound draft/approved reference loader, explicit deltas, geometry-backed
-  alias checks, semantic/geometry/network parity and entity-specific mutations.
+  alias checks, direct accepted/current FDS solid and passage parity, semantic/network parity and entity-specific mutations.
 - CLI/API profiles, registered server references, new artifact downloads and
   reference geometry viewer group; original upload filename preserved.
 - Inventory-only private intake, optional explicit external acceptance runner,
   CI regressions and bounded Quick audit in the benchmark harness.
 
-The full local Python suite passed **84 tests**, with one real-solver test
+The full local Python suite passed **89 tests**, with one real-solver test
 intentionally deselected. Existing trimesh zero-volume warnings and the Starlette
 TestClient deprecation remain visible. Ruff format/check and git diff checks passed.
 JavaScript workflow, export completeness/opening rays, GEOM openings and export
@@ -91,6 +91,9 @@ Decision change: [ADR 0004](adr/0004-golden-domain-and-mep-roles.md).
 | Missing explicit connection | golden_network_missing_edge |
 | Alias proof and explicit delta | alias_requires_actual_geometry_proof; delta_is_explicit_and_does_not_waive_gate |
 | Semantically equivalent mesh ordering | mesh_equivalence_without_vertex_or_face_order |
+| Coordinate order cannot hide a changed port/transform | reference_port_coordinate_permutation_is_detected; source_transform_axis_permutation_is_not_equivalent |
+| Golden geometry compared directly to accepted FDS | golden_compares_actual_fds_to_accepted_fds |
+| Manual FDS import remains unapproved | manual_fds_import_stays_a_draft |
 | Draft and edited reference cannot pass | golden_positive_and_draft; golden_bundle_edit_rejected |
 | Mapping vs simulation | mapping_and_simulation_levels |
 | Registered server paths only | reference_paths_are_operator_registered |

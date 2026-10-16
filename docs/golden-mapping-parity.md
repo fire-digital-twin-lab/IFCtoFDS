@@ -100,7 +100,9 @@ python -m ifc_to_fds reference-check .local-reference-cases/new-candidate
 `reference-candidate` never approves and returns exit 2 for its DRAFT output.
 It refuses to overwrite a nonempty reference directory. `reference-check` returns
 2 for a draft; integrity errors return 3. There is deliberately no approve-all
-command. The standalone audit defaults the geometry package path to
+command. To import a manually reviewed FDS, supply `--reference-fds <file>` and
+`--reference-manifest <mapping>` to reference-candidate. It is audited and imported
+as DRAFT, never automatically approved. The standalone audit defaults the geometry package path to
 `<fds-stem>_geometry.json`; an absent package is INCONCLUSIVE, not inferred success.
 
 Configuration extends the existing fields with `profile`, `simulation_domain`,
@@ -120,7 +122,7 @@ checksums after a mutation does not establish geometric equivalence.
 
 The case directory contains sources, scope/domain, exact expected entity records,
 structural/opening/HVAC/FP subsets, exclusions, boundary/alias decisions, golden
-manifest/metrics, geometry package, graph, acceptance profile and review queue.
+manifest/metrics, source geometry package, captured FDS solid geometry, graph, acceptance profile and review queue.
 The bundle digest binds every evidence JSON in the declared inventory. Approval
 is a separate record with status APPROVED, bundle_sha256, reviewer, rationale and
 evidence. Editing an approved payload without updating the revision is rejected.
@@ -133,7 +135,10 @@ A missing private fixture is RESEARCH_NOT_RUN, never a successful research run.
 
 Golden parity compares source identities, exact entity sets, dispositions, roles,
 ports/systems/edges, domain, tolerances, solid surfaces/volumes/IoU/components,
-openings and actual FDS audit findings. IDs and serialized text order are not
+openings, actual FDS audit findings, and direct accepted-FDS-to-current-FDS solids
+and passage equivalence. `fds-geometry.json` captures the saved FDS solids, not just
+the source IFC shape. Numeric coordinate/matrix order is preserved during metadata
+comparison; only identity collection order is ignored. IDs and serialized text order are not
 geometric evidence. Equivalent vertex/triangle ordering and identical coplanar
 surface partitions can pass; unsupported surface proofs remain INCONCLUSIVE.
 Alias decisions preserve separate identities and require measured equivalent
@@ -142,7 +147,7 @@ solids under a rigid transform, plus review evidence.
 Optional intentional_deltas JSON has status APPROVED, reference_digest and changes.
 Each change supplies entity_key, field, before, after, rationale, reviewer, evidence.
 The before value and baseline digest must match exactly. Supported fields are
-explicit entity decision/identity fields and geometry. Deltas do not disable
+explicit entity decision/identity fields, source `geometry`, and per-entity `fds_geometry` mesh lists (or null to remove an approved representation). Deltas do not disable
 source, fidelity, openings, boundary or topology gates. Adding/removing inventory
 requires a new reviewed reference revision; it is not supported as a delta waiver.
 

@@ -15,7 +15,7 @@ from ifc_to_fds.validation.engine import run_independent_validation
 from ifc_to_fds.validation.acceptance import AuditConfig, AcceptanceReport, GateResult
 from ifc_to_fds.validation.golden import (
     create_candidate,
-    golden_gate,
+    golden_gate as evaluate_golden_gate,
     bundle_digest,
     inspect_case,
 )
@@ -32,7 +32,21 @@ def checked(model, text=None, package=None, configuration=None):
     manifest.geometry_package_sha256 = package["sha256"]
     report = run_independent_validation(model, text, manifest)
     audit_package(model, package, report, AuditConfig())
+    report.configuration["test_serialized_fds"] = text
     return text, manifest, package, report, config
+
+
+def golden_gate(report, model, manifest, package, configuration, fds_text=None):
+    return evaluate_golden_gate(
+        report,
+        model,
+        manifest,
+        package,
+        configuration,
+        fds_text
+        if fds_text is not None
+        else report.configuration.get("test_serialized_fds"),
+    )
 
 
 def test_domain_does_not_follow_boundary_extent(box_model):
@@ -181,7 +195,15 @@ def golden(box_model, tmp_path):
     plan_mapping(box_model)
     text, manifest, package, report, config = checked(box_model)
     directory = tmp_path / "reference"
-    create_candidate(directory, box_model, manifest, package, report, config)
+    create_candidate(
+        directory,
+        box_model,
+        manifest,
+        package,
+        report,
+        config,
+        report.configuration["test_serialized_fds"],
+    )
     approve_test_fixture(directory)
     return box_model, directory, config
 
@@ -401,7 +423,15 @@ def test_golden_resealed_actual_fds(box_model, tmp_path):
     plan_mapping(model, force_all_geom=True)
     _, manifest, package, report, config = checked(model)
     directory = tmp_path / "opening-reference"
-    create_candidate(directory, model, manifest, package, report, config)
+    create_candidate(
+        directory,
+        model,
+        manifest,
+        package,
+        report,
+        config,
+        report.configuration["test_serialized_fds"],
+    )
     approve_test_fixture(directory)
     mutant = model.model_copy(deep=True)
     mutant.elements[0].mesh = solid
@@ -545,3 +575,128 @@ def test_failed_geometry_cannot_be_declared_outside_scope(box_model):
     box_model.elements.append(item)
     apply_spatial_scope(box_model, SpatialScope(bounding_box=box_model.model_bounds))
     assert item.scope_decision == "UNRESOLVED"
+
+
+def test_reference_port_coordinate_permutation_is_detected(box_model):
+    from ifc_to_fds.core.canonical import PortReference
+
+    element = box_model.elements[0]
+    element.ports = [
+        PortReference(
+            port_global_id="port-guid",
+            port_step_id=100,
+            port_key="fixture:100",
+            owner_key=element.entity_key,
+            local_position=[0.25, 0.5, 1.0],
+            world_position=[0.25, 0.5, 1.0],
+        )
+    ]
+    plan_mapping(box_model)
+    package = build_package(box_model)
+    package["elements"][element.entity_key]["ports"][0]["world_position"] = [
+        1.0,
+        0.5,
+        0.25,
+    ]
+    package = seal(package)
+    _, _, _, report, _ = checked(box_model, package=package)
+    assert report.gates["geometry_preservation"].status == "FAIL"
+    assert any(
+        f.element_id == element.entity_key and "ports" in f.detail
+        for f in report.findings
+    )
+
+
+def test_source_transform_axis_permutation_is_not_equivalent(box_model):
+    from ifc_to_fds.validation.golden import source_signature
+
+    source = box_model.source.model_dump(mode="json")
+    source["world_transform"][3] = 1.0
+    source["world_transform"][7] = 2.0
+    changed = dict(source, world_transform=list(source["world_transform"]))
+    changed["world_transform"][3] = 2.0
+    changed["world_transform"][7] = 1.0
+    assert source_signature([source]) != source_signature([changed])
+
+
+def test_equivalent_system_order_does_not_fail_mep_audit(box_model):
+    from ifc_to_fds.core.canonical import MEPSystem
+
+    box_model.mep_graph.systems = [
+        MEPSystem(system_id=key, name=key, system_type="VENTILATION")
+        for key in ("A", "B")
+    ]
+    expected = box_model.mep_graph.model_copy(deep=True)
+    expected.systems.reverse()
+    text, manifest = serialize_fds(box_model)
+    report = run_independent_validation(
+        box_model, text, manifest, expected_mep=expected
+    )
+    assert report.gates["mep"].status == "PASS"
+
+
+def test_golden_compares_actual_fds_to_accepted_fds(box_model, tmp_path):
+    box_model.simulation_domain = BoundingBox(
+        xmin=-1, xmax=3, ymin=-1, ymax=2, zmin=-1, zmax=4
+    )
+    text, _ = serialize_fds(box_model)
+    original = "XB=0.0000,2.0000,0.0000,1.0000,0.0000,3.0000"
+    baseline = text.replace(original, "XB=0.00075,2.00075,0,1,0,3")
+    actual = text.replace(original, "XB=-0.00075,1.99925,0,1,0,3")
+    _, manifest, package, report, config = checked(box_model, text=baseline)
+    assert report.gates["geometry"].status == "PASS"
+    directory = tmp_path / "fds-baseline"
+    create_candidate(directory, box_model, manifest, package, report, config, baseline)
+    approve_test_fixture(directory)
+    _, manifest, package, report, _ = checked(box_model, text=actual)
+    assert (
+        report.gates["geometry"].status == "PASS"
+    )  # Both within IFC tolerance independently.
+    golden_gate(
+        report,
+        box_model,
+        manifest,
+        package,
+        {**config, "reference_case": str(directory)},
+        actual,
+    )
+    assert report.gates["golden_reference_parity"].status == "FAIL"
+    assert any(
+        f.element_id == "fixture:1" and "golden_fds_geometry" in f.title
+        for f in report.findings
+    )
+
+
+def test_manual_fds_import_stays_a_draft(tiny_ifc, tmp_path):
+    from ifc_to_fds.pipeline import convert, save_artifacts
+    from ifc_to_fds.cli import main
+    from ifc_to_fds.validation.golden import inspect_case
+
+    path, _, _ = tiny_ifc
+    result = convert([path])
+    fds = tmp_path / "reviewed.fds"
+    save_artifacts(result, fds)
+    config = tmp_path / "config.json"
+    config.write_text("{}")
+    directory = tmp_path / "manual-candidate"
+    assert (
+        main(
+            [
+                "reference-candidate",
+                str(path),
+                "--config",
+                str(config),
+                "--reference-fds",
+                str(fds),
+                "--reference-manifest",
+                str(tmp_path / "reviewed_manifest.json"),
+                "-o",
+                str(directory),
+            ]
+        )
+        == 2
+    )
+    _, approval, values = inspect_case(directory)
+    assert approval["status"] == "DRAFT"
+    assert values["fds-geometry.json"]["complete"]
+    assert values["fds-geometry.json"]["entries"]

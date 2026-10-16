@@ -130,7 +130,7 @@ def audit_package(model, package, report, config):
             or entry.get("transform") != e.transform
         ):
             fail(e.entity_key, "Geometry package identity/transform differs")
-        from ifc_to_fds.validation.golden import normalize
+        from ifc_to_fds.core.compare import normalize
 
         if normalize(entry.get("ports", [])) != normalize(
             [p.model_dump(mode="json") for p in e.ports]

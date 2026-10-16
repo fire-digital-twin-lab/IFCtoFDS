@@ -58,6 +58,12 @@ def main(argv=None):
     p = commands.add_parser("reference-candidate")
     p.add_argument("input_ifc", nargs="+")
     p.add_argument("--config", required=True)
+    p.add_argument(
+        "--reference-fds", help="Existing manually reviewed FDS, imported as a draft"
+    )
+    p.add_argument(
+        "--reference-manifest", help="Source mapping for the existing FDS primitive IDs"
+    )
     p.add_argument("-o", "--output", required=True)
     p = commands.add_parser("reference-check")
     p.add_argument("directory")
@@ -122,14 +128,32 @@ def main(argv=None):
             from .validation.acceptance import AcceptanceReport
 
             model = prepare(args.input_ifc, config, reference=True)
+            fds_text = result["fds_text"]
+            report = AcceptanceReport.model_validate(result["report"])
+            if args.reference_manifest and not args.reference_fds:
+                raise ValueError("--reference-manifest requires --reference-fds")
+            if args.reference_fds:
+                fds_text = Path(args.reference_fds).read_text(encoding="utf-8")
+                if args.reference_manifest:
+                    manifest = MappingManifest.model_validate_json(
+                        Path(args.reference_manifest).read_text(encoding="utf-8")
+                    )
+                model, manifest, report = audit(
+                    args.input_ifc,
+                    fds_text,
+                    manifest,
+                    result["configuration"],
+                    result["geometry_package"],
+                )
             print(
                 create_candidate(
                     args.output,
                     model,
                     manifest,
                     result["geometry_package"],
-                    AcceptanceReport.model_validate(result["report"]),
+                    report,
                     config,
+                    fds_text,
                 )
             )
             return 2  # Candidate generation is never approval.

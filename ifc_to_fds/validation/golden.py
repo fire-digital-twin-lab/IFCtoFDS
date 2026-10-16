@@ -2,11 +2,12 @@
 
 import copy
 import json
+from ifc_to_fds.core.compare import normalize
 from pathlib import Path
 from ifc_to_fds.core.canonical import SCHEMA_VERSION, TriangleMesh
 from ifc_to_fds.geometry.package import digest, verify_package, metrics_pass
 from ifc_to_fds.mapping.manifest import MappingManifest
-from .metrics import compare_solids
+from .metrics import compare_solids, passage_metrics
 from .acceptance import GateResult, GateStatus, Finding, Severity
 
 FIELDS = (
@@ -43,20 +44,11 @@ FILES = (
     "golden-manifest.json",
     "golden-geometry-metrics.json",
     "geometry-package.json",
+    "fds-geometry.json",
     "mep-reference.json",
     "acceptance-profile.json",
     "review-queue.json",
 )
-
-
-def normalize(value):
-    if isinstance(value, dict):
-        return {k: normalize(v) for k, v in sorted(value.items())}
-    if isinstance(value, list):
-        return sorted(
-            (normalize(v) for v in value), key=lambda v: json.dumps(v, sort_keys=True)
-        )
-    return value
 
 
 def source_signature(sources):
@@ -113,7 +105,52 @@ def resolve_sources(case, mapping):
     return result
 
 
-def create_candidate(directory, model, manifest, package, report, configuration):
+def serialized_geometry(text, manifest):
+    """Capture the actual FDS solids, with reviewed manifest links for legacy files."""
+    import hashlib
+    from .parser import parse_fds
+
+    if text is None:
+        return dict(
+            schema_version=SCHEMA_VERSION,
+            complete=False,
+            entries={},
+            reason="No accepted/candidate FDS artifact supplied",
+        )
+    parsed = parse_fds(text)
+    errors = [*parsed.errors, *parsed.unsupported]
+    entries = {}
+    actual_ids = set()
+    for primitive in parsed.primitives:
+        actual_ids.add(primitive.id)
+        keys = manifest.primitive_to_ifc.get(primitive.id, [])
+        source_key = primitive.source.get("entity_key")
+        if len(keys) != 1 or (source_key and source_key != keys[0]):
+            errors.append(f"Unresolved primitive source: {primitive.id}")
+            continue
+        if primitive.kind not in ("OBST", "GEOM"):
+            errors.append(f"Unsupported golden primitive: {primitive.kind}")
+            continue
+        try:
+            entries.setdefault(keys[0], []).append(
+                primitive.mesh().model_dump(mode="json")
+            )
+        except ValueError as exc:
+            errors.append(str(exc))
+    if actual_ids != set(manifest.primitive_to_ifc):
+        errors.append("Golden FDS primitive set conflicts with manifest")
+    return dict(
+        schema_version=SCHEMA_VERSION,
+        complete=not errors,
+        entries=entries,
+        fds_sha256=hashlib.sha256(text.encode()).hexdigest(),
+        errors=errors,
+    )
+
+
+def create_candidate(
+    directory, model, manifest, package, report, configuration, fds_text=None
+):
     directory = Path(directory)
     if directory.exists() and any(directory.iterdir()):
         raise ValueError(
@@ -174,6 +211,7 @@ def create_candidate(directory, model, manifest, package, report, configuration)
         "golden-manifest.json": manifest.model_dump(mode="json"),
         "golden-geometry-metrics.json": report.metrics,
         "geometry-package.json": package,
+        "fds-geometry.json": serialized_geometry(fds_text, manifest),
         "mep-reference.json": model.mep_graph.model_dump(mode="json"),
         "acceptance-profile.json": dict(
             schema_version=SCHEMA_VERSION,
@@ -233,6 +271,16 @@ def inspect_case(directory):
         raise ValueError("Unsupported reference schema")
     verify_package(values["geometry-package.json"])
     inventory = values["expected-inventory.json"]
+    fds_evidence = values["fds-geometry.json"]
+    if fds_evidence.get("schema_version") != SCHEMA_VERSION or not isinstance(
+        fds_evidence.get("entries"), dict
+    ):
+        raise ValueError("Invalid golden FDS geometry evidence")
+    for key, meshes in fds_evidence["entries"].items():
+        if key not in inventory or not isinstance(meshes, list):
+            raise ValueError("Golden FDS geometry inventory conflicts")
+        for mesh in meshes:
+            TriangleMesh.model_validate(mesh)
     if inventory != snapshot(
         MappingManifest.model_validate(values["golden-manifest.json"])
     ):
@@ -251,7 +299,7 @@ def inspect_case(directory):
     return actual, approval, values
 
 
-def golden_gate(report, model, manifest, package, configuration):
+def golden_gate(report, model, manifest, package, configuration, fds_text=None):
     profile = configuration.get("profile", "mapping")
     case = configuration.get("reference_case")
     gate = GateResult(status=GateStatus.PASS, required=True)
@@ -305,6 +353,7 @@ def golden_gate(report, model, manifest, package, configuration):
         return
     expected = copy.deepcopy(values["expected-inventory.json"])
     reference_package = copy.deepcopy(values["geometry-package.json"])
+    reference_fds = copy.deepcopy(values["fds-geometry.json"])
     delta = configuration.get("intentional_deltas")
     if delta:
         if (
@@ -318,7 +367,7 @@ def golden_gate(report, model, manifest, package, configuration):
             key, field = change.get("entity_key"), change.get("field")
             if (
                 key not in expected
-                or field not in (*FIELDS, "geometry")
+                or field not in (*FIELDS, "geometry", "fds_geometry")
                 or not all(change.get(k) for k in ("rationale", "reviewer", "evidence"))
             ):
                 fail(
@@ -327,6 +376,24 @@ def golden_gate(report, model, manifest, package, configuration):
                     "explicit supported entity/field approval",
                     change,
                 )
+                continue
+            if field == "fds_geometry":
+                current = reference_fds["entries"].get(key)
+                if current != change.get("before"):
+                    fail(key, "delta.before", current, change.get("before"))
+                    continue
+                after = change.get("after")
+                if after is None:
+                    reference_fds["entries"].pop(key, None)
+                elif isinstance(after, list) and after:
+                    try:
+                        for mesh in after:
+                            TriangleMesh.model_validate(mesh)
+                        reference_fds["entries"][key] = after
+                    except ValueError as exc:
+                        fail(key, "delta.fds_geometry", "valid geometry", str(exc))
+                else:
+                    fail(key, "delta.fds_geometry", "mesh list or null", after)
                 continue
             target = (
                 reference_package["elements"][key]
@@ -432,6 +499,96 @@ def golden_gate(report, model, manifest, package, configuration):
     from .acceptance import AuditConfig
 
     config = AuditConfig.model_validate(audit_settings)
+    baseline_fds = reference_fds
+    actual_fds = serialized_geometry(fds_text, manifest)
+    if not baseline_fds.get("complete") or not actual_fds.get("complete"):
+        unknown("Actual or reference FDS solid evidence missing/unsupported")
+    else:
+        from ifc_to_fds.geometry.mesh import as_trimesh
+        import trimesh
+
+        expected_solids = baseline_fds["entries"]
+        actual_solids = actual_fds["entries"]
+        for key in sorted(set(expected_solids) | set(actual_solids)):
+            if not expected_solids.get(key) or not actual_solids.get(key):
+                fail(
+                    key,
+                    "fds_geometry_inventory",
+                    bool(expected_solids.get(key)),
+                    bool(actual_solids.get(key)),
+                )
+                continue
+            try:
+                pieces = [TriangleMesh.model_validate(m) for m in expected_solids[key]]
+                if len(pieces) == 1:
+                    reference = pieces[0]
+                else:
+                    union = trimesh.boolean.union(
+                        [as_trimesh(m) for m in pieces], engine="manifold"
+                    )
+                    reference = TriangleMesh(
+                        vertices=union.vertices.tolist(), faces=union.faces.tolist()
+                    )
+                measured = compare_solids(
+                    reference,
+                    [TriangleMesh.model_validate(m) for m in actual_solids[key]],
+                )
+                gate.evidence.setdefault("fds_geometry_metrics", {})[key] = measured
+                if not metrics_pass(measured, config):
+                    fail(
+                        key,
+                        "golden_fds_geometry",
+                        "equivalent accepted FDS solid",
+                        measured,
+                    )
+                elif not measured["surface_proven"]:
+                    unknown(f"Golden FDS full surface proof missing: {key}")
+            except ValueError as exc:
+                fail(key, "golden_fds_geometry", "valid solid", str(exc))
+            except Exception as exc:
+                unknown(f"Golden FDS geometry unavailable: {key}: {exc}")
+        reference_obstacles = [
+            TriangleMesh.model_validate(m)
+            for group in expected_solids.values()
+            for m in group
+        ]
+        actual_obstacles = [
+            TriangleMesh.model_validate(m)
+            for group in actual_solids.values()
+            for m in group
+        ]
+        for key, entry in reference_package["elements"].items():
+            for opening_id, mesh in entry.get("openings", {}).items():
+                if mesh is None:
+                    unknown(f"Golden passage probe missing: {key}/{opening_id}")
+                    continue
+                try:
+                    probe = TriangleMesh.model_validate(mesh)
+                    passage = passage_metrics(
+                        reference_obstacles, actual_obstacles, probe
+                    )
+                    solid = as_trimesh(probe)
+                    tolerance = max(
+                        1e-6,
+                        config.surface_tolerance_m
+                        * solid.area
+                        / max(solid.volume, 1e-12),
+                    )
+                    if (
+                        passage["normalized_symmetric_difference"] > tolerance
+                        or passage["source_free_components"]
+                        != passage["output_free_components"]
+                    ):
+                        fail(
+                            key,
+                            "golden_air_passage:" + opening_id,
+                            "equivalent free volume",
+                            passage,
+                        )
+                except Exception as exc:
+                    unknown(
+                        f"Golden passage comparison unavailable: {key}/{opening_id}: {exc}"
+                    )
     for key, entry in reference_package["elements"].items():
         source = entry.get("mesh")
         saved = package["elements"].get(key, {}).get("mesh")
