@@ -8,6 +8,8 @@ import hashlib
 import os
 from typing import Any, Dict, List, Optional, Tuple
 import ifcopenshell
+import ifcopenshell.util.element
+import ifcopenshell.util.placement
 
 from .canonical import (
     CanonicalElement,
@@ -16,6 +18,7 @@ from .canonical import (
     MappingStrategy,
     OpeningReference,
     SourceMetadata,
+    StoreyReference,
 )
 from .units import get_length_unit_scale
 
@@ -66,6 +69,7 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     unit_name, unit_scale = get_length_unit_scale(ifc_file)
 
     source_meta = SourceMetadata(
+        source_id=file_hash,
         filename=os.path.basename(file_path),
         file_path=os.path.abspath(file_path),
         file_hash_sha256=file_hash,
@@ -75,6 +79,28 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
         unit_scale_to_meters=unit_scale,
     )
 
+    storey_refs = []
+    for s in ifc_file.by_type("IfcBuildingStorey"):
+        elevation = None
+        if s.ObjectPlacement:
+            elevation = (
+                float(
+                    ifcopenshell.util.placement.get_local_placement(s.ObjectPlacement)[
+                        2, 3
+                    ]
+                )
+                * unit_scale
+            )
+        elif s.Elevation is not None:
+            elevation = float(s.Elevation) * unit_scale
+        storey_refs.append(
+            StoreyReference(
+                storey_id=f"{file_hash}:{s.id()}",
+                source_id=file_hash,
+                name=s.Name or s.GlobalId,
+                elevation_m=elevation,
+            )
+        )
     # Spatial storeys
     storeys: List[str] = [
         storey.Name or storey.GlobalId
@@ -110,23 +136,41 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     # Ingest 100% of IfcProduct entities
     all_products = ifc_file.by_type("IfcProduct")
     for prod in all_products:
-        # Exclude IfcOpeningElement from top-level building solids inventory
-        # (they are tracked via host openings)
-        if prod.is_a("IfcOpeningElement"):
-            continue
-
         guid = prod.GlobalId
         step_id = prod.id()
         ifc_type = prod.is_a()
         name = prod.Name or f"{ifc_type}_{step_id}"
         tag = getattr(prod, "Tag", None)
         storey = find_containing_storey(prod)
-        psets = extract_property_sets(prod)
+        psets = ifcopenshell.util.element.get_psets(prod)
+        container = ifcopenshell.util.element.get_container(prod)
+        parent = ifcopenshell.util.element.get_aggregate(prod)
+        if container is None and parent is not None:
+            container = ifcopenshell.util.element.get_container(parent)
+        if prod.is_a("IfcOpeningElement"):
+            voids = getattr(prod, "VoidsElements", ())
+            if voids:
+                container = ifcopenshell.util.element.get_container(
+                    voids[0].RelatingBuildingElement
+                )
+        if container and container.is_a("IfcBuildingStorey"):
+            storey = container.Name or container.GlobalId
         openings = openings_by_host.get(guid, [])
 
         has_geom = bool(getattr(prod, "Representation", None))
 
         elem = CanonicalElement(
+            source_id=file_hash,
+            entity_key=f"{file_hash}:{step_id}",
+            storey_id=f"{file_hash}:{container.id()}"
+            if container and container.is_a("IfcBuildingStorey")
+            else None,
+            role="OPENING"
+            if prod.is_a("IfcOpeningElement")
+            else "PORT"
+            if prod.is_a("IfcDistributionPort")
+            else "PHYSICAL",
+            predefined_type=ifcopenshell.util.element.get_predefined_type(prod),
             global_id=guid,
             step_id=step_id,
             ifc_type=ifc_type,
@@ -136,15 +180,21 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
             property_sets=psets,
             has_3d_geometry=has_geom,
             openings=openings,
-            mapping_status=MappingStatus.MATCHED if has_geom else MappingStatus.SEMANTIC_ONLY,
-            mapping_strategy=MappingStrategy.GEOM if has_geom else MappingStrategy.SEMANTIC_ONLY,
+            mapping_status=MappingStatus.INCONCLUSIVE
+            if has_geom
+            else MappingStatus.SEMANTIC_ONLY,
+            mapping_strategy=MappingStrategy.GEOM
+            if has_geom
+            else MappingStrategy.SEMANTIC_ONLY,
         )
         elements.append(elem)
 
     canonical = CanonicalModel(
         source=source_meta,
+        sources=[source_meta],
         elements=elements,
         storeys=storeys,
+        storey_references=storey_refs,
     )
     return canonical, ifc_file
 

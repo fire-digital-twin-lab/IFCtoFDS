@@ -13,6 +13,11 @@ __pycache__/
 .coverage
 htmlcov/
 scripts/out/
+.venv/
+.deps/
+.jobs/
+.cache/
+benchmark-results/
 
 # Private / non-redistributable BIM models. The "Technical school" model is a
 # private project; the Snowdon Towers file is an Autodesk Revit sample whose

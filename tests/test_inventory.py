@@ -14,8 +14,8 @@ def test_fzk_inventory_100_percent_ingestion():
     # 127 total products, 17 openings (tracked on host walls), 110 physical elements
     assert len(all_products) == 127
     assert len(opening_elements) == 17
-    assert len(model.elements) == len(all_products) - len(opening_elements)
-    assert len(model.elements) == 110
+    assert len(model.elements) == len(all_products)
+    assert len(model.elements) == 127
 
     # Ensure SHA-256 hash was calculated
     assert model.source.file_hash_sha256 is not None
@@ -27,7 +27,7 @@ def test_fzk_inventory_100_percent_ingestion():
 
     # Ensure elements retain GlobalId and step_id
     guids = {el.global_id for el in model.elements}
-    assert len(guids) == 110  # 100% unique GUIDs
+    assert len(guids) == 127  # 100% unique GUIDs
 
     # Verify openings are mapped to host walls
     walls_with_openings = [el for el in model.elements if len(el.openings) > 0]
@@ -41,7 +41,17 @@ def test_duplex_inventory_expanded_types():
     model, ifc_file = extract_inventory(duplex_path)
 
     all_products = ifc_file.by_type("IfcProduct")
-    opening_elements = ifc_file.by_type("IfcOpeningElement")
 
-    assert len(model.elements) == len(all_products) - len(opening_elements)
-    assert len(model.elements) == 245
+    assert len(model.elements) == len(all_products)
+    assert len(model.elements) == 295
+
+
+def test_nonphysical_products_remain_accounted():
+    model, source = extract_inventory(
+        os.path.join(REPO_ROOT, "examples", "AC20-FZK-Haus.ifc")
+    )
+    assert {e.step_id for e in model.elements} == {
+        e.id() for e in source.by_type("IfcProduct")
+    }
+    assert sum(e.role == "OPENING" for e in model.elements) == 17
+    assert len({e.entity_key for e in model.elements}) == len(model.elements)

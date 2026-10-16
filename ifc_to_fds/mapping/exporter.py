@@ -15,11 +15,18 @@ from ifc_to_fds.core.canonical import (
     MappingStrategy,
 )
 from .manifest import MappingManifest, build_manifest
-from .policy import determine_element_strategy
+from ifc_to_fds.geometry.mesh import (
+    bounds_for_vertices,
+    valid_solid,
+    is_axis_aligned_box,
+)
+from ifc_to_fds.core.canonical import ScopeDecision
+import json
 
 
 def clean_fds_id(name: str, fallback: str) -> str:
-    cleaned = re.sub(r"[^\w.-]+", "_", name or "")
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", name or "")
+    cleaned = cleaned.strip("._-")
     if not cleaned:
         cleaned = fallback
     return cleaned[:30]
@@ -30,14 +37,23 @@ def format_xb(xb: List[float]) -> str:
 
 
 def format_source_comment(elem: CanonicalElement) -> str:
-    storey_str = f", storey='{elem.storey}'" if elem.storey else ""
-    return (
-        f"! IFC_SOURCE(global_id='{elem.global_id}', step_id={elem.step_id}, "
-        f"ifc_type='{elem.ifc_type}', name='{clean_fds_id(elem.name, 'item')}'{storey_str})"
+    return "! IFC_SOURCE " + json.dumps(
+        dict(
+            entity_key=elem.entity_key,
+            source_id=elem.source_id,
+            global_id=elem.global_id,
+            step_id=elem.step_id,
+            ifc_type=elem.ifc_type,
+        ),
+        ensure_ascii=True,
     )
 
 
-def compute_mesh_grid(bounds: BoundingBox, cell_size: float = 0.2) -> Tuple[List[int], List[float]]:
+def compute_mesh_grid(
+    bounds: BoundingBox, cell_size: float = 0.2
+) -> Tuple[List[int], List[float]]:
+    if not math.isfinite(cell_size) or cell_size <= 0:
+        raise ValueError("cell_size must be finite and positive")
     pad = 0.4
     xb = [
         math.floor((bounds.xmin - pad) / cell_size) * cell_size,
@@ -58,18 +74,31 @@ def compute_mesh_grid(bounds: BoundingBox, cell_size: float = 0.2) -> Tuple[List
 def serialize_fds(
     model: CanonicalModel,
     cell_size: float = 0.2,
-    force_all_geom: bool = False,
-    include_review_solids: bool = False,
 ) -> Tuple[str, MappingManifest]:
     """Serializes CanonicalModel into valid FDS text and generates MappingManifest."""
+    if not all(e.mapping_planned for e in model.elements):
+        raise ValueError("Call plan_mapping before serialization")
     lines: List[str] = []
 
     chid = clean_fds_id(model.source.filename.replace(".ifc", ""), "IFC_MODEL")
-    lines.append(f"&HEAD CHID='{chid}', TITLE='Converted from {model.source.filename} via Verified IFCtoFDS' /")
+    lines.append(
+        f"&HEAD CHID='{chid}', TITLE='IFCtoFDS conversion; see acceptance report' /"
+    )
     lines.append("&TIME T_END=0.0 /")
 
     # MESH calculation
-    bounds = model.model_bounds or BoundingBox(xmin=-5, xmax=5, ymin=-5, ymax=5, zmin=0, zmax=3)
+    active = [
+        e
+        for e in model.elements
+        if e.scope_decision in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+        and e.mapping_strategy in (MappingStrategy.GEOM, MappingStrategy.OBST)
+        and e.mesh
+        and valid_solid(e.mesh)
+    ]
+    bounds = bounds_for_vertices([v for e in active for v in e.mesh.vertices])
+    if bounds is None:
+        raise ValueError("No valid export geometry in selected scope")
+    model.exported_bounds = bounds
     ijk, mesh_xb = compute_mesh_grid(bounds, cell_size=cell_size)
     lines.append(f"&MESH IJK={ijk[0]},{ijk[1]},{ijk[2]}, XB={format_xb(mesh_xb)} /")
     lines.append("")
@@ -85,14 +114,24 @@ def serialize_fds(
 
     for elem in model.elements:
         elem.fds_primitive_ids.clear()
-        strategy = determine_element_strategy(
-            elem,
-            force_all_geom=force_all_geom,
-            include_review_solids=include_review_solids,
-        )
-        elem.mapping_strategy = strategy
-
-        if strategy == MappingStrategy.EXCLUDED_APPROVED or strategy == MappingStrategy.SEMANTIC_ONLY:
+        strategy = elem.mapping_strategy
+        if elem.scope_decision in (
+            ScopeDecision.OUT_OF_SCOPE,
+            ScopeDecision.UNRESOLVED,
+        ):
+            continue
+        if strategy in (MappingStrategy.GEOM, MappingStrategy.OBST) and (
+            not elem.mesh or not valid_solid(elem.mesh)
+        ):
+            continue
+        if strategy in (MappingStrategy.VOXEL, MappingStrategy.OBST_HOLE):
+            raise ValueError(f"Unverified mapping strategy: {strategy.value}")
+        if strategy == MappingStrategy.OBST and not is_axis_aligned_box(elem.mesh):
+            raise ValueError(f"OBST lacks geometric equivalence: {elem.entity_key}")
+        if (
+            strategy == MappingStrategy.EXCLUDED_APPROVED
+            or strategy == MappingStrategy.SEMANTIC_ONLY
+        ):
             continue
 
         if strategy == MappingStrategy.OBST and elem.bounding_box:
@@ -101,17 +140,24 @@ def serialize_fds(
             elem.fds_primitive_ids.append(prim_id)
 
             lines.append(format_source_comment(elem))
-            lines.append(f"&OBST ID='{prim_id}', XB={format_xb(elem.bounding_box.to_xb())}, SURF_ID='CONCRETE' /")
+            lines.append(
+                f"&OBST ID='{prim_id}', XB={format_xb(elem.bounding_box.to_xb())}, SURF_ID='CONCRETE' /"
+            )
 
-        elif strategy == MappingStrategy.GEOM and elem.mesh and elem.mesh.vertices and elem.mesh.faces:
+        elif (
+            strategy == MappingStrategy.GEOM
+            and elem.mesh
+            and elem.mesh.vertices
+            and elem.mesh.faces
+        ):
             prim_counter += 1
             prim_id = f"GEOM_{prim_counter}_{clean_fds_id(elem.name, 'geom')}"
             elem.fds_primitive_ids.append(prim_id)
 
-            verts_str = ",".join(
+            verts_str = ",\n      ".join(
                 f"{v[0]:.4f},{v[1]:.4f},{v[2]:.4f}" for v in elem.mesh.vertices
             )
-            faces_str = ",".join(
+            faces_str = ",\n      ".join(
                 f"{f[0] + 1},{f[1] + 1},{f[2] + 1},1" for f in elem.mesh.faces
             )
 
@@ -124,5 +170,5 @@ def serialize_fds(
     lines.append("&TAIL /")
     lines.append("")
 
-    manifest = build_manifest(model)
+    manifest = build_manifest(model, "\n".join(lines))
     return "\n".join(lines), manifest

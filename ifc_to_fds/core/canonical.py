@@ -9,7 +9,24 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+import math
+
+SCHEMA_VERSION = "0.3.0"
+
+
+class ScopeDecision(str, Enum):
+    IN_SCOPE = "IN_SCOPE"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+    BOUNDARY_RETAINED = "BOUNDARY_RETAINED"
+    UNRESOLVED = "UNRESOLVED"
+
+
+class GeometryStatus(str, Enum):
+    NOT_PROCESSED = "NOT_PROCESSED"
+    VALID = "VALID"
+    FAILED = "FAILED"
+    NO_REPRESENTATION = "NO_REPRESENTATION"
 
 
 class MappingStatus(str, Enum):
@@ -33,6 +50,7 @@ class MappingStrategy(str, Enum):
 
 
 class SourceMetadata(BaseModel):
+    source_id: str = ""
     filename: str
     file_path: str
     file_hash_sha256: str
@@ -40,6 +58,26 @@ class SourceMetadata(BaseModel):
     schema_version: str  # e.g., "IFC4", "IFC2X3"
     unit_length_name: str = "METRE"
     unit_scale_to_meters: float = 1.0
+    world_transform: List[float] = Field(
+        default_factory=lambda: [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ]
+    )
 
 
 class BoundingBox(BaseModel):
@@ -49,6 +87,14 @@ class BoundingBox(BaseModel):
     ymax: float
     zmin: float
     zmax: float
+
+    @model_validator(mode="after")
+    def valid_bounds(self):
+        if not all(math.isfinite(v) for v in self.to_xb()):
+            raise ValueError("Bounds must be finite")
+        if self.xmax <= self.xmin or self.ymax <= self.ymin or self.zmax <= self.zmin:
+            raise ValueError("Bounds must have positive extents")
+        return self
 
     @property
     def dx(self) -> float:
@@ -107,6 +153,8 @@ class OpeningReference(BaseModel):
     bounding_box: Optional[BoundingBox] = None
     filling_global_ids: List[str] = Field(default_factory=list)
     is_subtracted: bool = False
+    mesh: Optional[TriangleMesh] = None
+    verification_status: str = "NOT_RUN"
 
 
 class PortReference(BaseModel):
@@ -116,15 +164,29 @@ class PortReference(BaseModel):
     flow_direction: Optional[str] = None  # SINK, SOURCE, SOURCEANDSINK, NOTDEFINED
     local_position: Optional[List[float]] = None
     connected_port_ids: List[str] = Field(default_factory=list)
+    port_key: str = ""
+    world_position: Optional[List[float]] = None
+    owner_key: str = ""
 
 
 class CanonicalElement(BaseModel):
+    source_id: str = ""
+    entity_key: str = ""
     global_id: str
     step_id: int
     ifc_type: str
     name: str = ""
     tag: Optional[str] = None
     storey: Optional[str] = None
+    storey_id: Optional[str] = None
+    role: str = "PHYSICAL"
+    geometry_status: GeometryStatus = GeometryStatus.NOT_PROCESSED
+    scope_decision: ScopeDecision = ScopeDecision.IN_SCOPE
+    scope_rationale: str = "Full model"
+    mapping_planned: bool = False
+    mep_category: str = "OTHER"
+    classification_evidence: List[str] = Field(default_factory=list)
+    predefined_type: Optional[str] = None
     system_names: List[str] = Field(default_factory=list)
     system_ids: List[str] = Field(default_factory=list)
 
@@ -144,7 +206,7 @@ class CanonicalElement(BaseModel):
 
     # Mapping Decisions & Provenance
     mapping_strategy: MappingStrategy = MappingStrategy.SEMANTIC_ONLY
-    mapping_status: MappingStatus = MappingStatus.MATCHED
+    mapping_status: MappingStatus = MappingStatus.INCONCLUSIVE
     mapping_rationale: Optional[str] = None
     fds_primitive_ids: List[str] = Field(default_factory=list)
     validation_notes: List[str] = Field(default_factory=list)
@@ -153,9 +215,12 @@ class CanonicalElement(BaseModel):
 class MEPSystem(BaseModel):
     system_id: str
     name: str
-    system_type: str  # e.g., "VENTILATION", "SMOKE_EXTRACT", "FIRE_SUPPRESSION", "PLUMBING"
+    system_type: (
+        str  # e.g., "VENTILATION", "SMOKE_EXTRACT", "FIRE_SUPPRESSION", "PLUMBING"
+    )
     element_global_ids: List[str] = Field(default_factory=list)
     is_fire_safety_critical: bool = False
+    element_keys: List[str] = Field(default_factory=list)
 
 
 class MEPConnection(BaseModel):
@@ -166,26 +231,42 @@ class MEPConnection(BaseModel):
     target_port_id: str
     relation_type: str  # "EXPLICIT_IFC", "GEOMETRIC_PROXIMITY"
     distance_meters: float = 0.0
+    boundary_connection: bool = False
 
 
 class MEPGraph(BaseModel):
     systems: List[MEPSystem] = Field(default_factory=list)
     connections: List[MEPConnection] = Field(default_factory=list)
     isolated_element_ids: List[str] = Field(default_factory=list)
+    issues: List[str] = Field(default_factory=list)
+    coverage: Dict[str, Any] = Field(default_factory=dict)
+
+
+class StoreyReference(BaseModel):
+    storey_id: str
+    source_id: str
+    name: str
+    elevation_m: Optional[float] = None
 
 
 class CanonicalModel(BaseModel):
+    schema_version: str = SCHEMA_VERSION
     source: SourceMetadata
+    sources: List[SourceMetadata] = Field(default_factory=list)
     elements: List[CanonicalElement] = Field(default_factory=list)
     mep_graph: MEPGraph = Field(default_factory=MEPGraph)
     storeys: List[str] = Field(default_factory=list)
     model_bounds: Optional[BoundingBox] = None
+    storey_references: List[StoreyReference] = Field(default_factory=list)
+    requested_scope: Dict[str, Any] = Field(default_factory=dict)
+    exported_bounds: Optional[BoundingBox] = None
+    timings: Dict[str, float] = Field(default_factory=dict)
 
     def get_element_by_guid(self, guid: str) -> Optional[CanonicalElement]:
-        for el in self.elements:
-            if el.global_id == guid:
-                return el
-        return None
+        matches = [el for el in self.elements if el.global_id == guid]
+        if len(matches) > 1:
+            raise ValueError("Ambiguous GlobalId; use entity_key")
+        return matches[0] if matches else None
 
     def get_elements_by_type(self, ifc_type: str) -> List[CanonicalElement]:
         t_upper = ifc_type.upper()

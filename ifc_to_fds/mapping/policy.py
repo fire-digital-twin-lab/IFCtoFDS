@@ -1,72 +1,65 @@
-"""FDS Mapping Policy Engine.
+"""Explicit, scope-preserving mapping decisions made before serialization."""
 
-Assigns appropriate FDS representation strategies (OBST, OBST+HOLE, GEOM,
-SEMANTIC_ONLY, EXCLUDED_APPROVED) based on geometry topology and semantics.
-"""
+from ifc_to_fds.core.canonical import (
+    MappingStrategy,
+    MappingStatus,
+    ScopeDecision,
+)
+from ifc_to_fds.geometry.mesh import is_axis_aligned_box, valid_solid
 
-from typing import Set
-from ifc_to_fds.core.canonical import CanonicalElement, MappingStrategy
-
-
-SOLID_STRUCTURE_TYPES: Set[str] = {
-    "IFCWALL",
-    "IFCWALLSTANDARDCASE",
-    "IFCSLAB",
-    "IFCCOLUMN",
-    "IFCBEAM",
-    "IFCFOOTING",
-    "IFCCOVERING",
-}
-
-COMPLEX_GEOM_TYPES: Set[str] = {
-    "IFCROOF",
-    "IFCSTAIR",
-    "IFCSTAIRFLIGHT",
-    "IFCRAMP",
-    "IFCRAMPFLIGHT",
-}
-
-NON_OBSTACLE_TYPES: Set[str] = {
+NON_OBSTACLE_TYPES = {
     "IFCSPACE",
     "IFCANNOTATION",
     "IFCSITE",
     "IFCVIRTUALELEMENT",
+    "IFCBUILDING",
+    "IFCBUILDINGSTOREY",
+    "IFCPROJECT",
+    "IFCOPENINGELEMENT",
+    "IFCDISTRIBUTIONPORT",
 }
+REVIEW_TYPES = {"IFCFURNISHINGELEMENT", "IFCBUILDINGELEMENTPROXY", "IFCRAILING"}
 
 
 def determine_element_strategy(
-    element: CanonicalElement,
-    force_all_geom: bool = False,
-    include_review_solids: bool = False,
-) -> MappingStrategy:
-    """Determines the target FDS mapping strategy for an element."""
-    ifc_type = element.ifc_type.upper()
-
-    if ifc_type in NON_OBSTACLE_TYPES or not element.has_3d_geometry or not element.mesh:
-        return MappingStrategy.SEMANTIC_ONLY
-
-    if force_all_geom:
-        return MappingStrategy.GEOM
-
-    if ifc_type in COMPLEX_GEOM_TYPES:
-        return MappingStrategy.GEOM
-
-    # Review solids (furnishing, MEP proxy)
-    if ifc_type in {"IFCFURNISHINGELEMENT", "IFCBUILDINGELEMENTPROXY", "IFCRAILING"}:
-        if include_review_solids:
-            return MappingStrategy.OBST
+    element, force_all_geom=False, include_review_solids=False
+):
+    if element.scope_decision == ScopeDecision.OUT_OF_SCOPE:
         return MappingStrategy.EXCLUDED_APPROVED
-
-    # Flow components
-    if "FLOW" in ifc_type or "DUCT" in ifc_type or "PIPE" in ifc_type:
-        if include_review_solids:
-            return MappingStrategy.GEOM
+    if element.ifc_type.upper() in NON_OBSTACLE_TYPES or element.role != "PHYSICAL":
         return MappingStrategy.SEMANTIC_ONLY
-
-    if ifc_type in SOLID_STRUCTURE_TYPES:
-        if element.openings:
-            # Walls or slabs with openings: use GEOM or OBST_HOLE
-            return MappingStrategy.GEOM
+    if element.ifc_type.upper() in REVIEW_TYPES and not include_review_solids:
+        return MappingStrategy.EXCLUDED_APPROVED
+    # Missing/failed geometry is still required, not silently semantic-only.
+    if not element.mesh or not valid_solid(element.mesh):
+        return MappingStrategy.GEOM
+    if (
+        not force_all_geom
+        and not element.openings
+        and is_axis_aligned_box(element.mesh)
+    ):
         return MappingStrategy.OBST
-
     return MappingStrategy.GEOM
+
+
+def plan_mapping(model, force_all_geom=False, include_review_solids=False):
+    for e in model.elements:
+        e.mapping_strategy = determine_element_strategy(
+            e, force_all_geom, include_review_solids
+        )
+        e.mapping_planned = True
+        e.fds_primitive_ids = []
+        if e.mapping_strategy == MappingStrategy.EXCLUDED_APPROVED:
+            e.mapping_status = MappingStatus.EXCLUDED_APPROVED
+            e.mapping_rationale = (
+                e.scope_rationale
+                if e.scope_decision == ScopeDecision.OUT_OF_SCOPE
+                else "Explicit review-solid exclusion policy"
+            )
+        elif e.mapping_strategy == MappingStrategy.SEMANTIC_ONLY:
+            e.mapping_status = MappingStatus.SEMANTIC_ONLY
+            e.mapping_rationale = "Spatial, annotation, opening or port entity; retained in inventory and relationships"
+        else:
+            e.mapping_status = MappingStatus.INCONCLUSIVE
+            e.mapping_rationale = "Physical solid required; awaiting independent audit"
+    return model

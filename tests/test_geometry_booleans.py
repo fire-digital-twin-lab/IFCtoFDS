@@ -19,9 +19,15 @@ def test_fzk_wall_opening_subtraction():
     assert len(wall.openings) == 3
     assert wall.mesh is not None
 
-    # Verify mesh has subtracted openings: uncarved box has exactly 12 faces; carved BRep mesh has 84 faces
-    assert len(wall.mesh.faces) > 12
-    assert len(wall.mesh.faces) == 84
+    from ifc_to_fds.validation.metrics import opening_residual
+
+    assert all(o.mesh is not None for o in wall.openings)
+    assert all(opening_residual([wall.mesh], o.mesh) < 1e-6 for o in wall.openings)
+    # Geometry generation is not allowed to claim independent verification.
+    assert all(
+        o.verification_status == "NOT_RUN" and not o.is_subtracted
+        for o in wall.openings
+    )
 
     # Verify bounding box is non-degenerate (0.3m thick, 10.0m long along Y, 2.7m tall)
     assert wall.bounding_box is not None
