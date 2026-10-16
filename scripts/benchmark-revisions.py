@@ -13,18 +13,81 @@ import psutil
 
 
 def child(root, source, configuration, output):
+    # Editable-install finders must not fill missing modules from the live checkout.
+    sys.meta_path = [
+        finder
+        for finder in sys.meta_path
+        if not getattr(finder, "__module__", "").startswith("__editable___ifc_to_fds_")
+    ]
     sys.path.insert(0, str(root))
     os.chdir(root)
-    from ifc_to_fds.pipeline import convert, save_artifacts
+    from ifc_to_fds import pipeline
+
+    try:
+        from ifc_to_fds.geometry import storage
+    except ImportError:
+        storage = None
+
+    phases = {}
+
+    def instrument(module, name):
+        original = getattr(module, name, None)
+        if original is None:
+            return
+
+        def measured(*args, **kwargs):
+            label = name + ("_source_audit" if kwargs.get("reference") else "")
+            started = time.monotonic()
+            phases[label] = dict(state="RUNNING")
+            (output / "phases.json").write_text(json.dumps(phases), encoding="utf-8")
+            try:
+                value = original(*args, **kwargs)
+                phases[label] = dict(
+                    state="COMPLETED", elapsed_s=time.monotonic() - started
+                )
+                if name == "load_sources":
+                    phases[label]["source_timings"] = value.timings
+                return value
+            except Exception as exc:
+                phases[label] = dict(
+                    state="FAILED", elapsed_s=time.monotonic() - started, error=str(exc)
+                )
+                raise
+            finally:
+                (output / "phases.json").write_text(
+                    json.dumps(phases), encoding="utf-8"
+                )
+
+        setattr(module, name, measured)
+
+    for name in (
+        "load_sources",
+        "prepare",
+        "serialize_fds",
+        "build_package",
+        "run_independent_validation",
+        "audit_package",
+        "golden_gate",
+        "save_artifacts",
+    ):
+        instrument(pipeline, name)
+    instrument(storage, "write_package")
+    convert, save_artifacts = pipeline.convert, pipeline.save_artifacts
 
     result = convert([source], json.loads(configuration.read_text(encoding="utf-8")))
     save_artifacts(result, output / "model.fds")
-    try:
+    if (root / "ifc_to_fds" / "results.py").exists():
         from ifc_to_fds.results import public_result
 
         public = public_result(result)
-    except ImportError:
+    else:
         public = result
+    for name, module in sys.modules.items():
+        if name.startswith("ifc_to_fds") and getattr(module, "__file__", None):
+            if not Path(module.__file__).resolve().is_relative_to(root):
+                raise RuntimeError(
+                    "Benchmark revision isolation failed: " + str(module.__file__)
+                )
     encoded = json.dumps(public, ensure_ascii=False).encode()
     (output / "measurement.json").write_text(
         json.dumps(
@@ -133,6 +196,10 @@ def main():
                 row["failure"] = (directory / "run.log").read_text(
                     encoding="utf-8", errors="replace"
                 )[-3000:]
+            if (directory / "phases.json").exists():
+                row["phases"] = json.loads(
+                    (directory / "phases.json").read_text(encoding="utf-8")
+                )
             rows.append(row)
             (root / "results.json").write_text(
                 json.dumps(

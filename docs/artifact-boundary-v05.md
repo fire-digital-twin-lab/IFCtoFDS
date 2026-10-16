@@ -55,3 +55,16 @@ Use `benchmark-revisions.py` with frozen revision directories, identical source/
 | Windows/Linux environment regression | Conversion correctness CI |
 
 Research acceptance still requires approved scope/domain, entity decisions, the whole reference bundle, independent source/golden checks and all applicable boundary evidence. Approval cannot override a technical gate.
+
+
+## Delivery evidence (2026-10-16)
+
+Branch: `codex/research-baseline-boundary-obst`; draft PR #2 targets `codex/golden-mapping-parity`. The runtime snapshot used for the new research measurements is `044ceb2`. The source baseline is `dc040c4`; benchmark tooling records code/source/configuration hashes. The research candidate was generated with runtime `46dd977`; its recorded tracked changes were test files only. No approval has been supplied.
+
+Windows/Linux Python 3.11/3.12 CI, JavaScript and pinned Windows FDS passed after the Linux-specific timeout mock was isolated. The suite contains 123 non-solver tests and two real solver tests. The solver tests include all 13 analytic fixtures and a changed serialized wall with an updated manifest FDS checksum. Headless Edge exercised 12 artifact downloads and reference-layer loading without page errors; the reference-only sample correctly remained INCONCLUSIVE for missing MEP connectivity.
+
+The private review pack includes `index.html`, entity decisions, source sections, binary geometry, geometry failures, domain review and `boundary-precheck.csv`. Of 112 scope crossings, one meets source-box prerequisites; all 112 still require approved domain/intersection and exact-output evidence. Nine source geometry failures span three in-scope, two unresolved and four out-of-scope entities. Candidate bundle SHA-256: `badd56b24f112e74946cb696414f59b14f89b4ded7e1846970af44d2088d3c68`; status DRAFT.
+
+The small synthetic fixture completed one warmup and three measured runs for each snapshot. Legacy result bodies were 19,138–19,140 bytes; compact results were 4,662–4,664 bytes. This is a contract smoke check, not a building-scale timing claim. The per-triangle invariance test separately verifies that unchanged summary metadata produces identical result bytes after mesh/FDS growth.
+
+The first full-source baseline warmup timed out at 1,800.141 s, peak process-tree RSS 1,265,201,152 bytes. Remaining baseline/new measurements continue under the same 1,800 s per-run limit. `benchmark-results/research-comparison.json` and its Markdown companion are updated by the running summary monitor; RUNNING is not completed acceptance. No building-scale speedup is claimed. The first trials precede stage instrumentation; their unavailable phase metrics remain unavailable. The harness disables editable-install module fallback to keep each revision isolated.
