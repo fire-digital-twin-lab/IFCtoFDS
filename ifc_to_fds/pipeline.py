@@ -343,7 +343,7 @@ def convert(paths, configuration=None, output_directory=None):
     workspace = Path(owner.name if owner else output_directory)
     workspace.mkdir(parents=True, exist_ok=True)
     geometry_package = write_package(model, workspace / "model_geometry.json", owner)
-    (workspace / "model.fds").write_text(fds, encoding="utf-8")
+    (workspace / "model.fds").write_bytes(fds.encode("utf-8"))
     packaged = perf_counter()
     configuration["geometry_package_sha256"] = geometry_package["sha256"]
     manifest.geometry_package_sha256 = geometry_package["sha256"]
@@ -354,7 +354,7 @@ def convert(paths, configuration=None, output_directory=None):
     manifest = MappingManifest.model_validate_json(
         manifest_path.read_text(encoding="utf-8")
     )
-    fds = (workspace / "model.fds").read_text(encoding="utf-8")
+    fds = (workspace / "model.fds").read_bytes().decode("utf-8")
     audited, manifest, report = audit(
         paths, fds, manifest, configuration, geometry_package
     )
@@ -399,7 +399,7 @@ def convert(paths, configuration=None, output_directory=None):
 def save_artifacts(result, output):
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(result["fds_text"], encoding="utf-8")
+    path.write_bytes(result["fds_text"].encode("utf-8"))
     base = path.with_suffix("")
     for suffix, key in (
         ("_manifest.json", "manifest"),

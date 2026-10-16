@@ -133,7 +133,7 @@ def main(argv=None):
             if args.reference_manifest and not args.reference_fds:
                 raise ValueError("--reference-manifest requires --reference-fds")
             if args.reference_fds:
-                fds_text = Path(args.reference_fds).read_text(encoding="utf-8")
+                fds_text = Path(args.reference_fds).read_bytes().decode("utf-8")
                 if args.reference_manifest:
                     manifest = MappingManifest.model_validate_json(
                         Path(args.reference_manifest).read_text(encoding="utf-8")
@@ -187,7 +187,7 @@ def main(argv=None):
                 config = {**manifest.configuration, **config}
             _, final, report = audit(
                 args.input_ifc,
-                Path(args.fds).read_text(encoding="utf-8"),
+                Path(args.fds).read_bytes().decode("utf-8"),
                 manifest,
                 config,
                 package,

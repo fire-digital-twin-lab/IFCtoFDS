@@ -36,6 +36,7 @@ jobs:
       - run: node --check js/verified-workflow.js
       - run: node scripts/test-worker-bundle-parity.js
       - run: node scripts/test-golden-workflow.js
+      - run: node scripts/test-artifact-viewer.js
       - run: node scripts/test-verified-regressions.js
       - run: node scripts/test-geom-opening-regression.js
       - run: node scripts/test-background-export-worker.js

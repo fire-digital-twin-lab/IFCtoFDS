@@ -56,6 +56,12 @@ def test_public_result_does_not_include_mesh(tiny_ifc, tmp_path):
         assert name not in encoded
     assert len(public["findings"]) <= 20
     assert (tmp_path / "model_geometry.zip").is_file()
+    import hashlib
+
+    assert (
+        hashlib.sha256((tmp_path / "model.fds").read_bytes()).hexdigest()
+        == result["manifest"]["fds_sha256"]
+    )
 
 
 def test_public_size_independent_of_mesh_and_fds(tiny_ifc):
