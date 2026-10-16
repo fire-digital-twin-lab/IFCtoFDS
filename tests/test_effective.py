@@ -1,0 +1,43 @@
+from ifc_to_fds.mapping.exporter import serialize_fds
+from ifc_to_fds.validation.effective import effective_obstructions
+
+
+def smv_for_box(pid, indices):
+    # Format taken from FDS 6.11.1 Source/dump.f90, not an asserted solver run.
+    text = ""
+    for axis in ("TRNX", "TRNY", "TRNZ"):
+        text += (
+            axis + "\n0\n" + "".join(f"{i} {i * 0.2:.5f}\n" for i in range(21)) + "\n"
+        )
+    return (
+        text
+        + "OBST\n1\n0 2 0 1 0 3 1 1 1 1 1 1 1 ! "
+        + pid
+        + "\n"
+        + " ".join(map(str, indices))
+        + " 0 0 ! F\n"
+    )
+
+
+def test_solver_integer_indices_drive_effective_bounds(box_model):
+    text, _ = serialize_fds(box_model)
+    # Set a known 4x4x4 / 0.2m mesh for this parser fixture.
+    import re
+
+    text = re.sub(r"&MESH[^/]+/", "&MESH IJK=20,20,20, XB=0,4,0,4,0,4 /", text)
+    pid = box_model.elements[0].fds_primitive_ids[0]
+    result = effective_obstructions(text, smv_for_box(pid, [0, 10, 0, 5, 0, 15]))
+    assert result.status == "PASS"
+    assert result.evidence["effective_bounds"][pid] == [0.0, 2.0, 0.0, 1.0, 0.0, 3.0]
+    collapsed = effective_obstructions(text, smv_for_box(pid, [0, 0, 0, 5, 0, 15]))
+    assert collapsed.status == "FAIL" and "collapsed" in collapsed.reason
+
+
+def test_unknown_effective_output_is_inconclusive(box_model):
+    text, _ = serialize_fds(box_model)
+    assert effective_obstructions(text, "not a smokeview file").status == "INCONCLUSIVE"
+    from ifc_to_fds.mapping.policy import plan_mapping
+
+    plan_mapping(box_model, force_all_geom=True)
+    text, _ = serialize_fds(box_model)
+    assert effective_obstructions(text, "").status == "INCONCLUSIVE"
