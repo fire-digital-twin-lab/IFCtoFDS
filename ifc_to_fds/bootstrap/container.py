@@ -18,12 +18,9 @@ class Container:
         from ifc_to_fds.adapters.storage.filesystem import LocalFilesystemArtifactRepository
         return LocalFilesystemArtifactRepository()
 
-
-_default_container = Container()
-
-
-def get_default_artifact_repository():
-    return _default_container.get_artifact_repository()
+    def get_save_artifacts_use_case(self):
+        from ifc_to_fds.application.use_cases.save_artifacts import SaveArtifactsUseCase
+        return SaveArtifactsUseCase(repository=self.get_artifact_repository())
 
 
 def create_container(config: Optional[dict[str, Any]] = None) -> Container:

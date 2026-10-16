@@ -7,7 +7,7 @@
   "elements_count": 4,
   "elements": [
     {
-      "entity_key": "b724168db43c55901683bf571f8032228a9dc1ca807f3978c0d36e3e20176047:10",
+      "entity_key": "cfe5eaafc5fefee47e11be5f1922580e8e101dd229d9078fb233f79e630d6a07:10",
       "ifc_type": "IfcFlowSegment",
       "name": "Duct",
       "storey": null,
@@ -28,7 +28,7 @@
       "fds_primitive_ids": []
     },
     {
-      "entity_key": "b724168db43c55901683bf571f8032228a9dc1ca807f3978c0d36e3e20176047:11",
+      "entity_key": "cfe5eaafc5fefee47e11be5f1922580e8e101dd229d9078fb233f79e630d6a07:11",
       "ifc_type": "IfcFlowFitting",
       "name": "Elbow",
       "storey": null,
@@ -49,7 +49,7 @@
       "fds_primitive_ids": []
     },
     {
-      "entity_key": "b724168db43c55901683bf571f8032228a9dc1ca807f3978c0d36e3e20176047:15",
+      "entity_key": "cfe5eaafc5fefee47e11be5f1922580e8e101dd229d9078fb233f79e630d6a07:15",
       "ifc_type": "IfcDistributionPort",
       "name": "Port",
       "storey": null,
@@ -68,7 +68,7 @@
       "fds_primitive_ids": []
     },
     {
-      "entity_key": "b724168db43c55901683bf571f8032228a9dc1ca807f3978c0d36e3e20176047:21",
+      "entity_key": "cfe5eaafc5fefee47e11be5f1922580e8e101dd229d9078fb233f79e630d6a07:21",
       "ifc_type": "IfcDistributionPort",
       "name": "Port",
       "storey": null,
@@ -90,7 +90,7 @@
   "records_count": 4,
   "records": [
     {
-      "entity_key": "b724168db43c55901683bf571f8032228a9dc1ca807f3978c0d36e3e20176047:10",
+      "entity_key": "cfe5eaafc5fefee47e11be5f1922580e8e101dd229d9078fb233f79e630d6a07:10",
       "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "NONE",
       "simulation_role": "REFERENCE_GEOMETRY",
@@ -100,7 +100,7 @@
       "ports_count": 1
     },
     {
-      "entity_key": "b724168db43c55901683bf571f8032228a9dc1ca807f3978c0d36e3e20176047:11",
+      "entity_key": "cfe5eaafc5fefee47e11be5f1922580e8e101dd229d9078fb233f79e630d6a07:11",
       "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "NONE",
       "simulation_role": "REFERENCE_GEOMETRY",
@@ -110,7 +110,7 @@
       "ports_count": 1
     },
     {
-      "entity_key": "b724168db43c55901683bf571f8032228a9dc1ca807f3978c0d36e3e20176047:15",
+      "entity_key": "cfe5eaafc5fefee47e11be5f1922580e8e101dd229d9078fb233f79e630d6a07:15",
       "mapping_status": "SEMANTIC_ONLY",
       "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
@@ -120,7 +120,7 @@
       "ports_count": 0
     },
     {
-      "entity_key": "b724168db43c55901683bf571f8032228a9dc1ca807f3978c0d36e3e20176047:21",
+      "entity_key": "cfe5eaafc5fefee47e11be5f1922580e8e101dd229d9078fb233f79e630d6a07:21",
       "mapping_status": "SEMANTIC_ONLY",
       "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
@@ -138,6 +138,7 @@
     "mesh_count": 0,
     "total_primitives": 0
   },
+  "fds_primitives": [],
   "gates": {
     "syntax": "INCONCLUSIVE",
     "source_inventory": "PASS",
@@ -157,6 +158,6 @@
   },
   "findings_count": 0,
   "findings": [],
-  "geometry_package_sha256": "0b401fc1089125c112a8b660368ddc4b05a4464dbec20af1c99d4ffd3d4c11d2",
-  "manifest_csv_sha256": "366b67ddbdca39acaf7fabc8538bde2a5b20b841bcb1d722003b2364b1964b92"
+  "geometry_package_sha256": "0ea233d323cbac5b49f461d9d254f43ba2e5845e038c8a0e372f6d80ad2d9d07",
+  "manifest_csv_sha256": "602e58dcd3af4c36889994eab7c93a5beae12d5ffbd6807be1a3a313eee6b4b2"
 }

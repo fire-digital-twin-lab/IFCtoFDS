@@ -168,22 +168,21 @@ class JobService:
                     if queued:
                         try:
                             # Capture stderr to error.txt if worker fails during startup
-                            err_file = open(
-                                Path(queued["directory"]) / "error.txt", "a", encoding="utf-8"
-                            )
-                            proc = subprocess.Popen(
-                                [
-                                    sys.executable,
-                                    "-m",
-                                    "ifc_to_fds.jobs",
-                                    queued["directory"],
-                                ],
-                                stdout=subprocess.DEVNULL,
-                                stderr=err_file,
-                                creationflags=getattr(
-                                    subprocess, "CREATE_NO_WINDOW", 0
-                                ),
-                            )
+                            err_path = Path(queued["directory"]) / "error.txt"
+                            with open(err_path, "a", encoding="utf-8") as err_file:
+                                proc = subprocess.Popen(
+                                    [
+                                        sys.executable,
+                                        "-m",
+                                        "ifc_to_fds.jobs",
+                                        queued["directory"],
+                                    ],
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=err_file,
+                                    creationflags=getattr(
+                                        subprocess, "CREATE_NO_WINDOW", 0
+                                    ),
+                                )
                             queued.update(
                                 state="RUNNING", started=time.time(), process=proc
                             )

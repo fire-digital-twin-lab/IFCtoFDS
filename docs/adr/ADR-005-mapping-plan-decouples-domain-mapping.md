@@ -1,7 +1,7 @@
 # ADR 0005 — MappingPlan Decouples Domain Mapping from FDS Serialization
 
 ## Status
-Accepted.
+Accepted `[IMPLEMENTED]` (MappingPlan decoupled from CanonicalModel, primitive IDs synchronized upon serialization).
 
 ## Context
 Previously, mapping policies and FDS text formatting were intertwined. The exporter directly inspected canonical elements and generated raw text lines like `&OBST ...` without an explicit intermediate contract. This made it impossible to test mapping decisions independently of FDS string syntax, and tied the policy engine to a single output syntax.

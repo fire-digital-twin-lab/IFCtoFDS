@@ -7,7 +7,7 @@
   "elements_count": 2,
   "elements": [
     {
-      "entity_key": "481e15f30f76255b4f43c0b64e76660eda8327974fd93fb425adacc25ef40ce3:10",
+      "entity_key": "7384bf41d55cea6fdb128874650dd749e3c6ba001b36a5ac903fc8ebc6ac9f4f:10",
       "ifc_type": "IfcBuildingStorey",
       "name": "Ground",
       "storey": null,
@@ -26,7 +26,7 @@
       "fds_primitive_ids": []
     },
     {
-      "entity_key": "481e15f30f76255b4f43c0b64e76660eda8327974fd93fb425adacc25ef40ce3:12",
+      "entity_key": "7384bf41d55cea6fdb128874650dd749e3c6ba001b36a5ac903fc8ebc6ac9f4f:12",
       "ifc_type": "IfcWall",
       "name": "Wall",
       "storey": "Ground",
@@ -50,7 +50,7 @@
   "records_count": 2,
   "records": [
     {
-      "entity_key": "481e15f30f76255b4f43c0b64e76660eda8327974fd93fb425adacc25ef40ce3:10",
+      "entity_key": "7384bf41d55cea6fdb128874650dd749e3c6ba001b36a5ac903fc8ebc6ac9f4f:10",
       "mapping_status": "SEMANTIC_ONLY",
       "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
@@ -60,7 +60,7 @@
       "ports_count": 0
     },
     {
-      "entity_key": "481e15f30f76255b4f43c0b64e76660eda8327974fd93fb425adacc25ef40ce3:12",
+      "entity_key": "7384bf41d55cea6fdb128874650dd749e3c6ba001b36a5ac903fc8ebc6ac9f4f:12",
       "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "OBST",
       "simulation_role": "PASSIVE_OBSTACLE",
@@ -80,6 +80,20 @@
     "mesh_count": 1,
     "total_primitives": 1
   },
+  "fds_primitives": [
+    {
+      "kind": "OBST",
+      "id": "OBST_1_Wall",
+      "xb": [
+        0.4,
+        2.0,
+        0.0,
+        1.0,
+        0.0,
+        3.0
+      ]
+    }
+  ],
   "gates": {
     "syntax": "PASS",
     "source_inventory": "PASS",
@@ -99,6 +113,6 @@
   },
   "findings_count": 0,
   "findings": [],
-  "geometry_package_sha256": "703ae8ecb9dfb58df1b6357e3720fd952f166c737f0b4287a7cee56805acd688",
-  "manifest_csv_sha256": "6bc7b33b6d69833cf695a4521415481968e06c169ea0c0732307b7a0429a41e5"
+  "geometry_package_sha256": "4596c7f6d23c4eb90603f54185808381c0247d741089ebbcea99f96b44a3bcda",
+  "manifest_csv_sha256": "f8b16e920718415186838ccb9bc62f3fa5c4e04ae6b975d44dcfbbeb9fc6865b"
 }

@@ -14,7 +14,7 @@ import json
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import ifcopenshell
 import ifcopenshell.api.aggregate
@@ -36,6 +36,20 @@ from ifc_to_fds.validation.engine import run_independent_validation
 from ifc_to_fds.validation.golden import create_candidate
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+def ensure_fixtures():
+    FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
+    tiny_path = FIXTURES_DIR / "tiny.ifc"
+    if not tiny_path.is_file():
+        create_tiny_ifc(str(tiny_path))
+    opening_path = FIXTURES_DIR / "opening.ifc"
+    if not opening_path.is_file():
+        create_opening_ifc(str(opening_path))
+    mep_path = FIXTURES_DIR / "mep.ifc"
+    if not mep_path.is_file():
+        create_mep_ifc(str(mep_path))
 
 
 def create_tiny_ifc(file_path: str):
@@ -196,6 +210,31 @@ def summarize_fds(fds_text: str) -> Dict[str, Any]:
     }
 
 
+def extract_normalized_primitives(fds_text: str) -> List[Dict[str, Any]]:
+    from ifc_to_fds.validation.parser import parse_fds
+
+    parsed = parse_fds(fds_text)
+    primitives = []
+    for r in parsed.primitives:
+        if r.kind in ("OBST", "HOLE"):
+            xb = [round(float(x), 6) for x in r.values.get("XB", [])]
+        elif r.kind == "GEOM":
+            v = [float(x) for x in r.values.get("VERTS", [])]
+            xb = [
+                round(min(v[0::3]), 6),
+                round(max(v[0::3]), 6),
+                round(min(v[1::3]), 6),
+                round(max(v[1::3]), 6),
+                round(min(v[2::3]), 6),
+                round(max(v[2::3]), 6),
+            ] if v else []
+        else:
+            xb = []
+        primitives.append({"kind": r.kind, "id": r.id, "xb": xb})
+    primitives.sort(key=lambda p: (str(p["kind"]), str(p["id"])))
+    return primitives
+
+
 def build_semantic_snapshot(case_id: str, result: Dict[str, Any], saved_dir: Path) -> Dict[str, Any]:
     inventory = result["inventory"]
     elements_summary = []
@@ -244,11 +283,17 @@ def build_semantic_snapshot(case_id: str, result: Dict[str, Any], saved_dir: Pat
             "category": f.get("category"),
             "severity": f.get("severity"),
             "element_id": f.get("element_id"),
-            "rule_id": f.get("rule_id"),
+            "title": f.get("title"),
         }
         for f in report.get("findings", [])
     ]
-    findings_summary.sort(key=lambda x: (str(x.get("category")), str(x.get("element_id")), str(x.get("rule_id"))))
+    findings_summary.sort(
+        key=lambda x: (
+            str(x.get("category")),
+            str(x.get("element_id")),
+            str(x.get("title")),
+        )
+    )
 
     csv_file = saved_dir / "model_manifest.csv"
     csv_bytes = csv_file.read_bytes() if csv_file.is_file() else b""
@@ -266,6 +311,7 @@ def build_semantic_snapshot(case_id: str, result: Dict[str, Any], saved_dir: Pat
         "mep_systems_count": len(result.get("mep_graph", {}).get("systems", [])),
         "mep_connections_count": len(result.get("mep_graph", {}).get("connections", [])),
         "fds_summary": summarize_fds(result["fds_text"]),
+        "fds_primitives": extract_normalized_primitives(result["fds_text"]),
         "gates": gate_statuses,
         "findings_count": len(findings_summary),
         "findings": findings_summary,
@@ -275,14 +321,14 @@ def build_semantic_snapshot(case_id: str, result: Dict[str, Any], saved_dir: Pat
 
 
 def generate_all_snapshots():
+    ensure_fixtures()
     SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp_root:
         root = Path(tmp_root)
 
         # Case A: Tiny synthetic IFC
         print("Generating Case A: Tiny synthetic...")
-        p_a = str(root / "tiny.ifc")
-        create_tiny_ifc(p_a)
+        p_a = str(FIXTURES_DIR / "tiny.ifc")
         out_a = root / "out_a"
         out_a.mkdir()
         res_a = convert([p_a], output_directory=out_a)
@@ -292,8 +338,7 @@ def generate_all_snapshots():
 
         # Case B: Model with opening
         print("Generating Case B: Model with opening...")
-        p_b = str(root / "opening.ifc")
-        create_opening_ifc(p_b)
+        p_b = str(FIXTURES_DIR / "opening.ifc")
         out_b = root / "out_b"
         out_b.mkdir()
         res_b = convert([p_b], output_directory=out_b)
@@ -313,8 +358,7 @@ def generate_all_snapshots():
 
         # Case D: MEP fixture
         print("Generating Case D: MEP fixture...")
-        p_d = str(root / "mep.ifc")
-        create_mep_ifc(p_d)
+        p_d = str(FIXTURES_DIR / "mep.ifc")
         out_d = root / "out_d"
         out_d.mkdir()
         res_d = convert([p_d], output_directory=out_d)
@@ -324,8 +368,7 @@ def generate_all_snapshots():
 
         # Case E: Boundary OBST fixture
         print("Generating Case E: Boundary fixture...")
-        p_e = str(root / "boundary.ifc")
-        create_tiny_ifc(p_e)
+        p_e = str(FIXTURES_DIR / "tiny.ifc")
         out_e = root / "out_e"
         out_e.mkdir()
         res_e = convert(
@@ -342,8 +385,7 @@ def generate_all_snapshots():
 
         # Case F: Golden reference synthetic fixture
         print("Generating Case F: Golden reference candidate...")
-        p_f = str(root / "golden.ifc")
-        create_tiny_ifc(p_f)
+        p_f = str(FIXTURES_DIR / "tiny.ifc")
         candidate_dir = root / "golden_candidate"
         model_f, ifc_f = extract_inventory(p_f)
         model_f = process_model_geometry(model_f, ifc_f)

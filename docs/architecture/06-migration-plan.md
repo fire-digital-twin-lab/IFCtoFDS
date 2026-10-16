@@ -32,9 +32,14 @@ Phase R7: Extract Artifact & Evidence Storage
 Phase R8: Split Job System
   │  JobService, WorkerRunner, and JobRepository.
   ▼
-Phase R9: Isolate Verified Web vs Legacy Quick Path
+Phase R9: Isolate Verified Web vs Legacy Quick Path — `[IMPLEMENTED]`
   │  Documentation and namespaces distinguishing authoritative core from legacy JS.
   ▼
-Phase R10: Reorganize Tests & Parity Verification
-     All parity snapshots pass. Compatibility facades safely pruned.
+Phase R9.5: Architectural Integrity Remediation — `[IMPLEMENTED]`
+  │  Fix AST parser for absolute/relative imports, enforce NOT_RUN evaluator fail-safe,
+  │  unify GateChecker contract, decouple MappingPlan & primitive IDs, close subprocess handles,
+  │  strengthen behavior parity with SHA-256 hashes & normalized FDS extents.
+  ▼
+Phase R10: Formal Ports Migration & Test Reorganization — `[TARGET]`
+     Full ports replacement of transitional internal packages; compatibility facades pruned.
 ```

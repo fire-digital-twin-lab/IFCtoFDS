@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 from ifc_to_fds.core.compare import normalize
 from ifc_to_fds.core.federation import load_sources
 from ifc_to_fds.domain.bim import BoundingBox, CanonicalModel
-from ifc_to_fds.domain.mapping import MappingManifest, build_mapping_plan
+from ifc_to_fds.domain.mapping import MappingManifest
 from ifc_to_fds.domain.scope import SpatialScope
 from ifc_to_fds.domain.validation import AcceptanceReport, AuditConfig, GateResult, GateStatus
 from ifc_to_fds.geometry.package import audit_package
@@ -43,7 +43,6 @@ def prepare_model(paths: list[str], configuration: Dict[str, Any], reference: bo
         configuration.get("decisions", {}),
         configuration.get("boundary_policy"),
     )
-    model.mapping_plan = build_mapping_plan(model, cell_size=configuration.get("cell_size", 0.2))
     included = {
         e.entity_key
         for e in model.elements

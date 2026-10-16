@@ -25,11 +25,10 @@ from ifc_to_fds.pipeline import convert, save_artifacts
 from ifc_to_fds.validation.engine import run_independent_validation
 from ifc_to_fds.validation.golden import create_candidate
 from .generate_baseline import (
+    FIXTURES_DIR,
     SNAPSHOT_DIR,
     build_semantic_snapshot,
-    create_mep_ifc,
-    create_opening_ifc,
-    create_tiny_ifc,
+    ensure_fixtures,
 )
 
 
@@ -45,6 +44,10 @@ def assert_semantic_parity(actual: dict, expected: dict):
     assert actual["fds_summary"] == expected["fds_summary"]
     assert actual["gates"] == expected["gates"]
     assert actual["findings_count"] == expected["findings_count"]
+    assert actual["geometry_package_sha256"] == expected["geometry_package_sha256"]
+    assert actual["manifest_csv_sha256"] == expected["manifest_csv_sha256"]
+    if "fds_primitives" in expected:
+        assert actual["fds_primitives"] == expected["fds_primitives"]
 
     # Verify elements semantic equivalence
     for act_el, exp_el in zip(actual["elements"], expected["elements"]):
@@ -79,15 +82,16 @@ def assert_semantic_parity(actual: dict, expected: dict):
     for act_f, exp_f in zip(actual["findings"], expected["findings"]):
         assert act_f["category"] == exp_f["category"]
         assert act_f["severity"] == exp_f["severity"]
-        assert act_f["rule_id"] == exp_f["rule_id"]
+        assert act_f["element_id"] == exp_f["element_id"]
+        assert act_f["title"] == exp_f["title"]
 
 
 def test_parity_case_a_tiny():
+    ensure_fixtures()
     expected = json.loads((SNAPSHOT_DIR / "case_a_tiny.json").read_text(encoding="utf-8"))
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
-        p_a = str(tmp / "tiny.ifc")
-        create_tiny_ifc(p_a)
+        p_a = str(FIXTURES_DIR / "tiny.ifc")
         res_a = convert([p_a], output_directory=tmp)
         save_artifacts(res_a, tmp / "model.fds")
         actual = build_semantic_snapshot("case_a_tiny", res_a, tmp)
@@ -95,11 +99,11 @@ def test_parity_case_a_tiny():
 
 
 def test_parity_case_b_opening():
+    ensure_fixtures()
     expected = json.loads((SNAPSHOT_DIR / "case_b_opening.json").read_text(encoding="utf-8"))
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
-        p_b = str(tmp / "opening.ifc")
-        create_opening_ifc(p_b)
+        p_b = str(FIXTURES_DIR / "opening.ifc")
         res_b = convert([p_b], output_directory=tmp)
         save_artifacts(res_b, tmp / "model.fds")
         actual = build_semantic_snapshot("case_b_opening", res_b, tmp)
@@ -118,11 +122,11 @@ def test_parity_case_c_fzk():
 
 
 def test_parity_case_d_mep():
+    ensure_fixtures()
     expected = json.loads((SNAPSHOT_DIR / "case_d_mep.json").read_text(encoding="utf-8"))
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
-        p_d = str(tmp / "mep.ifc")
-        create_mep_ifc(p_d)
+        p_d = str(FIXTURES_DIR / "mep.ifc")
         res_d = convert([p_d], output_directory=tmp)
         save_artifacts(res_d, tmp / "model.fds")
         actual = build_semantic_snapshot("case_d_mep", res_d, tmp)
@@ -130,11 +134,11 @@ def test_parity_case_d_mep():
 
 
 def test_parity_case_e_boundary():
+    ensure_fixtures()
     expected = json.loads((SNAPSHOT_DIR / "case_e_boundary.json").read_text(encoding="utf-8"))
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
-        p_e = str(tmp / "boundary.ifc")
-        create_tiny_ifc(p_e)
+        p_e = str(FIXTURES_DIR / "tiny.ifc")
         res_e = convert(
             [p_e],
             configuration={
@@ -149,11 +153,11 @@ def test_parity_case_e_boundary():
 
 
 def test_parity_case_f_golden():
+    ensure_fixtures()
     expected = json.loads((SNAPSHOT_DIR / "case_f_golden.json").read_text(encoding="utf-8"))
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
-        p_f = str(tmp / "golden.ifc")
-        create_tiny_ifc(p_f)
+        p_f = str(FIXTURES_DIR / "tiny.ifc")
         candidate_dir = tmp / "golden_candidate"
         model_f, ifc_f = extract_inventory(p_f)
         model_f = process_model_geometry(model_f, ifc_f)

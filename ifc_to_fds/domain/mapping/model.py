@@ -3,10 +3,12 @@
 import csv
 import io
 import json
+from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from ..bim.model import BoundingBox, MappingStatus, MappingStrategy, SCHEMA_VERSION
+from ..bim.bounding_box import BoundingBox
+from ..bim.model import SCHEMA_VERSION
 
 __all__ = [
     "MappingStrategy",
@@ -17,6 +19,31 @@ __all__ = [
     "MappingManifest",
     "_serialize_csv_value",
 ]
+
+
+class MappingStatus(str, Enum):
+    EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
+    REFERENCE_PRESERVED = "REFERENCE_PRESERVED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+    MATCHED = "MATCHED"
+    DEVIATED = "DEVIATED"
+    MISSING = "MISSING"
+    SEMANTIC_ONLY = "SEMANTIC_ONLY"
+    EXCLUDED_APPROVED = "EXCLUDED_APPROVED"
+    UNSUPPORTED = "UNSUPPORTED"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    MISSING_SOURCE_DATA = "MISSING_SOURCE_DATA"
+
+
+class MappingStrategy(str, Enum):
+    NONE = "NONE"
+    EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
+    OBST = "OBST"
+    OBST_HOLE = "OBST_HOLE"
+    GEOM = "GEOM"
+    VOXEL = "VOXEL"
+    SEMANTIC_ONLY = "SEMANTIC_ONLY"
+    EXCLUDED_APPROVED = "EXCLUDED_APPROVED"
 
 
 def _serialize_csv_value(value: Any) -> Any:
@@ -57,6 +84,13 @@ class MappingPlan(BaseModel):
             if d.entity_key == entity_key:
                 return d
         return None
+
+    def sync_primitive_ids(self, model: Any) -> None:
+        """Synchronize emitted primitive IDs from canonical elements into mapping decisions."""
+        for elem in model.elements:
+            decision = self.get_decision(elem.entity_key)
+            if decision is not None:
+                decision.fds_primitive_ids = list(elem.fds_primitive_ids)
 
 
 class ManifestRecord(BaseModel):

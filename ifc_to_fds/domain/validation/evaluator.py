@@ -32,7 +32,7 @@ class AcceptanceEvaluator:
             "domain",
         )
         report.gates = {
-            name: GateResult(status=GateStatus.PASS) for name in default_gate_names
+            name: GateResult(status=GateStatus.NOT_RUN) for name in default_gate_names
         }
 
         # Apply outcomes from checkers

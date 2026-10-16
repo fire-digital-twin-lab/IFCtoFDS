@@ -58,30 +58,7 @@ class StoreyReference(BaseModel):
     elevation_m: Optional[float] = None
 
 
-# Import Mapping enums dynamically or use standard string definitions to avoid circularity
-class MappingStatus(str, Enum):
-    EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
-    REFERENCE_PRESERVED = "REFERENCE_PRESERVED"
-    REVIEW_REQUIRED = "REVIEW_REQUIRED"
-    MATCHED = "MATCHED"
-    DEVIATED = "DEVIATED"
-    MISSING = "MISSING"
-    SEMANTIC_ONLY = "SEMANTIC_ONLY"
-    EXCLUDED_APPROVED = "EXCLUDED_APPROVED"
-    UNSUPPORTED = "UNSUPPORTED"
-    INCONCLUSIVE = "INCONCLUSIVE"
-    MISSING_SOURCE_DATA = "MISSING_SOURCE_DATA"
-
-
-class MappingStrategy(str, Enum):
-    NONE = "NONE"
-    EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
-    OBST = "OBST"
-    OBST_HOLE = "OBST_HOLE"
-    GEOM = "GEOM"
-    VOXEL = "VOXEL"
-    SEMANTIC_ONLY = "SEMANTIC_ONLY"
-    EXCLUDED_APPROVED = "EXCLUDED_APPROVED"
+from ..mapping.model import MappingStatus, MappingStrategy
 
 
 class CanonicalElement(BaseModel):
@@ -156,7 +133,6 @@ class CanonicalModel(BaseModel):
     requested_scope: Dict[str, Any] = Field(default_factory=dict)
     exported_bounds: Optional[BoundingBox] = None
     timings: Dict[str, float] = Field(default_factory=dict)
-    mapping_plan: Optional[Any] = None
 
     def get_element_by_guid(self, guid: str) -> Optional[CanonicalElement]:
         matches = [el for el in self.elements if el.global_id == guid]

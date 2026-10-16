@@ -24,13 +24,18 @@ GateResult[]
 AcceptanceEvaluator ──> Immutable AcceptanceReport
 ```
 
-## 2. Checker Contract
-Every checker implements the same protocol:
+## 2. Checker Contract — `[IMPLEMENTED]`
+Every checker implements the same protocol defined in `ifc_to_fds/domain/validation/checkers/base.py`:
 ```python
+@runtime_checkable
 class GateChecker(Protocol):
-    def run(self, context: ValidationContext) -> GateResult:
+    name: str
+
+    def check(self, context: ValidationContext) -> CheckerOutcome:
         ...
 ```
+`ValidationContext` carries the model, fds_text, manifest, config, and a lazy `parsed` FDS parser property so shared parse artifacts are not repeatedly recalculated.
 
-## 3. Immutability
-Checkers **never mutate** the `AcceptanceReport` or append thousands of characters into `gate.reason`. Details belong in `findings`, `metrics`, and `evidence`. Once evaluated, `AcceptanceReport` is immutable.
+## 3. Evaluator Fail-Safe & Immutability — `[IMPLEMENTED]`
+- **Fail-Safe Principle**: `AcceptanceEvaluator` initializes all unexecuted gates to `GateStatus.NOT_RUN`. A gate only transitions to `PASS` when its corresponding checker successfully validates all assertions.
+- **Immutability**: Checkers **never mutate** the `AcceptanceReport` directly. Outcomes return isolated `findings`, `metrics`, and `evidence`. `AcceptanceEvaluator` constructs the finalized report.

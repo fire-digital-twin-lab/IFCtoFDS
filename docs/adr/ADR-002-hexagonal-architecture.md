@@ -1,7 +1,7 @@
 # ADR 0002 — Hexagonal Architecture (Ports and Adapters)
 
 ## Status
-Accepted.
+Accepted `[TRANSITIONAL — Strangler Fig in progress, Stage R9.5 active]`.
 
 ## Context
 The core business value of IFCtoFDS lies in its domain models (BIM accounting, MEP graph, spatial scope, boundary policies, mapping decisions, and validation rules). Coupling domain models to specific external technologies (such as IfcOpenShell C++ bindings, FastAPI, or specific FDS binary versions) creates brittle code and prevents swapping or updating infrastructure.

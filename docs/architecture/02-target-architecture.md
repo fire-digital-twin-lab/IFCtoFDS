@@ -1,5 +1,7 @@
 # 02 — Target Architecture: Modular Monolith + Hexagonal Architecture
 
+**Status: `[TARGET]`** — Architectural destination of the progressive Strangler Fig migration.
+
 ## 1. Architectural Philosophy
 The target architecture adopts:
 - **Modular Monolith**: One deployable codebase without unnecessary network boundaries, microservices, or distributed queue dependencies.

@@ -71,6 +71,14 @@ class ValidationContext(BaseModel):
     manifest: Any
     config: AuditConfig | None = None
     geometry_package: Any | None = None
+    parsed_fds: Any | None = None
+
+    @property
+    def parsed(self) -> Any:
+        if self.parsed_fds is None and self.fds_text:
+            from ifc_to_fds.validation.parser import parse_fds
+            self.parsed_fds = parse_fds(self.fds_text)
+        return self.parsed_fds
 
 
 class AcceptanceReport(BaseModel):

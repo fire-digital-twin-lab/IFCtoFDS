@@ -1,6 +1,6 @@
 """Syntax and namelist grammar checker."""
 
-from typing import List
+from typing import Any, List
 from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
 from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, Severity, ValidationContext
 
@@ -8,7 +8,8 @@ from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, 
 class FdsSyntaxChecker:
     name = "syntax"
 
-    def check(self, context: ValidationContext, parsed) -> CheckerOutcome:
+    def check(self, context: ValidationContext, parsed: Any = None) -> CheckerOutcome:
+        parsed = parsed if parsed is not None else context.parsed
         model = context.model
         findings: List[Finding] = []
         status = GateStatus.PASS

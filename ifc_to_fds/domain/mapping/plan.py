@@ -1,11 +1,12 @@
 """MappingPlan builder and inspection utilities."""
 
+from __future__ import annotations
+from typing import Any
 from .model import MappingDecision, MappingPlan
-from ..bim.model import CanonicalModel
 
 
 def build_mapping_plan(
-    model: CanonicalModel, cell_size: float = 0.2
+    model: Any, cell_size: float = 0.2
 ) -> MappingPlan:
     """Constructs an immutable MappingPlan from canonical elements after mapping policy execution."""
     decisions = []

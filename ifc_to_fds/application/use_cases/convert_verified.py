@@ -5,7 +5,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Dict, List, Optional, Union
 
-from ifc_to_fds.domain.mapping import MappingManifest
+from ifc_to_fds.domain.mapping import MappingManifest, build_mapping_plan
 from ifc_to_fds.geometry.storage import write_package
 from ifc_to_fds.mapping.exporter import serialize_fds
 
@@ -29,8 +29,10 @@ class ConvertVerifiedUseCase:
         start = perf_counter()
         model = prepare_model(paths, configuration)
         prepared = perf_counter()
+        cell_size = configuration.get("cell_size", 0.2)
+        mapping_plan = build_mapping_plan(model, cell_size=cell_size)
         fds, manifest = serialize_fds(
-            model, cell_size=configuration.get("cell_size", 0.2)
+            model, cell_size=cell_size, mapping_plan=mapping_plan
         )
         serialized = perf_counter()
 

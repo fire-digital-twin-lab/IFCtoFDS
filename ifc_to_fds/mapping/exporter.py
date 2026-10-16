@@ -4,7 +4,7 @@ Converts Canonical BIM Model elements into standard FDS 6+ input namelists
 (&HEAD, &TIME, &MESH, &SURF, &OBST, &HOLE, &GEOM) with full IFC source provenance.
 """
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import math
 import re
 
@@ -14,6 +14,7 @@ from ifc_to_fds.core.canonical import (
     CanonicalModel,
     MappingStrategy,
 )
+from ifc_to_fds.domain.mapping import MappingPlan
 from .manifest import MappingManifest, build_manifest
 from ifc_to_fds.geometry.mesh import (
     bounds_for_vertices,
@@ -66,6 +67,7 @@ def compute_mesh_grid(
 def serialize_fds(
     model: CanonicalModel,
     cell_size: float = 0.2,
+    mapping_plan: Optional[MappingPlan] = None,
 ) -> Tuple[str, MappingManifest]:
     """Serializes CanonicalModel into valid FDS text and generates MappingManifest."""
     if not all(e.mapping_planned for e in model.elements):
@@ -174,6 +176,9 @@ def serialize_fds(
     lines.append("")
     lines.append("&TAIL /")
     lines.append("")
+
+    if mapping_plan is not None:
+        mapping_plan.sync_primitive_ids(model)
 
     manifest = build_manifest(model, "\n".join(lines))
     return "\n".join(lines), manifest

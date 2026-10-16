@@ -2,7 +2,6 @@
 
 from ifc_to_fds.core.canonical import MappingStrategy, MappingStatus, ScopeDecision
 from ifc_to_fds.geometry.mesh import is_axis_aligned_box, valid_solid
-from ifc_to_fds.domain.mapping.plan import build_mapping_plan
 
 NON_OBSTACLE_TYPES = {
     "IFCSPACE",
@@ -183,5 +182,4 @@ def plan_mapping(
             e.mapping_status = MappingStatus.SEMANTIC_ONLY
         elif e.review_status == "REVIEW_REQUIRED":
             e.mapping_status = MappingStatus.REVIEW_REQUIRED
-    model.mapping_plan = build_mapping_plan(model)
     return model

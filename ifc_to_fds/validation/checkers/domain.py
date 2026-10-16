@@ -8,7 +8,8 @@ from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, 
 class DomainChecker:
     name = "domain"
 
-    def check(self, context: ValidationContext, parsed) -> CheckerOutcome:
+    def check(self, context: ValidationContext, parsed: Any = None) -> CheckerOutcome:
+        parsed = parsed if parsed is not None else context.parsed
         model = context.model
         findings: List[Finding] = []
         metrics: Dict[str, Any] = {}

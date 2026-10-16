@@ -13,7 +13,6 @@ from ifc_to_fds.application.dto import validate_configuration
 from ifc_to_fds.application.use_cases import (
     AuditConversionUseCase,
     ConvertVerifiedUseCase,
-    SaveArtifactsUseCase,
     prepare_model,
 )
 from ifc_to_fds.core.canonical import CanonicalModel
@@ -73,4 +72,8 @@ def save_artifacts(
     output: Union[str, Path],
 ) -> Dict[str, str]:
     """Persists artifacts to disk (Compatibility Facade)."""
-    return SaveArtifactsUseCase().execute(result=result, output=output)
+    from ifc_to_fds.bootstrap.container import create_container
+
+    return create_container().get_save_artifacts_use_case().execute(
+        result=result, output=output
+    )
