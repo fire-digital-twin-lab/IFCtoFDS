@@ -79,13 +79,13 @@ def snapshot(manifest):
     }
 
 
+from ifc_to_fds.adapters.reference import FILES, FilesystemReferenceRepository
+
+_repo = FilesystemReferenceRepository()
+
+
 def bundle_digest(directory):
-    return digest(
-        {
-            name: json.loads((Path(directory) / name).read_text(encoding="utf-8"))
-            for name in FILES
-        }
-    )
+    return _repo.bundle_digest(directory)
 
 
 def resolve_case(case):
@@ -94,18 +94,7 @@ def resolve_case(case):
 
 
 def resolve_sources(case, mapping):
-    spec = json.loads((Path(case) / "sources.json").read_text(encoding="utf-8"))
-    result = []
-    import hashlib
-
-    for item in spec["sources"]:
-        path = Path(mapping.get(item["source_id"], ""))
-        if not path.is_file():
-            raise ValueError(f"EXTERNAL_FIXTURE_NOT_AVAILABLE: {item['source_id']}")
-        if hashlib.sha256(path.read_bytes()).hexdigest() != item["file_hash_sha256"]:
-            raise ValueError(f"External fixture checksum mismatch: {path.name}")
-        result.append(path)
-    return result
+    return _repo.resolve_sources(case, mapping)
 
 
 def serialized_geometry(text, manifest):
