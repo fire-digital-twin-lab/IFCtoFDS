@@ -93,6 +93,9 @@ def build_manifest(model, fds_text="", configuration=None, report=None):
     )
     manifest = MappingManifest(
         simulation_domain=domain,
+        geometry_package_sha256=(configuration or {}).get(
+            "geometry_package_sha256", ""
+        ),
         source_filename=model.source.filename,
         source_sha256=model.source.file_hash_sha256,
         sources=[s.model_dump(mode="json") for s in model.sources or [model.source]],

@@ -1,8 +1,8 @@
 """Canonical BIM domain module."""
 
+from .bounding_box import BoundingBox
 from .model import (
     SCHEMA_VERSION,
-    BoundingBox,
     CanonicalElement,
     CanonicalModel,
     GeometryStatus,

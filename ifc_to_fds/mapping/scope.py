@@ -1,17 +1,9 @@
 """Scope selection retains whole intersecting solids; never clips geometry."""
 
 from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
 from ifc_to_fds.core.canonical import BoundingBox, ScopeDecision
+from ifc_to_fds.domain.scope import SelectionScope, SpatialScope
 from ifc_to_fds.geometry.mesh import intersects_box
-
-
-class SpatialScope(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    name: str = "FullModel"
-    bounding_box: Optional[BoundingBox] = None
-    storeys: List[str] = Field(default_factory=list)
-    include_connecting_structures: bool = True
 
 
 def apply_spatial_scope(model, scope):

@@ -2,7 +2,9 @@
 
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from ..bim.bounding_box import BoundingBox
 
 
 class ScopeDecision(str, Enum):
@@ -20,8 +22,12 @@ class BoundaryPolicy(str, Enum):
 
 class SelectionScope(BaseModel):
     """User-requested spatial selection scope."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str = "FullModel"
+    bounding_box: Optional[BoundingBox] = None
     storeys: List[str] = Field(default_factory=list)
-    bounding_box: Optional[dict[str, float]] = None
+    include_connecting_structures: bool = True
     elements: List[str] = Field(default_factory=list)
 
 
