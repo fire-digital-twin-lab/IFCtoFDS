@@ -12,6 +12,7 @@ class SemanticRole(str, Enum):
     PLUMBING = "PLUMBING"
     VENTILATION = "VENTILATION"
     OTHER = "OTHER"
+    UNRESOLVED = "UNRESOLVED"
 
 
 class SimulationRole(str, Enum):
@@ -39,6 +40,7 @@ class PortReference(BaseModel):
 
 
 class MEPSystem(BaseModel):
+    assignment_relation_keys: List[str] = Field(default_factory=list)
     system_id: str
     name: str
     system_type: str  # e.g., "VENTILATION", "SMOKE_EXTRACT", "FIRE_SUPPRESSION", "PLUMBING"
@@ -48,13 +50,14 @@ class MEPSystem(BaseModel):
 
 
 class MEPConnection(BaseModel):
+    source_relation_keys: List[str] = Field(default_factory=list)
     connection_id: str
     source_element_id: str
     source_port_id: str
     target_element_id: str
     target_port_id: str
     relation_type: str  # "EXPLICIT_IFC", "GEOMETRIC_PROXIMITY"
-    distance_meters: float = 0.0
+    distance_meters: Optional[float] = None
     boundary_connection: bool = False
 
 

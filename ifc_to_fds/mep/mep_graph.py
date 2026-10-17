@@ -2,8 +2,10 @@
 
 import numpy as np
 import ifcopenshell.util.placement
+import ifcopenshell.util.element
 from ifc_to_fds.core.canonical import MEPGraph, MEPSystem, MEPConnection, PortReference
 from .classifier import classify_mep_element, MEP_TYPES
+from ifc_to_fds.diagnostics import operation
 
 
 def safe_by_type(file, name):
@@ -13,6 +15,7 @@ def safe_by_type(file, name):
         return []
 
 
+@operation("MEP_EXTRACTION")
 def extract_mep_graph(model, file):
     by_step = {e.step_id: e for e in model.elements}
     source = model.source
@@ -34,7 +37,8 @@ def extract_mep_graph(model, file):
         gid = key(group)
         name = group.Name or gid
         predefined = str(getattr(group, "PredefinedType", "") or "")
-        category, critical = classify_mep_element(group.is_a(), name, name, predefined)
+        category, critical = classify_mep_element(group.is_a(), name, name, predefined,
+                                                property_sets=ifcopenshell.util.element.get_psets(group))
         system = systems.setdefault(
             gid,
             MEPSystem(
@@ -44,6 +48,8 @@ def extract_mep_graph(model, file):
                 is_fire_safety_critical=critical,
             ),
         )
+        if key(rel) not in system.assignment_relation_keys:
+            system.assignment_relation_keys.append(key(rel))
         for item in rel.RelatedObjects:
             e = by_step.get(item.id())
             if e and e.entity_key not in system.element_keys:
@@ -99,7 +105,7 @@ def extract_mep_graph(model, file):
         owner.ports.append(ref)
         ports[port.id()] = ref
     connected = set()
-    edges = set()
+    edges = {}
     for rel in safe_by_type(file, "IfcRelConnectsPorts"):
         a, b = ports.get(rel.RelatingPort.id()), ports.get(rel.RelatedPort.id())
         if not a or not b:
@@ -107,8 +113,8 @@ def extract_mep_graph(model, file):
             continue
         pair = tuple(sorted((a.port_key, b.port_key)))
         if pair in edges:
+            edges[pair].source_relation_keys.append(key(rel))
             continue
-        edges.add(pair)
         a.connected_port_ids.append(b.port_key)
         b.connected_port_ids.append(a.port_key)
         distance = (
@@ -116,10 +122,11 @@ def extract_mep_graph(model, file):
                 np.linalg.norm(np.array(a.world_position) - np.array(b.world_position))
             )
             if a.world_position is not None and b.world_position is not None
-            else 0.0
+            else None
         )
         graph.connections.append(
             MEPConnection(
+                source_relation_keys=[key(rel)],
                 connection_id=key(rel),
                 source_element_id=a.owner_key,
                 target_element_id=b.owner_key,
@@ -129,19 +136,20 @@ def extract_mep_graph(model, file):
                 distance_meters=distance,
             )
         )
+        edges[pair] = graph.connections[-1]
         connected.update((a.owner_key, b.owner_key))
     for e in model.elements:
         if e.role != "PHYSICAL":
             continue
         if (
             e.ifc_type.upper() not in MEP_TYPES
+            and (e.type_class or "").upper().removesuffix("TYPE") not in MEP_TYPES
             and not e.system_ids
             and not e.ports
             and e.ifc_type.upper() != "IFCBUILDINGELEMENTPROXY"
         ):
             continue
         system_types = [systems[s].system_type for s in e.system_ids]
-        explicit = next((x for x in system_types if x != "OTHER"), "")
         category, _ = classify_mep_element(
             e.ifc_type,
             e.name,
@@ -149,13 +157,15 @@ def extract_mep_graph(model, file):
             e.predefined_type,
             e.type_class,
             e.property_sets,
+            system_types,
         )
-        e.mep_category = explicit or category
+        e.mep_category = category
         e.classification_evidence = [
             f"IFC class: {e.ifc_type}",
             f"IFC type class: {e.type_class}",
             f"PredefinedType: {e.predefined_type}",
             *e.system_ids,
+            f"Classification: {category}; names are unconfirmed hints: {e.name}; {'; '.join(e.system_names)}",
         ]
         if e.entity_key not in connected:
             graph.isolated_element_ids.append(e.entity_key)
@@ -165,17 +175,30 @@ def extract_mep_graph(model, file):
         "FIRE_SUPPRESSION",
         "PLUMBING",
         "OTHER",
+        "UNRESOLVED",
     ):
         members = [
             e
             for e in model.elements
-            if e.ifc_type.upper() in MEP_TYPES and e.mep_category == category
+            if e.classification_evidence and e.mep_category == category
         ]
         graph.coverage[category] = dict(
             source_count=len(members),
             ports=sum(len(e.ports) for e in members),
             connected=sum(e.entity_key in connected for e in members),
             entity_keys=[e.entity_key for e in members],
+            assigned_to_systems=sum(bool(e.system_ids) for e in members),
+            elements_with_ports=sum(bool(e.ports) for e in members),
+            connected_ports=sum(bool(p.connected_port_ids) for e in members for p in e.ports),
+            isolated_ports=sum(not p.connected_port_ids for e in members for p in e.ports),
+            unsupported_elements=[e.entity_key for e in members if e.geometry_status.value == "FAILED"],
         )
+    graph.coverage["source_relationships"] = dict(
+        distribution_ports=len(safe_by_type(file, "IfcDistributionPort")),
+        explicit_port_relations=len(safe_by_type(file, "IfcRelConnectsPorts")),
+        accounted_edge_relations=sum(len(c.source_relation_keys) for c in graph.connections),
+        unresolved_system_keys=[s.system_id for s in graph.systems if s.system_type == "UNRESOLVED"],
+        orphan_port_keys=[key(p) for p in safe_by_type(file, "IfcDistributionPort") if p.id() not in ports],
+    )
     model.mep_graph = graph
     return model

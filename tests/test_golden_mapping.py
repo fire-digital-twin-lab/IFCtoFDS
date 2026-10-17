@@ -123,7 +123,7 @@ def test_promotion_requires_all_factors():
 
 @pytest.mark.parametrize(
     "type_class, category",
-    [("IfcDuctSegmentType", "VENTILATION"), ("IfcPipeSegmentType", "PLUMBING")],
+    [("IfcDuctSegmentType", "VENTILATION"), ("IfcPipeSegmentType", "UNRESOLVED")],
 )
 def test_ifc2x3_type_class_used(type_class, category):
     assert (

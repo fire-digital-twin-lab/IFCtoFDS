@@ -8,10 +8,10 @@ HVAC_TYPES = {
     "IFCDUCTSILENCER",
     "IFCFAN",
     "IFCDAMPER",
-    "IFCFLOWMOVINGDEVICE",
-    "IFCFLOWCONTROLLER",
 }
 MEP_TYPES = HVAC_TYPES | {
+    "IFCFLOWMOVINGDEVICE",
+    "IFCFLOWCONTROLLER",
     "IFCPIPESEGMENT",
     "IFCPIPEFITTING",
     "IFCVALVE",
@@ -21,6 +21,10 @@ MEP_TYPES = HVAC_TYPES | {
     "IFCFLOWFITTING",
     "IFCFLOWTERMINAL",
     "IFCUNITARYEQUIPMENT",
+    "IFCSENSOR",
+    "IFCALARM",
+    "IFCFLOWINSTRUMENT",
+    "IFCDISTRIBUTIONCONTROLELEMENT",
 }
 
 
@@ -31,13 +35,35 @@ def classify_mep_element(
     predefined_type="",
     type_class="",
     property_sets=None,
+    system_categories=(),
 ):
     t = (type_class or ifc_type or "").upper()
     if t.endswith("TYPE"):
         t = t[:-4]
-    sys = str(system_name or "").upper()
     p = str(predefined_type or "").upper()
-    n = str(name or "").upper()
+    if t == "IFCFIRESUPPRESSIONTERMINAL":
+        return "FIRE_SUPPRESSION", True
+    enum_categories = {
+        "FIRE_SUPPRESSION": {"FIREPROTECTION", "FIRE PROTECTION", "FIRE_SUPPRESSION", "SPRINKLER", "FIREHYDRANT"},
+        "SMOKE_EXTRACT": {"SMOKEEXHAUST", "SMOKE EXTRACT", "SMOKECONTROL", "PRESSURISATION"},
+        "VENTILATION": {"VENTILATION", "AIRCONDITIONING", "EXHAUST"},
+        "PLUMBING": {"DOMESTICCOLDWATER", "DOMESTICHOTWATER", "DRAINAGE", "SEWAGE", "WATERSUPPLY"},
+    }
+
+    def result(category):
+        # A duct/fan class cannot establish a water/fire-suppression function.
+        if t in HVAC_TYPES and category in ("FIRE_SUPPRESSION", "PLUMBING"):
+            return "UNRESOLVED", False
+        return category, category in ("FIRE_SUPPRESSION", "SMOKE_EXTRACT")
+
+    for category, values in enum_categories.items():
+        if p in values:
+            return result(category)
+    categories = {x for x in system_categories if x not in ("OTHER", "UNRESOLVED")}
+    if len(categories) > 1:
+        return "UNRESOLVED", False
+    if categories:
+        return result(next(iter(categories)))
     explicit_property_values = []
     for properties in (property_sets or {}).values():
         if isinstance(properties, dict):
@@ -47,37 +73,12 @@ def classify_mep_element(
                 if key.replace(" ", "").lower()
                 in ("systemtype", "systemclassification", "servicetype")
             )
-    if any(
-        value in ("FIREPROTECTION", "FIRE PROTECTION", "FIRE_SUPPRESSION", "SPRINKLER")
-        for value in explicit_property_values
-    ):
-        return "FIRE_SUPPRESSION", True
-    if any(
-        value in ("SMOKEEXHAUST", "SMOKE EXTRACT", "SMOKECONTROL")
-        for value in explicit_property_values
-    ):
-        return "SMOKE_EXTRACT", True
-    if any(
-        value in ("VENTILATION", "AIRCONDITIONING", "EXHAUST")
-        for value in explicit_property_values
-    ):
+    categories = {category for category, values in enum_categories.items()
+                  if any(v in values for v in explicit_property_values)}
+    if len(categories) > 1:
+        return "UNRESOLVED", False
+    if categories:
+        return result(next(iter(categories)))
+    if t in HVAC_TYPES:
         return "VENTILATION", False
-    if p in ("SMOKEEXHAUST", "SMOKECONTROL", "PRESSURISATION") or any(
-        w in sys for w in ("SMOKE", "HUT_KHOI", "TANG_AP", "PRESSURIZATION")
-    ):
-        return "SMOKE_EXTRACT", True
-    if (
-        t == "IFCFIRESUPPRESSIONTERMINAL"
-        or p in ("FIREPROTECTION", "SPRINKLER", "FIREHYDRANT")
-        or any(w in sys for w in ("PCCC", "FIRE", "SPRINKLER", "CHUA_CHAY"))
-    ):
-        return "FIRE_SUPPRESSION", True
-    if p in ("VENTILATION", "AIRCONDITIONING", "EXHAUST") or t in HVAC_TYPES:
-        return "VENTILATION", False
-    if t in ("IFCPIPESEGMENT", "IFCPIPEFITTING"):
-        return "PLUMBING", False
-    if "SMOKE" in n:
-        return "SMOKE_EXTRACT", True
-    if "SPRINKLER" in n:
-        return "FIRE_SUPPRESSION", True
-    return "OTHER", False
+    return "UNRESOLVED", False
