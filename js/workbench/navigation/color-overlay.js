@@ -17,7 +17,9 @@
             GEOM: 0x059669,        // Surface conversion (Emerald)
             REFERENCE: 0x3b82f6,   // Reference only (Blue)
             EXCLUDE: 0x64748b,     // Excluded from simulation (Gray)
-            FAILED: 0xef4444       // Unsupported / Failed (Red)
+            FAILED: 0xef4444,      // Unsupported / Failed (Red)
+            UNKNOWN: 0xf97316,
+            NOT_RUN: 0x64748b
         },
         verification: {
             PASS: 0x10b981,        // Verified (Green)
@@ -104,22 +106,32 @@
         if (!desc) return null;
 
         if (mode === 'mapping') {
+            var raw = desc.raw || {};
+            var status = String(raw.verification_status || '').toUpperCase();
+            if (['FAIL', 'FAILED', 'REJECTED', 'UNSUPPORTED', 'MISSING', 'DEVIATED'].indexOf(status) >= 0) return COLOR_PALETTES.mapping.FAILED;
+            if (status === 'INCONCLUSIVE') return COLOR_PALETTES.mapping.UNKNOWN;
+            if (['FAILED', 'INVALID', 'UNSUPPORTED'].indexOf(raw.geometry_status) >= 0) return COLOR_PALETTES.mapping.FAILED;
+            if (['REVIEW_REQUIRED', 'PENDING', 'REQUIRED'].indexOf(raw.review_status) >= 0 || raw.boundary_treatment === 'PENDING_VALIDATION') return COLOR_PALETTES.mapping.UNKNOWN;
             var role = (desc.simulationRole || '').toUpperCase();
-            if (role === 'EXCLUDE') return COLOR_PALETTES.mapping.EXCLUDE;
+            if (['EXCLUDE', 'EXCLUDED_APPROVED', 'EXCLUDED_SCOPE'].indexOf(role) >= 0) return COLOR_PALETTES.mapping.EXCLUDE;
             if (role === 'REFERENCE_GEOMETRY') return COLOR_PALETTES.mapping.REFERENCE;
             var strat = (desc.mappingStrategy || '').toUpperCase();
-            if (strat.indexOf('OBST') >= 0) return COLOR_PALETTES.mapping.OBST;
-            if (strat.indexOf('GEOM') >= 0) return COLOR_PALETTES.mapping.GEOM;
-            return COLOR_PALETTES.mapping.OBST;
+            if (['FAILED', 'UNSUPPORTED', 'REJECTED'].indexOf(strat) >= 0) return COLOR_PALETTES.mapping.FAILED;
+            if (['EXCLUDED_APPROVED', 'EXCLUDED_SCOPE'].indexOf(strat) >= 0) return COLOR_PALETTES.mapping.EXCLUDE;
+            if (strat === 'REFERENCE_GEOMETRY') return COLOR_PALETTES.mapping.REFERENCE;
+            if (strat === 'OBST') return COLOR_PALETTES.mapping.OBST;
+            if (strat === 'GEOM') return COLOR_PALETTES.mapping.GEOM;
+            if (strat === 'NOT_RUN') return COLOR_PALETTES.mapping.NOT_RUN;
+            return COLOR_PALETTES.mapping.UNKNOWN;
         }
 
         if (mode === 'verification') {
             var raw = desc.raw || {};
-            var status = (raw.review_status || raw.verification_status || 'NOT_RUN').toUpperCase();
-            if (status.indexOf('PASS') >= 0 || status === 'MATCHED') return COLOR_PALETTES.verification.PASS;
-            if (status.indexOf('WARN') >= 0) return COLOR_PALETTES.verification.WARNING;
-            if (status.indexOf('INCON') >= 0) return COLOR_PALETTES.verification.INCONCLUSIVE;
-            if (status.indexOf('FAIL') >= 0 || status === 'REJECTED') return COLOR_PALETTES.verification.FAIL;
+            var status = String(raw.verification_status || 'NOT_RUN').toUpperCase();
+            if (status === 'PASS' || status === 'MATCHED') return COLOR_PALETTES.verification.PASS;
+            if (status === 'WARNING') return COLOR_PALETTES.verification.WARNING;
+            if (status === 'INCONCLUSIVE') return COLOR_PALETTES.verification.INCONCLUSIVE;
+            if (['FAIL', 'FAILED', 'REJECTED', 'MISSING', 'UNSUPPORTED', 'DEVIATED'].indexOf(status) >= 0) return COLOR_PALETTES.verification.FAIL;
             return COLOR_PALETTES.verification.NOT_RUN;
         }
 
@@ -180,7 +192,9 @@
                 ['#10b981', 'OBST Solid'],
                 ['#059669', 'GEOM Solid'],
                 ['#3b82f6', 'Reference'],
-                ['#64748b', 'Excluded']
+                ['#64748b', 'Excluded / Not run'],
+                ['#f97316', 'Unknown / Inconclusive'],
+                ['#ef4444', 'Failed / Unsupported']
             ];
         } else if (mode === 'verification') {
             items = [

@@ -36,8 +36,8 @@ ifc-to-fds = "ifc_to_fds.cli:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-m 'not solver'"
-markers = ["solver: requires an installed FDS solver"]
+addopts = "-m 'not solver and not browser'"
+markers = ["solver: requires an installed FDS solver", "browser: requires Playwright and Chromium"]
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -40,7 +40,10 @@
         this.selection.clearSelection('reset');
         this.selection.clearIndex();
         this.visibility.resetVisibility('reset');
-        this._mode = MODES.MODEL;
+        this.scenario.reset();
+        var bus = root.IfcFds.workbench.commands && root.IfcFds.workbench.commands.commandBus;
+        if (bus) bus.clear();
+        this.setMode(MODES.MODEL);
     };
 
     WorkbenchStore.prototype.subscribe = function (listener) {

@@ -71,13 +71,13 @@
         var box = new THREE.Box3();
         this.fdsGroup.traverse(function (node) {
             if (!node.isMesh && !node.isLineSegments) return;
-            if (noActiveClip) { node.visible = true; return; }
+            if (noActiveClip) { root.IfcFds.viewer.setVisibilityChannel(node, 'section', true); return; }
             box.makeEmpty().expandByObject(node);
-            if (box.isEmpty()) { node.visible = true; return; }
+            if (box.isEmpty()) { root.IfcFds.viewer.setVisibilityChannel(node, 'section', true); return; }
             var inside = box.min.x >= range.xmin && box.max.x <= range.xmax
                 && box.min.y >= range.zmin && box.max.y <= range.zmax
                 && box.min.z >= range.ymin && box.max.z <= range.ymax;
-            node.visible = inside;
+            root.IfcFds.viewer.setVisibilityChannel(node, 'section', inside);
         });
     };
 

@@ -273,7 +273,7 @@ Install test dependencies and run the non-solver suite:
 
 ```sh
 python -m pip install -e ".[test]"
-python -m pytest -q -m "not solver"
+python -m pytest -q -m "not solver and not browser"
 ```
 
 Representative JavaScript checks require Node.js:
@@ -524,7 +524,7 @@ Cài phụ thuộc kiểm thử và chạy nhóm không yêu cầu solver:
 
 ```sh
 python -m pip install -e ".[test]"
-python -m pytest -q -m "not solver"
+python -m pytest -q -m "not solver and not browser"
 ```
 
 Một số kiểm tra JavaScript tiêu biểu cần Node.js:

@@ -68,20 +68,22 @@
     function createEntityKey(item) {
         if (!item) return '';
         var raw = item.raw || {};
-        if (raw.entity_key) return String(raw.entity_key);
+        if (item.entityKey) return String(item.entityKey);
         if (item.entity_key) return String(item.entity_key);
+        if (raw.entity_key) return String(raw.entity_key);
 
-        var sourceId = raw.source_id ||
+        var sourceId = item.sourceId || item.source_id || raw.source_id ||
             (item.ifcSource && item.ifcSource.fileName) ||
-            item.sourceId ||
             'ifc';
 
         var primaryId = item.globalId ||
             raw.global_id ||
             raw.GlobalId ||
-            item.id ||
+            item.stepId ||
             raw.step_id ||
             item.expressID ||
+            (item.ifcSource && (item.ifcSource.globalId || item.ifcSource.stepId)) ||
+            item.id || item.name ||
             'unknown';
 
         return String(sourceId) + ':' + String(primaryId);
@@ -97,8 +99,8 @@
         var ifcType = item.ifcType || raw.ifc_type || item.type || 'UNKNOWN';
 
         var globalId = item.globalId || raw.global_id || raw.GlobalId || null;
-        var stepId = item.id || raw.step_id || item.expressID || null;
-        var sourceId = raw.source_id || (item.ifcSource && item.ifcSource.fileName) || 'ifc';
+        var stepId = item.stepId || raw.step_id || item.expressID || item.id || null;
+        var sourceId = item.sourceId || item.source_id || raw.source_id || (item.ifcSource && item.ifcSource.fileName) || 'ifc';
 
         var mepData = raw.mep_data || {};
         var ports = raw.ports || mepData.ports || [];
@@ -111,15 +113,15 @@
             globalId: globalId,
             stepId: stepId,
             ifcType: ifcType,
-            category: item.ifcCategory || 'other',
+            category: item.ifcCategory || item.category || 'other',
             name: item.name || (ifcType + (stepId ? ' #' + stepId : '')),
             storey: raw.storey || item.storey || null,
             building: raw.building_id || null,
             bounds: item.bounds || raw.bounding_box || null,
             xb: item.xb || raw.xb || null,
-            simulationRole: raw.simulation_role || item.fdsRole || 'REFERENCE_GEOMETRY',
-            mappingStrategy: raw.mapping_strategy || (item.canExportAsSolid ? 'OBST/GEOM' : 'NONE'),
-            representation: raw.fds_representation || item.type || 'GEOM',
+            simulationRole: raw.simulation_role || item.simulationRole || item.fdsRole || 'UNKNOWN',
+            mappingStrategy: raw.mapping_strategy || item.mappingStrategy || 'NONE',
+            representation: raw.fds_representation || item.representation || item.type || 'NONE',
             boundaryTreatment: raw.boundary_treatment || 'NOT_APPLICABLE',
             reviewStatus: raw.review_status || 'NOT_REQUIRED',
             mepCategory: raw.mep_category || mepData.category || null,

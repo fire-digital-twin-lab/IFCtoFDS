@@ -1,6 +1,10 @@
 """Automated browser tests verifying Workbench Interaction Core contracts (Phase 2)."""
 
 from pathlib import Path
+import os
+import pytest
+
+pytestmark = pytest.mark.browser
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -12,7 +16,9 @@ def test_workbench_scripts_loaded_and_interaction_core_functional():
     index_uri = (ROOT / "index.html").as_uri()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True, **({"channel": "msedge"} if os.name == "nt" else {})
+        )
         page = browser.new_page()
         page.goto(index_uri, wait_until="load")
 
@@ -38,7 +44,9 @@ def test_workbench_scripts_loaded_and_interaction_core_functional():
                 hasInspectorController: !!inspector.inspectorController
             };
         }""")
-        assert modules_loaded["ok"], f"Workbench modules failed to load: {modules_loaded}"
+        assert modules_loaded["ok"], (
+            f"Workbench modules failed to load: {modules_loaded}"
+        )
 
         # Test 2: EntityKey generation and normalization
         entity_key_test = page.evaluate("""() => {

@@ -1,6 +1,10 @@
 """Automated browser tests verifying Workbench Navigation features (Phase 3)."""
 
 from pathlib import Path
+import os
+import pytest
+
+pytestmark = pytest.mark.browser
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -12,7 +16,9 @@ def test_workbench_navigation_modules_and_visual_qa():
     index_uri = (ROOT / "index.html").as_uri()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True, **({"channel": "msedge"} if os.name == "nt" else {})
+        )
         page = browser.new_page()
         page.goto(index_uri, wait_until="load")
 
