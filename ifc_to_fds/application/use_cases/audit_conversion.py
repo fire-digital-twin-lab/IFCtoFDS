@@ -51,7 +51,13 @@ class AuditConversionUseCase:
         report.requested_level = (
             "simulation" if configuration.get("profile") == "simulation" else "mapping"
         )
-        audit_package(model, geometry_package, report, config)
+        if report.metrics.get("source_topology_preflight_rejected"):
+            report.gates["geometry_preservation"] = GateResult(
+                status=GateStatus.NOT_RUN,
+                reason="Source topology preflight rejected; full package geometry comparison not run",
+            )
+        else:
+            audit_package(model, geometry_package, report, config)
         unplaced = [
             e.entity_key
             for e in model.elements

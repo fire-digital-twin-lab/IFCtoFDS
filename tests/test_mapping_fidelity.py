@@ -270,3 +270,40 @@ def test_changed_output_cannot_reuse_source_intersection_proof(box_model, monkey
     with pytest.raises(ValueError, match="Self-intersecting"):
         compare_solids(mesh, [changed])
     assert len(calls) == 2
+
+
+def test_rejected_source_preflight_does_not_claim_remaining_geometry_checked(
+    box_model, monkeypatch
+):
+    from ifc_to_fds.validation.acceptance import AuditConfig
+    import ifc_to_fds.validation.engine as engine
+
+    healthy = box_model.elements[0].model_copy(deep=True)
+    healthy.entity_key, healthy.step_id, healthy.global_id = "fixture:2", 2, "second"
+    box_model.elements.append(healthy)
+    box_model.elements[0].mesh.faces.pop()
+    plan_mapping(box_model)
+    text, manifest = serialize_fds(box_model)
+    calls = []
+    original = engine.compare_solids
+
+    def measured(*args):
+        calls.append(True)
+        return original(*args)
+
+    monkeypatch.setattr(engine, "compare_solids", measured)
+    report = engine.run_independent_validation(
+        box_model, text, manifest, AuditConfig(fail_fast_on_source_errors=True)
+    )
+    assert report.status == "REJECTED"
+    assert report.gates["geometry"].status == "FAIL"
+    assert report.gates["openings"].status == "NOT_RUN"
+    assert report.gates["solver"].status == "NOT_RUN"
+    assert report.element_statuses[healthy.entity_key] == "INCONCLUSIVE"
+    assert not calls
+    full = engine.run_independent_validation(
+        box_model, text, manifest, AuditConfig(fail_fast_on_source_errors=False)
+    )
+    assert full.status == "REJECTED"
+    assert full.element_statuses[healthy.entity_key] == "MATCHED"
+    assert len(calls) == 1

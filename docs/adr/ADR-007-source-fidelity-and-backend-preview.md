@@ -86,6 +86,13 @@ and oriented-face arrays share a single self-intersection proof. That proof is
 still required. Changed coordinates/faces receive separate proofs. This reduces
 duplicate work without caching exporter assertions or weakening tolerances.
 
+Geometry-fidelity defaults to `audit.fail_fast_on_source_errors=true`. After
+independent source reconstruction, confirmed invalid in-scope source solids reject
+the output. Syntax, provenance and accounting still run; expensive remaining
+solid, opening, package-geometry and solver comparisons are explicitly NOT_RUN or
+INCONCLUSIVE. No unchecked geometry is labelled matched. Set the option to false
+for a complete diagnostic audit. Other profiles retain the full-audit default.
+
 IFC and FDS GEOM display buffers use coordinates relative to each product's
 origin. The Object3D placement retains the original world coordinates in double
 precision. This avoids collapsing thin walls when georeferenced coordinates are

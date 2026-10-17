@@ -236,9 +236,34 @@ def run_independent_validation(
         if e.scope_decision != ScopeDecision.OUT_OF_SCOPE
         and e.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
     )
+    bad_source = (
+        [
+            e.entity_key
+            for e in model.elements
+            if e.scope_decision
+            in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+            and e.role == "PHYSICAL"
+            and e.mesh
+            and not valid_solid(e.mesh)
+        ]
+        if config.fail_fast_on_source_errors
+        else []
+    )
+    stop_solid_checks = bool(bad_source)
+    if stop_solid_checks:
+        report.metrics["source_topology_preflight_rejected"] = bad_source
+        report.gates["openings"] = GateResult(
+            status=GateStatus.NOT_RUN,
+            reason="Source topology defects confirmed; full opening comparisons not run",
+        )
+        report.gates[
+            "geometry"
+        ].reason = (
+            "Source topology defects confirmed; remaining solid comparisons not run"
+        )
     reference_solids = None
     exported_solids = None
-    if opening_count > 0:
+    if opening_count > 0 and not stop_solid_checks:
         from ifc_to_fds.mapping.boundary import target_mesh
 
         reference_solids = SolidCandidateIndex(
@@ -447,6 +472,9 @@ def run_independent_validation(
                 key,
             )
             continue
+        if stop_solid_checks:
+            report.element_statuses[key] = "INCONCLUSIVE"
+            continue
         try:
             from ifc_to_fds.mapping.boundary import target_mesh
 
@@ -579,7 +607,16 @@ def run_independent_validation(
     from time import perf_counter
 
     solver_start = perf_counter()
-    if report.gates["syntax"].status == GateStatus.PASS:
+    if stop_solid_checks:
+        report.gates["solver"] = GateResult(
+            status=GateStatus.NOT_RUN,
+            reason="Source topology preflight rejected; solver not run",
+        )
+        report.gates["effective_geometry"] = GateResult(
+            status=GateStatus.NOT_RUN,
+            reason="Source topology preflight rejected; effective geometry not run",
+        )
+    elif report.gates["syntax"].status == GateStatus.PASS:
         report.gates["solver"], report.gates["effective_geometry"] = solver_gates(
             fds_text, config
         )

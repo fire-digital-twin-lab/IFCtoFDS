@@ -66,6 +66,8 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
     validate_decisions(config.get("system_decisions", {}))
     SpatialScope.model_validate(config.get("scope", {}))
     AuditConfig.model_validate(config.get("audit", {}))
+    if config.get("profile") == "geometry-fidelity":
+        config.setdefault("audit", {}).setdefault("fail_fast_on_source_errors", True)
     sources = config.get("sources", {})
     if not isinstance(sources, dict) or set(sources) - {
         "common_coordinates",

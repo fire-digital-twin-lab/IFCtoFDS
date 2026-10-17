@@ -2,7 +2,7 @@
 
 from enum import Enum
 from typing import Any, Callable, ClassVar, Optional
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
 from ..version import SCHEMA_VERSION
 
@@ -42,8 +42,11 @@ class GateResult(BaseModel):
 
 class AuditConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    fail_fast_on_source_errors: StrictBool = False
     surface_tolerance_m: float = Field(default=0.001, gt=0, allow_inf_nan=False)
-    relative_volume_tolerance: float = Field(default=0.001, ge=0, lt=1, allow_inf_nan=False)
+    relative_volume_tolerance: float = Field(
+        default=0.001, ge=0, lt=1, allow_inf_nan=False
+    )
     min_solid_iou: float = Field(default=0.999, gt=0, le=1, allow_inf_nan=False)
     solver_executable: str | None = None
     solver_version: str = "6.11.1"
@@ -65,6 +68,7 @@ class Finding(BaseModel):
 
 class ValidationContext(BaseModel):
     """Context passed to individual gate checkers."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
     model: Any
     fds_text: str
