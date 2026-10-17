@@ -62,6 +62,8 @@ def planned_model(model, plan):
             )
         if not emits and d.strategy != e.mapping_strategy:
             reject("non-emitting disposition differs from source policy")
+        if d.strategy != e.mapping_strategy:
+            reject("strategy differs from source policy; build a new plan through policy")
         if d.fds_representation != (d.strategy.value if emits else "NONE"):
             reject("strategy and FDS representation conflict")
         if (
@@ -85,6 +87,8 @@ def planned_model(model, plan):
         ):
             reject("boundary evidence differs from established policy")
         solid = bool(e.mesh and valid_solid(e.mesh))
+        if emits and not solid:
+            reject("emitting strategy requires valid source solid geometry")
         if emits and solid:
             source_bounds = bounds_for_vertices(e.mesh.vertices)
             if e.bounding_box is None or any(

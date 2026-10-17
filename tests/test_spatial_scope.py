@@ -67,4 +67,4 @@ def test_rotated_box_is_geom(box_model):
 def test_failed_geometry_never_semantic(box_model):
     e = box_model.elements[0]
     e.mesh = None
-    assert determine_element_strategy(e) == "GEOM"
+    assert determine_element_strategy(e) == "NONE"

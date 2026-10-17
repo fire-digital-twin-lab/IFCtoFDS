@@ -3,7 +3,7 @@
 from typing import List, Optional
 from ifc_to_fds.core.canonical import BoundingBox, ScopeDecision
 from ifc_to_fds.domain.scope import SelectionScope, SpatialScope
-from ifc_to_fds.geometry.mesh import intersects_box
+from ifc_to_fds.geometry.mesh import intersects_box, bounds_for_vertices
 
 
 def apply_spatial_scope(model, scope):
@@ -32,9 +32,21 @@ def apply_spatial_scope(model, scope):
             ),
             None,
         )
-        if s.elevation_m is not None and model.model_bounds:
-            if upper is not None:
-                intervals.append((s, s.elevation_m, upper))
+        if upper is None:
+            # Top storey: derive the upper limit only from this source/building,
+            # or an explicitly requested scope bound. Never invent a floor height.
+            if scope.bounding_box:
+                upper = scope.bounding_box.zmax
+            else:
+                bounds = [
+                    bounds_for_vertices(e.mesh.vertices)
+                    for e in model.elements
+                    if e.mesh and e.role == "PHYSICAL"
+                    and e.source_id == s.source_id and e.building_id == s.building_id
+                ]
+                upper = max((b.zmax for b in bounds if b), default=None)
+        if s.elevation_m is not None and upper is not None and upper > s.elevation_m:
+            intervals.append((s, s.elevation_m, upper))
     selected_ids = {s.storey_id for s in selected}
     model.requested_scope = scope.model_dump(mode="json")
     for e in model.elements:
