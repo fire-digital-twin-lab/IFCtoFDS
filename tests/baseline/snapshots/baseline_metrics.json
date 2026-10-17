@@ -1,0 +1,72 @@
+{
+  "javascript_files": {
+    "js/app-controller.js": {
+      "total_lines": 1473,
+      "code_lines": 1302
+    },
+    "js/viewer/scene-viewer.js": {
+      "total_lines": 1851,
+      "code_lines": 1570
+    },
+    "js/ifc/ifc-adapter.js": {
+      "total_lines": 1980,
+      "code_lines": 1724
+    },
+    "js/fds/fds-exporter.js": {
+      "total_lines": 1399,
+      "code_lines": 1119
+    },
+    "css/app.css": {
+      "total_lines": 1154,
+      "code_lines": 983
+    },
+    "index.html": {
+      "total_lines": 726,
+      "code_lines": 666
+    }
+  },
+  "python_files": {
+    "ifc_to_fds/validation/engine.py": {
+      "total_lines": 571,
+      "code_lines": 559
+    },
+    "ifc_to_fds/validation/golden.py": {
+      "total_lines": 0,
+      "code_lines": 0
+    },
+    "ifc_to_fds/domain/bim/model.py": {
+      "total_lines": 148,
+      "code_lines": 122
+    },
+    "ifc_to_fds/domain/validation/model.py": {
+      "total_lines": 206,
+      "code_lines": 177
+    },
+    "ifc_to_fds/application/use_cases/audit_conversion.py": {
+      "total_lines": 268,
+      "code_lines": 257
+    },
+    "ifc_to_fds/server.py": {
+      "total_lines": 353,
+      "code_lines": 301
+    }
+  },
+  "fixtures": {
+    "tests/baseline/fixtures/tiny.ifc": {
+      "sha256": "ff23ec05dde308d6bc28e817af0e5c6a6396dc663cfb04895c7711976e9c9f4d",
+      "size_bytes": 1593
+    },
+    "tests/baseline/fixtures/opening.ifc": {
+      "sha256": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a",
+      "size_bytes": 2382
+    },
+    "tests/baseline/fixtures/mep.ifc": {
+      "sha256": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a",
+      "size_bytes": 1536
+    },
+    "examples/AC20-FZK-Haus.ifc": {
+      "sha256": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d",
+      "size_bytes": 2526544
+    }
+  }
+}

@@ -35,7 +35,8 @@ self.onmessage = function (event) {
             type: 'error',
             requestId: request.requestId,
             shardIndex: request.shardIndex,
-            message: error && error.message ? error.message : String(error)
+            message: error && error.message ? error.message : String(error),
+            error: self.IfcFds.core.failure(error, {stage: 'ifc_parse', requestId: request.requestId})
         });
     }
 };

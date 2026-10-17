@@ -1,292 +1,654 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>IFCtoFDS</title>
+    <title>IFCtoFDS — Verified BIM-to-FDS Research Workbench</title>
     <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
     <main class="app-shell">
+        <!-- =====================================================================
+             1. Global Header Bar
+             ===================================================================== -->
         <header class="topbar">
-            <div class="brand">
-                <span class="brand-mark">IFCtoFDS</span>
+            <div class="topbar-left">
+                <div class="brand-wrap">
+                    <span class="brand-mark">IFCtoFDS</span>
+                    <span class="brand-badge">Research Core</span>
+                </div>
+                <div class="source-status-pill" id="source-pill" title="Current IFC source model">
+                    <i data-lucide="file-code" style="width:14px;height:14px;color:var(--text-muted)"></i>
+                    <span class="source-filename" id="ifc-source-name">No file loaded</span>
+                    <span class="source-meta-tag" id="ifc-schema-tag">IFC</span>
+                    <span class="source-meta-tag" id="ifc-size-tag">-- MB</span>
+                </div>
             </div>
 
-            <div class="file-actions" aria-label="File actions">
-                <label class="button primary" title="Open an IFC model">
-                    <i data-lucide="building-2"></i>
+            <div class="topbar-center">
+                <div class="backend-indicator-pill" id="backend-status-row" title="IfcOpenShell & FDS backend status">
+                    <span class="status-dot offline" id="backend-status-indicator"></span>
+                    <span id="backend-status-text">Backend: Connecting...</span>
+                </div>
+                <div class="global-status-badge" id="global-run-status" title="Current acceptance verdict">
+                    <i data-lucide="shield" style="width:13px;height:13px"></i>
+                    <span id="global-status-label">NOT RUN</span>
+                </div>
+            </div>
+
+            <div class="topbar-actions" aria-label="Workbench actions">
+                <label class="btn btn-primary file-input-wrapper" title="Open an IFC building model">
+                    <i data-lucide="folder-open" style="width:15px;height:15px"></i>
                     <span>Open IFC</span>
                     <input id="ifc-file" type="file" accept=".ifc,.ifczip,.ifcfds">
                 </label>
-                <button id="toggle-theme" class="icon-button" type="button" title="Switch to dark theme" aria-label="Switch to dark theme">
-                    <i data-lucide="moon"></i>
+
+                <button id="toggle-walk" class="btn btn-icon" type="button" title="First-person walk mode (WASD + Space)" aria-label="Enter walk mode">
+                    <i data-lucide="footprints" style="width:15px;height:15px"></i>
                 </button>
-                <button id="toggle-walk" class="icon-button" type="button" title="Enter walk mode" aria-label="Enter walk mode">
-                    <i data-lucide="footprints"></i>
+                <button id="reset-camera" class="btn btn-icon" type="button" title="Fit camera to visible extents">
+                    <i data-lucide="scan" style="width:15px;height:15px"></i>
                 </button>
-                <button id="open-help" class="icon-button" type="button" title="Open help guide" aria-label="Open help guide">
-                    <i data-lucide="circle-help"></i>
+                <button id="open-audit" class="btn btn-icon" type="button" title="Open Engineering Audit Console" disabled>
+                    <i data-lucide="file-check-2" style="width:15px;height:15px"></i>
                 </button>
-                <button id="reset-camera" class="icon-button" type="button" title="Reset camera">
-                    <i data-lucide="scan"></i>
+                <button id="save-manifest" class="btn btn-icon" type="button" title="Save Mapping Manifest (JSON)" disabled>
+                    <i data-lucide="file-spreadsheet" style="width:15px;height:15px"></i>
                 </button>
-                <button id="save-processed" class="icon-button" type="button" title="Save processed IFC for instant reopen" disabled>
-                    <i data-lucide="hard-drive-download"></i>
+                <button id="save-processed" class="btn btn-icon" type="button" title="Save processed model for fast reopen" disabled style="display:none">
+                    <i data-lucide="hard-drive-download" style="width:15px;height:15px"></i>
                 </button>
-                <button id="save-fds" class="icon-button" type="button" title="Save converted FDS" disabled>
-                    <i data-lucide="save"></i>
+                <button id="save-fds" class="btn btn-icon" type="button" title="Download generated FDS file" disabled>
+                    <i data-lucide="download" style="width:15px;height:15px"></i>
+                </button>
+                <button id="toggle-theme" class="btn btn-icon" type="button" title="Switch light/dark theme" aria-label="Toggle theme">
+                    <i data-lucide="sun" style="width:15px;height:15px"></i>
+                </button>
+                <button id="open-help" class="btn btn-icon" type="button" title="Documentation & Capability Matrix" aria-label="Open documentation">
+                    <i data-lucide="circle-help" style="width:15px;height:15px"></i>
                 </button>
             </div>
         </header>
 
-        <section class="workspace">
-            <aside class="sidebar" aria-label="Workbench controls">
-                <section class="panel">
-                    <h2>Sources</h2>
-                    <div class="source-row">
-                        <span>Output</span>
-                        <strong id="fds-source-name">No conversion</strong>
+        <!-- =====================================================================
+             2. Main 3-Column Workspace
+             ===================================================================== -->
+        <section class="workspace-container">
+            <!-- Left Sidebar: Configuration & Workflow -->
+            <aside class="left-panel" aria-label="Workflow configuration">
+                <div class="left-panel-content">
+                    <!-- Sidebar Tab Switcher: Workflow vs Semantic Model Tree -->
+                    <div class="sidebar-nav-tabs" role="tablist" style="display:flex;gap:4px;margin-bottom:10px">
+                        <button id="sidebar-tab-workflow" class="mode-card active" style="flex:1;padding:6px;justify-content:center;height:32px" type="button" role="tab" aria-selected="true">
+                            <span class="mode-card-title" style="font-size:11px">
+                                <i data-lucide="git-branch" style="width:13px;height:13px"></i>
+                                <span>Workflow</span>
+                            </span>
+                        </button>
+                        <button id="sidebar-tab-tree" class="mode-card" style="flex:1;padding:6px;justify-content:center;height:32px" type="button" role="tab" aria-selected="false">
+                            <span class="mode-card-title" style="font-size:11px">
+                                <i data-lucide="network" style="width:13px;height:13px"></i>
+                                <span>Model Tree</span>
+                            </span>
+                        </button>
                     </div>
-                    <div class="source-row">
-                        <span>IFC</span>
-                        <strong id="ifc-source-name">No file</strong>
+
+                    <!-- Panel 1: Workflow Configuration -->
+                    <div id="sidebar-panel-workflow">
+                        <!-- Mode Selector: Verified (Primary) vs Quick (Secondary) -->
+                        <div class="mode-selector-grid" role="tablist" aria-label="Workflow Mode">
+                        <button id="mode-tab-verified" class="mode-card active" type="button" role="tab" aria-selected="true">
+                            <span class="mode-card-title">
+                                <i data-lucide="shield-check" style="width:14px;height:14px;color:var(--status-pass)"></i>
+                                Verified Mapping
+                                <span class="mode-pill-badge authoritative">Authoritative</span>
+                            </span>
+                            <span class="mode-card-desc">IfcOpenShell &middot; 3-tier audit &middot; fail-closed</span>
+                        </button>
+                        <button id="mode-tab-quick" class="mode-card" type="button" role="tab" aria-selected="false">
+                            <span class="mode-card-title">
+                                <i data-lucide="zap" style="width:14px;height:14px;color:var(--status-warning)"></i>
+                                Quick Preview
+                                <span class="mode-pill-badge legacy">Legacy</span>
+                            </span>
+                            <span class="mode-card-desc">Browser heuristic &middot; fast interactive view</span>
+                        </button>
                     </div>
-                </section>
 
-                <section class="panel">
-                    <h2>View</h2>
-                    <div class="segmented" role="group" aria-label="View mode">
-                        <button class="active" type="button" data-view-mode="overlay">Overlay</button>
-                        <button type="button" data-view-mode="fds">FDS</button>
-                        <button type="button" data-view-mode="ifc">IFC</button>
+                    <!-- Workflow Mode Banner -->
+                    <div id="verified-workflow-banner" class="mode-workflow-banner verified">
+                        <i data-lucide="check-circle-2" style="width:16px;height:16px;flex-shrink:0"></i>
+                        <span><strong>Authoritative Research Core</strong>: Provenance, boundary tracking, and independent validation audit.</span>
                     </div>
-                    <label class="slider-row">
-                        <span>FDS opacity</span>
-                        <input id="fds-opacity" type="range" min="0" max="1" value="0.72" step="0.02">
-                    </label>
-                    <label class="slider-row">
-                        <span>IFC opacity</span>
-                        <input id="ifc-opacity" type="range" min="0" max="1" value="1" step="0.02">
-                    </label>
-                    <label class="check-row">
-                        <span>Element edges</span>
-                        <input id="show-ifc-edges" type="checkbox" checked>
-                    </label>
-                    <label class="check-row">
-                        <span>Structure and shell</span>
-                        <input id="show-structure" type="checkbox" checked>
-                    </label>
-                    <label class="check-row">
-                        <span>Doors and windows</span>
-                        <input id="show-fills" type="checkbox" checked>
-                    </label>
-                    <label class="check-row">
-                        <span>Other IFC products</span>
-                        <input id="show-other" type="checkbox" checked>
-                    </label>
-                    <label class="check-row">
-                        <span>FDS OBST</span>
-                        <input id="show-obst" type="checkbox" checked>
-                    </label>
-                    <label class="check-row">
-                        <span>FDS HOLE</span>
-                        <input id="show-hole" type="checkbox" checked>
-                    </label>
-                    <label class="check-row">
-                        <span>FDS GEOM</span>
-                        <input id="show-geom" type="checkbox" checked>
-                    </label>
-                    <label class="check-row">
-                        <span>Ground grid</span>
-                        <input id="show-grid" type="checkbox" checked>
-                    </label>
-                </section>
 
-                <section class="panel">
-                    <h2>Geometry</h2>
-                    <dl class="metrics">
-                        <div><dt>Meshes</dt><dd id="count-meshes">0</dd></div>
-                        <div><dt>OBST</dt><dd id="count-obsts">0</dd></div>
-                        <div><dt>VENT</dt><dd id="count-vents">0</dd></div>
-                        <div><dt>GEOM</dt><dd id="count-geoms">0</dd></div>
-                        <div><dt>Triangles</dt><dd id="count-triangles">0</dd></div>
-                        <div><dt>IFC</dt><dd id="count-ifc">0</dd></div>
-                        <div><dt>FDS-ready</dt><dd id="count-ifc-convertible">0</dd></div>
-                    </dl>
-                </section>
-
-                <section class="panel">
-                    <h2>IFC Mapping</h2>
-                    <div id="ifc-mapping" class="mapping-list">
-                        <p class="empty-state">Open an IFC model to review its FDS mapping.</p>
+                    <div id="quick-workflow-banner" class="mode-workflow-banner quick" style="display:none">
+                        <i data-lucide="alert-triangle" style="width:16px;height:16px;flex-shrink:0"></i>
+                        <span><strong>Legacy Heuristic Preview</strong>: Approximated voxel/HOLE geometry. Do not cite as research evidence.</span>
                     </div>
-                </section>
 
-                <section class="panel diagnostics-panel">
-                    <h2>Checks</h2>
-                    <ol id="diagnostics" class="diagnostics"></ol>
-                </section>
+                    <!-- Verified Workflow Settings Container -->
+                    <div id="container-verified" class="workflow-container">
+                        <!-- Step 1: Spatial Scope -->
+                        <section class="config-section">
+                            <div class="section-header">
+                                <span class="section-title"><i data-lucide="layers" style="width:14px;height:14px"></i> 1. Spatial Scope</span>
+                                <button id="verified-inventory" type="button" class="btn btn-icon" style="height:24px;width:24px" title="Query IFC storeys and products">
+                                    <i data-lucide="refresh-cw" style="width:12px;height:12px"></i>
+                                </button>
+                            </div>
 
+                            <div class="form-group">
+                                <label class="form-label" for="verified-storeys">Storeys <small>(Select storeys or none for full model)</small></label>
+                                <select id="verified-storeys" class="form-select" multiple size="4" aria-label="Export storeys" style="height:80px;font-family:var(--font-mono);font-size:11px"></select>
+                            </div>
+
+                            <!-- Preflight Warning: Scoped without domain -->
+                            <div id="verified-domain-warning" class="info-callout warning" style="display:none">
+                                <i data-lucide="alert-circle" style="width:14px;height:14px;flex-shrink:0"></i>
+                                <span>Scoped storeys require an explicit fixed simulation domain. Undeclared domain will result in INCOMPLETE.</span>
+                            </div>
+
+                            <label class="checkbox-card">
+                                <input id="verified-use-bounds" type="checkbox">
+                                <span>Limit spatial scope to custom volume box</span>
+                            </label>
+                            <div class="grid-3d-bounds" id="verified-bounds-box" style="display:none">
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Xmin</span><input id="verified-xmin" class="form-input" type="number" step="any" value="0"></div>
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Xmax</span><input id="verified-xmax" class="form-input" type="number" step="any" value="10"></div>
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Ymin</span><input id="verified-ymin" class="form-input" type="number" step="any" value="0"></div>
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Ymax</span><input id="verified-ymax" class="form-input" type="number" step="any" value="10"></div>
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Zmin</span><input id="verified-zmin" class="form-input" type="number" step="any" value="0"></div>
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Zmax</span><input id="verified-zmax" class="form-input" type="number" step="any" value="3"></div>
+                            </div>
+                        </section>
+
+                        <!-- Step 2: Simulation Domain Editor & Cell Budget -->
+                        <section class="config-section">
+                            <div class="section-header">
+                                <span class="section-title"><i data-lucide="box" style="width:14px;height:14px"></i> 2. Simulation Domain</span>
+                                <span class="domain-budget-chip reasonable" id="domain-est-budget">● OK</span>
+                            </div>
+
+                            <label class="checkbox-card">
+                                <input id="verified-use-domain" type="checkbox">
+                                <span>Declare fixed simulation domain (XB bounds)</span>
+                            </label>
+
+                            <div class="grid-3d-bounds" id="verified-domain-box" style="display:none">
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Xmin</span><input id="verified-domain-xmin" class="form-input" type="number" step="any" value="0"></div>
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Xmax</span><input id="verified-domain-xmax" class="form-input" type="number" step="any" value="10"></div>
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Ymin</span><input id="verified-domain-ymin" class="form-input" type="number" step="any" value="0"></div>
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Ymax</span><input id="verified-domain-ymax" class="form-input" type="number" step="any" value="10"></div>
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Zmin</span><input id="verified-domain-zmin" class="form-input" type="number" step="any" value="0"></div>
+                                <div class="axis-bound-cell"><span class="axis-bound-label">Zmax</span><input id="verified-domain-zmax" class="form-input" type="number" step="any" value="3"></div>
+                            </div>
+
+                            <div class="domain-metrics-box">
+                                <div class="domain-stat-row">
+                                    <span style="color:var(--text-muted)">Dimensions</span>
+                                    <strong id="domain-dimensions-text">10.0 &times; 10.0 &times; 3.0 m</strong>
+                                </div>
+                                <div class="domain-stat-row">
+                                    <span style="color:var(--text-muted)">Mesh resolution</span>
+                                    <span style="font-family:var(--font-mono)"><input id="verified-cell-size" type="number" step="0.05" min="0.05" max="2" value="0.20" style="width:55px;height:20px;padding:0 4px;font-size:11px;background:var(--bg-input);border:1px solid var(--border-subtle);border-radius:3px"> m</span>
+                                </div>
+                                <div class="domain-stat-row">
+                                    <span style="color:var(--text-muted)">Estimated cells</span>
+                                    <strong id="domain-est-cells" style="font-family:var(--font-mono)">37,500 cells</strong>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Step 3: Boundary Treatment -->
+                        <section class="config-section">
+                            <span class="section-title"><i data-lucide="scissors" style="width:14px;height:14px"></i> 3. Boundary Policy</span>
+                            <label class="checkbox-card">
+                                <input id="verified-boundary-obst" type="checkbox">
+                                <span><strong>Solver-verified structural boundary clipping</strong> (single MESH only)</span>
+                            </label>
+                            <p style="font-size:10px;color:var(--text-muted);line-height:1.4">
+                                Eligible: Walls, Columns, Beams, Slabs (pure axis-aligned boxes). Non-eligible structural crossings remain PENDING_VALIDATION.
+                            </p>
+                        </section>
+
+                        <!-- Step 4: Reviewed Decisions & Research Evidence -->
+                        <section class="config-section">
+                            <span class="section-title"><i data-lucide="file-check" style="width:14px;height:14px"></i> 4. Reviewed Decisions &amp; Evidence</span>
+                            <div class="form-group">
+                                <label class="form-label" for="verified-decisions">Reviewed Entity Decisions (JSON)</label>
+                                <input id="verified-decisions" class="form-input" type="file" accept=".json">
+                            </div>
+                            <div id="decisions-summary-chip" class="info-callout" style="display:none;font-size:10px"></div>
+                            <div class="form-group">
+                                <label class="form-label" for="verified-deltas">Approved Reference Deltas (JSON)</label>
+                                <input id="verified-deltas" class="form-input" type="file" accept=".json">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="verified-sources">Additional Federated IFCs</label>
+                                <input id="verified-sources" class="form-input" type="file" accept=".ifc" multiple>
+                            </div>
+                            <label class="checkbox-card">
+                                <input id="verified-common" type="checkbox">
+                                <span>Sources share a confirmed coordinate system</span>
+                            </label>
+                            <div id="verified-transforms"></div>
+                            <label class="checkbox-card" id="verified-transform-confirm-label" style="display:none">
+                                <input id="verified-transform-confirm" type="checkbox">
+                                <span>I have confirmed the 3D source offsets &amp; rotations</span>
+                            </label>
+                        </section>
+
+                        <!-- Step 5: Advanced & Diagnostics -->
+                        <details id="verified-advanced" class="config-section" style="cursor:pointer">
+                            <summary class="section-title" style="user-select:none"><i data-lucide="settings-2" style="width:14px;height:14px"></i> Advanced / Diagnostic Controls</summary>
+                            <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+                                <label class="checkbox-card">
+                                    <input id="verified-force-geom" type="checkbox">
+                                    <span>Force detailed GEOM output <small>(Diagnostic only &mdash; increases file size)</small></span>
+                                </label>
+                                <div class="form-group">
+                                    <label class="form-label" for="verified-profile">Acceptance Profile</label>
+                                    <select id="verified-profile" class="form-select">
+                                        <option value="mapping" selected>Mapping</option>
+                                        <option value="research-basement">Research Reference</option>
+                                        <option value="simulation">Simulation (Solver Evidence Required)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="verified-reference-case">Reference Case</label>
+                                    <select id="verified-reference-case" class="form-select">
+                                        <option value="">None</option>
+                                    </select>
+                                </div>
+                                <label class="checkbox-card">
+                                    <input id="verified-show-reference" type="checkbox">
+                                    <span>Display Reference Geometry (MEP/PCCC not in FDS)</span>
+                                </label>
+                            </div>
+                        </details>
+
+                        <!-- Primary Verified Action -->
+                        <div style="display:flex;gap:8px;margin-top:4px">
+                            <button id="convert-verified" class="btn btn-primary" type="button" style="flex:1;height:38px" title="Execute authoritative IfcOpenShell pipeline with independent audit" disabled>
+                                <i data-lucide="shield-check" style="width:16px;height:16px"></i>
+                                <span>Run Verified Mapping</span>
+                            </button>
+                            <button id="verified-cancel" class="btn" type="button" style="height:38px;padding:0 14px" disabled title="Cancel active conversion job">
+                                <i data-lucide="square" style="width:14px;height:14px"></i>
+                                <span>Cancel</span>
+                            </button>
+                        </div>
+                        <div id="verified-research-notice" style="font-size:10px;color:var(--text-muted);line-height:1.3"></div>
+                        <div id="verified-artifacts" style="display:none"></div>
+                        <span id="verified-progress" style="display:none"></span>
+                    </div>
+
+                    <!-- Quick Preview Settings Container (Secondary Utility) -->
+                    <div id="container-quick" class="workflow-container">
+                        <section class="config-section">
+                            <span class="section-title"><i data-lucide="sliders" style="width:14px;height:14px"></i> Heuristic Preview Settings</span>
+
+                            <div class="form-group">
+                                <label class="form-label" for="mesh-cell-size">FDS Target Mesh Cell (m)</label>
+                                <input id="mesh-cell-size" class="form-input" type="number" min="0.05" max="5" step="0.05" value="0.20">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="voxel-size">Voxelization Grid (m)</label>
+                                <input id="voxel-size" class="form-input" type="number" min="0.05" max="2" step="0.05" value="0.10">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="opening-thickening">Opening Margin (m)</label>
+                                <input id="opening-thickening" class="form-input" type="number" min="0" max="1" step="0.01" value="0.05">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="conversion-approach">Opening Approach</label>
+                                <select id="conversion-approach" class="form-select">
+                                    <option value="hole" selected>HOLE (Recommended Rectangles)</option>
+                                    <option value="voxel">Voxelization (Legacy Staired)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="opening-voxel-policy">Hole Voxel Policy</label>
+                                <select id="opening-voxel-policy" class="form-select">
+                                    <option value="smaller" selected>Smaller Holes (Preserve Walls)</option>
+                                    <option value="larger">Larger Holes (Full Aperture)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="obst-threshold">OBST Boxiness Threshold: <strong id="obst-threshold-val">0.80</strong></label>
+                                <input id="obst-threshold" type="range" min="0.5" max="1" step="0.05" value="0.8">
+                            </div>
+
+                            <label class="checkbox-card">
+                                <input id="include-fill-solids" type="checkbox">
+                                <span>Closed Window/Door Airtight Fills</span>
+                            </label>
+
+                            <label class="checkbox-card" title="Include furniture, MEP components, and proxies as blocking solids in Quick Preview only">
+                                <input id="include-review-solids" type="checkbox">
+                                <span>Include Furniture, MEP &amp; Proxy Solids (Quick Only)</span>
+                            </label>
+
+                            <button id="convert-ifc" class="btn btn-primary" type="button" style="height:38px;margin-top:6px" disabled>
+                                <i data-lucide="refresh-cw" style="width:15px;height:15px"></i>
+                                <span>Run Quick Preview (Legacy)</span>
+                            </button>
+
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">
+                                <button id="convert-selected-obst" class="btn" type="button" style="font-size:10px" disabled><span>Voxelize GEOM</span></button>
+                                <button id="delete-selected-ifc" class="btn" type="button" style="font-size:10px" disabled><span>Delete Selected</span></button>
+                            </div>
+                            <button id="undo-last" class="btn" type="button" style="font-size:10px" disabled><span>Undo (Ctrl+Z)</span></button>
+                        </section>
+                    </div>
+
+                    <!-- System Diagnostics & Checks list -->
+                    <section class="config-section diagnostics-panel">
+                        <div class="section-header">
+                            <span class="section-title"><i data-lucide="activity" style="width:14px;height:14px"></i> System Activity &amp; Checks</span>
+                        </div>
+                        <ol id="diagnostics" class="diagnostics" style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;list-style:none"></ol>
+                    </section>
+                </div>
+
+                <!-- Panel 2: Semantic Model Tree (PR-3) -->
+                <div id="sidebar-panel-tree" style="display:none;flex-direction:column;gap:8px">
+                    <div style="display:flex;gap:6px">
+                        <select id="tree-group-by" class="form-select" style="flex:1;height:26px;font-size:11px">
+                            <option value="storey" selected>Group: By Storey</option>
+                            <option value="ifc-type">Group: By IFC Type</option>
+                            <option value="system">Group: By MEP System</option>
+                            <option value="role">Group: By Mapping Role</option>
+                            <option value="validation">Group: By Validation State</option>
+                        </select>
+                    </div>
+                    <div style="position:relative">
+                        <input id="tree-search-input" class="form-input" style="height:26px;font-size:11px;padding-left:24px" placeholder="Filter entities…">
+                        <i data-lucide="search" style="position:absolute;left:7px;top:6px;width:12px;height:12px;color:var(--text-muted)"></i>
+                    </div>
+                    <div id="semantic-model-tree" style="max-height:calc(100vh - 220px);overflow-y:auto;padding-right:2px"></div>
+                </div>
+                </div>
             </aside>
 
-            <section class="viewer-area">
-                <div id="viewer" class="viewer"></div>
+            <!-- Center: 3D Engineering Viewport -->
+            <section class="viewport-area">
+                <div id="viewer" class="viewer-canvas"></div>
+
+                <!-- Floating Viewport Toolbar -->
+                <div class="viewport-floating-toolbar">
+                    <div class="segmented-control" role="group" aria-label="Render Mode">
+                        <button class="segmented-btn active" type="button" data-view-mode="overlay">Overlay</button>
+                        <button class="segmented-btn" type="button" data-view-mode="fds">FDS</button>
+                        <button class="segmented-btn" type="button" data-view-mode="ifc">IFC</button>
+                    </div>
+
+                    <button id="toggle-layers-popover" class="btn btn-icon" type="button" title="Toggle Layer Visibility">
+                        <i data-lucide="layers-2" style="width:15px;height:15px"></i>
+                    </button>
+
+                    <button id="toggle-camera-views" class="btn btn-icon" type="button" title="Camera Projections">
+                        <i data-lucide="camera" style="width:15px;height:15px"></i>
+                    </button>
+
+                    <button id="toggle-clip" class="btn btn-icon" type="button" title="Interactive 3D Box Clipping">
+                        <i data-lucide="scissors" style="width:15px;height:15px"></i>
+                    </button>
+                </div>
+
+                <!-- Layers Dropdown Popover (Floating) -->
+                <div id="layers-popover" class="viewport-popover" style="display:none">
+                    <span style="font-size:11px;font-weight:600;color:var(--text-primary)">Visibility &amp; Opacity</span>
+                    <label class="form-label" style="font-size:10px">FDS Opacity <input id="fds-opacity" type="range" min="0" max="1" value="0.72" step="0.02"></label>
+                    <label class="form-label" style="font-size:10px">IFC Opacity <input id="ifc-opacity" type="range" min="0" max="1" value="1" step="0.02"></label>
+                    <hr style="border:none;border-top:1px solid var(--border-subtle)">
+                    <label class="checkbox-card"><input id="show-ifc-edges" type="checkbox" checked><span>Element Edges</span></label>
+                    <label class="checkbox-card"><input id="show-structure" type="checkbox" checked><span>Structure &amp; Shell</span></label>
+                    <label class="checkbox-card"><input id="show-fills" type="checkbox" checked><span>Doors &amp; Windows</span></label>
+                    <label class="checkbox-card"><input id="show-other" type="checkbox" checked><span>Other IFC Products</span></label>
+                    <label class="checkbox-card"><input id="show-obst" type="checkbox" checked><span>FDS OBST</span></label>
+                    <label class="checkbox-card"><input id="show-hole" type="checkbox" checked><span>FDS HOLE</span></label>
+                    <label class="checkbox-card"><input id="show-geom" type="checkbox" checked><span>FDS GEOM</span></label>
+                    <label class="checkbox-card"><input id="show-grid" type="checkbox" checked><span>Ground Grid</span></label>
+                </div>
+
+                <!-- Camera Preset Views Popover -->
+                <div id="camera-popover" class="viewport-popover" style="display:none;width:160px">
+                    <span style="font-size:11px;font-weight:600;color:var(--text-primary)">Camera Snaps</span>
+                    <button class="btn" style="height:26px;justify-content:flex-start" type="button" data-cam="iso">Isometric (0)</button>
+                    <button class="btn" style="height:26px;justify-content:flex-start" type="button" data-cam="top">Top (5)</button>
+                    <button class="btn" style="height:26px;justify-content:flex-start" type="button" data-cam="front">Front (1)</button>
+                    <button class="btn" style="height:26px;justify-content:flex-start" type="button" data-cam="side">Side (3)</button>
+                </div>
+
+                <!-- Floating Legend & Color-By Mode -->
+                <div class="viewport-floating-legend">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <span style="font-weight:600;color:var(--text-primary)">Color Mode:</span>
+                        <select id="color-mode-select" class="form-select" style="height:22px;padding:0 4px;font-size:10px;width:130px">
+                            <option value="mapping" selected>Mapping Strategy</option>
+                            <option value="verification">Verification Status</option>
+                            <option value="ifc-type">IFC Product Type</option>
+                            <option value="mep">MEP System</option>
+                            <option value="storey">Building Storey</option>
+                            <option value="original">Original Materials</option>
+                        </select>
+                    </div>
+                    <div id="legend-swatches" class="legend-swatches-grid">
+                        <div class="legend-swatch-item"><span class="swatch-color" style="background:#3b82f6"></span><span>OBST</span></div>
+                        <div class="legend-swatch-item"><span class="swatch-color" style="background:#f59e0b"></span><span>GEOM</span></div>
+                        <div class="legend-swatch-item"><span class="swatch-color" style="background:#64748b"></span><span>Reference</span></div>
+                        <div class="legend-swatch-item"><span class="swatch-color" style="background:#ef4444"></span><span>Unsupported</span></div>
+                    </div>
+                </div>
+
+                <!-- Walk HUD -->
                 <div id="walk-hud" class="walk-hud" hidden>
-                    <span id="walk-hud-status"></span>
+                    <span id="walk-hud-status">First-person walk: WASD move &middot; Space jump &middot; Esc exit</span>
                 </div>
+
                 <div id="marquee" class="marquee" hidden></div>
+
+                <!-- Interactive Clip Box Panel -->
                 <div id="clip-panel" class="clip-panel" hidden>
-                    <span class="clip-panel-title">CLIP</span>
-                    <span class="clip-axis-label">X</span>
-                    <div class="clip-num-wrap">
-                        <button class="clip-step" data-target="clip-xmin" data-dir="-1" type="button">&#9660;</button>
-                        <input type="text" class="clip-num-input" id="clip-xmin-val">
-                        <button class="clip-step" data-target="clip-xmin" data-dir="1" type="button">&#9650;</button>
-                    </div>
-                    <input type="range" id="clip-xmin" class="clip-slider">
-                    <input type="range" id="clip-xmax" class="clip-slider">
-                    <div class="clip-num-wrap">
-                        <button class="clip-step" data-target="clip-xmax" data-dir="-1" type="button">&#9660;</button>
-                        <input type="text" class="clip-num-input" id="clip-xmax-val">
-                        <button class="clip-step" data-target="clip-xmax" data-dir="1" type="button">&#9650;</button>
-                    </div>
-                    <span class="clip-axis-label">Y</span>
-                    <div class="clip-num-wrap">
-                        <button class="clip-step" data-target="clip-ymin" data-dir="-1" type="button">&#9660;</button>
-                        <input type="text" class="clip-num-input" id="clip-ymin-val">
-                        <button class="clip-step" data-target="clip-ymin" data-dir="1" type="button">&#9650;</button>
-                    </div>
-                    <input type="range" id="clip-ymin" class="clip-slider">
-                    <input type="range" id="clip-ymax" class="clip-slider">
-                    <div class="clip-num-wrap">
-                        <button class="clip-step" data-target="clip-ymax" data-dir="-1" type="button">&#9660;</button>
-                        <input type="text" class="clip-num-input" id="clip-ymax-val">
-                        <button class="clip-step" data-target="clip-ymax" data-dir="1" type="button">&#9650;</button>
-                    </div>
-                    <span class="clip-axis-label">Z</span>
-                    <div class="clip-num-wrap">
-                        <button class="clip-step" data-target="clip-zmin" data-dir="-1" type="button">&#9660;</button>
-                        <input type="text" class="clip-num-input" id="clip-zmin-val">
-                        <button class="clip-step" data-target="clip-zmin" data-dir="1" type="button">&#9650;</button>
-                    </div>
-                    <input type="range" id="clip-zmin" class="clip-slider">
-                    <input type="range" id="clip-zmax" class="clip-slider">
-                    <div class="clip-num-wrap">
-                        <button class="clip-step" data-target="clip-zmax" data-dir="-1" type="button">&#9660;</button>
-                        <input type="text" class="clip-num-input" id="clip-zmax-val">
-                        <button class="clip-step" data-target="clip-zmax" data-dir="1" type="button">&#9650;</button>
-                    </div>
-                    <button id="clip-reset" class="button" type="button">Reset</button>
+                    <span style="font-size:10px;font-weight:700;letter-spacing:0.04em">CLIP</span>
+                    <select id="clip-storey-select" class="form-select" style="height:22px;padding:0 4px;font-size:10px;width:95px" title="Cut Section Box to Storey">
+                        <option value="" selected>Full Height</option>
+                    </select>
+                    <span>X</span>
+                    <input type="range" id="clip-xmin" class="clip-slider" style="width:50px">
+                    <input type="range" id="clip-xmax" class="clip-slider" style="width:50px">
+                    <span>Y</span>
+                    <input type="range" id="clip-ymin" class="clip-slider" style="width:50px">
+                    <input type="range" id="clip-ymax" class="clip-slider" style="width:50px">
+                    <span>Z</span>
+                    <input type="range" id="clip-zmin" class="clip-slider" style="width:50px">
+                    <input type="range" id="clip-zmax" class="clip-slider" style="width:50px">
+                    <button id="clip-reset" class="btn" style="height:24px;padding:0 8px;font-size:10px" type="button">Reset</button>
+
+                    <!-- Hidden legacy inputs for compatibility -->
+                    <input type="text" id="clip-xmin-val" style="display:none">
+                    <input type="text" id="clip-xmax-val" style="display:none">
+                    <input type="text" id="clip-ymin-val" style="display:none">
+                    <input type="text" id="clip-ymax-val" style="display:none">
+                    <input type="text" id="clip-zmin-val" style="display:none">
+                    <input type="text" id="clip-zmax-val" style="display:none">
                 </div>
+
+                <!-- Loading Overlay -->
                 <div id="ifc-loading" class="ifc-loading" hidden role="status" aria-live="polite">
-                    <div class="ifc-loading-label">
-                        <span id="ifc-loading-title">Loading IFC…</span>
-                        <span id="ifc-loading-percent"></span>
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <strong id="ifc-loading-title" style="font-size:12px;color:var(--text-primary)">Processing...</strong>
+                        <span id="ifc-loading-percent" style="font-size:11px;font-family:var(--font-mono);color:var(--accent-hover)"></span>
                     </div>
-                    <div class="ifc-loading-bar"><div id="ifc-loading-fill" class="ifc-loading-fill is-indeterminate"></div></div>
-                    <div id="ifc-loading-stage" class="ifc-loading-stage"></div>
+                    <div class="ifc-loading-bar">
+                        <div id="ifc-loading-fill" class="ifc-loading-fill is-indeterminate"></div>
+                    </div>
+                    <div id="ifc-loading-stage" style="font-size:11px;color:var(--text-muted)"></div>
                 </div>
             </section>
 
-            <aside class="conversion-sidebar" aria-label="Conversion options">
-                <section class="panel conversion-panel">
-                    <h2>Conversion</h2>
-                    <label class="number-row">
-                        <span>FDS cell size</span>
-                        <span class="number-input">
-                            <input id="mesh-cell-size" type="number" min="0.05" max="5" step="0.05" value="0.10">
-                            <small>m</small>
-                        </span>
-                    </label>
-                    <label class="number-row">
-                        <span>Voxel size</span>
-                        <span class="number-input">
-                            <input id="voxel-size" type="number" min="0.05" max="2" step="0.05" value="0.10">
-                            <small>m</small>
-                        </span>
-                    </label>
-                    <label class="number-row">
-                        <span>Opening margin</span>
-                        <span class="number-input">
-                            <input id="opening-thickening" type="number" min="0" max="1" step="0.01" value="0.05">
-                            <small>m</small>
-                        </span>
-                    </label>
-                    <label class="number-row">
-                        <span>Hole voxel policy</span>
-                        <select id="opening-voxel-policy" class="select-input">
-                            <option value="smaller" selected>Smaller holes</option>
-                            <option value="larger">Larger holes</option>
-                        </select>
-                    </label>
-                    <label class="number-row" title="HOLE approach: one continuous &amp;OBST per axis-aligned wall/slab with rectangular &amp;HOLE cutouts. Cleaner FDS file, exact rectangles. Voxelization: every wall becomes a cluster of small &amp;OBSTs that stair-step around the opening — handles arched / chamfered / non-axis-aligned shapes that HOLE can't.">
-                        <span>Opening approach</span>
-                        <select id="conversion-approach" class="select-input">
-                            <option value="hole" selected>HOLE (recommended)</option>
-                            <option value="voxel">Voxelization (legacy)</option>
-                        </select>
-                    </label>
-                    <label class="slider-row with-value" title="Lower = more elements voxelize into OBST (catches chamfered walls). Higher = stricter (only purely boxy shapes voxelize, rest stay as detailed GEOM).">
-                        <span>OBST threshold</span>
-                        <input id="obst-threshold" type="range" min="0.5" max="1" step="0.05" value="0.8">
-                        <input id="obst-threshold-val" type="text" class="slider-value-input" value="0.80">
-                    </label>
-                    <label class="check-row">
-                        <input id="include-fill-solids" type="checkbox">
-                        <span>Closed window/door fills</span>
-                    </label>
-                    <label class="check-row" title="Include furniture, MEP components, proxies, and assemblies as blocking FDS solids.">
-                        <input id="include-review-solids" type="checkbox">
-                        <span>Include furniture, MEP and proxy solids</span>
-                    </label>
+            <!-- Right Inspector Panel: Detailed Entity Data -->
+            <aside id="inspect-card" class="inspector-panel" hidden aria-label="Entity inspector">
+                <div class="inspector-header">
+                    <div>
+                        <div style="font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:600">Selected Entity</div>
+                        <strong id="inspect-title" style="font-size:13px;color:var(--text-primary);font-family:var(--font-mono)"></strong>
+                    </div>
+                    <button id="close-inspector" class="btn btn-icon" style="height:24px;width:24px" type="button" title="Close inspector">
+                        <i data-lucide="x" style="width:14px;height:14px"></i>
+                    </button>
+                </div>
 
-                    <button id="convert-ifc" class="button primary conversion-action" type="button" title="Convert IFC to FDS geometry" disabled>
-                        <i data-lucide="refresh-cw"></i>
-                        <span>Convert to FDS</span>
-                    </button>
-                    <button id="convert-selected-obst" class="button conversion-action secondary-action" type="button" title="Voxelize the selected generated GEOM objects into OBST geometry" disabled>
-                        <i data-lucide="box"></i>
-                        <span>Voxelize selected GEOM to OBST</span>
-                    </button>
-                    <button id="delete-selected-ifc" class="button conversion-action secondary-action" type="button" title="Exclude the selected IFC element(s) from the FDS export" disabled>
-                        <i data-lucide="trash-2"></i>
-                        <span>Delete selected from export</span>
-                    </button>
-                    <button id="undo-last" class="button conversion-action secondary-action" type="button" title="Undo last delete or voxelize (Ctrl+Z)" disabled>
-                        <i data-lucide="undo-2"></i>
-                        <span>Undo last change</span>
-                    </button>
-                </section>
-                <section id="inspect-card" class="inspect-card" hidden>
-                    <div class="inspect-title" id="inspect-title">Selection</div>
-                    <pre id="inspect-body"></pre>
-                </section>
+                <div class="inspector-tabs" role="tablist">
+                    <button id="inspect-tab-id" class="inspector-tab-btn active" type="button">Identity</button>
+                    <button id="inspect-tab-map" class="inspector-tab-btn" type="button">Mapping</button>
+                    <button id="inspect-tab-geom" class="inspector-tab-btn" type="button">Geometry</button>
+                    <button id="inspect-tab-mep" class="inspector-tab-btn" type="button">MEP</button>
+                </div>
+
+                <div class="inspector-body">
+                    <div id="inspect-structured-view" class="property-list"></div>
+                    <details style="margin-top:8px">
+                        <summary style="font-size:10px;color:var(--text-muted);cursor:pointer">Raw Entity JSON</summary>
+                        <pre id="inspect-body" style="font-size:10px;font-family:var(--font-mono);background:var(--bg-base);padding:8px;border-radius:4px;overflow-x:auto;max-height:180px;margin-top:6px"></pre>
+                    </details>
+                </div>
             </aside>
         </section>
+
+        <!-- =====================================================================
+             3. Bottom Drawer: Engineering Audit & Validation Console
+             ===================================================================== -->
+        <section id="audit-drawer" class="audit-drawer" aria-label="Engineering audit console">
+            <header class="audit-drawer-header">
+                <div class="audit-drawer-tabs" role="tablist">
+                    <button id="drawer-tab-gates" class="audit-tab-btn active" type="button">
+                        <i data-lucide="shield-check" style="width:14px;height:14px"></i>
+                        <span>Validation Gates</span>
+                        <span id="drawer-gate-count" class="brand-badge" style="background:var(--bg-base);font-size:9px">9</span>
+                    </button>
+                    <button id="drawer-tab-findings" class="audit-tab-btn" type="button">
+                        <i data-lucide="alert-circle" style="width:14px;height:14px"></i>
+                        <span>Findings</span>
+                        <span id="drawer-finding-count" class="brand-badge" style="background:var(--bg-base);font-size:9px">0</span>
+                    </button>
+                    <button id="drawer-tab-artifacts" class="audit-tab-btn" type="button">
+                        <i data-lucide="archive" style="width:14px;height:14px"></i>
+                        <span>Artifacts &amp; Checkpoints</span>
+                    </button>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:12px">
+                    <span id="drawer-verdict-summary" style="font-size:11px;font-family:var(--font-mono);font-weight:600;color:var(--text-secondary)">No audit run</span>
+                    <button id="toggle-drawer" class="btn btn-icon" style="height:24px;width:24px" type="button" title="Minimize / Expand console">
+                        <i data-lucide="chevron-down" id="drawer-toggle-icon" style="width:14px;height:14px"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="audit-drawer-body">
+                <!-- Panel 1: 9-Gate Grid -->
+                <div id="panel-gates" class="gates-grid">
+                    <div class="gate-card" data-gate="syntax"><div class="gate-card-header"><span class="gate-card-title">FDS Syntax</span><span class="status-dot"></span></div><span class="gate-card-reason">Namelist structure &amp; face indices</span></div>
+                    <div class="gate-card" data-gate="traceability"><div class="gate-card-header"><span class="gate-card-title">Traceability</span><span class="status-dot"></span></div><span class="gate-card-reason">Bidirectional IFC-FDS keys</span></div>
+                    <div class="gate-card" data-gate="scope"><div class="gate-card-header"><span class="gate-card-title">Spatial Scope</span><span class="status-dot"></span></div><span class="gate-card-reason">Storeys &amp; domain boundary</span></div>
+                    <div class="gate-card" data-gate="geometry"><div class="gate-card-header"><span class="gate-card-title">Geometry</span><span class="status-dot"></span></div><span class="gate-card-reason">Binary64 OpenCASCADE comparison</span></div>
+                    <div class="gate-card" data-gate="openings"><div class="gate-card-header"><span class="gate-card-title">Openings</span><span class="status-dot"></span></div><span class="gate-card-reason">Void subtraction &amp; aperture checks</span></div>
+                    <div class="gate-card" data-gate="mep"><div class="gate-card-header"><span class="gate-card-title">MEP Systems</span><span class="status-dot"></span></div><span class="gate-card-reason">Structured classification &amp; ports</span></div>
+                    <div class="gate-card" data-gate="boundary"><div class="gate-card-header"><span class="gate-card-title">Boundary</span><span class="status-dot"></span></div><span class="gate-card-reason">Boundary treatment verification</span></div>
+                    <div class="gate-card" data-gate="solver"><div class="gate-card-header"><span class="gate-card-title">Solver Evidence</span><span class="status-dot"></span></div><span class="gate-card-reason">FDS runtime verification</span></div>
+                    <div class="gate-card" data-gate="golden_reference_parity"><div class="gate-card-header"><span class="gate-card-title">Golden Parity</span><span class="status-dot"></span></div><span class="gate-card-reason">Approved reference benchmarks</span></div>
+                </div>
+
+                <!-- Panel 2: Findings List Table -->
+                <div id="panel-findings" style="display:none">
+                    <table class="findings-list-table">
+                        <thead>
+                            <tr>
+                                <th style="width:70px">Severity</th>
+                                <th style="width:110px">Category</th>
+                                <th style="width:180px">Entity Key</th>
+                                <th>Finding Description</th>
+                                <th style="width:110px;text-align:right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="findings-table-body">
+                            <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">No active findings. Conversion has not run or all checks verified.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Panel 3: Artifacts Download Cards -->
+                <div id="panel-artifacts" class="artifacts-grid" style="display:none">
+                    <div class="artifact-card">
+                        <span class="artifact-card-badge" style="background:var(--accent-subtle);color:var(--accent-hover)">Simulation Model</span>
+                        <span class="artifact-card-title">model.fds</span>
+                        <p style="font-size:10px;color:var(--text-muted)">Verified geometry and obstacle definitions for FDS.</p>
+                        <a id="btn-download-fds" class="btn" style="height:26px;font-size:11px" href="#" download>Download FDS</a>
+                    </div>
+                    <div class="artifact-card">
+                        <span class="artifact-card-badge" style="background:var(--status-pass-bg);color:var(--status-pass-text)">Audit Manifest</span>
+                        <span class="artifact-card-title">model_manifest.json</span>
+                        <p style="font-size:10px;color:var(--text-muted)">Complete entity-by-entity provenance and mapping records.</p>
+                        <a id="btn-download-manifest" class="btn" style="height:26px;font-size:11px" href="#" download>Download Manifest</a>
+                    </div>
+                    <div class="artifact-card">
+                        <span class="artifact-card-badge" style="background:var(--status-reference-bg);color:var(--status-reference-text)">Evidence Archive</span>
+                        <span class="artifact-card-title">model_geometry.zip</span>
+                        <p style="font-size:10px;color:var(--text-muted)">Lossless binary meshes for all converted and reference elements.</p>
+                        <a id="btn-download-geom-pkg" class="btn" style="height:26px;font-size:11px" href="#" download>Download Geometries</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             4. Footer Meta Bar
+             ===================================================================== -->
         <footer class="footer-bar">
+            <span>IFCtoFDS &mdash; Fire Digital Twin Laboratory &middot; Modular Monolith &amp; Hexagonal Core v0.5.0</span>
             <span class="footer-meta">
-                <button type="button" id="footer-help" class="footer-link">Guide</button>
+                <button type="button" id="footer-help" class="footer-link">Capability Matrix &amp; Guide</button>
                 <span aria-hidden="true">&middot;</span>
-                <button type="button" id="open-credits" class="footer-link">Credits</button>
+                <button type="button" id="open-credits" class="footer-link">Credits &amp; License</button>
             </span>
         </footer>
     </main>
 
-    <section id="credits-modal" class="help-modal" role="dialog" aria-modal="true" aria-labelledby="credits-title" hidden>
-        <div class="help-backdrop" data-close-credits></div>
-        <article class="help-card credits-card">
+    <!-- Legacy / Compatibility Containers -->
+    <div id="fds-source-name" style="display:none"></div>
+    <div id="ifc-mapping" style="display:none"></div>
+    <div id="count-meshes" style="display:none">0</div>
+    <div id="count-obsts" style="display:none">0</div>
+    <div id="count-vents" style="display:none">0</div>
+    <div id="count-geoms" style="display:none">0</div>
+    <div id="count-triangles" style="display:none">0</div>
+    <div id="count-ifc" style="display:none">0</div>
+    <div id="count-ifc-convertible" style="display:none">0</div>
+
+    <!-- Modals -->
+    <section id="audit-modal" class="help-modal" role="dialog" aria-modal="true" aria-labelledby="audit-title" hidden>
+        <div class="help-backdrop" data-close-audit></div>
+        <article class="help-card audit-card">
             <header class="help-header">
-                <h2 id="credits-title">About IFCtoFDS</h2>
-                <button id="close-credits" class="icon-button" type="button" title="Close" aria-label="Close">
-                    <i data-lucide="x"></i>
+                <div>
+                    <h2 id="audit-title" style="font-size:15px;color:var(--text-primary)">Acceptance Audit Report</h2>
+                    <p id="audit-subtitle" style="font-size:11px;color:var(--text-muted);margin-top:2px">Mapping, Reference Parity &amp; Simulation Evidence</p>
+                </div>
+                <button id="close-audit" class="btn btn-icon" type="button" title="Close report">
+                    <i data-lucide="x" style="width:15px;height:15px"></i>
                 </button>
             </header>
-            <div class="help-body">
-                <section>
-                    <p>&copy; Prof Rino Lovreglio, PhD &mdash; Massey University</p>
-                    <p style="margin-top:8px;color:var(--muted);font-size:13px;line-height:1.5"><em>No responsibility is taken for the use or output of these tools.</em></p>
-                </section>
+            <div class="help-body" id="audit-body">
+                <div id="audit-summary-box">
+                    <p>No audit report available. Run <strong>Verified Mapping</strong> to generate a complete 3-tier audit.</p>
+                </div>
             </div>
         </article>
     </section>
@@ -296,84 +658,84 @@
         <article class="help-card">
             <header class="help-header">
                 <div>
-                    <h2 id="help-title">IFCtoFDS Guide</h2>
-                    <p>Review IFC geometry, convert it into FDS geometry, then inspect the result before saving.</p>
+                    <h2 id="help-title" style="font-size:15px;color:var(--text-primary)">IFCtoFDS Research Workbench Guide</h2>
+                    <p style="font-size:11px;color:var(--text-muted);margin-top:2px">Capability Matrix, Workflows &amp; Scientific Invariants</p>
                 </div>
-                <button id="close-help" class="icon-button" type="button" title="Close help guide" aria-label="Close help guide">
-                    <i data-lucide="x"></i>
+                <button id="close-help" class="btn btn-icon" type="button" title="Close guide">
+                    <i data-lucide="x" style="width:15px;height:15px"></i>
                 </button>
             </header>
             <div class="help-body">
-                <section>
-                    <h3>Quick Start</h3>
-                    <ol>
-                        <li>Open a building <code>.ifc</code> file and inspect the imported model.</li>
-                        <li>Pick an <strong>Opening approach</strong> (HOLE is recommended), set FDS cell / voxel size, and the aperture policy.</li>
-                        <li>Press <strong>Convert to FDS</strong>. Conversion runs in the background.</li>
-                        <li>Use <strong>Overlay</strong>, <strong>FDS</strong>, and <strong>IFC</strong> views to compare geometry. Toggle <strong>FDS HOLE</strong> to show or hide carved openings.</li>
-                        <li>Use the save icon to download the converted <code>.fds</code> file.</li>
-                    </ol>
-                </section>
-                <section>
-                    <h3>Conversion</h3>
-                    <dl class="help-list">
-                        <dt>FDS cell size</dt><dd>Target simulation mesh resolution written to <code>&amp;MESH</code>.</dd>
-                        <dt>Voxel size</dt><dd>Grid used to approximate IFC solids as merged <code>OBST</code> blocks.</dd>
-                        <dt>Opening margin</dt><dd>Extends opening masks through walls so doors and windows remain clear.</dd>
-                        <dt>Hole voxel policy</dt><dd><strong>Smaller</strong> retains borderline wall cells; <strong>Larger</strong> removes them for a wider opening. Only relevant in Voxelization mode.</dd>
-                        <dt>Opening approach</dt><dd><strong>HOLE (recommended)</strong> emits one continuous <code>&amp;OBST</code> per axis-aligned wall/slab plus rectangular <code>&amp;HOLE</code> cutouts — cleaner FDS file and exact opening rectangles. <strong>Voxelization (legacy)</strong> emits a cluster of small <code>&amp;OBST</code>s that stair-step around each opening; use it for arched / curved / non-axis-aligned openings that <code>&amp;HOLE</code> cannot represent.</dd>
-                        <dt>OBST threshold</dt><dd>Lower = more elements voxelize into <code>OBST</code> (catches chamfered walls). Higher = stricter; only purely boxy shapes voxelize, the rest stay as detailed <code>GEOM</code>.</dd>
-                        <dt>Closed window/door fills</dt><dd>Adds colored airtight <code>&amp;OBST</code> closures (window blue / door brown) in the opening volume. With HOLE the closure perfectly refills the carved rectangle; the closure is written after every <code>&amp;HOLE</code> so no HOLE can carve it.</dd>
-                        <dt>Furniture, MEP and proxy solids</dt><dd>Includes review objects as blockers only when they should affect smoke flow.</dd>
-                    </dl>
-                </section>
-                <section>
-                    <h3>Geometry Strategy</h3>
-                    <p>Walls, slabs, rectangular columns, openings, doors, and simple blocks become <code>&amp;OBST</code>. Curved or irregular objects such as complex stairs remain detailed triangle <code>&amp;GEOM</code> and render slightly darker so the two outputs are easy to tell apart.</p>
-                    <p>Flat slabs whose IFC representation the parser couldn't extrude (some Revit-exported floors and tapered roofs) are auto-inflated to a default thickness during voxelization so their L / U / T floor outline is preserved instead of being collapsed to a single bounding box.</p>
-                    <p>Select generated <code>GEOM</code> items and press <strong>Voxelize selected GEOM to OBST</strong> to reroute those items through voxelization. (This re-converts in place without replaying the reveal animation.)</p>
-                </section>
-                <section>
-                    <h3>Toolbar and View</h3>
-                    <dl class="help-list">
-                        <dt>Open IFC</dt><dd>Loads a local IFC building model.</dd>
-                        <dt>Moon / sun</dt><dd>Switches between the light and dark interfaces.</dd>
-                        <dt>Footprints</dt><dd>Enters first-person walk mode. Click a floor or stair surface to place yourself.</dd>
-                        <dt>Reset</dt><dd>Fits the camera back around the visible model.</dd>
-                        <dt>Save</dt><dd>Downloads the most recent generated FDS file.</dd>
-                        <dt>Layer checks</dt><dd>Show or hide FDS meshes, OBST, HOLE, VENT, GEOM, IFC references, optional IFC edges, and the ground grid. HOLE markers render as ghost-cyan boxes so the closure colour behind them shows through.</dd>
-                        <dt>Opacity sliders</dt><dd>Fade IFC and FDS independently. Zero hides the layer completely.</dd>
-                        <dt>Clip bars</dt><dd>Six sliders along the bottom of the viewer cut the scene to a sub-volume; for FDS, primitives whose full bbox sits inside the clip stay visible and the rest disappear cleanly (no slicing through).</dd>
-                    </dl>
-                </section>
-                <section>
-                    <h3>Selection and Walk Mode</h3>
-                    <p>Clicks pick the closest visible hit first, so a click on a visible front wall lands on that wall rather than a HOLE or back-wall element behind it.</p>
-                    <table class="help-keys">
-                        <tbody>
-                            <tr><th>Click</th><td>Select one object and inspect its IFC source mapping.</td></tr>
-                            <tr><th><kbd>Shift</kbd> + click</th><td>Add or remove objects from a multi-selection.</td></tr>
-                            <tr><th><kbd>Shift</kbd> + drag</th><td>Marquee-select every OBST / HOLE / GEOM / IFC mesh whose centre lies inside the rectangle.</td></tr>
-                            <tr><th><kbd>1</kbd>–<kbd>6</kbd>, <kbd>0</kbd></th><td>Snap to front / back / left / right / top / bottom and isometric camera views.</td></tr>
-                            <tr><th><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd></th><td>Orbit the camera around the model. <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> dollies in/out; <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> strafes the pivot.</td></tr>
-                            <tr><th><kbd>Ctrl</kbd> + <kbd>Z</kbd></th><td>Undo the last delete or voxelize action.</td></tr>
-                            <tr><th><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></th><td>Walk horizontally.</td></tr>
-                            <tr><th><kbd>Space</kbd></th><td>Jump. Stairs are climbed automatically while walking.</td></tr>
-                            <tr><th><kbd>Shift</kbd></th><td>Walk faster.</td></tr>
-                            <tr><th><kbd>Esc</kbd></th><td>Leave walk mode and return to orbit inspection.</td></tr>
-                        </tbody>
-                    </table>
-                </section>
+                <h3 style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:8px">Quick Preview vs. Verified Mapping</h3>
+                <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px">
+                    <thead>
+                        <tr style="border-bottom:1px solid var(--border-medium);text-align:left">
+                            <th style="padding:6px">Capability</th>
+                            <th style="padding:6px;width:140px">Quick Preview (Legacy)</th>
+                            <th style="padding:6px;width:160px">Verified Mapping (Core)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom:1px solid var(--border-subtle)">
+                            <td style="padding:6px"><strong>Execution Engine</strong></td>
+                            <td style="padding:6px">Browser WebAssembly (Web-IFC)</td>
+                            <td style="padding:6px">IfcOpenShell &amp; OpenCASCADE C++</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--border-subtle)">
+                            <td style="padding:6px"><strong>Authoritative Research Status</strong></td>
+                            <td style="padding:6px;color:var(--status-warning-text)">No (Heuristic Preview)</td>
+                            <td style="padding:6px;color:var(--status-pass-text)">Yes (Audit Verified)</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--border-subtle)">
+                            <td style="padding:6px"><strong>Numeric Precision</strong></td>
+                            <td style="padding:6px">4 decimals (approximated)</td>
+                            <td style="padding:6px">Binary64 shortest round-trip (.17g)</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--border-subtle)">
+                            <td style="padding:6px"><strong>Independent Validation</strong></td>
+                            <td style="padding:6px">None</td>
+                            <td style="padding:6px">9-Gate Acceptance Evaluator</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--border-subtle)">
+                            <td style="padding:6px"><strong>Provenance Tracking</strong></td>
+                            <td style="padding:6px">Partial</td>
+                            <td style="padding:6px">Full SHA-256 Manifest &amp; Package</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--border-subtle)">
+                            <td style="padding:6px"><strong>Boundary Clipping</strong></td>
+                            <td style="padding:6px">Heuristic mesh slicing</td>
+                            <td style="padding:6px">Solver-verified structural OBST</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </article>
     </section>
 
+    <section id="credits-modal" class="help-modal" role="dialog" aria-modal="true" aria-labelledby="credits-title" hidden>
+        <div class="help-backdrop" data-close-credits></div>
+        <article class="help-card" style="max-width:500px">
+            <header class="help-header">
+                <h2 id="credits-title" style="font-size:14px;color:var(--text-primary)">About IFCtoFDS</h2>
+                <button id="close-credits" class="btn btn-icon" type="button" title="Close">
+                    <i data-lucide="x" style="width:14px;height:14px"></i>
+                </button>
+            </header>
+            <div class="help-body">
+                <p>Fire Digital Twin Laboratory &mdash; Massey University</p>
+                <p style="margin-top:8px;color:var(--text-muted);font-size:11px">Open source research software for verified Building Information Modeling (BIM) to Fire Dynamics Simulator (FDS) mapping.</p>
+            </div>
+        </article>
+    </section>
+
+    <!-- Dependencies -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
     <script src="js/vendor/earcut.min.js"></script>
 
+    <!-- Core & Workflow Scripts -->
     <script src="js/core/namespace.js"></script>
     <script src="js/core/diagnostics.js"></script>
     <script src="js/fds/namelist-parser.js"></script>
@@ -388,8 +750,39 @@
     <script src="js/ifc/web-ifc-display.js"></script>
     <script src="js/ifc/processed-file.js"></script>
     <script src="js/compare/checks.js"></script>
-    <script src="js/viewer/scene-viewer.js"></script>
-    <script src="js/app-controller.js"></script>
 
+    <!-- Viewer Sub-modules -->
+    <script src="js/viewer/material-cache.js"></script>
+    <script src="js/viewer/clipping-controller.js"></script>
+    <script src="js/viewer/scene-viewer.js"></script>
+    <script src="js/verified-workflow.js"></script>
+
+    <!-- UI Sub-modules (Ordered IIFE) -->
+    <script src="js/ui/dom-cache.js"></script>
+    <script src="js/ui/state-store.js"></script>
+    <script src="js/ui/domain-panel.js"></script>
+
+    <!-- Workbench Interaction Core (Phase 2) -->
+    <script src="js/workbench/events/workbench-events.js"></script>
+    <script src="js/workbench/state/selection-store.js"></script>
+    <script src="js/workbench/state/visibility-store.js"></script>
+    <script src="js/workbench/state/scenario-store.js"></script>
+    <script src="js/workbench/state/workbench-store.js"></script>
+    <script src="js/workbench/commands/command-bus.js"></script>
+    <script src="js/workbench/commands/select-command.js"></script>
+    <script src="js/workbench/commands/visibility-command.js"></script>
+    <script src="js/workbench/commands/camera-command.js"></script>
+    <script src="js/workbench/selection/selection-query.js"></script>
+    <script src="js/workbench/selection/selection-manager.js"></script>
+    <script src="js/workbench/inspector/inspector-view.js"></script>
+    <script src="js/workbench/inspector/inspector-controller.js"></script>
+
+    <!-- Workbench Navigation (Phase 3) -->
+    <script src="js/workbench/navigation/color-overlay.js"></script>
+    <script src="js/workbench/navigation/model-tree.js"></script>
+    <script src="js/workbench/navigation/section-box.js"></script>
+
+    <script src="js/ui/audit-drawer.js"></script>
+    <script src="js/app-controller.js"></script>
 </body>
 </html>

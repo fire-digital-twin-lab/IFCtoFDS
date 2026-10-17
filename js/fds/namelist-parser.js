@@ -90,6 +90,15 @@
 
     function preserveIfcSourceComments(text) {
         return text.replace(/!\s*IFC_SOURCE\s*,?\s*([^\n]*)/gi, function (_, body) {
+            if (body.trim().charAt(0) === '{') {
+                try {
+                    var source = JSON.parse(body);
+                    body = Object.keys(source).map(function (key) {
+                        var value = source[key];
+                        return key.toUpperCase() + '=' + (typeof value === 'number' ? value : "'" + String(value).replace(/'/g, "''") + "'");
+                    }).join(',');
+                } catch (error) { return ''; }
+            }
             return '&IFC_SOURCE ' + body + ' /';
         });
     }
@@ -254,6 +263,8 @@
 
     function normalizeIfcSource(params) {
         return {
+            entityKey: params.ENTITY_KEY || null,
+            sourceId: params.SOURCE_ID || null,
             outputType: params.OUTPUT || null,
             itemId: params.ITEM_ID || null,
             ifcType: params.IFC_TYPE || null,

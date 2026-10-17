@@ -1,0 +1,148 @@
+{
+  "case_id": "case_b_opening",
+  "source_sha256": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a",
+  "status": "MAPPING_VERIFIED",
+  "mapping_status": "MAPPING_VERIFIED",
+  "simulation_status": "INCONCLUSIVE",
+  "output_complete": true,
+  "elements_count": 3,
+  "elements": [
+    {
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:10",
+      "ifc_type": "IfcBuildingStorey",
+      "name": "Level 1",
+      "storey": null,
+      "scope_decision": "IN_SCOPE",
+      "mapping_strategy": "SEMANTIC_ONLY",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "operational_status": "NOT_APPLICABLE",
+      "fds_representation": "NONE",
+      "review_status": "NOT_REQUIRED",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "boundary_policy": null,
+      "has_3d_geometry": false,
+      "openings_count": 0,
+      "ports_count": 0,
+      "system_names": [],
+      "fds_primitive_ids": []
+    },
+    {
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:12",
+      "ifc_type": "IfcWall",
+      "name": "WallWithOpening",
+      "storey": "Level 1",
+      "scope_decision": "IN_SCOPE",
+      "mapping_strategy": "GEOM",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "operational_status": "NOT_APPLICABLE",
+      "fds_representation": "GEOM",
+      "review_status": "NOT_REQUIRED",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "boundary_policy": null,
+      "has_3d_geometry": true,
+      "openings_count": 1,
+      "ports_count": 0,
+      "system_names": [],
+      "fds_primitive_ids": [
+        "GEOM_1_WallWithOpening"
+      ]
+    },
+    {
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:30",
+      "ifc_type": "IfcOpeningElement",
+      "name": "DoorOpening",
+      "storey": "Level 1",
+      "scope_decision": "IN_SCOPE",
+      "mapping_strategy": "SEMANTIC_ONLY",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "operational_status": "NOT_APPLICABLE",
+      "fds_representation": "NONE",
+      "review_status": "NOT_REQUIRED",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "boundary_policy": null,
+      "has_3d_geometry": true,
+      "openings_count": 0,
+      "ports_count": 0,
+      "system_names": [],
+      "fds_primitive_ids": []
+    }
+  ],
+  "records_count": 3,
+  "records": [
+    {
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:10",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "fds_primitive_ids": [],
+      "openings_count": 0,
+      "ports_count": 0
+    },
+    {
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:12",
+      "mapping_status": "MATCHED",
+      "mapping_strategy": "GEOM",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "fds_primitive_ids": [
+        "GEOM_1_WallWithOpening"
+      ],
+      "openings_count": 1,
+      "ports_count": 0
+    },
+    {
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:30",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "fds_primitive_ids": [],
+      "openings_count": 0,
+      "ports_count": 0
+    }
+  ],
+  "mep_systems_count": 0,
+  "mep_connections_count": 0,
+  "fds_summary": {
+    "obst_count": 0,
+    "geom_count": 1,
+    "mesh_count": 1,
+    "total_primitives": 1
+  },
+  "fds_primitives": [
+    {
+      "kind": "GEOM",
+      "id": "GEOM_1_WallWithOpening",
+      "xb": [
+        0.0,
+        4.0,
+        0.0,
+        0.3,
+        0.0,
+        3.0
+      ]
+    }
+  ],
+  "gates": {
+    "syntax": "PASS",
+    "source_inventory": "PASS",
+    "traceability": "PASS",
+    "scope": "PASS",
+    "geometry": "PASS",
+    "openings": "PASS",
+    "mep": "PASS",
+    "representation": "PASS",
+    "boundary": "PASS",
+    "domain": "PASS",
+    "solver": "INCONCLUSIVE",
+    "effective_geometry": "INCONCLUSIVE",
+    "geometry_preservation": "PASS",
+    "placement": "PASS",
+    "golden_reference_parity": "NOT_APPLICABLE"
+  },
+  "findings_count": 0,
+  "findings": [],
+  "geometry_package_sha256": "9fead33912adbd0f4a4d32c69f6d9e92798fbd2bbce8e303ab3067b70c5da1c6",
+  "manifest_csv_sha256": "dae8fc77212976f51ea8a7f29fb1805922a9824322b542dcc5d47518bc32525a"
+}

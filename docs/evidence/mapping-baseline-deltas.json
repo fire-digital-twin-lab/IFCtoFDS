@@ -1,0 +1,876 @@
+{
+  "base_sha": "c7462d1b88935fc50390786e2ce49fbc3a460ab1",
+  "classification": "INTENDED_CORRECTIONS; source bytes/counts/overall verdicts unchanged; see verified-mapping-correction.md",
+  "cases": {
+    "case_b_opening.json": [
+      {
+        "field": "/manifest_csv_sha256",
+        "old": "75c6224b3313f2dc9d3018d03821ff7b4010083eb1fdb7160d4223f27f9795b7",
+        "new": "dae8fc77212976f51ea8a7f29fb1805922a9824322b542dcc5d47518bc32525a"
+      }
+    ],
+    "case_c_fzk_erdgeschoss.json": [
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:14502/fds_representation",
+        "old": "GEOM",
+        "new": "NONE"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:14502/mapping_strategy",
+        "old": "GEOM",
+        "new": "NONE"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:20909/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:20909/scope_decision",
+        "old": "OUT_OF_SCOPE",
+        "new": "BOUNDARY_RETAINED"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21283/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21283/scope_decision",
+        "old": "OUT_OF_SCOPE",
+        "new": "BOUNDARY_RETAINED"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21640/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21640/scope_decision",
+        "old": "OUT_OF_SCOPE",
+        "new": "BOUNDARY_RETAINED"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33774/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33774/scope_decision",
+        "old": "OUT_OF_SCOPE",
+        "new": "BOUNDARY_RETAINED"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:34191/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:34191/scope_decision",
+        "old": "OUT_OF_SCOPE",
+        "new": "BOUNDARY_RETAINED"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:34763/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/elements/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:34763/scope_decision",
+        "old": "OUT_OF_SCOPE",
+        "new": "BOUNDARY_RETAINED"
+      },
+      {
+        "field": "/fds_primitives",
+        "old": [
+          {
+            "kind": "GEOM",
+            "id": "GEOM_10_Wand-Int-ERDG-2",
+            "xb": [
+              7.41,
+              7.65,
+              4.01,
+              9.7,
+              0.0,
+              2.5
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_12_Wand-Int-ERDG-3",
+            "xb": [
+              0.3,
+              7.41,
+              5.75,
+              5.99,
+              0.0,
+              2.5
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_14_Wand-Ext-ERDG-1",
+            "xb": [
+              0.0,
+              0.3,
+              0.0,
+              10.0,
+              0.0,
+              2.7
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_15_Wand-Ext-ERDG-4",
+            "xb": [
+              0.0,
+              12.0,
+              0.0,
+              0.3,
+              0.0,
+              2.7
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_16_Wand-Ext-ERDG-3",
+            "xb": [
+              11.7,
+              12.0,
+              0.0,
+              10.0,
+              0.0,
+              2.7
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_17_Wand-Ext-ERDG-2",
+            "xb": [
+              0.0,
+              12.0,
+              9.7,
+              10.0,
+              0.0,
+              2.7
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_18_EG-Fenster-6",
+            "xb": [
+              0.12,
+              0.195,
+              6.495,
+              8.495,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_19_EG-Fenster-7",
+            "xb": [
+              0.12,
+              0.195,
+              1.205,
+              3.205,
+              0.95,
+              2.15
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_20_EG-Fenster-4",
+            "xb": [
+              1.79,
+              3.79,
+              0.12,
+              0.195,
+              0.95,
+              2.15
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_21_EG-Fenster-5",
+            "xb": [
+              8.21,
+              10.21,
+              0.12,
+              0.195,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_22_EG-Fenster-8",
+            "xb": [
+              11.805,
+              11.88,
+              6.5024,
+              8.5024,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_23_EG-Fenster-9",
+            "xb": [
+              11.805,
+              11.88,
+              1.205,
+              3.205,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_24_EG-Fenster-1",
+            "xb": [
+              1.05,
+              3.05,
+              9.805,
+              9.88,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_25_EG-Fenster-2",
+            "xb": [
+              4.66,
+              6.66,
+              9.805,
+              9.88,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_26_EG-Fenster-3",
+            "xb": [
+              8.795,
+              10.795,
+              9.805,
+              9.88,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_2_Innentuer-1",
+            "xb": [
+              7.41,
+              7.51,
+              4.5575,
+              5.4425,
+              0.0,
+              2.01
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_3_Innentuer-2",
+            "xb": [
+              5.2175,
+              6.1025,
+              5.75,
+              5.85,
+              0.0,
+              2.01
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_4_Innentuer-3",
+            "xb": [
+              1.6075,
+              2.4925,
+              5.75,
+              5.85,
+              0.0,
+              2.01
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_5_Haustuer",
+            "xb": [
+              0.16,
+              0.35,
+              4.495,
+              5.505,
+              0.0,
+              2.01
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_6_Terrassentuer",
+            "xb": [
+              4.995,
+              7.005,
+              0.12,
+              0.325,
+              0.0,
+              2.375
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_8_Slab-033",
+            "xb": [
+              0.1,
+              11.9,
+              0.1,
+              9.9,
+              2.5,
+              2.7
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_9_Wand-Int-ERDG-4",
+            "xb": [
+              7.41,
+              11.7,
+              4.01,
+              4.25,
+              0.0,
+              2.5
+            ]
+          },
+          {
+            "kind": "OBST",
+            "id": "OBST_11_Wand-Int-ERDG-1",
+            "xb": [
+              3.8,
+              4.04,
+              5.99,
+              9.7,
+              0.0,
+              2.5
+            ]
+          },
+          {
+            "kind": "OBST",
+            "id": "OBST_13_Wand-Int-ERDG-5",
+            "xb": [
+              0.3,
+              3.8,
+              4.01,
+              4.25,
+              0.0,
+              2.5
+            ]
+          },
+          {
+            "kind": "OBST",
+            "id": "OBST_1_Unterzug-1",
+            "xb": [
+              3.570039,
+              7.65,
+              4.03,
+              4.23,
+              2.26,
+              2.5
+            ]
+          },
+          {
+            "kind": "OBST",
+            "id": "OBST_7_Bodenplatte",
+            "xb": [
+              0.0,
+              12.0,
+              0.0,
+              10.0,
+              -0.2,
+              0.0
+            ]
+          }
+        ],
+        "new": [
+          {
+            "kind": "GEOM",
+            "id": "GEOM_10_Wand-Int-ERDG-2",
+            "xb": [
+              7.41,
+              7.65,
+              4.01,
+              9.7,
+              0.0,
+              2.5
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_12_Wand-Int-ERDG-3",
+            "xb": [
+              0.3,
+              7.41,
+              5.75,
+              5.99,
+              0.0,
+              2.5
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_14_Wand-Ext-ERDG-1",
+            "xb": [
+              0.0,
+              0.3,
+              0.0,
+              10.0,
+              0.0,
+              2.7
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_15_Wand-Ext-ERDG-4",
+            "xb": [
+              0.0,
+              12.0,
+              0.0,
+              0.3,
+              0.0,
+              2.7
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_16_Wand-Ext-ERDG-3",
+            "xb": [
+              11.7,
+              12.0,
+              0.0,
+              10.0,
+              0.0,
+              2.7
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_17_Wand-Ext-ERDG-2",
+            "xb": [
+              0.0,
+              12.0,
+              9.7,
+              10.0,
+              0.0,
+              2.7
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_18_EG-Fenster-6",
+            "xb": [
+              0.12,
+              0.195,
+              6.495,
+              8.495,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_19_EG-Fenster-7",
+            "xb": [
+              0.12,
+              0.195,
+              1.205,
+              3.205,
+              0.95,
+              2.15
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_20_EG-Fenster-4",
+            "xb": [
+              1.79,
+              3.79,
+              0.12,
+              0.195,
+              0.95,
+              2.15
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_21_EG-Fenster-5",
+            "xb": [
+              8.21,
+              10.21,
+              0.12,
+              0.195,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_22_EG-Fenster-8",
+            "xb": [
+              11.805,
+              11.88,
+              6.502394,
+              8.502394,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_23_EG-Fenster-9",
+            "xb": [
+              11.805,
+              11.88,
+              1.205,
+              3.205,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_24_EG-Fenster-1",
+            "xb": [
+              1.05,
+              3.05,
+              9.805,
+              9.88,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_25_EG-Fenster-2",
+            "xb": [
+              4.66,
+              6.66,
+              9.805,
+              9.88,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_26_EG-Fenster-3",
+            "xb": [
+              8.795,
+              10.795,
+              9.805,
+              9.88,
+              0.8,
+              2.0
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_2_Innentuer-1",
+            "xb": [
+              7.41,
+              7.51,
+              4.5575,
+              5.4425,
+              0.0,
+              2.01
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_3_Innentuer-2",
+            "xb": [
+              5.2175,
+              6.1025,
+              5.75,
+              5.85,
+              0.0,
+              2.01
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_4_Innentuer-3",
+            "xb": [
+              1.6075,
+              2.4925,
+              5.75,
+              5.85,
+              0.0,
+              2.01
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_5_Haustuer",
+            "xb": [
+              0.16,
+              0.35,
+              4.495,
+              5.505,
+              0.0,
+              2.01
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_6_Terrassentuer",
+            "xb": [
+              4.995,
+              7.005,
+              0.12,
+              0.325,
+              0.0,
+              2.375
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_8_Slab-033",
+            "xb": [
+              0.1,
+              11.9,
+              0.1,
+              9.9,
+              2.5,
+              2.7
+            ]
+          },
+          {
+            "kind": "GEOM",
+            "id": "GEOM_9_Wand-Int-ERDG-4",
+            "xb": [
+              7.41,
+              11.7,
+              4.01,
+              4.25,
+              0.0,
+              2.5
+            ]
+          },
+          {
+            "kind": "OBST",
+            "id": "OBST_11_Wand-Int-ERDG-1",
+            "xb": [
+              3.8,
+              4.04,
+              5.99,
+              9.7,
+              0.0,
+              2.5
+            ]
+          },
+          {
+            "kind": "OBST",
+            "id": "OBST_13_Wand-Int-ERDG-5",
+            "xb": [
+              0.3,
+              3.8,
+              4.01,
+              4.25,
+              0.0,
+              2.5
+            ]
+          },
+          {
+            "kind": "OBST",
+            "id": "OBST_1_Unterzug-1",
+            "xb": [
+              3.570039,
+              7.65,
+              4.03,
+              4.23,
+              2.26,
+              2.5
+            ]
+          },
+          {
+            "kind": "OBST",
+            "id": "OBST_7_Bodenplatte",
+            "xb": [
+              0.0,
+              12.0,
+              0.0,
+              10.0,
+              -0.2,
+              0.0
+            ]
+          }
+        ]
+      },
+      {
+        "field": "/findings",
+        "removed": [
+          {
+            "category": "openings",
+            "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
+            "severity": "P1",
+            "title": "Opening passage changed, including fills/blockers: 0seqbT9MlcQAX_K0YLzD86"
+          },
+          {
+            "category": "traceability",
+            "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:14502",
+            "severity": "P0",
+            "title": "Missing required FDS solid: 38a9vdh9bF5Qg28GWyHhlr"
+          }
+        ],
+        "added": [
+          {
+            "category": "geometry",
+            "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:14502",
+            "severity": "P1",
+            "title": "Unsupported source geometry: entity=ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d"
+          }
+        ]
+      },
+      {
+        "field": "/findings_count",
+        "old": 48,
+        "new": 47
+      },
+      {
+        "field": "/gates/traceability",
+        "old": "FAIL",
+        "new": "PASS"
+      },
+      {
+        "field": "/geometry_package_sha256",
+        "old": "91e435bf447cd884fe557442ed4cd1cb33c7b084557a8cf70c475d7dcd65b1f8",
+        "new": "43eb399bf105286b824d557acb98eb51dcc6df27e5652f3b0df04820a02b44df"
+      },
+      {
+        "field": "/manifest_csv_sha256",
+        "old": "b1e8ad0ba46b79088f50dfff60bc8f1ea73fce7e9aacba48d0c5ee339530e654",
+        "new": "3bc8f0750471ae445cec87ad9557c68cf87404faad6c5b2c76c9aee071d00b98"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:14502/mapping_status",
+        "old": "MISSING",
+        "new": "UNSUPPORTED"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:14502/mapping_strategy",
+        "old": "GEOM",
+        "new": "NONE"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:20909/mapping_status",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:20909/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21283/mapping_status",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21283/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21640/mapping_status",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21640/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33774/mapping_status",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33774/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:34191/mapping_status",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:34191/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:34763/mapping_status",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      },
+      {
+        "field": "/records/ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:34763/mapping_strategy",
+        "old": "EXCLUDED_SCOPE",
+        "new": "SEMANTIC_ONLY"
+      }
+    ],
+    "case_d_mep.json": [
+      {
+        "field": "/findings",
+        "removed": [],
+        "added": [
+          {
+            "category": "geometry",
+            "element_id": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:10",
+            "severity": "P2",
+            "title": "Required evidence unavailable"
+          },
+          {
+            "category": "geometry",
+            "element_id": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:11",
+            "severity": "P2",
+            "title": "Required evidence unavailable"
+          }
+        ]
+      },
+      {
+        "field": "/findings_count",
+        "old": 0,
+        "new": 2
+      },
+      {
+        "field": "/gates/mep",
+        "old": "PASS",
+        "new": "INCONCLUSIVE"
+      },
+      {
+        "field": "/manifest_csv_sha256",
+        "old": "5e6866ff46481ee14a66f26abf6d317033304c5df98ad6da0d9896f6ea7977f7",
+        "new": "a35f3ddcf698555ce6150a2d2a116de2fbe94131f6e765cafab0fbbf07fea15a"
+      },
+      {
+        "field": "/records/182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:10/mapping_status",
+        "old": "INCONCLUSIVE",
+        "new": "UNSUPPORTED"
+      },
+      {
+        "field": "/records/182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:11/mapping_status",
+        "old": "INCONCLUSIVE",
+        "new": "UNSUPPORTED"
+      }
+    ]
+  }
+}
