@@ -26,8 +26,9 @@ self.onmessage = function (event) {
                 stage: stage || ''
             });
         };
-        var text = exporter.exportFromIfcScene(request.ifcModel, options);
-        var model = adapter.toSceneModel(parser.parse(text));
+        var text = self.IfcFds.core.atStage('serialization', function () { return exporter.exportFromIfcScene(request.ifcModel, options); });
+        var parsed = self.IfcFds.core.atStage('fds_parse', function () { return parser.parse(text); });
+        var model = self.IfcFds.core.atStage('scene_model', function () { return adapter.toSceneModel(parsed); });
         self.postMessage({
             type: 'complete',
             requestId: request.requestId,
@@ -38,7 +39,8 @@ self.onmessage = function (event) {
         self.postMessage({
             type: 'error',
             requestId: request.requestId,
-            message: error && error.message ? error.message : String(error)
+            message: error && error.message ? error.message : String(error),
+            error: self.IfcFds.core.failure(error, {requestId: request.requestId})
         });
     }
 };

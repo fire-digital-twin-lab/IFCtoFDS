@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from ..bim.bounding_box import BoundingBox
 from ..bim.model import SCHEMA_VERSION
+from ..scope.model import ScopeDecision
 
 __all__ = [
     "MappingStrategy",
@@ -70,13 +71,20 @@ class MappingDecision(BaseModel):
     representation_bounds: Optional[BoundingBox] = None
     rationale: Optional[str] = None
     boundary_treatment: str = "NOT_APPLICABLE"
+    scope_decision: ScopeDecision = ScopeDecision.IN_SCOPE
+    scope_rationale: str = "Full model"
+    boundary_policy: Optional[str] = None
+    boundary_evidence: Dict[str, Any] = Field(default_factory=dict)
+    decision: Dict[str, Any] = Field(default_factory=dict)
+    review_status: str = "NOT_REQUIRED"
 
 
 class MappingPlan(BaseModel):
     """Intermediate mapping plan decoupled from FDS serialization."""
     decisions: List[MappingDecision] = Field(default_factory=list)
     simulation_domain: Optional[BoundingBox] = None
-    cell_size: float = 0.2
+    cell_size: float = Field(0.2, gt=0, allow_inf_nan=False)
+    domain_origin: str = "UNRESOLVED"
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def get_decision(self, entity_key: str) -> Optional[MappingDecision]:
@@ -153,7 +161,7 @@ class MappingManifest(BaseModel):
 
     def to_csv(self):
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = csv.writer(output, lineterminator="\n")
         fields = list(ManifestRecord.model_fields)
         writer.writerow(fields)
         for record in self.records:

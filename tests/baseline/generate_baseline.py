@@ -10,6 +10,8 @@ Captures semantic snapshots for cases A-F:
 """
 
 import hashlib
+import csv
+import io
 import json
 import re
 import tempfile
@@ -37,6 +39,19 @@ from ifc_to_fds.validation.golden import create_candidate
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+def assert_fixture_hash(path, expected):
+    actual = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    assert actual == expected["source_sha256"], (
+        f"Fixture bytes differ: {path}; expected {expected['source_sha256']}, got {actual}. "
+        "Check checkout line endings before comparing conversion results."
+    )
+
+
+def semantic_csv_hash(data):
+    rows = list(csv.reader(io.StringIO(data.decode('utf-8'), newline='')))
+    return hashlib.sha256(json.dumps(rows, ensure_ascii=False, separators=(',', ':')).encode('utf-8')).hexdigest()
 
 
 def ensure_fixtures():
@@ -300,6 +315,7 @@ def build_semantic_snapshot(case_id: str, result: Dict[str, Any], saved_dir: Pat
 
     return {
         "case_id": case_id,
+        "source_sha256": manifest["source_sha256"],
         "status": result["status"],
         "mapping_status": result["mapping_status"],
         "simulation_status": result["simulation_status"],
@@ -316,7 +332,7 @@ def build_semantic_snapshot(case_id: str, result: Dict[str, Any], saved_dir: Pat
         "findings_count": len(findings_summary),
         "findings": findings_summary,
         "geometry_package_sha256": result.get("geometry_package", {}).get("sha256"),
-        "manifest_csv_sha256": hashlib.sha256(csv_bytes).hexdigest(),
+        "manifest_csv_sha256": semantic_csv_hash(csv_bytes),
     }
 
 

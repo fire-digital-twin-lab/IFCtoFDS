@@ -29,10 +29,12 @@ from .generate_baseline import (
     SNAPSHOT_DIR,
     build_semantic_snapshot,
     ensure_fixtures,
+    assert_fixture_hash,
 )
 
 
 def assert_semantic_parity(actual: dict, expected: dict):
+    assert actual["source_sha256"] == expected["source_sha256"]
     assert actual["status"] == expected["status"]
     assert actual["mapping_status"] == expected["mapping_status"]
     assert actual["simulation_status"] == expected["simulation_status"]
@@ -92,6 +94,7 @@ def test_parity_case_a_tiny():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         p_a = str(FIXTURES_DIR / "tiny.ifc")
+        assert_fixture_hash(p_a, expected)
         res_a = convert([p_a], output_directory=tmp)
         save_artifacts(res_a, tmp / "model.fds")
         actual = build_semantic_snapshot("case_a_tiny", res_a, tmp)
@@ -104,6 +107,7 @@ def test_parity_case_b_opening():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         p_b = str(FIXTURES_DIR / "opening.ifc")
+        assert_fixture_hash(p_b, expected)
         res_b = convert([p_b], output_directory=tmp)
         save_artifacts(res_b, tmp / "model.fds")
         actual = build_semantic_snapshot("case_b_opening", res_b, tmp)
@@ -115,6 +119,7 @@ def test_parity_case_c_fzk():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         p_c = "examples/AC20-FZK-Haus.ifc"
+        assert_fixture_hash(p_c, expected)
         res_c = convert([p_c], configuration={"scope": {"storeys": ["Erdgeschoss"]}}, output_directory=tmp)
         save_artifacts(res_c, tmp / "model.fds")
         actual = build_semantic_snapshot("case_c_fzk_erdgeschoss", res_c, tmp)
@@ -127,6 +132,7 @@ def test_parity_case_d_mep():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         p_d = str(FIXTURES_DIR / "mep.ifc")
+        assert_fixture_hash(p_d, expected)
         res_d = convert([p_d], output_directory=tmp)
         save_artifacts(res_d, tmp / "model.fds")
         actual = build_semantic_snapshot("case_d_mep", res_d, tmp)
@@ -139,6 +145,7 @@ def test_parity_case_e_boundary():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         p_e = str(FIXTURES_DIR / "tiny.ifc")
+        assert_fixture_hash(p_e, expected)
         res_e = convert(
             [p_e],
             configuration={
@@ -158,6 +165,7 @@ def test_parity_case_f_golden():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         p_f = str(FIXTURES_DIR / "tiny.ifc")
+        assert_fixture_hash(p_f, expected)
         candidate_dir = tmp / "golden_candidate"
         model_f, ifc_f = extract_inventory(p_f)
         model_f = process_model_geometry(model_f, ifc_f)

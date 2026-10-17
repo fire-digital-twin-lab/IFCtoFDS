@@ -39,13 +39,18 @@ class FilesystemReferenceRepository:
 
     def inspect_case(self, directory: Path | str) -> Tuple[str, Dict[str, Any], Dict[str, Any]]:
         path = Path(directory)
-        files = {
-            f: json.loads((path / f).read_text(encoding="utf-8"))
-            for f in FILES
-            if (path / f).is_file()
-        }
-        checksum = self.bundle_digest(path)
-        approval = files.get("acceptance-profile.json", {}).get("approval", {})
+        approval = json.loads((path / "approval.json").read_text(encoding="utf-8"))
+        files = {f: json.loads((path / f).read_text(encoding="utf-8")) for f in FILES}
+        checksum = digest(files)
+        if approval.get("bundle_sha256") != checksum:
+            raise ValueError("Reference bundle changed after its recorded revision")
+        if approval.get("status") not in ("DRAFT", "APPROVED", "SUPERSEDED"):
+            raise ValueError("Invalid reference approval status")
+        from ifc_to_fds.geometry.storage import read_package
+        from ifc_to_fds.validation.reference_integrity import validate_reference
+
+        files["geometry-package.json"] = read_package(path / "geometry-package.json")
+        validate_reference(files)
         return checksum, approval, files
 
     def resolve_sources(self, case: Path | str, mapping: Dict[str, str]) -> List[Path]:
