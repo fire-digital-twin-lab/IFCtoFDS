@@ -1,0 +1,30 @@
+"""Mapping status and strategy enumerations."""
+
+from enum import Enum
+
+__all__ = ["MappingStatus", "MappingStrategy"]
+
+
+class MappingStatus(str, Enum):
+    EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
+    REFERENCE_PRESERVED = "REFERENCE_PRESERVED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+    MATCHED = "MATCHED"
+    DEVIATED = "DEVIATED"
+    MISSING = "MISSING"
+    SEMANTIC_ONLY = "SEMANTIC_ONLY"
+    EXCLUDED_APPROVED = "EXCLUDED_APPROVED"
+    UNSUPPORTED = "UNSUPPORTED"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    MISSING_SOURCE_DATA = "MISSING_SOURCE_DATA"
+
+
+class MappingStrategy(str, Enum):
+    NONE = "NONE"
+    EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
+    OBST = "OBST"
+    OBST_HOLE = "OBST_HOLE"
+    GEOM = "GEOM"
+    VOXEL = "VOXEL"
+    SEMANTIC_ONLY = "SEMANTIC_ONLY"
+    EXCLUDED_APPROVED = "EXCLUDED_APPROVED"

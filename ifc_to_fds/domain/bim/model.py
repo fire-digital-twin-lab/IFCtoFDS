@@ -15,8 +15,8 @@ from ..mep.model import MEPGraph, PortReference
 from ..scope.model import ScopeDecision
 from ..source.model import SourceMetadata
 from .bounding_box import BoundingBox
-
-SCHEMA_VERSION = "0.5.0"
+from ..version import SCHEMA_VERSION
+from ..mapping.enums import MappingStatus, MappingStrategy
 
 
 class GeometryStatus(str, Enum):
@@ -62,9 +62,6 @@ class StoreyReference(BaseModel):
     source_id: str
     name: str
     elevation_m: Optional[float] = None
-
-
-from ..mapping.model import MappingStatus, MappingStrategy
 
 
 class CanonicalElement(BaseModel):

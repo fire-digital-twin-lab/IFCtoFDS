@@ -5,34 +5,9 @@ import json
 import os
 from pathlib import Path
 from .solver import solver_gates
-from .acceptance import AuditConfig
+from ifc_to_fds.domain.validation.model import AuditConfig
 from ifc_to_fds.mapping.boundary import POLICY, VERSION, adapter_digest
-
-
-def fixture_cases():
-    box = [1, 2, 1, 2, 1, 2]
-    cases = {
-        "inside": [box],
-        "corner": [[0, 1, 0, 1, 0, 1]],
-        "offgrid": [[1.04, 2.06, 1, 2, 1, 2]],
-        "thin": [[1.01, 1.09, 1, 2, 1, 2]],
-        "passage": [[0.4, 1, 1, 2, 1, 2], [1.4, 2, 1, 2, 1, 2]],
-        "closed_passage": [[0.4, 1.04, 1, 2, 1, 2], [1.06, 2, 1, 2, 1, 2]],
-        "rejected": [box],
-    }
-    for axis, name in enumerate(("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")):
-        bounds = box.copy()
-        bounds[axis // 2 * 2 : axis // 2 * 2 + 2] = [0, 1] if axis % 2 == 0 else [3, 4]
-        cases[name] = [bounds]
-    return cases
-
-
-def fixture_text(name, boxes):
-    text = f"&HEAD CHID='fixture_{name}' /\n&MESH IJK=20,20,20,XB=0,4,0,4,0,4 /\n&TIME T_END=0 /\n"
-    for i, bounds in enumerate(boxes):
-        surf = ", SURF_ID='missing_surface'" if name == "rejected" else ""
-        text += f"&OBST ID='box{i}',XB={','.join(map(str, bounds))}{surf} /\n"
-    return text + "&TAIL /\n"
+from ifc_to_fds.mapping.boundary_fixtures_data import fixture_cases, fixture_text
 
 
 def certify(executable, output):
@@ -70,8 +45,8 @@ def certify(executable, output):
         records[name] = dict(
             expected_matched=matched,
             expected_effective_bounds=expected,
-            solver_status=solver.status.value,
-            effective_status=effective.status.value,
+            solver_status=getattr(solver.status, "value", str(solver.status)),
+            effective_status=getattr(effective.status, "value", str(effective.status)),
             reason=effective.reason,
             directory=os.path.relpath(solver.evidence.get("directory", root), root),
             fds_sha256=hashlib.sha256(text.encode()).hexdigest(),

@@ -8,8 +8,9 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from ..bim.bounding_box import BoundingBox
-from ..bim.model import SCHEMA_VERSION
+from ..version import SCHEMA_VERSION
 from ..scope.model import ScopeDecision
+from .enums import MappingStatus, MappingStrategy
 
 __all__ = [
     "MappingStrategy",
@@ -20,31 +21,6 @@ __all__ = [
     "MappingManifest",
     "_serialize_csv_value",
 ]
-
-
-class MappingStatus(str, Enum):
-    EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
-    REFERENCE_PRESERVED = "REFERENCE_PRESERVED"
-    REVIEW_REQUIRED = "REVIEW_REQUIRED"
-    MATCHED = "MATCHED"
-    DEVIATED = "DEVIATED"
-    MISSING = "MISSING"
-    SEMANTIC_ONLY = "SEMANTIC_ONLY"
-    EXCLUDED_APPROVED = "EXCLUDED_APPROVED"
-    UNSUPPORTED = "UNSUPPORTED"
-    INCONCLUSIVE = "INCONCLUSIVE"
-    MISSING_SOURCE_DATA = "MISSING_SOURCE_DATA"
-
-
-class MappingStrategy(str, Enum):
-    NONE = "NONE"
-    EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
-    OBST = "OBST"
-    OBST_HOLE = "OBST_HOLE"
-    GEOM = "GEOM"
-    VOXEL = "VOXEL"
-    SEMANTIC_ONLY = "SEMANTIC_ONLY"
-    EXCLUDED_APPROVED = "EXCLUDED_APPROVED"
 
 
 def _serialize_csv_value(value: Any) -> Any:

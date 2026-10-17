@@ -1,0 +1,12 @@
+{
+  "include": [
+    "ifc_to_fds",
+    "tests",
+    "scripts"
+  ],
+  "extraPaths": [
+    "."
+  ],
+  "venvPath": ".",
+  "venv": ".venv"
+}

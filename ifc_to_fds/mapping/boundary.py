@@ -96,7 +96,7 @@ def certificate_valid(path, solver_hash):
                 False,
                 "Boundary fixture certificate does not cover this policy/solver",
             )
-        from ifc_to_fds.validation.boundary_fixtures import fixture_cases, fixture_text
+        from .boundary_fixtures_data import fixture_cases, fixture_text
         from ifc_to_fds.validation.effective import effective_obstructions
 
         for name, case in spec["cases"].items():

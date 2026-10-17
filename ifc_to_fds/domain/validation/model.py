@@ -1,10 +1,10 @@
 """Validation domain models for findings, gates, and acceptance reports."""
 
 from enum import Enum
-from typing import Any
+from typing import Any, Callable, ClassVar, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..bim.model import SCHEMA_VERSION
+from ..version import SCHEMA_VERSION
 
 
 class Severity(str, Enum):
@@ -42,14 +42,14 @@ class GateResult(BaseModel):
 
 class AuditConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    surface_tolerance_m: float = Field(0.001, gt=0, allow_inf_nan=False)
-    relative_volume_tolerance: float = Field(0.001, ge=0, lt=1, allow_inf_nan=False)
-    min_solid_iou: float = Field(0.999, gt=0, le=1, allow_inf_nan=False)
+    surface_tolerance_m: float = Field(default=0.001, gt=0, allow_inf_nan=False)
+    relative_volume_tolerance: float = Field(default=0.001, ge=0, lt=1, allow_inf_nan=False)
+    min_solid_iou: float = Field(default=0.999, gt=0, le=1, allow_inf_nan=False)
     solver_executable: str | None = None
     solver_version: str = "6.11.1"
     solver_evidence_directory: str | None = None
     boundary_fixture_certificate: str | None = None
-    solver_timeout_s: float = Field(120, gt=0, allow_inf_nan=False)
+    solver_timeout_s: float = Field(default=120.0, gt=0, allow_inf_nan=False)
 
 
 class Finding(BaseModel):
@@ -73,11 +73,19 @@ class ValidationContext(BaseModel):
     geometry_package: Any | None = None
     parsed_fds: Any | None = None
 
+    _parser: ClassVar[Optional[Callable[[str], Any]]] = None
+
+    @classmethod
+    def register_parser(cls, parser_fn: Callable[[str], Any]) -> None:
+        cls._parser = staticmethod(parser_fn)
+
     @property
     def parsed(self) -> Any:
         if self.parsed_fds is None and self.fds_text:
-            from ifc_to_fds.validation.parser import parse_fds
-            self.parsed_fds = parse_fds(self.fds_text)
+            if self._parser is not None:
+                self.parsed_fds = self._parser(self.fds_text)
+            else:
+                raise RuntimeError("No FDS parser registered on ValidationContext")
         return self.parsed_fds
 
 

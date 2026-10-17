@@ -59,6 +59,8 @@ def test_domain_has_no_external_infrastructure_dependencies():
         "ifc_to_fds.interfaces",
         "ifc_to_fds.application",
         "ifc_to_fds.geometry",
+        "ifc_to_fds.mapping",
+        "ifc_to_fds.validation",
         "ifc_to_fds.pipeline",
         "ifc_to_fds.jobs",
         "ifc_to_fds.server",
