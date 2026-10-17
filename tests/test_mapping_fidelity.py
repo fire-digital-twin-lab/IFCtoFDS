@@ -376,6 +376,73 @@ def test_air_path_topology_checker_detects_leak_and_verifies_enclosure(box_model
     assert any(f.severity == Severity.P1 for f in outcome_leak.findings)
 
 
+def test_air_path_excludes_non_enclosure_mep_primitives(box_model):
+    from ifc_to_fds.validation.checkers.air_path import AirPathTopologyChecker
+    from ifc_to_fds.domain.validation.model import ValidationContext, AuditConfig
+    from ifc_to_fds.domain.bim import CanonicalElement, BoundingBox
+    from ifc_to_fds.geometry.mesh import box_mesh
+
+    wall_elem = box_model.elements[0]
+
+    # Add a non-enclosure MEP element (duct) to the model
+    duct_bbox = BoundingBox(xmin=5.0, xmax=6.0, ymin=0.0, ymax=1.0, zmin=0.0, zmax=1.0)
+    duct_elem = CanonicalElement(
+        entity_key="source:999",
+        global_id="duct_guid_999",
+        step_id=999,
+        ifc_type="IfcDuctSegment",
+        role="PHYSICAL",
+        scope_decision="IN_SCOPE",
+        mapping_strategy="OBST",
+        mesh=box_mesh(duct_bbox),
+        has_3d_geometry=True,
+    )
+    box_model.elements.append(duct_elem)
+
+    wall_xb = "0.0,2.0,0.0,1.0,0.0,3.0"
+    duct_xb = "5.0,6.0,0.0,1.0,0.0,1.0"
+    fds_text = (
+        "&HEAD TITLE='test' /\n"
+        "&MESH IJK=10,10,10, XB=0,10,0,10,0,10 /\n"
+        f"! IFC_SOURCE {{\"entity_key\": \"{wall_elem.entity_key}\"}}\n"
+        f"&OBST XB={wall_xb}, SURF_ID='INERT' /\n"
+        f"! IFC_SOURCE {{\"entity_key\": \"{duct_elem.entity_key}\"}}\n"
+        f"&OBST XB={duct_xb}, SURF_ID='INERT' /\n"
+    )
+
+    checker = AirPathTopologyChecker()
+    context = ValidationContext(
+        model=box_model,
+        fds_text=fds_text,
+        manifest=None,
+        config=AuditConfig(),
+    )
+    outcome = checker.check(context)
+    assert outcome.result.status == "PASS"
+    assert not outcome.findings
+    assert outcome.result.evidence["enclosure_count"] == 1
+
+
+def test_production_validation_engine_runs_air_path_gate(box_model):
+    from ifc_to_fds.validation.engine import run_independent_validation
+    from ifc_to_fds.domain.validation.model import GateStatus
+
+    wall_xb = "0.0,2.0,0.0,1.0,0.0,3.0"
+    wall_key = box_model.elements[0].entity_key
+    fds_text = (
+        "&HEAD TITLE='test' /\n"
+        "&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n"
+        f"! IFC_SOURCE {{\"entity_key\": \"{wall_key}\"}}\n"
+        f"&OBST XB={wall_xb}, SURF_ID='INERT' /\n"
+    )
+    report = run_independent_validation(box_model, fds_text)
+
+    # AirPath gate must be executed in production engine
+    assert "air_path" in report.gates
+    assert report.gates["air_path"].status == GateStatus.PASS
+    assert "air_path" in report.metrics
+
+
 def test_multi_product_geometric_batch_generation(tiny_ifc, tmp_path):
     """Verify that multiple real distinct geometric products chunk across spatial batches."""
     _, file, wall = tiny_ifc
