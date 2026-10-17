@@ -10,6 +10,7 @@ ifc-render-check.png
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 scripts/out/
