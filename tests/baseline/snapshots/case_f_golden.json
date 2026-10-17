@@ -1,5 +1,6 @@
 {
   "case_id": "case_f_golden",
+  "source_sha256": "ff23ec05dde308d6bc28e817af0e5c6a6396dc663cfb04895c7711976e9c9f4d",
   "status": "INCONCLUSIVE",
   "mapping_status": "INCONCLUSIVE",
   "simulation_status": "INCONCLUSIVE",
@@ -7,7 +8,7 @@
   "elements_count": 2,
   "elements": [
     {
-      "entity_key": "7384bf41d55cea6fdb128874650dd749e3c6ba001b36a5ac903fc8ebc6ac9f4f:10",
+      "entity_key": "ff23ec05dde308d6bc28e817af0e5c6a6396dc663cfb04895c7711976e9c9f4d:10",
       "ifc_type": "IfcBuildingStorey",
       "name": "Ground",
       "storey": null,
@@ -26,7 +27,7 @@
       "fds_primitive_ids": []
     },
     {
-      "entity_key": "7384bf41d55cea6fdb128874650dd749e3c6ba001b36a5ac903fc8ebc6ac9f4f:12",
+      "entity_key": "ff23ec05dde308d6bc28e817af0e5c6a6396dc663cfb04895c7711976e9c9f4d:12",
       "ifc_type": "IfcWall",
       "name": "Wall",
       "storey": "Ground",
@@ -50,7 +51,7 @@
   "records_count": 2,
   "records": [
     {
-      "entity_key": "7384bf41d55cea6fdb128874650dd749e3c6ba001b36a5ac903fc8ebc6ac9f4f:10",
+      "entity_key": "ff23ec05dde308d6bc28e817af0e5c6a6396dc663cfb04895c7711976e9c9f4d:10",
       "mapping_status": "SEMANTIC_ONLY",
       "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
@@ -60,7 +61,7 @@
       "ports_count": 0
     },
     {
-      "entity_key": "7384bf41d55cea6fdb128874650dd749e3c6ba001b36a5ac903fc8ebc6ac9f4f:12",
+      "entity_key": "ff23ec05dde308d6bc28e817af0e5c6a6396dc663cfb04895c7711976e9c9f4d:12",
       "mapping_status": "MATCHED",
       "mapping_strategy": "OBST",
       "simulation_role": "PASSIVE_OBSTACLE",
@@ -113,6 +114,6 @@
   },
   "findings_count": 0,
   "findings": [],
-  "geometry_package_sha256": "4596c7f6d23c4eb90603f54185808381c0247d741089ebbcea99f96b44a3bcda",
-  "manifest_csv_sha256": "815a5337d5392b16946d9375fd5296313045158c2d24f5b43f49b273de5b44b8"
+  "geometry_package_sha256": "3d29703a6c2422a1266d9ea28a03dcdc310b7460c35f88d512207729147610bc",
+  "manifest_csv_sha256": "2315c17aa998d80235b9cc955dd2ba0707540f84b302623457582a1633c16513"
 }

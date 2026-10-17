@@ -1,5 +1,6 @@
 {
   "case_id": "case_b_opening",
+  "source_sha256": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a",
   "status": "MAPPING_VERIFIED",
   "mapping_status": "MAPPING_VERIFIED",
   "simulation_status": "INCONCLUSIVE",
@@ -7,7 +8,7 @@
   "elements_count": 3,
   "elements": [
     {
-      "entity_key": "b8925e495fa4e2d53e14361988e27a8e37403e2e7b8065236ec778b9d7ef2dbf:10",
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:10",
       "ifc_type": "IfcBuildingStorey",
       "name": "Level 1",
       "storey": null,
@@ -26,7 +27,7 @@
       "fds_primitive_ids": []
     },
     {
-      "entity_key": "b8925e495fa4e2d53e14361988e27a8e37403e2e7b8065236ec778b9d7ef2dbf:12",
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:12",
       "ifc_type": "IfcWall",
       "name": "WallWithOpening",
       "storey": "Level 1",
@@ -47,7 +48,7 @@
       ]
     },
     {
-      "entity_key": "b8925e495fa4e2d53e14361988e27a8e37403e2e7b8065236ec778b9d7ef2dbf:30",
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:30",
       "ifc_type": "IfcOpeningElement",
       "name": "DoorOpening",
       "storey": "Level 1",
@@ -69,7 +70,7 @@
   "records_count": 3,
   "records": [
     {
-      "entity_key": "b8925e495fa4e2d53e14361988e27a8e37403e2e7b8065236ec778b9d7ef2dbf:10",
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:10",
       "mapping_status": "SEMANTIC_ONLY",
       "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
@@ -79,7 +80,7 @@
       "ports_count": 0
     },
     {
-      "entity_key": "b8925e495fa4e2d53e14361988e27a8e37403e2e7b8065236ec778b9d7ef2dbf:12",
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:12",
       "mapping_status": "MATCHED",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
@@ -91,7 +92,7 @@
       "ports_count": 0
     },
     {
-      "entity_key": "b8925e495fa4e2d53e14361988e27a8e37403e2e7b8065236ec778b9d7ef2dbf:30",
+      "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:30",
       "mapping_status": "SEMANTIC_ONLY",
       "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
@@ -142,6 +143,6 @@
   },
   "findings_count": 0,
   "findings": [],
-  "geometry_package_sha256": "8eb3c7fd58a7a16a5d3e06960a5fa69f7062b59ebe7f66da581ce0b17506f0b9",
-  "manifest_csv_sha256": "846f6e4eaca8a7baff8eee4c90c541f17a0207d9eda11c643b7b7bd4d2c2a613"
+  "geometry_package_sha256": "9fead33912adbd0f4a4d32c69f6d9e92798fbd2bbce8e303ab3067b70c5da1c6",
+  "manifest_csv_sha256": "edc5c584ab9b07c09d3f7180aa6befe6a6b696e7a2e01bbc7e4e6566887f32c8"
 }
