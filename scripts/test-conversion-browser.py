@@ -215,10 +215,24 @@ def main():
                     }""")
                     page.locator("#convert-ifc").click(force=True)
                     page.wait_for_function("window.oldRequest")
-                    page.set_input_files("#ifc-file", args.source)
-                    page.wait_for_function(
-                        "!document.getElementById('convert-ifc').disabled"
+                    page.set_input_files(
+                        "#ifc-file",
+                        {
+                            "name": "next-source.ifc",
+                            "mimeType": "application/octet-stream",
+                            "buffer": args.source.read_bytes(),
+                        },
                     )
+                    try:
+                        page.wait_for_function(
+                            "!document.getElementById('convert-ifc').disabled"
+                        )
+                    except Exception:
+                        (args.output / "stale-worker-state.txt").write_text(
+                            page.locator("body").inner_text(), encoding="utf-8"
+                        )
+                        page.screenshot(path=str(args.output / "stale-worker.png"))
+                        raise
                     page.evaluate(
                         "oldMessage({data: {type: 'complete', requestId: oldRequest.requestId, text: 'STALE'}})"
                     )

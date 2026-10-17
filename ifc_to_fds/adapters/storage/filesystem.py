@@ -30,9 +30,8 @@ class LocalFilesystemArtifactRepository:
             Path(str(base) + suffix).write_text(
                 json.dumps(result[key], ensure_ascii=False, indent=2), encoding="utf-8"
             )
-        Path(str(base) + "_manifest.csv").write_text(
-            MappingManifest.model_validate(result["manifest"]).to_csv(),
-            encoding="utf-8",
+        Path(str(base) + "_manifest.csv").write_bytes(
+            MappingManifest.model_validate(result["manifest"]).to_csv().encode("utf-8")
         )
         Path(str(base) + "_acceptance_report.md").write_text(
             result["markdown_report"], encoding="utf-8"

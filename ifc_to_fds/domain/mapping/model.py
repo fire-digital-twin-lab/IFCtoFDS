@@ -161,7 +161,7 @@ class MappingManifest(BaseModel):
 
     def to_csv(self):
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = csv.writer(output, lineterminator="\n")
         fields = list(ManifestRecord.model_fields)
         writer.writerow(fields)
         for record in self.records:

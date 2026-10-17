@@ -253,6 +253,11 @@ def test_golden_mutations(golden, mutation):
         target = item.entity_key
         for v in item.mesh.vertices:
             v[0] += 2
+        # Keep the mutant internally coherent so serialization can run; golden
+        # must detect the altered solid rather than a stale cached source bbox.
+        from ifc_to_fds.geometry.mesh import bounds_for_vertices
+
+        item.bounding_box = bounds_for_vertices(item.mesh.vertices)
     elif mutation.startswith("include "):
         item = model.elements[0].model_copy(deep=True)
         item.entity_key = "fixture:extra"

@@ -36,7 +36,14 @@ def build_mapping_plan(model: Any, cell_size: float = 0.2) -> MappingPlan:
             and not model.requested_scope.get("bounding_box")
             else None
         ),
-        domain_origin=model.domain_origin,
+        domain_origin=(
+            "FULL_MODEL"
+            if model.simulation_domain is None
+            and model.model_bounds
+            and not model.requested_scope.get("storeys")
+            and not model.requested_scope.get("bounding_box")
+            else model.domain_origin
+        ),
         cell_size=cell_size,
         metadata={
             "source_id": model.source.source_id,
