@@ -6,6 +6,7 @@ from ifc_to_fds.domain.scope.model import ScopeDecision
 from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
 from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, Severity, ValidationContext
 from ifc_to_fds.geometry.mesh import as_trimesh, valid_solid
+from ifc_to_fds.mapping.boundary import target_mesh
 from ifc_to_fds.validation.metrics import SolidCandidateIndex, opening_residual, passage_metrics
 
 
@@ -51,7 +52,7 @@ class OpeningsChecker:
             )
 
         reference_solids = SolidCandidateIndex(
-            x.mesh
+            target_mesh(x)
             for x in model.elements
             if x.mesh
             and x.role == "PHYSICAL"

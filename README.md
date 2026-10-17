@@ -262,6 +262,7 @@ examples/                  IFC models and source attribution
 |---|---|
 | [Mapping profiles and golden parity](docs/golden-mapping-parity.md) | Acceptance, scope/domain, decisions and reference cases |
 | [Artifact and boundary guide](docs/artifact-boundary-v05.md) | Compact API, binary geometry and solver-backed boundary policy |
+| [Source fidelity and large IFC import](docs/adr/ADR-007-source-fidelity-and-backend-preview.md) | Passive MEP export, retained opening hosts, exact domain intersections and backend preview |
 | [Architecture decision](docs/adr/ADR-002-hexagonal-architecture.md) | Ports, adapters and the architecture transition |
 | [Correctness review](docs/post-refactor-correctness.md) | Documented correctness work and evidence |
 | [Example sources](examples/SOURCES.md) | KIT and IfcOpenShell Duplex attribution |
@@ -513,6 +514,7 @@ examples/                  Mô hình IFC và ghi nhận nguồn
 |---|---|
 | [Hồ sơ mapping và đối chiếu tham chiếu](docs/golden-mapping-parity.md) | Kiểm chứng, phạm vi/miền, quyết định và bộ tham chiếu |
 | [Hướng dẫn artifact và phần tử biên](docs/artifact-boundary-v05.md) | API rút gọn, hình học nhị phân và chính sách biên có bằng chứng solver |
+| [Giữ hình học nguồn và import IFC lớn](docs/adr/ADR-007-source-fidelity-and-backend-preview.md) | Xuất MEP thụ động, giữ host có opening, giao miền chính xác và preview bằng backend |
 | [Quyết định kiến trúc](docs/adr/ADR-002-hexagonal-architecture.md) | Port, adapter và quá trình chuyển đổi kiến trúc |
 | [Rà soát tính đúng đắn](docs/post-refactor-correctness.md) | Công việc và bằng chứng kiểm tra đã ghi nhận |
 | [Nguồn mô hình mẫu](examples/SOURCES.md) | Ghi công các mô hình KIT và IfcOpenShell Duplex |

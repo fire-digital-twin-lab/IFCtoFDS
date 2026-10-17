@@ -75,20 +75,24 @@ def compare_solids(reference, outputs):
         or not all(valid_solid(m) for m in outputs)
     ):
         raise ValueError("Cannot measure invalid solids")
-    for mesh in [reference, *outputs]:
+    a = as_trimesh(reference)
+    pieces = [as_trimesh(m) for m in outputs]
+    exact_identity = (
+        len(pieces) == 1
+        and np.array_equal(a.vertices, pieces[0].vertices)
+        and np.array_equal(a.faces, pieces[0].faces)
+    )
+    # Independently read, exactly equal oriented triangles describe the same
+    # surface. One self-intersection proof covers both; changed outputs must
+    # still receive their own proof. No tolerance or bounding-box shortcut.
+    for mesh in [reference] if exact_identity else [reference, *outputs]:
         evidence = self_intersection_evidence(mesh)
         if evidence["status"] == "CONFIRMED":
             raise ValueError("Self-intersecting solid")
         if evidence["status"] == "UNCERTAIN":
             raise RuntimeError(f"Self-intersection uncertain: {evidence['reason']}")
-    a = as_trimesh(reference)
-    pieces = [as_trimesh(m) for m in outputs]
     b = pieces[0] if len(pieces) == 1 else solid_boolean(pieces, "union")
-    if (
-        len(pieces) == 1
-        and np.array_equal(a.vertices, b.vertices)
-        and np.array_equal(a.faces, b.faces)
-    ):
+    if exact_identity:
         # Independently reconstructed coordinates and oriented triangles are equal.
         # This is a full-surface identity proof, not a sampled/bounds shortcut.
         components = len(a.split(only_watertight=False))

@@ -1,6 +1,6 @@
 (function (ns) {
     'use strict';
-    var jobId = null, stopped = false, fallback = null, generation = 0;
+    var jobId = null, stopped = false, fallback = null, generation = 0, inventoryGeneration = 0;
     function cancelled() { var error = new Error('Conversion cancelled'); error.name = 'AbortError'; return error; }
     function get(id) { return document.getElementById('verified-' + id); }
     function files() { return Array.prototype.slice.call(get('sources').files || []); }
@@ -13,20 +13,24 @@
         });
     }
     function readInventory() {
+        var token = ++inventoryGeneration;
         var data = new FormData();
         selectedFiles().forEach(function (file) { data.append('files', file); });
         progress('Reading inventory…');
         return fetch('/api/inventory', {method: 'POST', body: data}).then(response).then(function (inventory) {
+            if (token === inventoryGeneration) applyInventory(inventory);
+        }).catch(function (err) { if (token === inventoryGeneration) progress(err.message); });
+    }
+    function applyInventory(inventory) {
             get('storeys').replaceChildren();
-            inventory.storey_references.forEach(function (storey) {
+            (inventory.storey_references || []).forEach(function (storey) {
                 var option = document.createElement('option');
                 option.value = storey.storey_id;
                 option.textContent = storey.name + ' [' + storey.source_id.slice(0, 8) + ' / ' + (storey.building_id || 'unassigned').split(':').pop() + ' / #' + storey.storey_id.split(':').pop() + ']';
                 get('storeys').appendChild(option);
             });
             progress(inventory.total_elements + ' entities in ' + inventory.sources.length + ' sources');
-            get('research-notice').textContent = (inventory.research.known_cases || []).map(function (c) { return c.name + ' [' + c.source_match + '] — research parity NOT RUN. Choose research profile and reference to compare.'; }).join(' ');
-        }).catch(function (err) { progress(err.message); });
+            get('research-notice').textContent = ((inventory.research || {}).known_cases || []).map(function (c) { return c.name + ' [' + c.source_match + '] — research parity NOT RUN. Choose research profile and reference to compare.'; }).join(' ');
     }
     function transformInputs() {
         get('transforms').replaceChildren();
@@ -44,8 +48,15 @@
         });
     }
     ns.verified = {
-        hasFiles: function () { return files().length > 0; },
-        setFallback: function (file) { fallback = file; },
+        hasFiles: function () { return selectedFiles().length > 0; },
+        setFallback: function (file) {
+            if (fallback !== file) { inventoryGeneration++; get('storeys').replaceChildren(); }
+            fallback = file;
+        },
+        usePreviewInventory: function (inventory, file) {
+            var chosen = selectedFiles();
+            if (chosen.length === 1 && chosen[0] === file) { inventoryGeneration++; applyInventory(inventory); }
+        },
         cancel: function () {
             stopped = true; generation++;
             var active = jobId; jobId = null; get('cancel').disabled = true;
@@ -60,6 +71,7 @@
                 });
             }).catch(function () {});
             get('sources').addEventListener('change', function () {
+                inventoryGeneration++;
                 ns.verified.cancel().catch(function (err) { progress(err.message); });
                 transformInputs(); get('storeys').replaceChildren();
                 document.getElementById('convert-verified').disabled = !selectedFiles().length;
@@ -79,6 +91,7 @@
             if (get('boundary-obst').checked) configuration.boundary_policy = 'VALIDATED_BOUNDARY_OBST_SINGLE_MESH';
             if (get('reference-case').value) configuration.reference_case = get('reference-case').value;
             if (get('decisions').files.length) configuration.decisions = JSON.parse(await get('decisions').files[0].text());
+            if (get('system-decisions').files.length) configuration.system_decisions = JSON.parse(await get('system-decisions').files[0].text());
             if (get('deltas').files.length) configuration.intentional_deltas = JSON.parse(await get('deltas').files[0].text());
             if (get('use-domain').checked) {
                 configuration.simulation_domain = {};

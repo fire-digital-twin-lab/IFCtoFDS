@@ -19,7 +19,8 @@ class BoundaryChecker:
             key = e.entity_key
             if (
                 e.boundary_treatment == "PENDING_VALIDATION"
-                and e.representation_bounds is None
+                and (e.representation_bounds is None
+                     or e.boundary_policy == "SOURCE_SOLID_DOMAIN_INTERSECTION")
             ):
                 if status != GateStatus.FAIL:
                     status = GateStatus.INCONCLUSIVE

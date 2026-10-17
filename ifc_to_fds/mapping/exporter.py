@@ -216,11 +216,14 @@ def _serialize_planned_model(model, cell_size):
             prim_id = f"GEOM_{prim_counter}_{clean_fds_id(elem.name, 'geom')}"
             elem.fds_primitive_ids.append(prim_id)
 
+            from .boundary import target_mesh
+
+            output_mesh = target_mesh(elem)
             verts_str = ",\n      ".join(
-                ",".join(format(x, ".17g") for x in v) for v in elem.mesh.vertices
+                ",".join(format(x, ".17g") for x in v) for v in output_mesh.vertices
             )
             faces_str = ",\n      ".join(
-                f"{f[0] + 1},{f[1] + 1},{f[2] + 1},1" for f in elem.mesh.faces
+                f"{f[0] + 1},{f[1] + 1},{f[2] + 1},1" for f in output_mesh.faces
             )
 
             lines.append(format_source_comment(elem))
@@ -232,5 +235,6 @@ def _serialize_planned_model(model, cell_size):
     lines.append("&TAIL /")
     lines.append("")
 
-    manifest = build_manifest(model, "\n".join(lines))
-    return "\n".join(lines), manifest
+    text = "\n".join(lines)
+    manifest = build_manifest(model, text)
+    return text, manifest

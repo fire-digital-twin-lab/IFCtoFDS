@@ -37,16 +37,50 @@ def extract_mep_graph(model, file):
         gid = key(group)
         name = group.Name or gid
         predefined = str(getattr(group, "PredefinedType", "") or "")
+        object_type = str(getattr(group, "ObjectType", "") or "")
+        psets = ifcopenshell.util.element.get_psets(group)
         category, critical = classify_mep_element(
             group.is_a(),
             name,
             name,
             predefined,
-            property_sets=ifcopenshell.util.element.get_psets(group),
+            property_sets=psets,
+            object_type=object_type,
         )
         system = systems.setdefault(
             gid,
             MEPSystem(
+                ifc_type=group.is_a(),
+                object_type=object_type,
+                predefined_type=predefined,
+                description=str(getattr(group, "Description", "") or ""),
+                property_sets=psets,
+                classifications=[
+                    {
+                        "relation_key": key(association),
+                        "ifc_type": association.RelatingClassification.is_a(),
+                        **{
+                            attr: str(
+                                getattr(association.RelatingClassification, attr, "")
+                                or ""
+                            )
+                            for attr in (
+                                "Identification",
+                                "ItemReference",
+                                "Name",
+                                "Location",
+                            )
+                        },
+                    }
+                    for association in getattr(group, "HasAssociations", ())
+                    if association.is_a("IfcRelAssociatesClassification")
+                ],
+                classification_evidence=[
+                    f"IFC system class: {group.is_a()}",
+                    f"PredefinedType: {predefined}",
+                    f"ObjectType: {object_type}",
+                    "Exact declared ObjectType vocabulary v1; free Name is not classification evidence; unknown/conflicting values remain UNRESOLVED",
+                ],
                 system_id=gid,
                 name=name,
                 system_type=category,

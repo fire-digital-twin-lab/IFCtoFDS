@@ -1,4 +1,4 @@
-"""Narrow structural-box representation; source meshes are never clipped."""
+"""Boundary representations derived from immutable source meshes."""
 
 import hashlib
 import json
@@ -7,6 +7,7 @@ from ifc_to_fds.core.canonical import BoundingBox
 from ifc_to_fds.geometry.mesh import valid_solid, is_axis_aligned_box, box_mesh
 
 POLICY = "VALIDATED_BOUNDARY_OBST_SINGLE_MESH"
+EXACT_POLICY = "SOURCE_SOLID_DOMAIN_INTERSECTION"
 VERSION = "1.0.0"
 FIXTURES = {
     "inside",
@@ -72,11 +73,46 @@ def eligible_bounds(element, model, force_all_geom=False):
 
 
 def target_mesh(element):
+    if element.boundary_policy == EXACT_POLICY and element.representation_bounds:
+        return intersect_solid(element.mesh, element.representation_bounds)
     return (
         box_mesh(element.representation_bounds)
         if element.boundary_policy == POLICY and element.representation_bounds
         else element.mesh
     )
+
+
+def intersect_solid(mesh, bounds):
+    """Intersect actual triangulated solid, including voids, with a domain box."""
+    from ifc_to_fds.geometry.boolean import solid_boolean
+    from ifc_to_fds.geometry.mesh import as_trimesh
+    from ifc_to_fds.core.canonical import TriangleMesh
+
+    solid = solid_boolean(
+        [as_trimesh(mesh), as_trimesh(box_mesh(bounds))], "intersection"
+    )
+    if not solid.is_volume or solid.volume <= 0:
+        raise ValueError(
+            "Domain intersection has no valid positive-volume source solid"
+        )
+    return TriangleMesh(vertices=solid.vertices.tolist(), faces=solid.faces.tolist())
+
+
+def exact_bounds(element, model):
+    from ifc_to_fds.geometry.mesh import bounds_for_vertices
+
+    if (
+        model.domain_origin != "EXPLICIT_CONFIGURATION"
+        or not model.simulation_domain
+        or element.simulation_role != "PASSIVE_OBSTACLE"
+        or element.review_status not in ("NOT_REQUIRED", "APPROVED")
+        or not element.mesh
+        or not valid_solid(element.mesh)
+    ):
+        return None
+    # Bounds are measured from the intersected solid, never used as a proxy solid.
+    clipped = intersect_solid(element.mesh, model.simulation_domain)
+    return bounds_for_vertices(clipped.vertices)
 
 
 def certificate_valid(path, solver_hash):

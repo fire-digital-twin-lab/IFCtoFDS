@@ -30,6 +30,16 @@ def create_geom_settings() -> Any:
     return settings
 
 
+def mesh_from_geometry(geom) -> TriangleMesh:
+    # IfcOpenShell's property getter copies the entire native buffer to Python.
+    # Reading geom.verts/faces inside each slice makes large meshes quadratic.
+    vertices, faces = geom.verts, geom.faces
+    return TriangleMesh(
+        vertices=[vertices[i : i + 3] for i in range(0, len(vertices), 3)],
+        faces=[faces[i : i + 3] for i in range(0, len(faces), 3)],
+    )
+
+
 def extract_element_geometry(
     ifc_file: ifcopenshell.file,
     element: CanonicalElement,
@@ -96,12 +106,7 @@ def process_model_geometry(
             while True:
                 shape = iterator.get()
                 g = shape.geometry
-                shapes[shape.id] = TriangleMesh(
-                    vertices=[
-                        list(g.verts[i : i + 3]) for i in range(0, len(g.verts), 3)
-                    ],
-                    faces=[list(g.faces[i : i + 3]) for i in range(0, len(g.faces), 3)],
-                )
+                shapes[shape.id] = mesh_from_geometry(g)
                 if not iterator.next():
                     break
     except Exception as exc:
@@ -113,7 +118,7 @@ def process_model_geometry(
             elem.geometry_status = GeometryStatus.NO_REPRESENTATION
             continue
 
-        mesh = shapes.get(elem.step_id) or extract_element_geometry(
+        mesh = shapes.pop(elem.step_id, None) or extract_element_geometry(
             ifc_file, elem, settings
         )
         if mesh and mesh.vertices:

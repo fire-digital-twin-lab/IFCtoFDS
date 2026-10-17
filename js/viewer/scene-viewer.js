@@ -133,6 +133,9 @@
 
     SceneViewer.prototype.animate = function (time) {
         requestAnimationFrame(this.animate.bind(this));
+        // Leave CPU/GPU time for payload decoding while a large import grows.
+        if (this.backendPreviewLoading && time - (this.lastPreviewFrame || 0) < 1000) return;
+        this.lastPreviewFrame = time;
         var delta = this.lastFrameTime ? Math.min((time - this.lastFrameTime) / 1000, 0.1) : 0;
         this.lastFrameTime = time;
         if (this.navigationMode === 'walk') this.updateWalkMovement(delta);
@@ -265,6 +268,59 @@
         this.verifiedReferenceGroup.visible = document.getElementById('verified-show-reference').checked;
         var group = this.verifiedReferenceGroup;
         document.getElementById('verified-show-reference').onchange = function (event) { group.visible = event.target.checked; };
+    };
+
+    SceneViewer.prototype.loadBackendPreview = async function (index, jobId, signal, onProgress) {
+        var self = this, entries = Object.values(index.elements).filter(function (e) { return e.mesh; });
+        var loadingToken = {}; this.backendPreviewLoading = loadingToken;
+        var batches = [], batch = [], bytes = 0;
+        entries.forEach(function (entry) {
+            if (batch.length && (batch.length === 16 || bytes + entry.mesh.byte_length > 16 * 1024 * 1024)) {
+                batches.push(batch); batch = []; bytes = 0;
+            }
+            batch.push(entry); bytes += entry.mesh.byte_length;
+        });
+        if (batch.length) batches.push(batch);
+        var next = 0, done = 0;
+        async function worker() {
+            while (next < batches.length) {
+                if (signal.aborted) throw new DOMException('Preview cancelled', 'AbortError');
+                var group = batches[next++], expectedBytes = group.reduce(function (sum, e) { return sum + e.mesh.byte_length; }, 0);
+                var endpoint = group.length === 1 && expectedBytes > 16 * 1024 * 1024
+                    ? '/geometry/' + group[0].mesh.payload
+                    : '/geometry-batch?' + group.map(function (e) { return 'payloads=' + e.mesh.payload; }).join('&');
+                var res = await fetch('/api/jobs/' + jobId + endpoint, {signal:signal});
+                if (!res.ok) throw new Error('Geometry batch unavailable');
+                var buffer = await res.arrayBuffer();
+                if (buffer.byteLength !== expectedBytes) throw new Error('Geometry batch length mismatch');
+                var offset = 0;
+                for (var item = 0; item < group.length; item++) {
+                var entry = group[item], ref = entry.mesh;
+                var hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(buffer, offset, ref.byte_length)))).map(function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+                if (hash !== ref.payload ||
+                    ref.faces_offset !== ref.vertex_count * 24 ||
+                    ref.byte_length !== ref.vertex_count * 24 + ref.face_count * 12) throw new Error('Invalid geometry payload: ' + entry.entity_key);
+                var view = new DataView(buffer, offset, ref.byte_length), vertices = [], faces = [];
+                offset += ref.byte_length;
+                for (var i = 0; i < ref.vertex_count; i++) vertices.push([0,1,2].map(function (axis) { return view.getFloat64(i*24+axis*8,true); }));
+                for (var j = 0; j < ref.face_count; j++) faces.push([0,1,2].map(function (axis) { return view.getUint32(ref.faces_offset+j*12+axis*4,true); }));
+                if (signal.aborted) throw new DOMException('Preview cancelled', 'AbortError');
+                self.ifcSolidGroup.add(self.makeIfcElement({mesh:{vertices:vertices,faces:faces},
+                    entityKey:entry.entity_key, sourceId:entry.source_id, stepId:entry.step_id,
+                    ifcType:entry.ifc_type, globalId:entry.global_id, name:entry.name, bounds:entry.bounds,
+                    convertible:false, backendSourcePreview:true, deferEdges:true, raw:entry}));
+                if ((done + 1) % 32 === 0) self.applyIfcCategoryVisibility();
+                onProgress(++done, entries.length);
+                }
+            }
+        }
+        // Two batches, at most 16 payloads / 16 MiB each, in flight.
+        try {
+            await Promise.all([worker(), worker()]);
+            self.applyIfcCategoryVisibility();
+        } finally {
+            if (self.backendPreviewLoading === loadingToken) self.backendPreviewLoading = null;
+        }
     };
 
     SceneViewer.prototype.loadIfcModel = function (model, displayMeshes) {
@@ -748,8 +804,9 @@
 
         var positions = [];
         var indices = [];
+        var origin = geom.vertices.length ? geom.vertices[0] : [0,0,0];
         geom.vertices.forEach(function (v) {
-            var converted = toThree(v[0], v[1], v[2]);
+            var converted = toThree(v[0] - origin[0], v[1] - origin[1], v[2] - origin[2]);
             positions.push(converted.x, converted.y, converted.z);
         });
         geom.faces.forEach(function (f) { indices.push(f[0], f[1], f[2]); });
@@ -771,6 +828,7 @@
             side: THREE.DoubleSide
         });
         var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(toThree(origin[0], origin[1], origin[2]));
         mesh.userData = makeUserData('GEOM', geom);
         var edges = new THREE.LineSegments(
             new THREE.EdgesGeometry(geometry, 25),
@@ -787,8 +845,11 @@
         // Prefer the display mesh (host walls carry their window/door voids there); the
         // solid element.mesh is reserved for the FDS export pipeline.
         var source = element.displayMesh || element.mesh;
+        var origin = source.vertices.length ? source.vertices[0] : [0,0,0];
         source.vertices.forEach(function (v) {
-            var converted = toThree(v[0], v[1], v[2]);
+            // Keep Float32 vertex coordinates near the product origin. The
+            // Object3D placement remains in the original double-precision world.
+            var converted = toThree(v[0] - origin[0], v[1] - origin[1], v[2] - origin[2]);
             positions.push(converted.x, converted.y, converted.z);
         });
         source.faces.forEach(function (f) {
@@ -800,7 +861,7 @@
         geometry.setIndex(indices);
         geometry.computeVertexNormals();
 
-        var style = styleForIfcType(element.ifcType, element.convertible === false);
+        var style = styleForIfcType(element.ifcType, element.convertible === false && !element.backendSourcePreview);
         var opacity = scaleIfcOpacity(style.opacity, this.ifcOpacity);
         var isTransparent = opacity < 1;
         var material = new THREE.MeshPhongMaterial({
@@ -816,6 +877,7 @@
         material.userData.isIfcFace = true;
         material.userData.isIfcOpeningSurface = !!style.openingSurface;
         var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(toThree(origin[0], origin[1], origin[2]));
         mesh.renderOrder = isTransparent ? 1 : 0;
         mesh.userData = {
             type: 'IFC',
@@ -834,6 +896,8 @@
             raw: element.raw
         };
 
+        // Large backend previews build selection outlines only when selected.
+        if (element.deferEdges) return mesh;
         var edgeMaterial = new THREE.LineBasicMaterial({
             color: style.edgeColor,
             transparent: true,
@@ -1564,7 +1628,22 @@
             return;
         }
         var keyMap = {};
-        for (var i = 0; i < keys.length; i++) keyMap[String(keys[i])] = true;
+        var stepIdMap = {};
+        var globalIdMap = {};
+        var store = (window.IfcFds && window.IfcFds.workbench && window.IfcFds.workbench.state && window.IfcFds.workbench.state.selectionStore);
+
+        for (var i = 0; i < keys.length; i++) {
+            var rawK = String(keys[i]);
+            keyMap[rawK] = true;
+            if (store && store._aliasMap && store._aliasMap[rawK]) {
+                keyMap[store._aliasMap[rawK]] = true;
+            }
+            var parts = rawK.split(':');
+            var idPart = parts.length > 1 ? parts.slice(1).join(':') : rawK;
+            stepIdMap[idPart] = true;
+            globalIdMap[idPart] = true;
+        }
+
         var matched = [];
         var createEntityKey = (window.IfcFds && window.IfcFds.workbench && window.IfcFds.workbench.createEntityKey) || function () { return ''; };
 
@@ -1572,7 +1651,12 @@
             if (node._isSelectionHelper || (node.parent && node.parent.isMesh)) return;
             if (!node || !node.userData || !node.userData.type) return;
             var k = createEntityKey(node.userData);
-            if (keyMap[k]) {
+            var u = node.userData;
+            var raw = u.raw || {};
+            var stepId = String(u.stepId || raw.step_id || u.expressID || u.id || '');
+            var globalId = String(u.globalId || raw.global_id || raw.GlobalId || '');
+
+            if (keyMap[k] || (stepId && stepIdMap[stepId]) || (globalId && globalIdMap[globalId])) {
                 matched.push(node);
             }
         }

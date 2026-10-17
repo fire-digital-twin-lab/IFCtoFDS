@@ -27,6 +27,7 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
         "profile",
         "reference_case",
         "decisions",
+        "system_decisions",
         "intentional_deltas",
         "geometry_package_sha256",
         "boundary_policy",
@@ -42,6 +43,7 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
         "mapping",
         "research-basement",
         "simulation",
+        "geometry-fidelity",
     ):
         raise ValueError("Unknown acceptance profile")
     if config.get("reference_case") is not None and not isinstance(
@@ -50,13 +52,22 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
         raise ValueError("reference_case must be a case directory or registered ID")
     if config.get("simulation_domain") is not None:
         BoundingBox.model_validate(config["simulation_domain"])
-    from ifc_to_fds.mapping.boundary import POLICY
+    from ifc_to_fds.mapping.boundary import POLICY, EXACT_POLICY
 
-    if config.get("boundary_policy") not in (None, POLICY):
+    if config.get("boundary_policy") not in (None, POLICY, EXACT_POLICY):
         raise ValueError("Unsupported boundary policy")
+    if (
+        config.get("profile") == "geometry-fidelity"
+        and config.get("simulation_domain")
+        and not config.get("boundary_policy")
+    ):
+        config["boundary_policy"] = EXACT_POLICY
     validate_decisions(config.get("decisions", {}))
+    validate_decisions(config.get("system_decisions", {}))
     SpatialScope.model_validate(config.get("scope", {}))
     AuditConfig.model_validate(config.get("audit", {}))
+    if config.get("profile") == "geometry-fidelity":
+        config.setdefault("audit", {}).setdefault("fail_fast_on_source_errors", True)
     sources = config.get("sources", {})
     if not isinstance(sources, dict) or set(sources) - {
         "common_coordinates",

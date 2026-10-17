@@ -26,6 +26,8 @@ class AcceptanceEvaluator:
             "traceability",
             "scope",
             "geometry",
+            "structural_completeness",
+            "air_path",
             "openings",
             "mep",
             "representation",

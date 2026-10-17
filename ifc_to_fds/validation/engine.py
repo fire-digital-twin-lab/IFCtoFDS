@@ -236,11 +236,38 @@ def run_independent_validation(
         if e.scope_decision != ScopeDecision.OUT_OF_SCOPE
         and e.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
     )
+    bad_source = (
+        [
+            e.entity_key
+            for e in model.elements
+            if e.scope_decision
+            in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+            and e.role == "PHYSICAL"
+            and e.mesh
+            and not valid_solid(e.mesh)
+        ]
+        if config.fail_fast_on_source_errors
+        else []
+    )
+    stop_solid_checks = bool(bad_source)
+    if stop_solid_checks:
+        report.metrics["source_topology_preflight_rejected"] = bad_source
+        report.gates["openings"] = GateResult(
+            status=GateStatus.NOT_RUN,
+            reason="Source topology defects confirmed; full opening comparisons not run",
+        )
+        report.gates[
+            "geometry"
+        ].reason = (
+            "Source topology defects confirmed; remaining solid comparisons not run"
+        )
     reference_solids = None
     exported_solids = None
-    if opening_count > 0:
+    if opening_count > 0 and not stop_solid_checks:
+        from ifc_to_fds.mapping.boundary import target_mesh
+
         reference_solids = SolidCandidateIndex(
-            x.mesh
+            target_mesh(x)
             for x in model.elements
             if x.mesh
             and x.role == "PHYSICAL"
@@ -365,9 +392,9 @@ def run_independent_validation(
             and e.scope_decision != ScopeDecision.OUT_OF_SCOPE
         ):
             unknown("representation", f"Review decision required for {key}")
-        if (
-            e.boundary_treatment == "PENDING_VALIDATION"
-            and e.representation_bounds is None
+        if e.boundary_treatment == "PENDING_VALIDATION" and (
+            e.representation_bounds is None
+            or e.boundary_policy == "SOURCE_SOLID_DOMAIN_INTERSECTION"
         ):
             unknown(
                 "boundary",
@@ -445,6 +472,9 @@ def run_independent_validation(
                 key,
             )
             continue
+        if stop_solid_checks:
+            report.element_statuses[key] = "INCONCLUSIVE"
+            continue
         try:
             from ifc_to_fds.mapping.boundary import target_mesh
 
@@ -473,6 +503,15 @@ def run_independent_validation(
             unknown("geometry", f"{key}: solid comparison failed: {exc}")
             report.element_statuses[key] = "INCONCLUSIVE"
         for opening in e.openings:
+            if not opening.mesh or not valid_solid(opening.mesh):
+                unknown(
+                    "openings",
+                    f"Host {key}, opening STEP {opening.opening_step_id}: "
+                    f"{opening.extraction_diagnostic or 'missing or invalid opening solid'}; "
+                    "valid host retained; void evidence incomplete",
+                    key,
+                )
+                continue
             try:
                 source_residual = opening_residual([e.mesh], opening.mesh)
                 output_residual = opening_residual(meshes, opening.mesh)
@@ -517,7 +556,7 @@ def run_independent_validation(
                     passage=passage,
                 )
             except Exception as exc:
-                unknown("openings", f"{opening.opening_global_id}: {exc}")
+                unknown("openings", f"{opening.opening_global_id}: {exc}", key)
     if not opening_count and report.gates["openings"].status == GateStatus.PASS:
         report.gates["openings"] = GateResult(
             status=GateStatus.NOT_APPLICABLE,
@@ -551,10 +590,34 @@ def run_independent_validation(
         openings=opening_count,
         mep=model.mep_graph.coverage,
     )
+    from ifc_to_fds.domain.validation.model import ValidationContext
+    from .checkers.structural import StructuralCompletenessChecker
+
+    structural = StructuralCompletenessChecker().check(
+        ValidationContext(
+            model=model,
+            fds_text=fds_text,
+            manifest=manifest,
+            parsed_fds=parsed,
+            config=config,
+        )
+    )
+    report.gates[structural.gate_name] = structural.result
+    report.findings.extend(structural.findings)
+    report.metrics.update(structural.metrics)
     from time import perf_counter
 
     solver_start = perf_counter()
-    if report.gates["syntax"].status == GateStatus.PASS:
+    if stop_solid_checks:
+        report.gates["solver"] = GateResult(
+            status=GateStatus.NOT_RUN,
+            reason="Source topology preflight rejected; solver not run",
+        )
+        report.gates["effective_geometry"] = GateResult(
+            status=GateStatus.NOT_RUN,
+            reason="Source topology preflight rejected; effective geometry not run",
+        )
+    elif report.gates["syntax"].status == GateStatus.PASS:
         report.gates["solver"], report.gates["effective_geometry"] = solver_gates(
             fds_text, config
         )

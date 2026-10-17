@@ -37,6 +37,8 @@ def prepare_model(
         configuration.get("include_review", False),
         configuration.get("decisions", {}),
         configuration.get("boundary_policy"),
+        geometry_fidelity=configuration.get("profile") == "geometry-fidelity",
+        system_decisions=configuration.get("system_decisions", {}),
     )
     model.timings.update(
         scope_s=mapping_start - scope_start, mapping_s=perf_counter() - mapping_start
