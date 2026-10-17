@@ -50,6 +50,9 @@
         viewer.setNavigationModeChangeHandler(updateWalkModeButton);
         applyTheme(readSavedTheme());
         if (window.lucide) window.lucide.createIcons();
+        if (ns.ui && ns.ui.domainPanel) ns.ui.domainPanel.init(els);
+        if (ns.ui && ns.ui.inspectorPanel) ns.ui.inspectorPanel.init(els);
+        if (ns.ui && ns.ui.auditDrawer) ns.ui.auditDrawer.init(els, viewer);
         bindEvents();
         ns.verified.init();
         clearFdsModel();
@@ -58,105 +61,9 @@
     });
 
     function cacheElements() {
-        els.viewer = document.getElementById('viewer');
-        els.ifcFile = document.getElementById('ifc-file');
-        els.toggleTheme = document.getElementById('toggle-theme');
-        els.toggleWalk = document.getElementById('toggle-walk');
-        els.openHelp = document.getElementById('open-help');
-        els.footerHelp = document.getElementById('footer-help');
-        els.helpModal = document.getElementById('help-modal');
-        els.closeHelp = document.getElementById('close-help');
-        els.resetCamera = document.getElementById('reset-camera');
-        els.convertIfc = document.getElementById('convert-ifc');
-        els.convertSelectedObst = document.getElementById('convert-selected-obst');
-        els.saveFds = document.getElementById('save-fds');
-        els.fdsSourceName = document.getElementById('fds-source-name');
-        els.ifcSourceName = document.getElementById('ifc-source-name');
-        els.diagnostics = document.getElementById('diagnostics');
-        els.inspectCard = document.getElementById('inspect-card');
-        els.inspectTitle = document.getElementById('inspect-title');
-        els.inspectBody = document.getElementById('inspect-body');
-        els.countMeshes = document.getElementById('count-meshes');
-        els.countObsts = document.getElementById('count-obsts');
-        els.countVents = document.getElementById('count-vents');
-        els.countGeoms = document.getElementById('count-geoms');
-        els.countTriangles = document.getElementById('count-triangles');
-        els.countIfc = document.getElementById('count-ifc');
-        els.countIfcConvertible = document.getElementById('count-ifc-convertible');
-        els.ifcMapping = document.getElementById('ifc-mapping');
-        els.fdsOpacity = document.getElementById('fds-opacity');
-        els.ifcOpacity = document.getElementById('ifc-opacity');
-        els.meshCellSize = document.getElementById('mesh-cell-size');
-        els.voxelSize = document.getElementById('voxel-size');
-        els.openingThickening = document.getElementById('opening-thickening');
-        els.openingVoxelPolicy = document.getElementById('opening-voxel-policy');
-        els.includeFillSolids = document.getElementById('include-fill-solids');
-        els.includeReviewSolids = document.getElementById('include-review-solids');
-        els.conversionApproach = document.getElementById('conversion-approach');
-        els.obstThreshold = document.getElementById('obst-threshold');
-        els.obstThresholdVal = document.getElementById('obst-threshold-val');
-        els.openCredits = document.getElementById('open-credits');
-        els.creditsModal = document.getElementById('credits-modal');
-        els.closeCredits = document.getElementById('close-credits');
-        els.openAudit = document.getElementById('open-audit');
-        els.saveManifest = document.getElementById('save-manifest');
-        els.convertVerified = document.getElementById('convert-verified');
-        els.auditModal = document.getElementById('audit-modal');
-        els.closeAudit = document.getElementById('close-audit');
-        els.auditBody = document.getElementById('audit-body');
-        els.backendStatusIndicator = document.getElementById('backend-status-indicator');
-        els.backendStatusText = document.getElementById('backend-status-text');
-        els.ifcLoading = document.getElementById('ifc-loading');
-        els.ifcLoadingTitle = document.getElementById('ifc-loading-title');
-        els.ifcLoadingPercent = document.getElementById('ifc-loading-percent');
-        els.ifcLoadingFill = document.getElementById('ifc-loading-fill');
-        els.ifcLoadingStage = document.getElementById('ifc-loading-stage');
-        els.saveProcessed = document.getElementById('save-processed');
-        els.showIfcEdges = document.getElementById('show-ifc-edges');
-        els.showGrid = document.getElementById('show-grid');
-        els.showStructure = document.getElementById('show-structure');
-        els.showFills = document.getElementById('show-fills');
-        els.showOther = document.getElementById('show-other');
-        els.showObst = document.getElementById('show-obst');
-        els.showHole = document.getElementById('show-hole');
-        els.showGeom = document.getElementById('show-geom');
-        els.deleteSelected = document.getElementById('delete-selected-ifc');
-        els.undoLast = document.getElementById('undo-last');
-        els.clipPanel = document.getElementById('clip-panel');
-        els.clipReset = document.getElementById('clip-reset');
-        els.clipSliders = {
-            xmin: document.getElementById('clip-xmin'),
-            xmax: document.getElementById('clip-xmax'),
-            ymin: document.getElementById('clip-ymin'),
-            ymax: document.getElementById('clip-ymax'),
-            zmin: document.getElementById('clip-zmin'),
-            zmax: document.getElementById('clip-zmax')
-        };
-        els.clipInputs = {
-            xmin: document.getElementById('clip-xmin-val'),
-            xmax: document.getElementById('clip-xmax-val'),
-            ymin: document.getElementById('clip-ymin-val'),
-            ymax: document.getElementById('clip-ymax-val'),
-            zmin: document.getElementById('clip-zmin-val'),
-            zmax: document.getElementById('clip-zmax-val')
-        };
-        els.modeTabVerified = document.getElementById('mode-tab-verified');
-        els.modeTabQuick = document.getElementById('mode-tab-quick');
-        els.containerVerified = document.getElementById('container-verified');
-        els.containerQuick = document.getElementById('container-quick');
-        els.verifiedWorkflowBanner = document.getElementById('verified-workflow-banner');
-        els.quickWorkflowBanner = document.getElementById('quick-workflow-banner');
-        els.verifiedStoreys = document.getElementById('verified-storeys');
-        els.verifiedUseDomain = document.getElementById('verified-use-domain');
-        els.verifiedDomainWarning = document.getElementById('verified-domain-warning');
-        els.verifiedForceGeom = document.getElementById('verified-force-geom');
-        els.verifiedCellSize = document.getElementById('verified-cell-size');
-        els.domainEstCells = document.getElementById('domain-est-cells');
-        els.domainEstBudget = document.getElementById('domain-est-budget');
-        els.domainDimensionsText = document.getElementById('domain-dimensions-text');
-        els.auditDrawer = document.getElementById('audit-drawer');
-        els.toggleDrawer = document.getElementById('toggle-drawer');
-        els.closeInspector = document.getElementById('close-inspector');
+        if (ns.ui && ns.ui.domCache) {
+            els = ns.ui.domCache.init();
+        }
     }
 
     function applyClip(id, value) {
@@ -1452,68 +1359,10 @@
         return { stepIds: stepIds, itemIds: itemIds };
     }
 
-    var activeInspectorTab = 'id';
     function renderStructuredInspector(item) {
-        var view = document.getElementById('inspect-structured-view');
-        if (!view) return;
-        view.innerHTML = '';
-        if (!item) {
-            view.innerHTML = '<p style="color:var(--text-muted);font-size:11px">Multi-object selection active.</p>';
-            return;
+        if (ns.ui && ns.ui.inspectorPanel) {
+            ns.ui.inspectorPanel.renderStructuredInspector(item);
         }
-        var raw = item.raw || {};
-        var rows = [];
-        if (activeInspectorTab === 'id') {
-            rows = [
-                ['IFC Type', item.ifcType || item.type || '--'],
-                ['GlobalId', item.globalId || raw.global_id || '--'],
-                ['STEP ID', item.id || raw.step_id || '--'],
-                ['Source File', item.ifcSource ? item.ifcSource.fileName : (raw.source_id || '--')],
-                ['Building', raw.building_id || '--'],
-                ['Storey', raw.storey || '--']
-            ];
-        } else if (activeInspectorTab === 'map') {
-            rows = [
-                ['Simulation Role', raw.simulation_role || item.fdsRole || '--'],
-                ['Mapping Strategy', raw.mapping_strategy || (item.canExportAsSolid ? 'OBST/GEOM' : 'NONE')],
-                ['FDS Representation', raw.fds_representation || item.type || '--'],
-                ['Review Status', raw.review_status || 'NOT_REQUIRED'],
-                ['Boundary Treatment', raw.boundary_treatment || 'NOT_APPLICABLE']
-            ];
-        } else if (activeInspectorTab === 'geom') {
-            var b = item.bounds || raw.bounding_box || {};
-            var dx = (b.xmax !== undefined && b.xmin !== undefined) ? Math.abs(b.xmax - b.xmin).toFixed(3) : '--';
-            var dy = (b.ymax !== undefined && b.ymin !== undefined) ? Math.abs(b.ymax - b.ymin).toFixed(3) : '--';
-            var dz = (b.zmax !== undefined && b.zmin !== undefined) ? Math.abs(b.zmax - b.zmin).toFixed(3) : '--';
-            rows = [
-                ['Extents dx×dy×dz', dx + ' × ' + dy + ' × ' + dz + ' m'],
-                ['FDS Primitive IDs', (raw.fds_primitive_ids || []).join(', ') || '--'],
-                ['Surface Area', raw.surface_area_m2 ? raw.surface_area_m2.toFixed(3) + ' m²' : '--'],
-                ['Volume', raw.volume_m3 ? raw.volume_m3.toFixed(3) + ' m³' : '--']
-            ];
-        } else if (activeInspectorTab === 'mep') {
-            rows = [
-                ['MEP Category', raw.mep_category || 'NOT_APPLICABLE'],
-                ['System Names', (raw.system_names || []).join(', ') || '--'],
-                ['System IDs', (raw.system_ids || []).join(', ') || '--'],
-                ['Ports Count', raw.ports ? raw.ports.length : (item.ports_count || 0)],
-                ['Operational Status', raw.operational_status || 'NOT_APPLICABLE']
-            ];
-        }
-        rows.forEach(function (pair) {
-            var row = document.createElement('div');
-            row.className = 'property-row';
-            var keySpan = document.createElement('span');
-            keySpan.className = 'property-key';
-            keySpan.textContent = String(pair[0]);
-            var valSpan = document.createElement('span');
-            valSpan.className = 'property-val';
-            valSpan.title = String(pair[1]);
-            valSpan.textContent = String(pair[1]);
-            row.appendChild(keySpan);
-            row.appendChild(valSpan);
-            view.appendChild(row);
-        });
     }
 
     function updateSourcePill(file, model) {
@@ -1547,65 +1396,20 @@
     }
 
     function updateDomainEstimates() {
-        var xminInput = document.getElementById('verified-domain-xmin');
-        var xmaxInput = document.getElementById('verified-domain-xmax');
-        var yminInput = document.getElementById('verified-domain-ymin');
-        var ymaxInput = document.getElementById('verified-domain-ymax');
-        var zminInput = document.getElementById('verified-domain-zmin');
-        var zmaxInput = document.getElementById('verified-domain-zmax');
-        var cellInput = document.getElementById('verified-cell-size') || els.meshCellSize;
-
-        var xmin = Number(xminInput ? xminInput.value : 0) || 0;
-        var xmax = Number(xmaxInput ? xmaxInput.value : 10) || 10;
-        var ymin = Number(yminInput ? yminInput.value : 0) || 0;
-        var ymax = Number(ymaxInput ? ymaxInput.value : 10) || 10;
-        var zmin = Number(zminInput ? zminInput.value : 0) || 0;
-        var zmax = Number(zmaxInput ? zmaxInput.value : 3) || 3;
-        var cellSize = Math.max(0.01, Number(cellInput ? cellInput.value : 0.20) || 0.20);
-
-        var dx = Math.max(0.01, Math.abs(xmax - xmin));
-        var dy = Math.max(0.01, Math.abs(ymax - ymin));
-        var dz = Math.max(0.01, Math.abs(zmax - zmin));
-
-        var cellsX = Math.ceil(dx / cellSize);
-        var cellsY = Math.ceil(dy / cellSize);
-        var cellsZ = Math.ceil(dz / cellSize);
-        var totalCells = cellsX * cellsY * cellsZ;
-
-        if (els.domainDimensionsText) {
-            els.domainDimensionsText.textContent = dx.toFixed(1) + ' × ' + dy.toFixed(1) + ' × ' + dz.toFixed(1) + ' m';
-        }
-        if (els.domainEstCells) {
-            els.domainEstCells.textContent = totalCells.toLocaleString() + ' cells';
-        }
-        if (els.domainEstBudget) {
-            if (totalCells <= 10000000) {
-                els.domainEstBudget.className = 'domain-budget-chip reasonable';
-                els.domainEstBudget.textContent = '● OK';
-            } else if (totalCells <= 50000000) {
-                els.domainEstBudget.className = 'domain-budget-chip heavy';
-                els.domainEstBudget.textContent = '▲ Heavy';
-            } else {
-                els.domainEstBudget.className = 'domain-budget-chip heavy';
-                els.domainEstBudget.textContent = '⚠️ Critical (>50M)';
-            }
+        if (ns.ui && ns.ui.domainPanel) {
+            ns.ui.domainPanel.updateDomainEstimates(els);
         }
     }
 
     function checkScopedDomainPreflight() {
-        if (!els.verifiedStoreys || !els.verifiedUseDomain || !els.verifiedDomainWarning) return;
-        var hasSelectedStoreys = Array.prototype.some.call(els.verifiedStoreys.options, function (o) { return o.selected; });
-        var hasDomain = els.verifiedUseDomain.checked;
-        els.verifiedDomainWarning.style.display = (hasSelectedStoreys && !hasDomain) ? 'flex' : 'none';
+        if (ns.ui && ns.ui.domainPanel) {
+            ns.ui.domainPanel.checkScopedDomainPreflight(els);
+        }
     }
 
     function toggleAuditDrawer() {
-        if (!els.auditDrawer) return;
-        var isMin = els.auditDrawer.classList.toggle('minimized');
-        var icon = document.getElementById('drawer-toggle-icon');
-        if (icon) {
-            icon.setAttribute('data-lucide', isMin ? 'chevron-up' : 'chevron-down');
-            if (window.lucide) window.lucide.createIcons();
+        if (ns.ui && ns.ui.auditDrawer) {
+            ns.ui.auditDrawer.toggleAuditDrawer(els);
         }
     }
 
@@ -1655,132 +1459,14 @@
     }
 
     function renderAuditDrawer(report) {
-        if (!report) return;
-        var verdictText = document.getElementById('drawer-verdict-summary');
-        if (verdictText) verdictText.textContent = report.status || 'INCONCLUSIVE';
-
-        var gatesContainer = document.getElementById('panel-gates');
-        if (gatesContainer && report.gates) {
-            Object.keys(report.gates).forEach(function (gateName) {
-                var card = gatesContainer.querySelector('[data-gate="' + gateName + '"]');
-                if (!card && gateName === 'golden_reference_parity') {
-                    card = gatesContainer.querySelector('[data-gate="golden"]');
-                }
-                if (!card && gateName === 'golden') {
-                    card = gatesContainer.querySelector('[data-gate="golden_reference_parity"]');
-                }
-                if (card) {
-                    var gate = report.gates[gateName];
-                    var dot = card.querySelector('.status-dot');
-                    var reason = card.querySelector('.gate-card-reason');
-                    if (dot) {
-                        dot.className = 'status-dot ' + (gate.status === 'PASS' ? 'online' : (gate.status === 'FAIL' ? 'offline' : ''));
-                        if (gate.status === 'FAIL') dot.style.background = 'var(--status-error)';
-                    }
-                    if (reason && gate.reason) {
-                        reason.textContent = gate.status + ': ' + gate.reason;
-                    }
-                }
-            });
-        }
-
-        var findings = report.findings || [];
-        var findingCountBadge = document.getElementById('drawer-finding-count');
-        if (findingCountBadge) findingCountBadge.textContent = findings.length;
-
-        var findingsTbody = document.getElementById('findings-table-body');
-        if (findingsTbody) {
-            findingsTbody.innerHTML = '';
-            if (!findings.length) {
-                findingsTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">No active findings. All evaluated gates satisfied.</td></tr>';
-            } else {
-                findings.forEach(function (f) {
-                    var tr = document.createElement('tr');
-                    var isErr = f.severity === 'P0' || f.severity === 'ERROR' || f.severity === 'P1';
-                    var sevColor = isErr ? 'var(--status-error-text)' : 'var(--status-warning-text)';
-
-                    var tdSev = document.createElement('td');
-                    var badge = document.createElement('span');
-                    badge.className = 'brand-badge';
-                    badge.style.color = sevColor;
-                    badge.textContent = f.severity || 'WARN';
-                    tdSev.appendChild(badge);
-                    tr.appendChild(tdSev);
-
-                    var tdCat = document.createElement('td');
-                    var catTag = document.createElement('span');
-                    catTag.className = 'source-meta-tag';
-                    catTag.textContent = f.category || 'general';
-                    tdCat.appendChild(catTag);
-                    tr.appendChild(tdCat);
-
-                    var tdKey = document.createElement('td');
-                    tdKey.style.fontFamily = 'var(--font-mono)';
-                    tdKey.style.color = 'var(--text-primary)';
-                    tdKey.textContent = f.element_id || '—';
-                    tr.appendChild(tdKey);
-
-                    var tdDesc = document.createElement('td');
-                    tdDesc.style.color = 'var(--text-secondary)';
-                    tdDesc.textContent = f.detail || f.title || '';
-                    tr.appendChild(tdDesc);
-
-                    var tdAct = document.createElement('td');
-                    tdAct.style.textAlign = 'right';
-                    if (f.element_id) {
-                        var btn = document.createElement('button');
-                        btn.className = 'btn';
-                        btn.style.height = '22px';
-                        btn.style.padding = '0 6px';
-                        btn.style.fontSize = '10px';
-                        btn.textContent = 'Locate';
-                        btn.addEventListener('click', function () {
-                            if (viewer && viewer.selectElementByKey) viewer.selectElementByKey(f.element_id);
-                        });
-                        tdAct.appendChild(btn);
-                    }
-                    tr.appendChild(tdAct);
-                    findingsTbody.appendChild(tr);
-                });
-            }
-        }
-
-        if (report.artifacts) {
-            var fdsBtn = document.getElementById('btn-download-fds');
-            if (fdsBtn && report.artifacts.fds) fdsBtn.href = report.artifacts.fds.url;
-            var manifestBtn = document.getElementById('btn-download-manifest');
-            if (manifestBtn && report.artifacts.manifest) manifestBtn.href = report.artifacts.manifest.url;
-            var geomBtn = document.getElementById('btn-download-geom-pkg');
-            if (geomBtn && report.artifacts.geometry) geomBtn.href = report.artifacts.geometry.url;
+        if (ns.ui && ns.ui.auditDrawer) {
+            ns.ui.auditDrawer.renderAuditDrawer(report, viewer);
         }
     }
 
     function exposeFailedCheckpoints(jobId) {
-        if (!jobId) return;
-        var fdsBtn = document.getElementById('btn-download-fds');
-        if (fdsBtn) {
-            fdsBtn.href = '/api/jobs/' + jobId + '/checkpoints/fds';
-            fdsBtn.textContent = 'Download Checkpoint FDS (UNACCEPTED)';
-        }
-        var manifestBtn = document.getElementById('btn-download-manifest');
-        if (manifestBtn) {
-            manifestBtn.href = '/api/jobs/' + jobId + '/checkpoints/manifest';
-            manifestBtn.textContent = 'Download Checkpoint Manifest (UNACCEPTED)';
-        }
-        var geomBtn = document.getElementById('btn-download-geom-pkg');
-        if (geomBtn) {
-            geomBtn.href = '/api/jobs/' + jobId + '/checkpoints/geometry';
-            geomBtn.textContent = 'Download Checkpoint Geometries (AUDIT INCOMPLETE)';
-        }
-        var panelArtifacts = document.getElementById('panel-artifacts');
-        if (panelArtifacts) {
-            panelArtifacts.style.display = 'grid';
-            var tabs = document.querySelectorAll('.audit-tab-btn');
-            tabs.forEach(function (t) { t.classList.remove('active'); });
-            var artTab = document.getElementById('drawer-tab-artifacts');
-            if (artTab) artTab.classList.add('active');
-            var panelGates = document.getElementById('panel-gates');
-            if (panelGates) panelGates.style.display = 'none';
+        if (ns.ui && ns.ui.auditDrawer) {
+            ns.ui.auditDrawer.exposeFailedCheckpoints(jobId);
         }
     }
 
