@@ -24,6 +24,13 @@ Work branch: `codex/post-refactor-correctness`.
   same `(text, manifest)` tuple. The serializer leaves the input plan untouched;
   emitted IDs are returned through the manifest and mirrored to model elements
   for compatibility. Source meshes are retained. Artifact schemas remain 0.5.0.
+- Follow-up review: a source-policy OBST/GEOM cannot become NONE, SEMANTIC_ONLY,
+  EXCLUDED_SCOPE or EXCLUDED_APPROVED merely by editing the plan. Changing a
+  disposition requires applying the explicit reviewed decision through source
+  policy before constructing a new plan. Existing reference-only, out-of-scope,
+  pending-boundary, semantic and approved exclusions remain valid. Non-emitting
+  dispositions cannot be relabelled by the serializer. Rejections identify the
+  entity and leave both inputs unchanged. Independent audit remains required.
 - AcceptanceEvaluator copies checker outcomes and finalizes verdicts before
   returning. FAIL takes precedence over incomplete gates. The report is mutable
   but detached from checker evidence. Production audit retains the full existing

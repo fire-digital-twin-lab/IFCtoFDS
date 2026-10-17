@@ -30,16 +30,104 @@ def test_plan_is_authoritative_and_not_mutated(box_model):
     plan.simulation_domain = BoundingBox(
         xmin=-1, xmax=3, ymin=-1, ymax=2, zmin=-1, zmax=4
     )
-    plan.decisions[0].strategy = MappingStrategy.NONE
-    plan.decisions[0].fds_representation = "NONE"
     before = plan.model_dump()
     text, manifest = serialize_fds(box_model, mapping_plan=plan)
-    assert "&OBST" not in text and "&GEOM" not in text
+    assert "&OBST" in text and "&GEOM" not in text
     assert "&MESH IJK=8,6,10, XB=-1,3,-1,2,-1,4 /" in text
-    assert manifest.records[0].mapping_strategy == "NONE"
-    assert manifest.total_primitives_emitted == 0
+    assert manifest.records[0].mapping_strategy == "OBST"
+    assert manifest.total_primitives_emitted == 1
     assert manifest.simulation_domain == plan.simulation_domain.model_dump()
     assert plan.model_dump() == before
+
+
+@pytest.mark.parametrize(
+    "source_strategy", [MappingStrategy.OBST, MappingStrategy.GEOM]
+)
+@pytest.mark.parametrize(
+    "target",
+    [
+        MappingStrategy.NONE,
+        MappingStrategy.SEMANTIC_ONLY,
+        MappingStrategy.EXCLUDED_SCOPE,
+        MappingStrategy.EXCLUDED_APPROVED,
+    ],
+)
+def test_required_representation_cannot_be_suppressed(
+    box_model, source_strategy, target
+):
+    plan_mapping(box_model, force_all_geom=source_strategy == MappingStrategy.GEOM)
+    assert box_model.elements[0].mapping_strategy == source_strategy
+    plan = build_mapping_plan(box_model)
+    plan.decisions[0].strategy = target
+    plan.decisions[0].fds_representation = "NONE"
+    original_model, original_plan = box_model.model_dump(), plan.model_dump()
+    with pytest.raises(
+        ValueError,
+        match="fixture:1: required source representation cannot be suppressed",
+    ):
+        serialize_fds(box_model, mapping_plan=plan)
+    assert box_model.model_dump() == original_model
+    assert plan.model_dump() == original_plan
+
+
+@pytest.mark.parametrize(
+    "authorization", ["reference", "scope", "boundary", "semantic", "approved"]
+)
+def test_policy_authorized_nonemitting_dispositions_remain_valid(
+    box_model, authorization
+):
+    element = box_model.elements[0]
+    decisions = {}
+    if authorization == "reference":
+        element.classification_evidence = ["MEP fixture"]
+    elif authorization == "scope":
+        element.scope_decision = ScopeDecision.OUT_OF_SCOPE
+    elif authorization == "boundary":
+        box_model.simulation_domain = BoundingBox(
+            xmin=0.4, xmax=2, ymin=0, ymax=1, zmin=0, zmax=3
+        )
+        box_model.domain_origin = "EXPLICIT_CONFIGURATION"
+    elif authorization == "semantic":
+        element.ifc_type = "IfcOpeningElement"
+        element.role = "OPENING"
+    elif authorization == "approved":
+        decisions[element.entity_key] = dict(
+            action="EXCLUDE",
+            reviewer="fixture reviewer",
+            policy_version="fixture-1",
+            rationale="Explicit reviewed exclusion",
+            evidence=["review:fixture:1"],
+        )
+    plan_mapping(box_model, decisions=decisions)
+    plan = build_mapping_plan(box_model)
+    text, manifest = serialize_fds(box_model, mapping_plan=plan)
+    assert "&OBST" not in text and "&GEOM" not in text
+    record = manifest.records[0]
+    assert record.mapping_strategy == element.mapping_strategy.value
+    assert record.decision == element.decision
+    assert record.boundary_treatment == element.boundary_treatment
+    assert record.scope_decision == element.scope_decision.value
+    assert manifest.total_primitives_emitted == 0
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        MappingStrategy.NONE,
+        MappingStrategy.SEMANTIC_ONLY,
+        MappingStrategy.EXCLUDED_APPROVED,
+    ],
+)
+def test_nonemitting_scope_disposition_cannot_be_relabelled(box_model, target):
+    box_model.elements[0].scope_decision = ScopeDecision.OUT_OF_SCOPE
+    plan_mapping(box_model)
+    plan = build_mapping_plan(box_model)
+    plan.decisions[0].strategy = target
+    with pytest.raises(
+        ValueError,
+        match="fixture:1: non-emitting disposition differs from source policy",
+    ):
+        serialize_fds(box_model, mapping_plan=plan)
 
 
 def test_plan_missing_domain_is_not_implicitly_expanded(box_model):

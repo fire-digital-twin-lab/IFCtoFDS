@@ -52,6 +52,16 @@ def planned_model(model, plan):
         if d.strategy in (MappingStrategy.VOXEL, MappingStrategy.OBST_HOLE):
             reject("unverified representation strategy")
         emits = d.strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
+        source_requires_representation = e.mapping_strategy in (
+            MappingStrategy.OBST,
+            MappingStrategy.GEOM,
+        )
+        if source_requires_representation and not emits:
+            reject(
+                "required source representation cannot be suppressed; authorize disposition through source policy first"
+            )
+        if not emits and d.strategy != e.mapping_strategy:
+            reject("non-emitting disposition differs from source policy")
         if d.fds_representation != (d.strategy.value if emits else "NONE"):
             reject("strategy and FDS representation conflict")
         if (
