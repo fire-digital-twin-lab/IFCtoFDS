@@ -71,3 +71,22 @@ revision's required remote CI checks pass and the stabilization PR is reviewed.
 Branch protection is a separate repository-owner setting, not changed here.
 Research-basement approval, general GEOM effective geometry and simulation
 acceptance retain their existing limitations.
+
+## Pre-main edge visibility follow-up
+
+PR #8 was merged at `dev@c45ec20c6713c19114fc71b3c6a7069a95c82487` after
+approval of the tested head `6efe550`. A small follow-up binds IFC edge display
+to its own visibility channel at native/Web-IFC creation and checkbox changes.
+Workbench visibility updates cannot restore disabled edges. Existing opening
+outlines remain visible by policy, subject to the owning object's visibility.
+
+Before correction, the extended real-IFC test failed on both native and Web-IFC
+meshes. After correction it checks edges OFF before loading, Hide/Show, Reset,
+Isolate/Reset, and edges ON while the entity is hidden. The Node regression also
+checks the intended opening-outline exception. Geometry, review and boundary
+status strings are normalized consistently (case and surrounding whitespace),
+with regression cases that previously selected a green mapping color.
+
+This follow-up changes display state and tests only. Source identity improvements
+for advanced Quick federation and the separate Scenario Engine remain future work;
+neither is claimed as completed by stabilization.

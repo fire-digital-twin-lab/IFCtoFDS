@@ -49,6 +49,7 @@ def test_real_ifc_identity_visibility_and_source_lifecycle(preview):
                         window.previewMeshes += meshes.length;
                         return original.call(this, model, meshes);
                     };
+                    IfcFds.workbench.navigation.colorOverlay.viewer.setIfcEdgesVisible(false);
                 }""")
                 page.set_input_files("#ifc-file", ROOT / "tests/browser/box.ifc")
                 page.wait_for_function(
@@ -59,6 +60,12 @@ def test_real_ifc_identity_visibility_and_source_lifecycle(preview):
                 )
                 if preview:
                     assert page.evaluate("previewMeshes") > 0
+                assert page.evaluate("""() => {
+                    const v = IfcFds.workbench.navigation.colorOverlay.viewer;
+                    const edges = [];
+                    v.ifcGroup.traverse(node => { if (node._isIfcEdge && !node._isIfcOpeningEdge) edges.push(node); });
+                    return edges.length > 0 && edges.every(edge => !edge.visible);
+                }""")
                 page.locator("#sidebar-tab-tree").click()
                 row = page.locator(".tree-item-row").first
                 key = row.get_attribute("data-entity-key")
@@ -133,6 +140,26 @@ def test_real_ifc_identity_visibility_and_source_lifecycle(preview):
                     vis.unghostKeys([key]);
                     const opacityRestored = material.opacity === 0.4;
                     const ifcMesh = v.ifcSolidGroup.children[0];
+                    const ifcKey = ifcMesh.userData.entityKey;
+                    const edges = ifcMesh.children.filter(child => child._isIfcEdge && !child._isIfcOpeningEdge);
+                    if (!edges.length) throw new Error('Real IFC wall has no edge helpers');
+                    const edgesOff = () => edges.every(edge => !edge.visible);
+                    v.setIfcEdgesVisible(false);
+                    const edgesInitiallyOff = edgesOff();
+                    vis.hideKeys([ifcKey]);
+                    vis.showKeys([ifcKey]);
+                    const edgesOffAfterHideShow = edgesOff();
+                    vis.resetVisibility();
+                    const edgesOffAfterReset = edgesOff();
+                    vis.isolateKeys([ifcKey]);
+                    const edgesOffAfterIsolate = edgesOff();
+                    vis.resetVisibility();
+                    const edgesOffAfterIsolateReset = edgesOff();
+                    vis.hideKeys([ifcKey]);
+                    v.setIfcEdgesVisible(true);
+                    const edgesOnRespectsHidden = edgesOff() && !ifcMesh.visible;
+                    vis.resetVisibility();
+                    const edgesOnAfterReset = edges.every(edge => edge.visible) && ifcMesh.visible;
                     v.setIfcCategoryVisible(ifcMesh.userData.ifcCategory, false);
                     vis.resetVisibility();
                     const categorySurvives = !ifcMesh.visible;
@@ -140,7 +167,9 @@ def test_real_ifc_identity_visibility_and_source_lifecycle(preview):
                     wb.state.scenarioStore.addFireSource({name:'Old draft'});
                     wb.commands.commandBus.execute(new wb.commands.SelectCommand([key]));
                     return {hideThenSection, sectionThenHide, isolateOutside, resetKeepsIsolation,
-                        exclusionSurvives, ghosted, restored, ghostSurvivesOpacity, opacityRestored, categorySurvives};
+                        exclusionSurvives, ghosted, restored, ghostSurvivesOpacity, opacityRestored, categorySurvives,
+                        edgesInitiallyOff, edgesOffAfterHideShow, edgesOffAfterReset, edgesOffAfterIsolate,
+                        edgesOffAfterIsolateReset, edgesOnRespectsHidden, edgesOnAfterReset};
                 }""")
                 assert all(result.values()), result
                 # A new source clears scenario, tree selection and undo history together.

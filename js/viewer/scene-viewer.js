@@ -666,7 +666,7 @@
                 new THREE.EdgesGeometry(geom, 50),
                 edgeMaterial
             );
-            edges.visible = style.openingSurface || self.showIfcEdges;
+            setVisibilityChannel(edges, 'edgeDisplay', style.openingSurface || self.showIfcEdges);
             edges._isIfcEdge = true;
             edges._isIfcOpeningEdge = !!style.openingSurface;
             edges.userData = mesh.userData;
@@ -845,7 +845,7 @@
             new THREE.EdgesGeometry(geometry, 50),
             edgeMaterial
         );
-        edges.visible = style.openingSurface || this.showIfcEdges;
+        setVisibilityChannel(edges, 'edgeDisplay', style.openingSurface || this.showIfcEdges);
         edges._isIfcEdge = true;
         edges._isIfcOpeningEdge = !!style.openingSurface;
         edges.userData = mesh.userData;
@@ -1178,9 +1178,10 @@
 
     SceneViewer.prototype.setIfcEdgesVisible = function (visible) {
         this.showIfcEdges = !!visible;
-        [this.ifcSolidGroup, this.ifcReferenceGroup].forEach(function (group) {
+        [this.ifcSolidGroup, this.ifcReferenceGroup, this.verifiedReferenceGroup].forEach(function (group) {
+            if (!group) return;
             group.traverse(function (node) {
-                if (node._isIfcEdge) node.visible = node._isIfcOpeningEdge || !!visible;
+                if (node._isIfcEdge) setVisibilityChannel(node, 'edgeDisplay', node._isIfcOpeningEdge || !!visible);
             });
         });
     };

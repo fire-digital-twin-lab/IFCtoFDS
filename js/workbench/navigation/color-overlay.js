@@ -53,6 +53,10 @@
         return new THREE.Color('hsl(' + h + ', 65%, 55%)').getHex();
     }
 
+    function normalizeStatus(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
     function ColorOverlayEngine(viewerInstance) {
         this.viewer = viewerInstance || null;
         this.currentMode = 'mapping';
@@ -107,15 +111,15 @@
 
         if (mode === 'mapping') {
             var raw = desc.raw || {};
-            var status = String(raw.verification_status || '').toUpperCase();
+            var status = normalizeStatus(raw.verification_status);
             if (['FAIL', 'FAILED', 'REJECTED', 'UNSUPPORTED', 'MISSING', 'DEVIATED'].indexOf(status) >= 0) return COLOR_PALETTES.mapping.FAILED;
             if (status === 'INCONCLUSIVE') return COLOR_PALETTES.mapping.UNKNOWN;
-            if (['FAILED', 'INVALID', 'UNSUPPORTED'].indexOf(raw.geometry_status) >= 0) return COLOR_PALETTES.mapping.FAILED;
-            if (['REVIEW_REQUIRED', 'PENDING', 'REQUIRED'].indexOf(raw.review_status) >= 0 || raw.boundary_treatment === 'PENDING_VALIDATION') return COLOR_PALETTES.mapping.UNKNOWN;
-            var role = (desc.simulationRole || '').toUpperCase();
+            if (['FAILED', 'INVALID', 'UNSUPPORTED'].indexOf(normalizeStatus(raw.geometry_status)) >= 0) return COLOR_PALETTES.mapping.FAILED;
+            if (['REVIEW_REQUIRED', 'PENDING', 'REQUIRED'].indexOf(normalizeStatus(raw.review_status)) >= 0 || normalizeStatus(raw.boundary_treatment) === 'PENDING_VALIDATION') return COLOR_PALETTES.mapping.UNKNOWN;
+            var role = normalizeStatus(desc.simulationRole);
             if (['EXCLUDE', 'EXCLUDED_APPROVED', 'EXCLUDED_SCOPE'].indexOf(role) >= 0) return COLOR_PALETTES.mapping.EXCLUDE;
             if (role === 'REFERENCE_GEOMETRY') return COLOR_PALETTES.mapping.REFERENCE;
-            var strat = (desc.mappingStrategy || '').toUpperCase();
+            var strat = normalizeStatus(desc.mappingStrategy);
             if (['FAILED', 'UNSUPPORTED', 'REJECTED'].indexOf(strat) >= 0) return COLOR_PALETTES.mapping.FAILED;
             if (['EXCLUDED_APPROVED', 'EXCLUDED_SCOPE'].indexOf(strat) >= 0) return COLOR_PALETTES.mapping.EXCLUDE;
             if (strat === 'REFERENCE_GEOMETRY') return COLOR_PALETTES.mapping.REFERENCE;
@@ -127,7 +131,7 @@
 
         if (mode === 'verification') {
             var raw = desc.raw || {};
-            var status = String(raw.verification_status || 'NOT_RUN').toUpperCase();
+            var status = normalizeStatus(raw.verification_status || 'NOT_RUN');
             if (status === 'PASS' || status === 'MATCHED') return COLOR_PALETTES.verification.PASS;
             if (status === 'WARNING') return COLOR_PALETTES.verification.WARNING;
             if (status === 'INCONCLUSIVE') return COLOR_PALETTES.verification.INCONCLUSIVE;
