@@ -1026,6 +1026,7 @@
 
     function cancelPendingExport() {
         state.exportRequestId += 1;
+        if (ns.verified.cancel) ns.verified.cancel().catch(function () {});
         cleanupExportWorker();
         setExportBusy(false);
     }
@@ -1053,6 +1054,7 @@
         var fileLabel = (state.ifcFileName || (state.ifcModel && state.ifcModel.fileName) || 'IFC model');
         showLoading('Verified Conversion: ' + fileLabel, 'Processing with IfcOpenShell & OpenCASCADE...');
         setExportBusy(true, 'convert-verified');
+        var generation = ++state.exportRequestId;
 
         var blob = state.currentIfcFile || new File([state.ifcSourceText || ''], state.ifcFileName || 'model.ifc');
         ns.verified.run(blob, {
@@ -1060,6 +1062,7 @@
             include_review: !!(els.includeReviewSolids && els.includeReviewSolids.checked)
         })
         .then(async function (data) {
+            if (generation !== state.exportRequestId) return;
             state.verifiedJobId = data && data.job_id;
             hideLoading(); setExportBusy(false);
             if (!data || !data.artifacts) throw new Error('Missing conversion artifacts');
@@ -1074,6 +1077,7 @@
             var response = await fetch(data.artifacts.fds.url);
             if (!response.ok) throw new Error('FDS artifact unavailable');
             var text = await response.text();
+            if (generation !== state.exportRequestId) return;
             var base = (data.source_filename || state.ifcFileName || 'model').replace(/\.[^.]+$/, '');
             var fileName = base + (data.status === 'MAPPING_VERIFIED' ? '_mapping_verified.fds' : '_diagnostic.fds');
             state.generatedFdsText = text; state.generatedFdsName = fileName;
@@ -1082,9 +1086,12 @@
             setupClippingForBounds(boundsForClipping());
         })
         .catch(function (err) {
+            if (generation !== state.exportRequestId || err.name === 'AbortError') return;
             hideLoading();
             setExportBusy(false);
             addExportDiagnostic(err, {stage: 'verified_conversion', jobId: state.verifiedJobId});
+        }).finally(function () {
+            if (generation === state.exportRequestId) { hideLoading(); setExportBusy(false); }
         });
     }
 

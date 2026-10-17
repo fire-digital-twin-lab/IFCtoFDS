@@ -46,6 +46,8 @@ known. Verified frontend errors also retain the job ID. The Checks panel offers
 a diagnostic JSON download without IFC text, FDS text, mesh or full inventory.
 Viewer failures are labelled as display failures and keep the FDS download.
 Changing the source prevents delayed worker results from replacing the new view.
+Verified polls use per-run identities; cancel/replacement stops the server job
+and late responses cannot overwrite the next job's artifacts or progress.
 The HTTP and inline bundles are generated from the same sources.
 
 ## Reproduction and checks
@@ -73,6 +75,14 @@ The large-opening test can replay the reviewed implementation locally with
 It is expected to fail; the ordinary command must pass. Local evidence and run
 logs are under `scripts/out/post-refactor/` and the browser output directories.
 All failed/timeout attempts are retained separately from successful runs.
+
+Local verification after the CSV and coherent-mutant corrections: 155 Python
+tests passed (two solver tests deselected); both real FDS 6.11.1 solver tests
+passed separately. Seven JavaScript suites include the new large-opening stress
+case. Browser cases passed with actual preview enabled/disabled over HTTP/file,
+and Verified over HTTP; the two file-URL Verified cases are NOT_SUPPORTED as
+described above. CI repeats the checks on the delivered commit; local Windows
+results alone are not a Linux pass claim.
 
 ## Real-model limits
 

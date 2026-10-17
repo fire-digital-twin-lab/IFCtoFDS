@@ -1,6 +1,7 @@
 (function (ns) {
     'use strict';
-    var jobId = null, stopped = false, fallback = null;
+    var jobId = null, stopped = false, fallback = null, generation = 0;
+    function cancelled() { var error = new Error('Conversion cancelled'); error.name = 'AbortError'; return error; }
     function get(id) { return document.getElementById('verified-' + id); }
     function files() { return Array.prototype.slice.call(get('sources').files || []); }
     function selectedFiles() { return files().length ? files() : (fallback ? [fallback] : []); }
@@ -45,6 +46,11 @@
     ns.verified = {
         hasFiles: function () { return files().length > 0; },
         setFallback: function (file) { fallback = file; },
+        cancel: function () {
+            stopped = true; generation++;
+            var active = jobId; jobId = null; get('cancel').disabled = true;
+            return active ? fetch('/api/jobs/' + active, {method: 'DELETE'}).then(response) : Promise.resolve();
+        },
         init: function () {
             fetch('/api/reference-cases').then(response).then(function (data) {
                 data.cases.forEach(function (entry) {
@@ -54,17 +60,18 @@
                 });
             }).catch(function () {});
             get('sources').addEventListener('change', function () {
+                ns.verified.cancel().catch(function (err) { progress(err.message); });
                 transformInputs(); get('storeys').replaceChildren();
                 document.getElementById('convert-verified').disabled = !selectedFiles().length;
             });
             get('inventory').addEventListener('click', readInventory);
             get('cancel').addEventListener('click', function () {
-                stopped = true;
-                if (jobId) fetch('/api/jobs/' + jobId, {method: 'DELETE'}).then(response).then(function () { progress('Cancelled'); }).catch(function (err) { progress(err.message); });
+                ns.verified.cancel().then(function () { progress('Cancelled'); }).catch(function (err) { progress(err.message); });
             });
         },
         run: async function (file, configuration) {
             fallback = file; stopped = false; jobId = null;
+            var runGeneration = ++generation, localJobId = null;
             if (location.protocol === 'file:') return Promise.reject(new Error('Open http://127.0.0.1:8000 for Verified Conversion'));
             var sources = selectedFiles();
             if (!sources.length) return Promise.reject(new Error('Select IFC sources first'));
@@ -94,31 +101,36 @@
                 });
             }
             var data = new FormData(); sources.forEach(function (source) { data.append('files', source); });
+            if (runGeneration !== generation) throw cancelled();
             data.append('configuration', JSON.stringify(configuration)); get('cancel').disabled = false;
             progress('Uploading…');
             function poll() {
-                if (stopped) return Promise.reject(new Error('Conversion cancelled'));
-                return fetch('/api/jobs/' + jobId).then(response).then(function (job) {
+                if (stopped || runGeneration !== generation) return Promise.reject(cancelled());
+                return fetch('/api/jobs/' + localJobId).then(response).then(function (job) {
+                    if (runGeneration !== generation) throw cancelled();
                     progress(job.state);
-                    if (job.state === 'COMPLETED') return fetch('/api/jobs/' + jobId + '/result').then(response);
+                    if (job.state === 'COMPLETED') return fetch('/api/jobs/' + localJobId + '/result').then(response);
                     if (['FAILED','TIMED_OUT','CANCELLED'].indexOf(job.state) !== -1) throw new Error(job.error || job.state);
                     return new Promise(function (resolve) { setTimeout(resolve, 700); }).then(poll);
                 });
             }
             return fetch('/api/jobs', {method:'POST',body:data}).then(response).then(function (job) {
-                jobId = job.id;
-                if (stopped) return fetch('/api/jobs/' + jobId, {method:'DELETE'}).then(function () { throw new Error('Conversion cancelled'); });
+                localJobId = job.id;
+                if (stopped || runGeneration !== generation) return fetch('/api/jobs/' + localJobId, {method:'DELETE'}).then(function () { throw cancelled(); });
+                jobId = localJobId;
                 return poll();
-            }).then(function (result) { progress(result.status);
+            }).then(function (result) {
+                if (runGeneration !== generation) throw cancelled();
+                progress(result.status);
                 get('artifacts').replaceChildren();
                 Object.keys(result.artifacts || {}).forEach(function (name) {
                     var link = document.createElement('a'); link.href = result.artifacts[name].url;
                     link.textContent = 'Download ' + name; link.download = ''; link.style.display = 'block'; get('artifacts').appendChild(link);
                 });
-                result.job_id = jobId;
+                result.job_id = localJobId;
                 return result; })
-                .catch(function (error) { error.jobId = jobId; throw error; })
-                .finally(function () { get('cancel').disabled = true; });
+                .catch(function (error) { error.jobId = localJobId; throw error; })
+                .finally(function () { if (runGeneration === generation) { jobId = null; get('cancel').disabled = true; } });
         }
     };
 })(window.IfcFds);
