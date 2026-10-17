@@ -1,6 +1,7 @@
 """AcceptanceEvaluator: aggregates gate checker outcomes into an immutable AcceptanceReport."""
 
 from typing import List
+from copy import deepcopy
 from .checkers.base import CheckerOutcome
 from .model import AcceptanceReport, GateResult, GateStatus, ValidationContext
 
@@ -37,10 +38,10 @@ class AcceptanceEvaluator:
 
         # Apply outcomes from checkers
         for outcome in outcomes:
-            report.gates[outcome.gate_name] = outcome.result
-            report.findings.extend(outcome.findings)
-            report.metrics.update(outcome.metrics)
-            report.element_statuses.update(outcome.element_statuses)
+            report.gates[outcome.gate_name] = outcome.result.model_copy(deep=True)
+            report.findings.extend(f.model_copy(deep=True) for f in outcome.findings)
+            report.metrics.update(deepcopy(outcome.metrics))
+            report.element_statuses.update(deepcopy(outcome.element_statuses))
 
         # Update summary counts
         statuses = report.element_statuses
@@ -52,4 +53,4 @@ class AcceptanceEvaluator:
         )
         report.semantic_only_count = sum(s == "SEMANTIC_ONLY" for s in statuses.values())
 
-        return report
+        return report.finalize()
