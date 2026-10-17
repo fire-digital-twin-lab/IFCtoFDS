@@ -239,3 +239,26 @@ def test_gate_checker_protocol_conformance(box_model):
 
     domain_outcome = domain_checker.check(context)
     assert domain_outcome.gate_name == "domain"
+
+
+def test_validation_runner_coordinates_checkers(box_model):
+    """ValidationRunner executes registered checkers and returns an evaluated AcceptanceReport."""
+    from ifc_to_fds.validation.runner import ValidationRunner
+    from ifc_to_fds.mapping.exporter import serialize_fds
+    from ifc_to_fds.mapping.manifest import build_manifest
+    from ifc_to_fds.domain.validation.model import AcceptanceReport, GateStatus
+
+    runner = ValidationRunner()
+    fds_text, _ = serialize_fds(box_model)
+    manifest = build_manifest(box_model, fds_text)
+    report = runner.validate(box_model, fds_text, manifest)
+
+    assert isinstance(report, AcceptanceReport)
+    assert "syntax" in report.gates
+    assert "domain" in report.gates
+    assert "traceability" in report.gates
+    assert "scope" in report.gates
+    assert report.gates["syntax"].status == GateStatus.PASS
+    assert report.gates["scope"].status == GateStatus.PASS
+    assert report.gates["traceability"].status == GateStatus.PASS
+
