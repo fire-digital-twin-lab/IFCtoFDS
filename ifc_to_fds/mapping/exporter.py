@@ -66,9 +66,32 @@ def compute_mesh_grid(
 
 def serialize_fds(
     model: CanonicalModel,
-    cell_size: float = 0.2,
+    cell_size: Optional[float] = None,
     mapping_plan: Optional[MappingPlan] = None,
 ) -> Tuple[str, MappingManifest]:
+    """Render a validated plan; never re-run policy or mutate its decisions."""
+    from ifc_to_fds.domain.mapping import build_mapping_plan
+    from .plan_validation import planned_model
+
+    if cell_size is not None and (not math.isfinite(cell_size) or cell_size <= 0):
+        raise ValueError("cell_size must be finite and positive")
+    if mapping_plan is None:
+        mapping_plan = build_mapping_plan(model, cell_size=0.2 if cell_size is None else cell_size)
+    elif cell_size is not None and cell_size != mapping_plan.cell_size:
+        raise ValueError("cell_size conflicts with MappingPlan")
+    view = planned_model(model, mapping_plan)
+    text, manifest = _serialize_planned_model(view, mapping_plan.cell_size)
+    # Compatibility outputs only. Source geometry and the input plan stay intact.
+    by_key = {e.entity_key: e for e in view.elements}
+    for element in model.elements:
+        element.fds_primitive_ids = list(by_key[element.entity_key].fds_primitive_ids)
+    model.exported_bounds = view.exported_bounds
+    model.simulation_domain = view.simulation_domain
+    model.domain_origin = view.domain_origin
+    return text, manifest
+
+
+def _serialize_planned_model(model, cell_size):
     """Serializes CanonicalModel into valid FDS text and generates MappingManifest."""
     if not all(e.mapping_planned for e in model.elements):
         raise ValueError("Call plan_mapping before serialization")
@@ -176,9 +199,6 @@ def serialize_fds(
     lines.append("")
     lines.append("&TAIL /")
     lines.append("")
-
-    if mapping_plan is not None:
-        mapping_plan.sync_primitive_ids(model)
 
     manifest = build_manifest(model, "\n".join(lines))
     return "\n".join(lines), manifest

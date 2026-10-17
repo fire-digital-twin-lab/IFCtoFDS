@@ -130,9 +130,9 @@ def test_mapping_plan_decouples_mapping_from_serialization(box_model):
     # Before serialize_fds, primitive IDs in plan are empty
     assert len(decision.fds_primitive_ids) == 0
     serialize_fds(box_model, mapping_plan=plan)
-    # After serialize_fds with mapping_plan, primitive IDs are synchronized!
-    assert decision.fds_primitive_ids == elem.fds_primitive_ids
-    assert len(decision.fds_primitive_ids) > 0
+    # Plans describe intent; emitted IDs belong to the serialization result.
+    assert decision.fds_primitive_ids == []
+    assert len(elem.fds_primitive_ids) > 0
 
 
 def test_validation_evaluator_produces_immutable_report(box_model):

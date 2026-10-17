@@ -21,15 +21,25 @@ def build_mapping_plan(
                 representation_bounds=e.representation_bounds,
                 rationale=e.mapping_rationale,
                 boundary_treatment=e.boundary_treatment,
+                scope_decision=e.scope_decision,
+                scope_rationale=e.scope_rationale,
+                boundary_policy=e.boundary_policy,
+                boundary_evidence=e.boundary_evidence.copy(),
+                decision=e.decision.copy(),
+                review_status=e.review_status,
             )
         )
     return MappingPlan(
         decisions=decisions,
-        simulation_domain=model.simulation_domain,
+        simulation_domain=model.simulation_domain or (
+            model.model_bounds if not model.requested_scope.get("storeys")
+            and not model.requested_scope.get("bounding_box") else None
+        ),
+        domain_origin=model.domain_origin,
         cell_size=cell_size,
         metadata={
             "source_id": model.source.source_id,
             "filename": model.source.filename,
             "total_elements": len(model.elements),
         },
-    )
+    ).model_copy(deep=True)
