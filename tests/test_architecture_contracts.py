@@ -111,6 +111,12 @@ def test_container_and_skeleton_structure_exists():
     container = create_container()
     assert isinstance(container, Container)
     assert container.config is not None
+    assert container.get_artifact_repository() is not None
+    assert container.get_reference_repository() is not None
+    assert container.get_validation_runner() is not None
+    assert container.get_save_artifacts_use_case() is not None
+    assert container.get_audit_conversion_use_case() is not None
+    assert container.get_convert_verified_use_case() is not None
 
 
 def test_mapping_plan_decouples_mapping_from_serialization(box_model):
