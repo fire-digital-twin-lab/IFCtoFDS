@@ -2,6 +2,7 @@
 
 import tempfile
 import json
+import gc
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Dict, List, Optional, Union
@@ -92,12 +93,18 @@ class ConvertVerifiedUseCase:
         manifest = MappingManifest.model_validate_json(
             manifest_path.read_text(encoding="utf-8")
         )
+        # The auditor reopens the source. Release the converter's full meshes
+        # before constructing that independent model, rather than retaining both.
+        source_timings = dict(model.timings)
+        exported_bounds = model.exported_bounds
+        del mapping_plan, model
+        gc.collect()
         fds = (workspace / "model.fds").read_bytes().decode("utf-8")
         audited, manifest, report = self.audit_use_case.execute(
             paths, fds, manifest, configuration, geometry_package
         )
         timings = dict(
-            **model.timings,
+            **source_timings,
             prepare_s=prepared - start,
             serialize_s=serialized - prepared,
             package_write_s=packaged - serialized,
@@ -115,10 +122,10 @@ class ConvertVerifiedUseCase:
             ),
             encoding="utf-8",
         )
-        audited.exported_bounds = model.exported_bounds
+        audited.exported_bounds = exported_bounds
         audited.timings = timings
         report.metrics["exported_bounds"] = (
-            model.exported_bounds.model_dump() if model.exported_bounds else None
+            exported_bounds.model_dump() if exported_bounds else None
         )
         return dict(
             status=report.status.value,

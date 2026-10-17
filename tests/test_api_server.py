@@ -51,6 +51,25 @@ def test_api_convert_job(tiny_ifc):
     import hashlib
 
     assert hashlib.sha256(payload.content).hexdigest() == ref["payload"]
+    batch = client.get(
+        "/api/jobs/" + jid + "/geometry-batch",
+        params=[("payloads", ref["payload"])] * 2,
+    )
+    assert batch.status_code == 200
+    assert batch.content == payload.content * 2
+    assert (
+        client.get(
+            "/api/jobs/" + jid + "/geometry-batch",
+            params=[("payloads", ref["payload"])] * 17,
+        ).status_code
+        == 422
+    )
+    assert (
+        client.get(
+            "/api/jobs/" + jid + "/geometry-batch", params={"payloads": "0" * 64}
+        ).status_code
+        == 404
+    )
     assert client.get("/api/jobs/" + jid + "/geometry/" + "0" * 64).status_code == 404
     assert "_geometry_payloads" not in client.get("/api/jobs/" + jid).json()
     assert client.get(result["artifacts"]["geometry_archive"]["url"]).status_code == 200
@@ -180,5 +199,3 @@ def test_checkpoint_artifacts_accessible_on_failed_or_incomplete_jobs(tmp_path):
         res_chk.headers.get("X-Verification-Status")
         == "UNACCEPTED-AUDIT_INCOMPLETE-DO_NOT_USE_AS_VERIFIED_OUTPUT"
     )
-
-

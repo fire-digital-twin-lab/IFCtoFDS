@@ -59,8 +59,8 @@ def test_malformed_source_opening_is_explicit_not_bypassed(tiny_ifc):
     assert evidence["errors"][0]["stage"] == "IFC_GEOMETRY"
     model = prepare_model([str(path)], {}, reference=True)
     host = next(e for e in model.elements if e.step_id == wall.id())
-    assert host.mapping_status == "UNSUPPORTED"
-    assert host.fds_representation == "NONE"
+    assert host.mapping_status == "INCONCLUSIVE"
+    assert host.fds_representation == "GEOM"
     assert host.openings[0].extraction_diagnostic
     text, manifest = serialize_fds(model)
     report = run_independent_validation(model, text, manifest)

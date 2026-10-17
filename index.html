@@ -220,6 +220,10 @@
                             </div>
                             <div id="decisions-summary-chip" class="info-callout" style="display:none;font-size:10px"></div>
                             <div class="form-group">
+                                <label class="form-label" for="verified-system-decisions">Reviewed System Decisions (JSON)</label>
+                                <input id="verified-system-decisions" class="form-input" type="file" accept=".json">
+                            </div>
+                            <div class="form-group">
                                 <label class="form-label" for="verified-deltas">Approved Reference Deltas (JSON)</label>
                                 <input id="verified-deltas" class="form-input" type="file" accept=".json">
                             </div>
@@ -239,6 +243,16 @@
                         </section>
 
                         <!-- Step 5: Advanced & Diagnostics -->
+                        <div class="form-group">
+                            <label class="form-label" for="verified-profile">Mapping Profile</label>
+                            <select id="verified-profile" class="form-select">
+                                <option value="mapping" selected>Mapping</option>
+                                <option value="geometry-fidelity">Geometry Fidelity (Include HVAC / Fire Protection)</option>
+                                <option value="research-basement">Research Reference</option>
+                                <option value="simulation">Simulation (Solver Evidence Required)</option>
+                            </select>
+                            <small>Geometry Fidelity includes equipment shapes. Equipment operation remains unconfigured.</small>
+                        </div>
                         <details id="verified-advanced" class="config-section" style="cursor:pointer">
                             <summary class="section-title" style="user-select:none"><i data-lucide="settings-2" style="width:14px;height:14px"></i> Advanced / Diagnostic Controls</summary>
                             <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
@@ -247,14 +261,6 @@
                                     <span>Force detailed GEOM output <small>(Diagnostic only &mdash; increases file size)</small></span>
                                 </label>
                                 <div class="form-group">
-                                    <label class="form-label" for="verified-profile">Acceptance Profile</label>
-                                    <select id="verified-profile" class="form-select">
-                                        <option value="mapping" selected>Mapping</option>
-                                        <option value="research-basement">Research Reference</option>
-                                        <option value="simulation">Simulation (Solver Evidence Required)</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
                                     <label class="form-label" for="verified-reference-case">Reference Case</label>
                                     <select id="verified-reference-case" class="form-select">
                                         <option value="">None</option>
@@ -262,7 +268,7 @@
                                 </div>
                                 <label class="checkbox-card">
                                     <input id="verified-show-reference" type="checkbox">
-                                    <span>Display Reference Geometry (MEP/PCCC not in FDS)</span>
+                                    <span>Show Source Shapes Kept as Reference</span>
                                 </label>
                             </div>
                         </details>
@@ -531,7 +537,7 @@
                     <button id="drawer-tab-gates" class="audit-tab-btn active" type="button">
                         <i data-lucide="shield-check" style="width:14px;height:14px"></i>
                         <span>Validation Gates</span>
-                        <span id="drawer-gate-count" class="brand-badge" style="background:var(--bg-base);font-size:9px">9</span>
+                        <span id="drawer-gate-count" class="brand-badge" style="background:var(--bg-base);font-size:9px">10</span>
                     </button>
                     <button id="drawer-tab-findings" class="audit-tab-btn" type="button">
                         <i data-lucide="alert-circle" style="width:14px;height:14px"></i>
@@ -553,12 +559,13 @@
             </header>
 
             <div class="audit-drawer-body">
-                <!-- Panel 1: 9-Gate Grid -->
+                <!-- Panel 1: Core validation gates -->
                 <div id="panel-gates" class="gates-grid">
                     <div class="gate-card" data-gate="syntax"><div class="gate-card-header"><span class="gate-card-title">FDS Syntax</span><span class="status-dot"></span></div><span class="gate-card-reason">Namelist structure &amp; face indices</span></div>
                     <div class="gate-card" data-gate="traceability"><div class="gate-card-header"><span class="gate-card-title">Traceability</span><span class="status-dot"></span></div><span class="gate-card-reason">Bidirectional IFC-FDS keys</span></div>
                     <div class="gate-card" data-gate="scope"><div class="gate-card-header"><span class="gate-card-title">Spatial Scope</span><span class="status-dot"></span></div><span class="gate-card-reason">Storeys &amp; domain boundary</span></div>
                     <div class="gate-card" data-gate="geometry"><div class="gate-card-header"><span class="gate-card-title">Geometry</span><span class="status-dot"></span></div><span class="gate-card-reason">Binary64 OpenCASCADE comparison</span></div>
+                    <div class="gate-card" data-gate="structural_completeness"><div class="gate-card-header"><span class="gate-card-title">Structural Coverage</span><span class="status-dot"></span></div><span class="gate-card-reason">In-scope walls, floors and structure accounted for</span></div>
                     <div class="gate-card" data-gate="openings"><div class="gate-card-header"><span class="gate-card-title">Openings</span><span class="status-dot"></span></div><span class="gate-card-reason">Void subtraction &amp; aperture checks</span></div>
                     <div class="gate-card" data-gate="mep"><div class="gate-card-header"><span class="gate-card-title">MEP Systems</span><span class="status-dot"></span></div><span class="gate-card-reason">Structured classification &amp; ports</span></div>
                     <div class="gate-card" data-gate="boundary"><div class="gate-card-header"><span class="gate-card-title">Boundary</span><span class="status-dot"></span></div><span class="gate-card-reason">Boundary treatment verification</span></div>
@@ -748,6 +755,7 @@
     <script src="js/ifc/ifc-adapter.js"></script>
     <script src="js/ifc/ifc-meta.js"></script>
     <script src="js/ifc/web-ifc-display.js"></script>
+    <script src="js/ifc/backend-preview.js"></script>
     <script src="js/ifc/processed-file.js"></script>
     <script src="js/compare/checks.js"></script>
 

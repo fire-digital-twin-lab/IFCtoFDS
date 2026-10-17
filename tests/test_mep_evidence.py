@@ -31,6 +31,35 @@ def test_fire_pipe_requires_structured_evidence():
     ) == ("UNRESOLVED", False)
 
 
+def test_declared_system_object_type_vocabulary_and_conflicts():
+    assert classify_mep_element("IfcSystem", "", object_type="Hệ thống PCCC") == (
+        "UNRESOLVED",
+        False,
+    )
+    assert classify_mep_element(
+        "IfcSystem", "", object_type="Hệ thống thông gió bãi đỗ xe"
+    ) == ("VENTILATION", False)
+    assert classify_mep_element(
+        "IfcSystem", "SPR 50", object_type="FP_Hệ thống chữa cháy Sprinkler"
+    ) == ("FIRE_SUPPRESSION", True)
+    assert classify_mep_element(
+        "IfcSystem", "SPR 50", object_type="Hệ thống tăng áp"
+    ) == ("SMOKE_EXTRACT", True)
+    assert classify_mep_element("IfcSystem", "FP_Hệ thống chữa cháy Sprinkler") == (
+        "UNRESOLVED",
+        False,
+    )
+    assert classify_mep_element(
+        "IfcDistributionSystem",
+        "",
+        predefined_type="VENTILATION",
+        object_type="FIRE_SUPPRESSION",
+    ) == ("UNRESOLVED", False)
+    assert classify_mep_element(
+        "IfcSystem", "", object_type="Maybe smoke or sprinkler, to be reviewed"
+    ) == ("UNRESOLVED", False)
+
+
 def test_pressurization_american_spelling_classified():
     assert classify_mep_element(
         "IfcFlowSegment",
@@ -122,4 +151,3 @@ def test_proxy_with_mep_evidence_is_classified(box_model):
     extract_mep_graph(box_model, DummyFile())
     assert e.mep_category == "FIRE_SUPPRESSION"
     assert len(e.classification_evidence) > 0
-
