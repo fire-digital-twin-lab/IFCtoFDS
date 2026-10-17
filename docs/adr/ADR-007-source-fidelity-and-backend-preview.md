@@ -91,7 +91,7 @@ origin. The Object3D placement retains the original world coordinates in double
 precision. This avoids collapsing thin walls when georeferenced coordinates are
 in the millions of metres and the GPU uses Float32 vertices. Source/FDS geometry,
 selection bounds and clipping coordinates are unchanged. Browser tests include a
-3 cm object near northing 2.3 million metres.
+3 cm object at generic northing 2.4 million metres.
 
 The viewer still ultimately retains all displayed GPU geometry. Upload caps
 remain configurable (default 200 MiB per source / 500 MiB total); these caps are
