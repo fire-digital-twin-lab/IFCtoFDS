@@ -115,7 +115,9 @@
                     var link = document.createElement('a'); link.href = result.artifacts[name].url;
                     link.textContent = 'Download ' + name; link.download = ''; link.style.display = 'block'; get('artifacts').appendChild(link);
                 });
+                result.job_id = jobId;
                 return result; })
+                .catch(function (error) { error.jobId = jobId; throw error; })
                 .finally(function () { get('cancel').disabled = true; });
         }
     };

@@ -113,3 +113,17 @@ console.log({
     inlineObsts: inlineResponse.model.obsts.length
 });
 console.log('Background and direct-file export worker tests passed.');
+
+// Errors preserve stage/stack/identity without embedding the conversion payload.
+for (const [workerCtx, getResponse] of [[ctx, () => response], [inlineCtx, () => inlineResponse]]) {
+    vm.runInContext("IfcFds.fds.FdsNamelistParser.prototype.parse = function () { throw new RangeError('parser fixture failure'); };", workerCtx);
+    workerCtx.onmessage({data:{type:'export',requestId:99,ifcModel:model,options:{mode:'hybrid',cellSize:0.1}}});
+    const failure = getResponse();
+    if (failure.type !== 'error' || failure.error.stage !== 'fds_parse' || failure.error.requestId !== 99 || !failure.error.stack) {
+        throw new Error('Worker lost structured failure evidence');
+    }
+    if ('vertices' in failure.error || 'fds_text' in failure.error || 'model' in failure.error) {
+        throw new Error('Worker diagnostics embedded geometry');
+    }
+}
+console.log('Worker and inline diagnostics retain stage, stack and request identity.');

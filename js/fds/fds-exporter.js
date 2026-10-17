@@ -55,6 +55,7 @@
         // still match.
         var allocateId = makeIdAllocator();
         elements.forEach(function (element, index) {
+            try {
             if (onProgress && (index & 0xF) === 0) {
                 onProgress(index / Math.max(1, total), element.name || (element.ifcType + ' #' + element.stepId));
             }
@@ -82,6 +83,7 @@
                     lines.push(formatBoundingObst(element, index + 1, elementId));
                 }
             }
+            } catch (error) { error.entityId = element.stepId; throw error; }
         });
         if (deferredClosures.length) {
             lines.push('! Window/door closure OBSTs come after every wall HOLE so HOLEs do not carve the glass.');

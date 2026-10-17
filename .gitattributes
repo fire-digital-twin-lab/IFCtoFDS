@@ -1,3 +1,4 @@
 # Freeze public regression inputs; source identity deliberately hashes exact bytes.
 /tests/baseline/fixtures/*.ifc text eol=lf
+/tests/browser/*.ifc text eol=lf
 /examples/*.ifc text eol=lf

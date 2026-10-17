@@ -279,7 +279,7 @@
             fileName: fileName,
             elements: [],
             diagnostics: [
-                new ns.core.Diagnostic('error', 'IFC import failed', error && error.message ? error.message : String(error))
+                new ns.core.Diagnostic('error', 'IFC import failed', error && error.message ? error.message : String(error), ns.core.failure(error, {stage: 'ifc_read'}))
             ]
         };
         state.lastDisplayMeshes = null;
@@ -384,6 +384,7 @@
                 : null;
 
             file.arrayBuffer().then(function (buffer) {
+                if (state.currentIfcFile !== file) return;
                 setLoadingProgress(0.1, 'Indexing entities…');
                 var text = new TextDecoder().decode(new Uint8Array(buffer));
                 state.ifcSourceText = text;
@@ -396,6 +397,7 @@
                     })
                     : Promise.resolve(null);
                 return displayPromise.then(function (displayMeshes) {
+                    if (state.currentIfcFile !== file) return;
                     if (displayMeshes && displayMeshes.length) {
                         finishIfcLoad(meta, displayMeshes, oversizeNotice);
                         return;
@@ -405,11 +407,13 @@
                     return ifcAdapter.parseAsync(text, file.name, function (fraction) {
                         setLoadingProgress(fraction, 'Parsing legacy mesh…');
                     }).then(function (fullModel) {
+                        if (state.currentIfcFile !== file) return;
                         state.fullModel = fullModel;
                         finishIfcLoad(fullModel, null, oversizeNotice);
                     });
                 });
             }).catch(function (error) {
+                if (state.currentIfcFile !== file) return;
                 failIfcLoad(file.name, error);
             });
         });
@@ -671,10 +675,11 @@
     }
 
     function loadFdsText(text, sourceName, preparedModel) {
-        var model = preparedModel || adapter.toSceneModel(parser.parse(text));
+        var parsed = preparedModel ? null : ns.core.atStage('fds_parse', function () { return parser.parse(text); });
+        var model = preparedModel || ns.core.atStage('scene_model', function () { return adapter.toSceneModel(parsed); });
         state.fdsModel = model;
         els.fdsSourceName.textContent = sourceName;
-        viewer.loadFdsModel(model);
+        ns.core.atStage('viewer', function () { viewer.loadFdsModel(model); });
         viewer.setFdsOpacity(Number(els.fdsOpacity.value));
         viewer.setExclusions(state.excludedStepIds, state.excludedItemIds);
         updateMetrics(model);
@@ -758,6 +763,16 @@
             item.querySelector('strong').textContent = diag.title;
             item.querySelector('span').textContent = diag.detail;
             els.diagnostics.appendChild(item);
+            if (diag.ref && diag.ref.kind === 'conversion-failure') {
+                var download = document.createElement('button');
+                download.type = 'button'; download.textContent = 'Download diagnostic';
+                download.addEventListener('click', function () {
+                    var url = URL.createObjectURL(new Blob([JSON.stringify(diag.ref, null, 2)], {type: 'application/json'}));
+                    var link = document.createElement('a'); link.href = url; link.download = 'conversion-diagnostic.json';
+                    link.click(); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+                });
+                item.appendChild(download);
+            }
         });
     }
 
@@ -875,10 +890,13 @@
     function exportIfc(action) {
         if (state.exportBusy) return;
         if (!state.ifcModel || !state.ifcModel.elements || !state.ifcModel.elements.length) return;
+        var generation = state.exportRequestId;
         ensureFullModel().then(function (fullModel) {
+            if (generation !== state.exportRequestId) return;
             runExportWithModel(fullModel, action);
         }).catch(function (err) {
-            addExportDiagnostic(err && err.message ? err.message : String(err));
+            if (generation !== state.exportRequestId) return;
+            addExportDiagnostic(err, {stage: 'ifc_parse'});
         });
     }
 
@@ -891,12 +909,14 @@
             return Promise.reject(new Error('IFC source not in memory — please reopen the file.'));
         }
         showLoading('Preparing FDS conversion', 'Parsing entities…');
+        var generation = state.exportRequestId;
         // Export completes openings independently of the preview source.
         var parseOptions = { skipBoxOpenings: false };
-        var parsePromise = ifcAdapter.parseAsync(state.ifcSourceText, state.ifcFileName, function (fraction) {
+        var parsePromise = ns.core.atStage('ifc_parse', function () { return ifcAdapter.parseAsync(state.ifcSourceText, state.ifcFileName, function (fraction) {
             setLoadingProgress(fraction, 'Parsing entities…');
-        }, parseOptions);
+        }, parseOptions); });
         return parsePromise.then(function (model) {
+            if (generation !== state.exportRequestId) { var aborted = new Error('Conversion cancelled'); aborted.name = 'AbortError'; throw aborted; }
             state.fullModel = model;
             // Swap the displayed model to the precise one so sidebar counts and the IFC
             // mapping reflect the actual parser output instead of the meta heuristic.
@@ -936,7 +956,7 @@
                     return;
                 }
                 if (result.type === 'error') {
-                    finishExportWithError(result.message || 'Background conversion failed.');
+                    finishExportWithError(result.error || new Error(result.message || 'Background conversion failed.'));
                     return;
                 }
                 if (result.type !== 'complete') return;
@@ -945,10 +965,10 @@
                 try {
                     var base = (fullModel.fileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
                     var fileName = base + '_obst-geom.fds';
-                    loadFdsText(result.text, fileName, result.model);
                     state.generatedFdsText = result.text;
                     state.generatedFdsName = fileName;
                     els.saveFds.disabled = false;
+                    loadFdsText(result.text, fileName, result.model);
                     hideLoading();
                     // The reveal animation clears any partial clip box from before this
                     // convert; mirror that on the UI so the bars sit at the full extent.
@@ -959,14 +979,14 @@
                     // change a single OBST.
                     if (viewer.playConversionReveal && action !== 'voxelize') viewer.playConversionReveal();
                 } catch (error) {
-                    addExportDiagnostic(error && error.message ? error.message : String(error));
+                    addExportDiagnostic(error, {stage: 'viewer', requestId: requestId});
                     hideLoading();
                 }
                 setExportBusy(false);
             });
             worker.addEventListener('error', function (event) {
                 if (requestId !== state.exportRequestId) return;
-                finishExportWithError(event.message || 'Background conversion worker failed.');
+                finishExportWithError(ns.core.failure(event, {stage: 'worker', requestId: requestId}));
             });
             worker.postMessage({
                 type: 'export',
@@ -975,7 +995,7 @@
                 options: options
             });
         } catch (error) {
-            finishExportWithError(error && error.message ? error.message : String(error));
+            finishExportWithError(error);
         }
     }
 
@@ -986,11 +1006,13 @@
         setExportBusy(false);
     }
 
-    function addExportDiagnostic(message) {
+    function addExportDiagnostic(error, context) {
+        var failure = ns.core.failure(error, Object.assign({requestId: state.exportRequestId}, context || {}));
         if (!state.ifcModel) state.ifcModel = { diagnostics: [] };
         if (!state.ifcModel.diagnostics) state.ifcModel.diagnostics = [];
         state.ifcModel.diagnostics.push(
-            new ns.core.Diagnostic('error', 'FDS export failed', message)
+            new ns.core.Diagnostic('error', failure.stage === 'viewer' ? 'FDS display failed' : 'FDS export failed',
+                failure.message + ' (stage: ' + failure.stage + ')', failure)
         );
         renderDiagnostics();
     }
@@ -1009,6 +1031,7 @@
     }
 
     function clearGeneratedFds() {
+        state.verifiedJobId = null;
         state.generatedFdsText = null;
         state.generatedFdsName = null;
         if (viewer.cancelVerifiedLoad) viewer.cancelVerifiedLoad();
@@ -1037,6 +1060,7 @@
             include_review: !!(els.includeReviewSolids && els.includeReviewSolids.checked)
         })
         .then(async function (data) {
+            state.verifiedJobId = data && data.job_id;
             hideLoading(); setExportBusy(false);
             if (!data || !data.artifacts) throw new Error('Missing conversion artifacts');
             state.lastArtifactLinks = data.artifacts;
@@ -1053,15 +1077,14 @@
             var base = (data.source_filename || state.ifcFileName || 'model').replace(/\.[^.]+$/, '');
             var fileName = base + (data.status === 'MAPPING_VERIFIED' ? '_mapping_verified.fds' : '_diagnostic.fds');
             state.generatedFdsText = text; state.generatedFdsName = fileName;
-            loadFdsText(text, fileName);
             if (els.saveFds) els.saveFds.disabled = false;
+            loadFdsText(text, fileName);
             setupClippingForBounds(boundsForClipping());
         })
         .catch(function (err) {
             hideLoading();
             setExportBusy(false);
-            var msg = err && err.message ? err.message : String(err);
-            addExportDiagnostic('Verified conversion failed: ' + msg + '. Verify local server is running (python -m ifc_to_fds serve).');
+            addExportDiagnostic(err, {stage: 'verified_conversion', jobId: state.verifiedJobId});
         });
     }
 
