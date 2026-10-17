@@ -1,8 +1,8 @@
 {
   "javascript_files": {
     "js/app-controller.js": {
-      "total_lines": 1787,
-      "code_lines": 1603
+      "total_lines": 1473,
+      "code_lines": 1302
     },
     "js/viewer/scene-viewer.js": {
       "total_lines": 1851,
@@ -21,8 +21,8 @@
       "code_lines": 983
     },
     "index.html": {
-      "total_lines": 715,
-      "code_lines": 657
+      "total_lines": 722,
+      "code_lines": 663
     }
   },
   "python_files": {
@@ -35,12 +35,12 @@
       "code_lines": 588
     },
     "ifc_to_fds/domain/bim/model.py": {
-      "total_lines": 151,
+      "total_lines": 148,
       "code_lines": 122
     },
     "ifc_to_fds/domain/validation/model.py": {
-      "total_lines": 198,
-      "code_lines": 171
+      "total_lines": 206,
+      "code_lines": 177
     },
     "ifc_to_fds/application/use_cases/audit_conversion.py": {
       "total_lines": 312,

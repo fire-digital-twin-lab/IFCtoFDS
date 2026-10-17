@@ -1,217 +1,29 @@
-"""Approved, content-bound reference cases; candidates never approve themselves."""
+"""Golden reference parity evaluation gate."""
 
 import copy
-import json
-from ifc_to_fds.diagnostics import operation
-from ifc_to_fds.adapters.reference import FILES as FILES, FilesystemReferenceRepository
+from typing import Any, Dict, Optional
 from ifc_to_fds.core.compare import normalize
-from pathlib import Path
-from ifc_to_fds.core.canonical import SCHEMA_VERSION, TriangleMesh
-from ifc_to_fds.geometry.package import verify_package, metrics_pass
-from .metrics import compare_solids, passage_metrics
-from .acceptance import GateResult, GateStatus, Finding, Severity
-
-from .reference_integrity import FIELDS, snapshot
-
-
-def source_signature(sources):
-    return normalize(
-        [
-            {
-                k: s[k]
-                for k in (
-                    "source_id",
-                    "file_hash_sha256",
-                    "schema_version",
-                    "unit_scale_to_meters",
-                    "world_transform",
-                )
-            }
-            for s in sources
-        ]
-    )
-
-
-_repo = FilesystemReferenceRepository()
-
-
-def bundle_digest(directory):
-    return _repo.bundle_digest(directory)
-
-
-def resolve_case(case):
-    # Server converts registered IDs to paths; local CLI also accepts paths.
-    return Path(case)
-
-
-def resolve_sources(case, mapping):
-    return _repo.resolve_sources(case, mapping)
-
-
-def serialized_geometry(text, manifest):
-    """Capture the actual FDS solids, with reviewed manifest links for legacy files."""
-    import hashlib
-    from .parser import parse_fds
-
-    if text is None:
-        return dict(
-            schema_version=SCHEMA_VERSION,
-            complete=False,
-            entries={},
-            reason="No accepted/candidate FDS artifact supplied",
-        )
-    parsed = parse_fds(text)
-    errors = [*parsed.errors, *parsed.unsupported]
-    entries = {}
-    actual_ids = set()
-    for primitive in parsed.primitives:
-        actual_ids.add(primitive.id)
-        keys = manifest.primitive_to_ifc.get(primitive.id, [])
-        source_key = primitive.source.get("entity_key")
-        if len(keys) != 1 or (source_key and source_key != keys[0]):
-            errors.append(f"Unresolved primitive source: {primitive.id}")
-            continue
-        if primitive.kind not in ("OBST", "GEOM"):
-            errors.append(f"Unsupported golden primitive: {primitive.kind}")
-            continue
-        try:
-            entries.setdefault(keys[0], []).append(
-                primitive.mesh().model_dump(mode="json")
-            )
-        except ValueError as exc:
-            errors.append(str(exc))
-    if actual_ids != set(manifest.primitive_to_ifc):
-        errors.append("Golden FDS primitive set conflicts with manifest")
-    return dict(
-        schema_version=SCHEMA_VERSION,
-        complete=not errors,
-        entries=entries,
-        fds_sha256=hashlib.sha256(text.encode()).hexdigest(),
-        errors=errors,
-    )
-
-
-def create_candidate(
-    directory, model, manifest, package, report, configuration, fds_text=None
-):
-    directory = Path(directory)
-    if directory.exists() and any(directory.iterdir()):
-        raise ValueError(
-            "Reference output must be a new empty directory; existing baseline is immutable"
-        )
-    directory.mkdir(parents=True, exist_ok=True)
-    records = snapshot(manifest)
-    selected = {e.entity_key: e for e in model.elements}
-
-    def subset(predicate):
-        return {k: v for k, v in records.items() if predicate(selected[k])}
-
-    values = {
-        "sources.json": dict(
-            schema_version=SCHEMA_VERSION,
-            sources=[
-                s.model_dump(mode="json", exclude={"file_path"})
-                for s in model.sources or [model.source]
-            ],
-        ),
-        "scope.json": dict(
-            scope=model.requested_scope, simulation_domain=manifest.simulation_domain
-        ),
-        "expected-inventory.json": records,
-        "structural-reference.json": subset(
-            lambda e: e.role == "PHYSICAL" and not e.classification_evidence
-        ),
-        "openings-reference.json": {
-            e.entity_key: [
-                dict(
-                    step_id=o.opening_step_id,
-                    global_id=o.opening_global_id,
-                    fillings=o.filling_global_ids,
-                )
-                for o in e.openings
-            ]
-            for e in model.elements
-            if e.openings
-        },
-        "hvac-reference.json": subset(
-            lambda e: e.mep_category in ("VENTILATION", "SMOKE_EXTRACT")
-        ),
-        "fire-protection-reference.json": subset(
-            lambda e: e.mep_category == "FIRE_SUPPRESSION"
-        ),
-        "exclusions.json": subset(
-            lambda e: (
-                e.mapping_strategy.value in ("EXCLUDED_SCOPE", "EXCLUDED_APPROVED")
-            )
-        ),
-        "boundary-elements.json": subset(
-            lambda e: (
-                e.boundary_treatment == "PENDING_VALIDATION"
-                or e.scope_decision.value == "BOUNDARY_RETAINED"
-            )
-        ),
-        "alias-decisions.json": [],
-        "golden-manifest.json": manifest.model_dump(mode="json"),
-        "golden-geometry-metrics.json": report.metrics,
-        "geometry-package.json": package,
-        "fds-geometry.json": serialized_geometry(fds_text, manifest),
-        "mep-reference.json": model.mep_graph.model_dump(mode="json"),
-        "acceptance-profile.json": dict(
-            schema_version=SCHEMA_VERSION,
-            configuration=configuration,
-            status="DRAFT",
-            origin="AUTOMATIC_CANDIDATE_NOT_GROUND_TRUTH",
-        ),
-        "review-queue.json": [
-            dict(
-                entity_key=e.entity_key,
-                review_status=e.review_status,
-                boundary_treatment=e.boundary_treatment,
-            )
-            for e in model.elements
-            if e.review_status == "REVIEW_REQUIRED"
-            or e.boundary_treatment == "PENDING_VALIDATION"
-        ],
-    }
-    from ifc_to_fds.geometry.storage import DiskPackage, copy_package
-
-    if isinstance(package, DiskPackage):
-        copy_package(package, directory / "geometry-package.json")
-        values.pop("geometry-package.json")
-    for name, value in values.items():
-        (directory / name).write_text(
-            json.dumps(value, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-    checksum = bundle_digest(directory)
-    (directory / "approval.json").write_text(
-        json.dumps(
-            dict(
-                status="DRAFT",
-                bundle_sha256=checksum,
-                reviewer=None,
-                rationale=None,
-                evidence=[],
-            ),
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    (directory / "intentional-deltas.json").write_text(
-        json.dumps(
-            dict(status="DRAFT", reference_digest=checksum, changes=[]), indent=2
-        ),
-        encoding="utf-8",
-    )
-    return checksum
-
-
-def inspect_case(directory):
-    """Compatibility entrypoint with the same integrity checks as the adapter."""
-    return _repo.inspect_case(directory)
+from ifc_to_fds.diagnostics import operation
+from ifc_to_fds.domain.bim.model import TriangleMesh
+from ifc_to_fds.domain.validation.model import AuditConfig, Finding, GateResult, GateStatus, Severity
+from ifc_to_fds.geometry.boolean import solid_boolean
+from ifc_to_fds.geometry.mesh import as_trimesh
+from ifc_to_fds.geometry.package import metrics_pass, verify_package
+from ifc_to_fds.validation.golden.bundle_io import inspect_case
+from ifc_to_fds.validation.golden.normalizer import serialized_geometry, source_signature
+from ifc_to_fds.validation.metrics import compare_solids, passage_metrics
+from ifc_to_fds.validation.reference_integrity import FIELDS, snapshot
 
 
 @operation("GOLDEN")
-def golden_gate(report, model, manifest, package, configuration, fds_text=None):
+def golden_gate(
+    report: Any,
+    model: Any,
+    manifest: Any,
+    package: Any,
+    configuration: Dict[str, Any],
+    fds_text: Optional[str] = None,
+) -> None:
     profile = configuration.get("profile", "mapping")
     case = configuration.get("reference_case")
     gate = GateResult(status=GateStatus.PASS, required=True)
@@ -256,7 +68,8 @@ def golden_gate(report, model, manifest, package, configuration, fds_text=None):
     except (ValueError, TypeError, KeyError) as exc:
         fail("", "reference_integrity", "valid reference", str(exc))
         return
-    gate.evidence = dict(reference_sha256=checksum, reference_case=str(case))
+    evidence: Dict[str, Any] = {"reference_sha256": checksum, "reference_case": str(case)}
+    gate.evidence = evidence
     approved = approval.get("status") == "APPROVED" and all(
         approval.get(k) for k in ("reviewer", "rationale", "evidence")
     )
@@ -373,7 +186,6 @@ def golden_gate(report, model, manifest, package, configuration, fds_text=None):
             )
     saved_graph = configuration.get("mep_graph")
     if normalize(values["mep-reference.json"]) != normalize(saved_graph):
-        # Report endpoint identities for missing/changed network records.
         wanted = {
             x["connection_id"]: x
             for x in values["mep-reference.json"].get("connections", [])
@@ -417,7 +229,6 @@ def golden_gate(report, model, manifest, package, configuration, fds_text=None):
                 reference_package["elements"][key].get("ports"),
                 package["elements"][key].get("ports"),
             )
-    from .acceptance import AuditConfig
 
     config = AuditConfig.model_validate(audit_settings)
     baseline_fds = reference_fds
@@ -425,9 +236,6 @@ def golden_gate(report, model, manifest, package, configuration, fds_text=None):
     if not baseline_fds.get("complete") or not actual_fds.get("complete"):
         unknown("Actual or reference FDS solid evidence missing/unsupported")
     else:
-        from ifc_to_fds.geometry.mesh import as_trimesh
-        from ifc_to_fds.geometry.boolean import solid_boolean
-
         expected_solids = baseline_fds["entries"]
         actual_solids = actual_fds["entries"]
         for key in sorted(set(expected_solids) | set(actual_solids)):
@@ -557,8 +365,6 @@ def golden_gate(report, model, manifest, package, configuration, fds_text=None):
                 fail(key, "opening_geometry:" + opening_id, "valid solid", str(exc))
             except Exception as exc:
                 unknown(f"Opening comparison unavailable: {key}/{opening_id}: {exc}")
-    # Actual FDS geometry/opening findings are propagated to this gate. IDs and
-    # checksums alone can never establish parity with a golden solid.
     for finding in list(report.findings):
         if finding.category in (
             "geometry",
@@ -621,4 +427,4 @@ def golden_gate(report, model, manifest, package, configuration, fds_text=None):
         except (ValueError, KeyError, TypeError) as exc:
             fail(key or "", "alias_geometry", "valid equivalent solid", str(exc))
         except Exception as exc:
-            unknown(f"Alias measurement unavailable: {key}: {exc}")
+            unknown(f"Alias comparison failed: {key}: {exc}")
