@@ -64,18 +64,22 @@ def extract_mep_graph(model, file):
                 e.system_names.append(name)
     graph.systems = list(systems.values())
     owners = {}
+    ownership_rel_keys = {}
+    ownership_rel_types = {}
 
-    def register(port, owner):
+    def register(port, owner, rel):
         if port.id() in owners and owners[port.id()] != owner.id():
             graph.issues.append(f"Conflicting port owner: {key(port)}")
         owners[port.id()] = owner.id()
+        ownership_rel_keys.setdefault(port.id(), []).append(key(rel))
+        ownership_rel_types[port.id()] = rel.is_a()
 
     for rel in safe_by_type(file, "IfcRelConnectsPortToElement"):
-        register(rel.RelatingPort, rel.RelatedElement)
+        register(rel.RelatingPort, rel.RelatedElement, rel)
     for rel in safe_by_type(file, "IfcRelNests"):
         for child in rel.RelatedObjects:
             if child.is_a("IfcDistributionPort"):
-                register(child, rel.RelatingObject)
+                register(child, rel.RelatingObject, rel)
     ports = {}
     for port in safe_by_type(file, "IfcDistributionPort"):
         owner = by_step.get(owners.get(port.id()))
@@ -106,6 +110,8 @@ def extract_mep_graph(model, file):
             flow_direction=str(port.FlowDirection),
             local_position=local.tolist() if local is not None else None,
             world_position=world.tolist() if world is not None else None,
+            ownership_relation_keys=ownership_rel_keys.get(port.id(), []),
+            ownership_relation_type=ownership_rel_types.get(port.id()),
         )
         owner.ports.append(ref)
         ports[port.id()] = ref
@@ -146,13 +152,23 @@ def extract_mep_graph(model, file):
     for e in model.elements:
         if e.role != "PHYSICAL":
             continue
-        if (
-            e.ifc_type.upper() not in MEP_TYPES
-            and (e.type_class or "").upper().removesuffix("TYPE") not in MEP_TYPES
-            and not e.system_ids
-            and not e.ports
-            and e.ifc_type.upper() != "IFCBUILDINGELEMENTPROXY"
-        ):
+        has_mep_properties = any(
+            isinstance(props, dict)
+            and any(
+                k.replace(" ", "").lower()
+                in ("systemtype", "systemclassification", "servicetype")
+                for k in props
+            )
+            for props in (e.property_sets or {}).values()
+        )
+        is_mep = (
+            e.ifc_type.upper() in MEP_TYPES
+            or (e.type_class or "").upper().removesuffix("TYPE") in MEP_TYPES
+            or bool(e.system_ids)
+            or bool(e.ports)
+            or has_mep_properties
+        )
+        if not is_mep:
             continue
         system_types = [systems[s].system_type for s in e.system_ids]
         category, _ = classify_mep_element(

@@ -157,3 +157,28 @@ def test_geometry_payload_returns_404_when_index_file_missing(tmp_path):
     assert response.status_code == 404
     assert "Geometry index not available" in response.json()["detail"]
 
+
+def test_checkpoint_artifacts_accessible_on_failed_or_incomplete_jobs(tmp_path):
+    from ifc_to_fds.server import manager
+
+    job_id = "test-job-failed-audit"
+    (tmp_path / "model.fds").write_text("&HEAD CHID='test' /", encoding="utf-8")
+    manager.jobs[job_id] = {
+        "job_id": job_id,
+        "state": "FAILED",
+        "directory": str(tmp_path),
+    }
+    # Regular /artifacts requires COMPLETED
+    res_reg = client.get(f"/api/jobs/{job_id}/artifacts/fds")
+    assert res_reg.status_code == 409
+
+    # /checkpoints allows access with unaccepted header
+    res_chk = client.get(f"/api/jobs/{job_id}/checkpoints/fds")
+    assert res_chk.status_code == 200
+    assert "&HEAD" in res_chk.text
+    assert (
+        res_chk.headers.get("X-Verification-Status")
+        == "UNACCEPTED-AUDIT_INCOMPLETE-DO_NOT_USE_AS_VERIFIED_OUTPUT"
+    )
+
+

@@ -84,6 +84,8 @@ def test_ifc2x3_explicit_port_ownership(tmp_path):
     owners = [e for e in model.elements if e.step_id in {x.id() for x in members}]
     assert all(e.mep_category == "UNRESOLVED" and len(e.ports) == 1 for e in owners)
     assert all(np.allclose(e.ports[0].world_position, [1.0, 0.0, 0.0]) for e in owners)
+    assert all(e.ports[0].ownership_relation_type == "IfcRelConnectsPortToElement" for e in owners)
+    assert all(len(e.ports[0].ownership_relation_keys) == 1 for e in owners)
 
 
 def test_ports_edges_positions_system_deduplication(tiny_ifc):

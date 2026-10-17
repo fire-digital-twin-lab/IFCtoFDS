@@ -11,6 +11,10 @@ from ifc_to_fds.diagnostics import operation
 
 @operation("SCOPE")
 def apply_spatial_scope(model, scope):
+    if scope.elements:
+        raise ValueError(
+            "Element-scoped selection is not implemented; use storeys or bounding_box"
+        )
     building_bounds = {}
     for e in model.elements:
         if e.mesh and e.building_id and e.role == "PHYSICAL":

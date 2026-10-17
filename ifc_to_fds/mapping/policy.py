@@ -102,6 +102,11 @@ def plan_mapping(
     decisions=None,
     boundary_policy=None,
 ):
+    if include_review_solids:
+        raise ValueError(
+            "include_review=True is not supported without explicit reviewed decisions; "
+            "provide decisions with action='PASSIVE_OBSTACLE' and required promotion factors"
+        )
     decisions = decisions or {}
     validate_decisions(decisions)
     unknown = set(decisions) - {e.entity_key for e in model.elements}

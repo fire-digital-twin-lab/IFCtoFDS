@@ -81,3 +81,45 @@ def test_opening_host_identity_does_not_collide_on_global_id(tiny_ifc):
     assert ref.host_entity_key == by_step[first.id()].entity_key
     assert ref.void_relation_key.endswith(f":{relation.id()}")
     assert ref.entity_key == by_step[opening.id()].entity_key
+
+
+def test_generic_proxy_does_not_become_unresolved_mep(box_model):
+    from ifc_to_fds.mep.mep_graph import extract_mep_graph
+
+    e = box_model.elements[0]
+    e.ifc_type = "IfcBuildingElementProxy"
+    e.role = "PHYSICAL"
+    e.system_ids = []
+    e.ports = []
+    e.property_sets = {}
+    e.type_class = None
+
+    class DummyFile:
+        def by_type(self, _):
+            return []
+
+    extract_mep_graph(box_model, DummyFile())
+    assert e.mep_category == "OTHER"
+    assert e.classification_evidence == []
+
+
+def test_proxy_with_mep_evidence_is_classified(box_model):
+    from ifc_to_fds.mep.mep_graph import extract_mep_graph
+
+    e = box_model.elements[0]
+    e.ifc_type = "IfcBuildingElementProxy"
+    e.role = "PHYSICAL"
+    e.system_ids = ["sys:1"]
+    e.system_names = ["Fire Suppression"]
+    e.ports = []
+    e.property_sets = {"Pset": {"SystemClassification": "FIRE_SUPPRESSION"}}
+    e.type_class = None
+
+    class DummyFile:
+        def by_type(self, _):
+            return []
+
+    extract_mep_graph(box_model, DummyFile())
+    assert e.mep_category == "FIRE_SUPPRESSION"
+    assert len(e.classification_evidence) > 0
+

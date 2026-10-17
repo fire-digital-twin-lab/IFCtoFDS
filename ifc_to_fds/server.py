@@ -267,6 +267,24 @@ def artifact(jid: str, artifact: str):
         return FileResponse(path, filename=ARTIFACTS[artifact])
 
 
+@app.get("/api/jobs/{jid}/checkpoints/{artifact}")
+def checkpoint_artifact(jid: str, artifact: str):
+    if artifact not in ARTIFACTS:
+        raise HTTPException(404, "Unknown artifact")
+    with manager.lock:
+        if jid not in manager.jobs:
+            raise HTTPException(404, "Unknown job")
+        job = manager.jobs[jid]
+        path = Path(job["directory"]) / ARTIFACTS[artifact]
+        if not path.is_file():
+            raise HTTPException(404, "Checkpoint artifact not available")
+        response = FileResponse(path, filename=ARTIFACTS[artifact])
+        response.headers["X-Verification-Status"] = (
+            "UNACCEPTED-AUDIT_INCOMPLETE-DO_NOT_USE_AS_VERIFIED_OUTPUT"
+        )
+        return response
+
+
 @app.get("/api/jobs/{jid}/geometry/{payload}")
 def geometry_payload(jid: str, payload: str):
     if len(payload) != 64 or any(c not in "0123456789abcdef" for c in payload):

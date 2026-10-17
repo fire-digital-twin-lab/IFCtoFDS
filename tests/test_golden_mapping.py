@@ -88,7 +88,7 @@ def test_storey_interval_is_within_building(box_model):
 def test_proxy_and_reference_mep_do_not_become_obstacles(box_model):
     e = box_model.elements[0]
     e.ifc_type = "IfcBuildingElementProxy"
-    plan_mapping(box_model, include_review_solids=True)
+    plan_mapping(box_model)
     text, _, package, report, _ = checked(box_model)
     assert e.review_status == "REVIEW_REQUIRED"
     assert e.simulation_role == "REFERENCE_GEOMETRY"
@@ -103,6 +103,16 @@ def test_proxy_and_reference_mep_do_not_become_obstacles(box_model):
     _, _, _, report, _ = checked(box_model)
     assert e.review_status == "NOT_REQUIRED"
     assert report.element_statuses[e.entity_key] == "REFERENCE_PRESERVED"
+
+
+def test_include_review_without_decisions_is_rejected(box_model):
+    from ifc_to_fds.application.dto.configuration import validate_configuration
+
+    with pytest.raises(ValueError, match="include_review=True is not supported"):
+        plan_mapping(box_model, include_review_solids=True)
+    with pytest.raises(ValueError, match="include_review=True is not supported"):
+        validate_configuration({"include_review": True})
+
 
 
 def test_promotion_requires_all_factors():

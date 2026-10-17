@@ -37,6 +37,8 @@ class PortReference(BaseModel):
     port_key: str = ""
     world_position: Optional[List[float]] = None
     owner_key: str = ""
+    ownership_relation_keys: List[str] = Field(default_factory=list)
+    ownership_relation_type: Optional[str] = None
 
 
 class MEPSystem(BaseModel):

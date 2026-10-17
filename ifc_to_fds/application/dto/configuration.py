@@ -33,6 +33,11 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
     }
     if unknown:
         raise ValueError(f"Unknown configuration fields: {sorted(unknown)}")
+    if config.get("include_review"):
+        raise ValueError(
+            "include_review=True is not supported without explicit reviewed decisions; "
+            "provide decisions with action='PASSIVE_OBSTACLE' and required promotion factors"
+        )
     if config.get("profile", "mapping") not in (
         "mapping",
         "research-basement",

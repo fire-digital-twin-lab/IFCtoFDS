@@ -97,3 +97,11 @@ def test_meshless_unselected_source_resolves_out_of_scope(box_model):
     apply_spatial_scope(box_model, SpatialScope(storeys=["Level 1"]))
     assert unselected_element.scope_decision == ScopeDecision.OUT_OF_SCOPE
 
+
+def test_element_scoped_selection_is_explicitly_rejected(box_model):
+    with pytest.raises(
+        ValueError, match="Element-scoped selection is not implemented"
+    ):
+        apply_spatial_scope(box_model, SpatialScope(elements=["source:123"]))
+
+
