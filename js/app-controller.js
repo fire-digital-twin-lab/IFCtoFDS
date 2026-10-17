@@ -200,12 +200,13 @@
             }
         }
         viewer.sourceId = state.currentIfcFile ? state.currentIfcFile.name : 'ifc';
-        viewer.loadIfcModel(model, displayMeshes);
+        if (!model.backendPreview) viewer.loadIfcModel(model, displayMeshes);
+        else ns.verified.usePreviewInventory(model.inventorySummary, state.currentIfcFile);
         viewer.setIfcOpacity(Number(els.ifcOpacity.value));
         updateIfcMetrics(model);
         updateSourcePill(state.currentIfcFile, model);
         setExportEnabled(countConvertibleIfc(model) > 0);
-        setSaveProcessedEnabled(!!(model && model.elements && model.elements.length));
+        setSaveProcessedEnabled(!!(model && !model.backendPreview && model.elements && model.elements.length));
         setupClippingForBounds(boundsForClipping());
         if (ns.workbench && ns.workbench.navigation) {
             if (ns.workbench.navigation.sectionBox) {
@@ -319,6 +320,7 @@
         els.ifcFile.addEventListener('change', function (event) {
             var file = event.target.files[0];
             if (!file) return;
+            ns.ifc.backendPreview.cancel();
             state.currentIfcFile = file;
             ns.verified.setFallback(file);
             cancelPendingExport();
@@ -343,21 +345,19 @@
             els.ifcSourceName.textContent = file.name;
             showLoading('Loading ' + file.name, 'Reading file…');
 
-            // Mirrors the demo's fast open: regex-index for sidebar/selection metadata, web-ifc
-            // for display. The heavy ifc-adapter parse runs later, only when Convert to FDS is
-            // clicked. Above WEB_IFC_MAX_BYTES we still skip the WASM display path to keep the
-            // tab stable — the meta index by itself is fine on any size.
-            var WEB_IFC_MAX_BYTES = 32 * 1024 * 1024;
+            // Large sources go directly to an isolated backend worker. Never
+            // decode their entire STEP content or send them to the legacy parser.
+            var WEB_IFC_MAX_BYTES = 8 * 1024 * 1024;
+            if (file.size > WEB_IFC_MAX_BYTES) {
+                ns.ifc.backendPreview.load(file, viewer, setLoadingProgress).then(function (model) {
+                    if (state.currentIfcFile === file) finishIfcLoad(model, null, null);
+                }).catch(function (error) {
+                    if (state.currentIfcFile === file && error.name !== 'AbortError') failIfcLoad(file.name, error);
+                });
+                return;
+            }
             var useWebIfcDisplay = webIfcDisplay && file.size <= WEB_IFC_MAX_BYTES;
-            var oversizeNotice = (webIfcDisplay && file.size > WEB_IFC_MAX_BYTES)
-                ? new ns.core.Diagnostic(
-                    'info',
-                    'High-detail preview disabled',
-                    'IFC file is ' + (file.size / (1024 * 1024)).toFixed(1)
-                        + ' MB; the WASM display engine is skipped to keep the tab stable. '
-                        + 'FDS conversion is unaffected.'
-                )
-                : null;
+            var oversizeNotice = null;
 
             file.arrayBuffer().then(function (buffer) {
                 if (state.currentIfcFile !== file) return;

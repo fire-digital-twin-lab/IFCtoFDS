@@ -79,14 +79,11 @@ def determine_element_strategy(
         and element.representation_bounds is None
     ):
         return MappingStrategy.NONE
-    if (
-        not element.mesh
-        or not valid_solid(element.mesh)
-        or any(not o.mesh or not valid_solid(o.mesh) for o in element.openings)
-    ):
+    if not element.mesh or not valid_solid(element.mesh):
         return MappingStrategy.NONE
     if (
         not force_all_geom
+        and element.boundary_policy != "SOURCE_SOLID_DOMAIN_INTERSECTION"
         and not element.openings
         and is_axis_aligned_box(element.mesh)
     ):
@@ -101,6 +98,8 @@ def plan_mapping(
     include_review_solids=False,
     decisions=None,
     boundary_policy=None,
+    geometry_fidelity=False,
+    system_decisions=None,
 ):
     if include_review_solids:
         raise ValueError(
@@ -109,12 +108,28 @@ def plan_mapping(
         )
     decisions = decisions or {}
     validate_decisions(decisions)
+    system_decisions = system_decisions or {}
+    validate_decisions(system_decisions)
+    unknown_systems = set(system_decisions) - {
+        s.system_id for s in model.mep_graph.systems
+    }
+    if unknown_systems:
+        raise ValueError(
+            f"Decisions refer to unknown systems: {sorted(unknown_systems)}"
+        )
     unknown = set(decisions) - {e.entity_key for e in model.elements}
     if unknown:
         raise ValueError(f"Decisions refer to unknown entities: {sorted(unknown)}")
     for e in model.elements:
         e.fds_primitive_ids = []
         e.decision = decisions.get(e.entity_key, {})
+        inherited = [system_decisions[s] for s in e.system_ids if s in system_decisions]
+        if inherited and not e.decision:
+            if len({d["action"] for d in inherited}) > 1:
+                raise ValueError(
+                    f"Conflicting system decisions require an entity decision: {e.entity_key}"
+                )
+            e.decision = inherited[0]
         e.review_status = "NOT_REQUIRED"
         is_review = e.ifc_type.upper() in REVIEW_TYPES
         is_mep = bool(
@@ -126,11 +141,14 @@ def plan_mapping(
             .startswith(("IFCDUCT", "IFCPIPE", "IFCFAN", "IFCVALVE"))
         )
         e.simulation_role = (
-            "REFERENCE_GEOMETRY" if is_mep or is_review else "PASSIVE_OBSTACLE"
+            "REFERENCE_GEOMETRY"
+            if (is_review and not (is_mep and geometry_fidelity))
+            or (is_mep and not geometry_fidelity)
+            else "PASSIVE_OBSTACLE"
         )
         e.operational_status = (
             "NOT_CONFIGURED"
-            if e.simulation_role == "REFERENCE_GEOMETRY"
+            if is_mep or e.simulation_role == "REFERENCE_GEOMETRY"
             else "NOT_APPLICABLE"
         )
         if is_review:
@@ -143,7 +161,7 @@ def plan_mapping(
                 e.simulation_role = e.decision["action"]
                 e.operational_status = (
                     "NOT_CONFIGURED"
-                    if e.simulation_role == "REFERENCE_GEOMETRY"
+                    if is_mep or e.simulation_role == "REFERENCE_GEOMETRY"
                     else "NOT_APPLICABLE"
                 )
         e.boundary_treatment = "NOT_APPLICABLE"
@@ -170,6 +188,16 @@ def plan_mapping(
                     if bounds:
                         e.boundary_policy = POLICY
                         e.representation_bounds = bounds
+                from .boundary import EXACT_POLICY, exact_bounds
+
+                if boundary_policy == EXACT_POLICY:
+                    try:
+                        bounds = exact_bounds(e, model)
+                        if bounds:
+                            e.boundary_policy = EXACT_POLICY
+                            e.representation_bounds = bounds
+                    except (ValueError, RuntimeError) as exc:
+                        e.boundary_evidence = {"intersection_error": str(exc)}
         e.mapping_strategy = determine_element_strategy(
             e, force_all_geom, include_review_solids
         )
@@ -182,8 +210,13 @@ def plan_mapping(
         e.geometry_preservation = "NOT_RUN"
         e.mapping_status = MappingStatus.INCONCLUSIVE
         e.mapping_rationale = e.decision.get(
-            "rationale", "Policy 0.4: independently audit geometry, role and scope"
+            "rationale",
+            "Geometry fidelity: preserve source MEP solid as passive geometry; operational behavior NOT_CONFIGURED"
+            if geometry_fidelity and is_mep
+            else "Policy 0.4: independently audit geometry, role and scope",
         )
+        if e.boundary_policy == "SOURCE_SOLID_DOMAIN_INTERSECTION":
+            e.mapping_rationale += "; source solid intersected with explicit domain; solver-effective boundary verification pending"
         if e.mapping_strategy == MappingStrategy.EXCLUDED_SCOPE:
             e.mapping_status = MappingStatus.EXCLUDED_SCOPE
             e.mapping_rationale = e.scope_rationale
@@ -191,11 +224,7 @@ def plan_mapping(
             e.mapping_status = MappingStatus.EXCLUDED_APPROVED
         elif e.mapping_strategy == MappingStrategy.SEMANTIC_ONLY:
             e.mapping_status = MappingStatus.SEMANTIC_ONLY
-        elif e.role == "PHYSICAL" and (
-            not e.mesh
-            or not valid_solid(e.mesh)
-            or any(not o.mesh or not valid_solid(o.mesh) for o in e.openings)
-        ):
+        elif e.role == "PHYSICAL" and (not e.mesh or not valid_solid(e.mesh)):
             e.mapping_status = MappingStatus.UNSUPPORTED
             e.geometry_preservation = (
                 "FAILED" if e.mesh and not valid_solid(e.mesh) else "INCONCLUSIVE"
@@ -214,4 +243,13 @@ def plan_mapping(
             )
         elif e.review_status == "REVIEW_REQUIRED":
             e.mapping_status = MappingStatus.REVIEW_REQUIRED
+            if geometry_fidelity and is_mep:
+                e.mapping_rationale += "; generic MEP source shape included for fidelity; simulation relevance review REQUIRED"
+        elif e.openings and any(
+            not o.mesh or not valid_solid(o.mesh) for o in e.openings
+        ):
+            e.mapping_rationale += (
+                "; valid IFC host solid retained, including kernel-applied voids; "
+                "opening evidence incomplete, opening verification INCONCLUSIVE"
+            )
     return model

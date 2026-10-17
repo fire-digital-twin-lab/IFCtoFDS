@@ -26,7 +26,11 @@ class WorkerRunner:
                 (directory / "request.json").read_text(encoding="utf-8")
             )
             job_id = request.get("job_id", job_id)
-            if request.get("mode") == "inventory":
+            if request.get("mode") == "preview":
+                from ifc_to_fds.application.use_cases.preview_model import preview_model
+
+                result = preview_model(request["paths"], directory)
+            elif request.get("mode") == "inventory":
                 from ifc_to_fds.core.inventory import extract_inventory
 
                 models = [extract_inventory(path)[0] for path in request["paths"]]
