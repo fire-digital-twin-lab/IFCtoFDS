@@ -9,9 +9,17 @@ let initPromise = null;
 async function ensureInit() {
     if (initPromise) return initPromise;
     initPromise = (async () => {
-        const WebIFC = await import('https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/web-ifc-api.js');
+        let WebIFC;
+        let basePath = '../vendor/web-ifc/';
+        try {
+            WebIFC = await import('../vendor/web-ifc/web-ifc-api.js');
+        } catch (localErr) {
+            console.warn('Local web-ifc vendor not available, trying CDN fallback:', localErr);
+            basePath = 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/';
+            WebIFC = await import('https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/web-ifc-api.js');
+        }
         api = new WebIFC.IfcAPI();
-        api.SetWasmPath('https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/');
+        api.SetWasmPath(basePath);
         await api.Init();
         return api;
     })();

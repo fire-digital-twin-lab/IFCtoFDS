@@ -72,13 +72,16 @@
                 desc.mappingStrategy = rec.mapping_strategy || desc.mappingStrategy;
                 desc.representation = rec.fds_representation || desc.representation;
                 desc.boundaryTreatment = rec.boundary_treatment || desc.boundaryTreatment;
-                desc.reviewStatus = rec.review_status || desc.reviewStatus;
+                if (rec.review_status) {
+                    desc.reviewStatus = rec.review_status;
+                    if (!desc.raw) desc.raw = {};
+                    desc.raw.review_status = rec.review_status;
+                }
                 desc.fdsPrimitiveIds = rec.fds_primitive_ids || desc.fdsPrimitiveIds;
                 if (elementStatuses[canonicalKey]) {
                     desc.verificationStatus = elementStatuses[canonicalKey];
                     if (!desc.raw) desc.raw = {};
                     desc.raw.verification_status = elementStatuses[canonicalKey];
-                    desc.raw.review_status = elementStatuses[canonicalKey];
                 }
                 if (rec.mep_data) {
                     desc.mepCategory = rec.mep_data.category || desc.mepCategory;
@@ -90,6 +93,10 @@
                 this._aliasMap[desc.entityKey] = canonicalKey;
                 this._entityIndex[canonicalKey] = desc;
             } else {
+                var rawRec = Object.assign({}, rec);
+                if (elementStatuses[canonicalKey]) {
+                    rawRec.verification_status = elementStatuses[canonicalKey];
+                }
                 var newDesc = normalizeEntityDescriptor({
                     entityKey: canonicalKey,
                     sourceId: rec.source_id,
@@ -102,8 +109,9 @@
                     mappingStrategy: rec.mapping_strategy,
                     representation: rec.fds_representation,
                     boundaryTreatment: rec.boundary_treatment,
-                    reviewStatus: elementStatuses[canonicalKey] || rec.review_status || 'NOT_REQUIRED',
-                    raw: rec
+                    reviewStatus: rec.review_status || 'NOT_REQUIRED',
+                    verificationStatus: elementStatuses[canonicalKey] || 'NOT_RUN',
+                    raw: rawRec
                 });
                 if (newDesc && newDesc.entityKey) {
                     this._entityIndex[newDesc.entityKey] = newDesc;
@@ -114,7 +122,7 @@
         }
         if (events && WORKBENCH_EVENTS) {
             events.emit(WORKBENCH_EVENTS.MODEL_INDEXED, {
-                totalIndexed: Object.keys(this._entityIndex).length,
+                totalIndexed: this.getAllDescriptors().length,
                 hydrated: true
             });
         }
@@ -134,18 +142,38 @@
         var k = String(key);
         if (this._entityIndex[k]) return this._entityIndex[k];
         if (this._aliasMap[k] && this._entityIndex[this._aliasMap[k]]) return this._entityIndex[this._aliasMap[k]];
-        var parts = k.split(':');
-        var idPart = parts.length > 1 ? parts.slice(1).join(':') : k;
-        if (this._byStepId[idPart]) return this._byStepId[idPart];
-        if (this._byGlobalId[idPart]) return this._byGlobalId[idPart];
+        var colonIdx = k.indexOf(':');
+        if (colonIdx !== -1) {
+            var src = k.substring(0, colonIdx);
+            var idPart = k.substring(colonIdx + 1);
+            if (this._byGlobalId[idPart] && (!this._byGlobalId[idPart].sourceId || String(this._byGlobalId[idPart].sourceId) === src)) {
+                return this._byGlobalId[idPart];
+            }
+            if (this._byStepId[idPart] && (!this._byStepId[idPart].sourceId || String(this._byStepId[idPart].sourceId) === src)) {
+                return this._byStepId[idPart];
+            }
+        } else {
+            if (this._byStepId[k]) return this._byStepId[k];
+            if (this._byGlobalId[k]) return this._byGlobalId[k];
+        }
         return null;
     };
 
     SelectionStore.prototype.getAllDescriptors = function () {
         var self = this;
-        return Object.keys(this._entityIndex).map(function (k) {
-            return self._entityIndex[k];
-        });
+        var seen = {};
+        var unique = [];
+        var keys = Object.keys(this._entityIndex);
+        for (var i = 0; i < keys.length; i++) {
+            var desc = self._entityIndex[keys[i]];
+            if (!desc) continue;
+            var primary = desc.entityKey || keys[i];
+            if (!seen[primary]) {
+                seen[primary] = true;
+                unique.push(desc);
+            }
+        }
+        return unique;
     };
 
     SelectionStore.prototype.getSelection = function () {
