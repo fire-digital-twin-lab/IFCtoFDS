@@ -28,7 +28,7 @@
             if (!item) continue;
             // Bind identity once on the scene input, before either tree or mesh is built.
             var raw = item.raw || {};
-            if (!item.sourceId && !item.source_id && !raw.source_id && !(item.ifcSource && item.ifcSource.fileName)) {
+            if (!item.sourceId && !item.source_id && !raw.source_id && !(item.ifcSource && (item.ifcSource.sourceId || item.ifcSource.fileName))) {
                 item.sourceId = defaultSourceId || 'ifc';
             }
             item.entityKey = createEntityKey(item);

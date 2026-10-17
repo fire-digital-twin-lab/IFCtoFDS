@@ -71,8 +71,10 @@
         if (item.entityKey) return String(item.entityKey);
         if (item.entity_key) return String(item.entity_key);
         if (raw.entity_key) return String(raw.entity_key);
+        if (item.ifcSource && item.ifcSource.entityKey) return String(item.ifcSource.entityKey);
 
         var sourceId = item.sourceId || item.source_id || raw.source_id ||
+            (item.ifcSource && item.ifcSource.sourceId) ||
             (item.ifcSource && item.ifcSource.fileName) ||
             'ifc';
 
@@ -96,11 +98,11 @@
         if (!item) return null;
         var raw = item.raw || {};
         var entityKey = createEntityKey(item);
-        var ifcType = item.ifcType || raw.ifc_type || item.type || 'UNKNOWN';
+        var ifcType = item.ifcType || raw.ifc_type || (item.ifcSource && item.ifcSource.ifcType) || item.type || 'UNKNOWN';
 
-        var globalId = item.globalId || raw.global_id || raw.GlobalId || null;
-        var stepId = item.stepId || raw.step_id || item.expressID || item.id || null;
-        var sourceId = item.sourceId || item.source_id || raw.source_id || (item.ifcSource && item.ifcSource.fileName) || 'ifc';
+        var globalId = item.globalId || raw.global_id || raw.GlobalId || (item.ifcSource && item.ifcSource.globalId) || null;
+        var stepId = item.stepId || raw.step_id || item.expressID || (item.ifcSource && item.ifcSource.stepId) || item.id || null;
+        var sourceId = item.sourceId || item.source_id || raw.source_id || (item.ifcSource && (item.ifcSource.sourceId || item.ifcSource.fileName)) || 'ifc';
 
         var mepData = raw.mep_data || {};
         var ports = raw.ports || mepData.ports || [];

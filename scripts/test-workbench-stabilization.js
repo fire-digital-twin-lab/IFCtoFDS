@@ -24,6 +24,11 @@ test('canonical identity survives indexing, descriptors and duplicate GUIDs acro
     const missingGuid = {stepId: 77, name: 'Wall'};
     store.indexElements([missingGuid], 'model.ifc');
     assert.equal(wb.createEntityKey(missingGuid), 'model.ifc:77');
+    // The FDS parser retains authoritative provenance in ifcSource, not raw.
+    const savedFds = {id: 'GEOM_1', ifcSource: {entityKey: 'source-hash:88', sourceId: 'source-hash', globalId: 'GUID'}};
+    store.indexElements([savedFds], 'output.fds');
+    assert.equal(wb.createEntityKey(savedFds), 'source-hash:88');
+    assert.equal(store.getDescriptor('source-hash:88').sourceId, 'source-hash');
 });
 test('unknown mapping and review approval never imply verification', () => {
     const colors = new wb.navigation.ColorOverlayEngine();
