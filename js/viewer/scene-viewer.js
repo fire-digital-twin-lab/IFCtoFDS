@@ -1628,20 +1628,42 @@
             return;
         }
         var keyMap = {};
-        var stepIdMap = {};
-        var globalIdMap = {};
+        var sourceQualifiedMap = {};
+        var globalGuidMap = {};
         var store = (window.IfcFds && window.IfcFds.workbench && window.IfcFds.workbench.state && window.IfcFds.workbench.state.selectionStore);
 
         for (var i = 0; i < keys.length; i++) {
             var rawK = String(keys[i]);
             keyMap[rawK] = true;
-            if (store && store._aliasMap && store._aliasMap[rawK]) {
-                keyMap[store._aliasMap[rawK]] = true;
+            if (store) {
+                if (store._aliasMap && store._aliasMap[rawK]) {
+                    keyMap[store._aliasMap[rawK]] = true;
+                }
+                var desc = store.getDescriptor ? store.getDescriptor(rawK) : null;
+                if (desc) {
+                    if (desc.entityKey) keyMap[desc.entityKey] = true;
+                    if (desc.canonicalKey) keyMap[desc.canonicalKey] = true;
+                    if (desc.sourceId && desc.stepId !== undefined && desc.stepId !== null) {
+                        sourceQualifiedMap[String(desc.sourceId) + ':' + String(desc.stepId)] = true;
+                    }
+                    if (desc.globalId) {
+                        globalGuidMap[String(desc.globalId)] = true;
+                    }
+                }
             }
-            var parts = rawK.split(':');
-            var idPart = parts.length > 1 ? parts.slice(1).join(':') : rawK;
-            stepIdMap[idPart] = true;
-            globalIdMap[idPart] = true;
+            var colonIdx = rawK.indexOf(':');
+            if (colonIdx !== -1) {
+                var srcPart = rawK.substring(0, colonIdx);
+                var idPart = rawK.substring(colonIdx + 1);
+                sourceQualifiedMap[srcPart + ':' + idPart] = true;
+                if (idPart.length >= 20 && !/^\d+$/.test(idPart)) {
+                    globalGuidMap[idPart] = true;
+                }
+            } else {
+                if (rawK.length >= 20 && !/^\d+$/.test(rawK)) {
+                    globalGuidMap[rawK] = true;
+                }
+            }
         }
 
         var matched = [];
@@ -1651,13 +1673,26 @@
             if (node._isSelectionHelper || (node.parent && node.parent.isMesh)) return;
             if (!node || !node.userData || !node.userData.type) return;
             var k = createEntityKey(node.userData);
+            if (k && keyMap[k]) {
+                matched.push(node);
+                return;
+            }
+            if (store && store._aliasMap && store._aliasMap[k] && keyMap[store._aliasMap[k]]) {
+                matched.push(node);
+                return;
+            }
             var u = node.userData;
             var raw = u.raw || {};
-            var stepId = String(u.stepId || raw.step_id || u.expressID || u.id || '');
             var globalId = String(u.globalId || raw.global_id || raw.GlobalId || '');
-
-            if (keyMap[k] || (stepId && stepIdMap[stepId]) || (globalId && globalIdMap[globalId])) {
+            if (globalId && globalGuidMap[globalId]) {
                 matched.push(node);
+                return;
+            }
+            var stepId = String(u.stepId || raw.step_id || u.expressID || u.id || '');
+            var nodeSource = String(u.sourceId || raw.source_id || (u.ifcSource && (u.ifcSource.sourceId || u.ifcSource.fileName)) || 'ifc');
+            if (stepId && sourceQualifiedMap[nodeSource + ':' + stepId]) {
+                matched.push(node);
+                return;
             }
         }
 

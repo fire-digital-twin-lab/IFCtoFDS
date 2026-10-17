@@ -5,6 +5,7 @@
     // up module workers). Either way the WASM kernel natively applies IfcRelVoidsElement
     // boolean subtractions so walls come out with their window/door openings cut.
 
+    var LOCAL_WEB_IFC = './js/vendor/web-ifc/';
     var WEB_IFC_CDN = 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/';
 
     // -------- worker path ----------------------------------------------------
@@ -68,13 +69,19 @@
     function ensureMainThreadApi() {
         if (mainApiPromise) return mainApiPromise;
         mainApiPromise = (async function () {
-            // Use the spec-compliant ES module form via dynamic import. Note we cannot use
-            // a bare `import` statement here because this file ships as a classic script,
-            // so we go through Function('return import(url)') to dodge the parser.
+            // Use local vendored web-ifc when available, falling back to CDN.
             var importer = new Function('url', 'return import(url)');
-            var WebIFC = await importer(WEB_IFC_CDN + 'web-ifc-api.js');
+            var WebIFC;
+            var basePath = LOCAL_WEB_IFC;
+            try {
+                WebIFC = await importer(LOCAL_WEB_IFC + 'web-ifc-api.js');
+            } catch (localErr) {
+                console.warn('Local web-ifc vendor not available, trying CDN fallback:', localErr);
+                basePath = WEB_IFC_CDN;
+                WebIFC = await importer(WEB_IFC_CDN + 'web-ifc-api.js');
+            }
             var api = new WebIFC.IfcAPI();
-            api.SetWasmPath(WEB_IFC_CDN);
+            api.SetWasmPath(basePath);
             await api.Init();
             return api;
         })().catch(function (err) {

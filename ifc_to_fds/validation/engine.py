@@ -43,6 +43,8 @@ def run_independent_validation(
             "traceability",
             "scope",
             "geometry",
+            "structural_completeness",
+            "air_path",
             "openings",
             "mep",
             "representation",
@@ -255,6 +257,10 @@ def run_independent_validation(
         report.gates["openings"] = GateResult(
             status=GateStatus.NOT_RUN,
             reason="Source topology defects confirmed; full opening comparisons not run",
+        )
+        report.gates["air_path"] = GateResult(
+            status=GateStatus.NOT_RUN,
+            reason="Source topology defects confirmed; air path analysis not run",
         )
         report.gates[
             "geometry"
@@ -592,19 +598,25 @@ def run_independent_validation(
     )
     from ifc_to_fds.domain.validation.model import ValidationContext
     from .checkers.structural import StructuralCompletenessChecker
+    from .checkers.air_path import AirPathTopologyChecker
 
-    structural = StructuralCompletenessChecker().check(
-        ValidationContext(
-            model=model,
-            fds_text=fds_text,
-            manifest=manifest,
-            parsed_fds=parsed,
-            config=config,
-        )
+    validation_ctx = ValidationContext(
+        model=model,
+        fds_text=fds_text,
+        manifest=manifest,
+        parsed_fds=parsed,
+        config=config,
     )
+    structural = StructuralCompletenessChecker().check(validation_ctx)
     report.gates[structural.gate_name] = structural.result
     report.findings.extend(structural.findings)
     report.metrics.update(structural.metrics)
+
+    if not stop_solid_checks:
+        air_path_outcome = AirPathTopologyChecker().check(validation_ctx)
+        report.gates[air_path_outcome.gate_name] = air_path_outcome.result
+        report.findings.extend(air_path_outcome.findings)
+        report.metrics.update(air_path_outcome.metrics)
     from time import perf_counter
 
     solver_start = perf_counter()

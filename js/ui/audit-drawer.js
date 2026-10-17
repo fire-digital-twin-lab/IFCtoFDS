@@ -65,7 +65,8 @@
             }
             if (truncationBanner) {
                 truncationBanner.style.display = 'block';
-                truncationBanner.textContent = 'Showing first ' + findings.length + ' of ' + totalFindings + ' findings. Download full acceptance report or refine scope for complete list.';
+                var reportUrl = (report.artifacts && report.artifacts.report && report.artifacts.report.url) || '#';
+                truncationBanner.innerHTML = 'Showing first ' + findings.length + ' of ' + totalFindings + ' findings. <a href="' + reportUrl + '" download style="color:inherit;text-decoration:underline;font-weight:600">Download full acceptance report</a> for complete list.';
             }
         } else if (truncationBanner) {
             truncationBanner.style.display = 'none';
@@ -145,6 +146,8 @@
             if (manifestBtn && report.artifacts.manifest) manifestBtn.href = report.artifacts.manifest.url;
             var geomBtn = document.getElementById('btn-download-geom-pkg');
             if (geomBtn && report.artifacts.geometry) geomBtn.href = report.artifacts.geometry.url;
+            var reportBtn = document.getElementById('btn-download-report');
+            if (reportBtn && report.artifacts.report) reportBtn.href = report.artifacts.report.url;
         }
 
         updateGlobalStatusBadge(report.status);
@@ -166,6 +169,11 @@
         if (geomBtn) {
             geomBtn.href = '/api/jobs/' + jobId + '/checkpoints/geometry';
             geomBtn.textContent = 'Download Checkpoint Geometries (AUDIT INCOMPLETE)';
+        }
+        var reportBtn = document.getElementById('btn-download-report');
+        if (reportBtn) {
+            reportBtn.href = '/api/jobs/' + jobId + '/checkpoints/report';
+            reportBtn.textContent = 'Download Checkpoint Report (UNACCEPTED)';
         }
         var panelArtifacts = document.getElementById('panel-artifacts');
         if (panelArtifacts) {

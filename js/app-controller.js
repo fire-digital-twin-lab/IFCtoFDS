@@ -1309,6 +1309,7 @@
                 : Promise.resolve(null);
 
             var extraArtifacts = await Promise.all([manifestPromise, reportPromise]);
+            if (generation !== state.exportRequestId) return;
             var manifestData = extraArtifacts[0];
             var fullReport = extraArtifacts[1] || summary;
             state.lastManifest = manifestData;
@@ -1331,7 +1332,8 @@
             loadFdsText(text, fileName);
             if (ns.workbench && ns.workbench.state && ns.workbench.state.scenarioStore) {
                 var mSha = (data.artifacts && data.artifacts.manifest && data.artifacts.manifest.sha256) ||
-                           (manifestData && (manifestData.bundle_sha256 || manifestData.source_sha256));
+                           (manifestData && manifestData.bundle_sha256) ||
+                           (data.artifacts && data.artifacts.fds && data.artifacts.fds.sha256);
                 if (mSha) {
                     ns.workbench.state.scenarioStore.setBaseMapping(mSha);
                 }

@@ -95,6 +95,52 @@ test('scenario reset clears all project data, commands and invented physics', ()
     }
     assert.equal(scenario.getHvacOperation('fan'), null);
 });
+test('hydrateManifest separates human review_status from machine verification_status without duplicates', () => {
+    const store = new wb.state.SelectionStore();
+    const elem = {entityKey: 'arch.ifc:101', sourceId: 'arch.ifc', globalId: 'GUID101', stepId: 101, name: 'Wall #101'};
+    store.indexElements([elem], 'arch.ifc');
+    assert.equal(store.getAllDescriptors().length, 1);
+
+    const records = [{
+        entity_key: 'sha-canon:101',
+        source_id: 'sha-canon',
+        global_id: 'GUID101',
+        step_id: 101,
+        ifc_type: 'IfcWall',
+        simulation_role: 'PASSIVE_OBSTACLE',
+        mapping_strategy: 'OBST',
+        review_status: 'REQUIRES_REVIEW'
+    }];
+    const report = {
+        element_statuses: {'sha-canon:101': 'MATCHED'}
+    };
+    store.hydrateManifest(records, report);
+
+    const desc = store.getDescriptor('sha-canon:101');
+    assert.ok(desc);
+    assert.equal(desc.verificationStatus, 'MATCHED');
+    assert.equal(desc.reviewStatus, 'REQUIRES_REVIEW');
+    assert.equal(desc.raw.verification_status, 'MATCHED');
+    assert.equal(desc.raw.review_status, 'REQUIRES_REVIEW');
+    // Ensure no phantom duplicate entries in Model Tree / index
+    assert.equal(store.getAllDescriptors().length, 1);
+});
+test('selectByEntityKeys uses source-qualified keys and avoids cross-file STEP ID collision', () => {
+    const viewer = Object.create(context.IfcFds.viewer.SceneViewer.prototype);
+    let selected = [];
+    viewer.setSelectedObjects = objs => { selected = objs; };
+
+    const nodeA = {userData: {type: 'wall', sourceId: 'sourceA', stepId: 105, raw: {source_id: 'sourceA', step_id: 105}}};
+    const nodeB = {userData: {type: 'wall', sourceId: 'sourceB', stepId: 105, raw: {source_id: 'sourceB', step_id: 105}}};
+
+    viewer.fdsGroup = {traverse: fn => { fn(nodeA); fn(nodeB); }};
+    viewer.ifcGroup = null;
+
+    viewer.selectByEntityKeys(['sourceA:105']);
+    assert.equal(selected.length, 1);
+    assert.equal(selected[0], nodeA);
+    assert.notEqual(selected[0], nodeB);
+});
 let failures = 0;
 for (const [name, fn] of tests) {
     try { fn(); console.log('PASS ' + name); }
