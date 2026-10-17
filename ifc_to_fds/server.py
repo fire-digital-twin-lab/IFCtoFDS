@@ -18,7 +18,7 @@ from .validation.acceptance import AuditConfig
 
 manager = JobManager(
     max_waiting=int(os.getenv("IFCFDS_MAX_WAITING", "2")),
-    timeout_s=float(os.getenv("IFCFDS_TIMEOUT_S", "1800")),
+    timeout_s=int(os.getenv("IFCFDS_TIMEOUT_S", "1800")),
 )
 MAX_FILE = int(os.getenv("IFCFDS_MAX_FILE_BYTES", str(200 * 1024**2)))
 MAX_TOTAL = int(os.getenv("IFCFDS_MAX_JOB_BYTES", str(500 * 1024**2)))
@@ -237,6 +237,20 @@ def result(jid: str):
         raise HTTPException(409, str(exc))
 
 
+@app.get("/api/jobs/{jid}/diagnostics")
+def diagnostics(jid: str):
+    with manager.lock:
+        job = manager.jobs.get(jid)
+        if not job:
+            raise HTTPException(404, "Unknown job")
+        path = Path(job["directory"]) / "diagnostics.json"
+        if not path.is_file():
+            raise HTTPException(404, "No diagnostic produced")
+        return FileResponse(
+            path, filename="diagnostics.json", media_type="application/json"
+        )
+
+
 @app.get("/api/jobs/{jid}/artifacts/{artifact}")
 def artifact(jid: str, artifact: str):
     if artifact not in ARTIFACTS:
@@ -253,6 +267,24 @@ def artifact(jid: str, artifact: str):
         return FileResponse(path, filename=ARTIFACTS[artifact])
 
 
+@app.get("/api/jobs/{jid}/checkpoints/{artifact}")
+def checkpoint_artifact(jid: str, artifact: str):
+    if artifact not in ARTIFACTS:
+        raise HTTPException(404, "Unknown artifact")
+    with manager.lock:
+        if jid not in manager.jobs:
+            raise HTTPException(404, "Unknown job")
+        job = manager.jobs[jid]
+        path = Path(job["directory"]) / ARTIFACTS[artifact]
+        if not path.is_file():
+            raise HTTPException(404, "Checkpoint artifact not available")
+        response = FileResponse(path, filename=ARTIFACTS[artifact])
+        response.headers["X-Verification-Status"] = (
+            "UNACCEPTED-AUDIT_INCOMPLETE-DO_NOT_USE_AS_VERIFIED_OUTPUT"
+        )
+        return response
+
+
 @app.get("/api/jobs/{jid}/geometry/{payload}")
 def geometry_payload(jid: str, payload: str):
     if len(payload) != 64 or any(c not in "0123456789abcdef" for c in payload):
@@ -264,6 +296,8 @@ def geometry_payload(jid: str, payload: str):
         if job["state"] != "COMPLETED":
             raise HTTPException(409, "Job is not complete")
         index_path = Path(job["directory"]) / "model_geometry.json"
+        if not index_path.is_file():
+            raise HTTPException(404, "Geometry index not available for this job")
         if "_geometry_payloads" not in job:
             index = json.loads(index_path.read_text(encoding="utf-8"))
             job["_geometry_payloads"] = {

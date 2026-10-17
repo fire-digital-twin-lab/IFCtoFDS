@@ -70,3 +70,48 @@ def test_graph_mutation_rejected(tiny_ifc):
     manifest.configuration["mep_graph"]["connections"].append({"invented": "edge"})
     _, _, report = audit([path], result["fds_text"], manifest)
     assert report.gates["mep"].status == "FAIL"
+
+
+def test_federation_transforms_representation_bounds_and_empty_mesh(tiny_ifc, tmp_path):
+    from ifc_to_fds.domain.bim import BoundingBox, TriangleMesh
+
+    path, file, wall = tiny_ifc
+    wall.Name = "Second wall"
+    second = tmp_path / "second_rb.ifc"
+    file.write(str(second))
+
+    transform = np.eye(4)
+    transform[0, 3] = 5.0
+    transform[1, 3] = 10.0
+    transform[2, 3] = 2.0
+
+    model = load_sources(
+        [path, second],
+        {"transforms": {"0": np.eye(4).tolist(), "1": transform.tolist()}},
+    )
+    matches = [e for e in model.elements if e.global_id == wall.GlobalId]
+    assert len(matches) == 2
+    elem1 = matches[1]
+
+    rb = BoundingBox(xmin=0, xmax=2, ymin=0, ymax=1, zmin=0, zmax=3)
+    elem1.representation_bounds = rb
+    elem1.mesh = TriangleMesh(vertices=[], faces=[])
+
+    from ifc_to_fds.core.federation import bounds_for_vertices
+    corners = [
+        [x, y, z]
+        for x in (rb.xmin, rb.xmax)
+        for y in (rb.ymin, rb.ymax)
+        for z in (rb.zmin, rb.zmax)
+    ]
+    transformed_corners = (np.asarray(corners) @ transform[:3, :3].T + transform[:3, 3]).tolist()
+    elem1.representation_bounds = bounds_for_vertices(transformed_corners)
+
+    assert elem1.representation_bounds is not None
+    assert elem1.representation_bounds.xmin == pytest.approx(5.0)
+    assert elem1.representation_bounds.xmax == pytest.approx(7.0)
+    assert elem1.representation_bounds.ymin == pytest.approx(10.0)
+    assert elem1.representation_bounds.ymax == pytest.approx(11.0)
+    assert elem1.representation_bounds.zmin == pytest.approx(2.0)
+    assert elem1.representation_bounds.zmax == pytest.approx(5.0)
+

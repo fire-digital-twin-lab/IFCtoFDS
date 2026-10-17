@@ -2,7 +2,9 @@
 
 import numpy as np
 import trimesh
+from fractions import Fraction
 from ifc_to_fds.core.canonical import BoundingBox, TriangleMesh
+from .boolean import solid_boolean
 
 
 def as_trimesh(mesh):
@@ -38,27 +40,35 @@ def inspect_mesh_quality(mesh):
     if verts.ndim != 2 or verts.shape[1:] != (3,) or not np.isfinite(verts).all():
         result["finite"] = 0
         return result
-    edges = {}
-    directed = set()
-    for face in mesh.faces:
-        if len(face) != 3 or any(i < 0 or i >= len(verts) for i in face):
-            result["invalid_indices"] += 1
-            continue
-        a, b, c = face
-        if (
-            len(set(face)) != 3
-            or np.linalg.norm(np.cross(verts[b] - verts[a], verts[c] - verts[a]))
-            < 1e-12
-        ):
-            result["degenerate_faces"] += 1
-        for x, y in ((a, b), (b, c), (c, a)):
-            edge = tuple(sorted((x, y)))
-            edges[edge] = edges.get(edge, 0) + 1
-            if (x, y) in directed:
-                result["inconsistent_edges"] += 1
-            directed.add((x, y))
-    result["open_edges"] = sum(v == 1 for v in edges.values())
-    result["non_manifold_edges"] = sum(v > 2 for v in edges.values())
+    triangles = [face for face in mesh.faces if len(face) == 3]
+    result["invalid_indices"] = len(mesh.faces) - len(triangles)
+    # Filter before int64 conversion; arbitrarily large Python indices remain
+    # invalid input instead of overflowing the accelerated path.
+    usable = [f for f in triangles if all(0 <= i < len(verts) for i in f)]
+    result["invalid_indices"] += len(triangles) - len(usable)
+    if usable:
+        faces = np.asarray(usable, dtype=np.int64)
+        a, b, c = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
+        repeated = (
+            (faces[:, 0] == faces[:, 1])
+            | (faces[:, 1] == faces[:, 2])
+            | (faces[:, 2] == faces[:, 0])
+        )
+        result["degenerate_faces"] = int(
+            np.count_nonzero(
+                repeated | (np.linalg.norm(np.cross(b - a, c - a), axis=1) < 1e-12)
+            )
+        )
+        directed = np.concatenate(
+            (faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])
+        )
+        _, occurrences = np.unique(directed, axis=0, return_counts=True)
+        result["inconsistent_edges"] = int(np.sum(occurrences - 1))
+        _, occurrences = np.unique(
+            np.sort(directed, axis=1), axis=0, return_counts=True
+        )
+        result["open_edges"] = int(np.count_nonzero(occurrences == 1))
+        result["non_manifold_edges"] = int(np.count_nonzero(occurrences > 2))
     result["is_closed_manifold"] = int(
         bool(mesh.faces)
         and not any(
@@ -117,56 +127,171 @@ def intersects_box(mesh, bounds):
         raise ValueError("Cannot prove intersection for an invalid solid")
     a = as_trimesh(mesh)
     b = as_trimesh(box_mesh(bounds))
-    hit = trimesh.boolean.intersection([a, b], engine="manifold")
+    hit = solid_boolean([a, b], "intersection")
     return hit.volume > 1e-12
 
 
 def has_self_intersection(mesh):
-    """Detect nonadjacent triangle crossings and overlapping closed components."""
+    """Compatibility predicate. Numerical/backend uncertainty raises, never FAILs."""
     tm = as_trimesh(mesh)
     triangles = tm.triangles
     tree = tm.triangles_tree
     faces = np.asarray(mesh.faces)
+
+    def plane_side(triangle, point):
+        for axis in range(3):
+            if triangle[0, axis] == triangle[1, axis] == triangle[2, axis]:
+                # Axis-aligned planes have an exact binary64 sign comparison.
+                return int(point[axis] > triangle[0, axis]) - int(
+                    point[axis] < triangle[0, axis]
+                )
+        vectors = np.asarray(
+            [triangle[1] - triangle[0], triangle[2] - triangle[0], point - triangle[0]]
+        )
+        a, b, c = vectors
+        terms = [
+            a[0] * b[1] * c[2],
+            a[1] * b[2] * c[0],
+            a[2] * b[0] * c[1],
+            -a[2] * b[1] * c[0],
+            -a[1] * b[0] * c[2],
+            -a[0] * b[2] * c[1],
+        ]
+        value = sum(terms)
+        error = sum(abs(x) for x in terms) * np.finfo(float).eps * 16
+        if abs(value) > error:
+            return 1 if value > 0 else -1
+        # Exact arithmetic over the original binary64 coordinates, including
+        # subtraction. A distance epsilon cannot establish coplanarity.
+        origin = [Fraction(float(x)) for x in triangle[0]]
+        a, b, c = [
+            [Fraction(float(x)) - o for x, o in zip(p, origin)]
+            for p in (triangle[1], triangle[2], point)
+        ]
+        exact = (
+            a[0] * (b[1] * c[2] - b[2] * c[1])
+            - a[1] * (b[0] * c[2] - b[2] * c[0])
+            + a[2] * (b[0] * c[1] - b[1] * c[0])
+        )
+        return (exact > 0) - (exact < 0)
 
     def segment_hit(start, end, triangle):
         direction = end - start
         edge1, edge2 = triangle[1] - triangle[0], triangle[2] - triangle[0]
         h = np.cross(direction, edge2)
         det = np.dot(edge1, h)
-        if abs(det) < 1e-12:
-            return False
-        u = np.dot(start - triangle[0], h) / det
         q = np.cross(start - triangle[0], edge1)
-        v = np.dot(direction, q) / det
-        t = np.dot(edge2, q) / det
-        return 1e-8 < t < 1 - 1e-8 and u >= -1e-8 and v >= -1e-8 and u + v <= 1 + 1e-8
+        numerators = np.asarray(
+            [np.dot(start - triangle[0], h), np.dot(direction, q), np.dot(edge2, q)]
+        )
+        bound = (
+            64
+            * np.finfo(float).eps
+            * max(
+                float(
+                    np.linalg.norm(edge1)
+                    * np.linalg.norm(edge2)
+                    * np.linalg.norm(direction)
+                ),
+                float(np.max(np.abs(numerators))),
+                np.finfo(float).tiny,
+            )
+        )
+        if abs(det) > bound:
+            u, v, t = numerators / det
+            margin = bound / abs(det)
+            if min(u, v, t, 1 - t, 1 - u - v) > margin:
+                return True
+            if min(u, v, t, 1 - t, 1 - u - v) < -margin:
+                return False
+
+        # Uncertain ratios use exact rational predicates, not widened barycentric
+        # tolerances. The endpoint rule is strict as in the original traversal.
+        def vector(p):
+            return tuple(Fraction(float(x)) for x in p)
+
+        def sub(a, b):
+            return tuple(x - y for x, y in zip(a, b))
+
+        def cross(a, b):
+            return (
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0],
+            )
+
+        def dot(a, b):
+            return sum(x * y for x, y in zip(a, b))
+
+        p0, p1, p2 = map(vector, triangle)
+        origin = vector(start)
+        direction = sub(vector(end), origin)
+        edge1, edge2, offset = sub(p1, p0), sub(p2, p0), sub(origin, p0)
+        h, q = cross(direction, edge2), cross(offset, edge1)
+        determinant = dot(edge1, h)
+        if not determinant:
+            return False
+        u, v, t = (
+            dot(offset, h) / determinant,
+            dot(direction, q) / determinant,
+            dot(edge2, q) / determinant,
+        )
+        return 0 < t < 1 and u >= 0 and v >= 0 and u + v <= 1
 
     for i, tri in enumerate(triangles):
         bounds = np.r_[tri.min(axis=0), tri.max(axis=0)]
         for j in tree.intersection(bounds):
-            if j <= i or set(faces[i]) & set(faces[j]):
+            if j <= i:
                 continue
             other = triangles[j]
-            normal = np.cross(tri[1] - tri[0], tri[2] - tri[0])
-            if np.max(np.abs((other - tri[0]) @ normal)) < 1e-10 * np.linalg.norm(
-                normal
+            sides = [plane_side(tri, p) for p in other]
+            reverse_sides = [plane_side(other, p) for p in tri]
+            if (
+                all(s > 0 for s in sides)
+                or all(s < 0 for s in sides)
+                or all(s > 0 for s in reverse_sides)
+                or all(s < 0 for s in reverse_sides)
             ):
+                continue
+            if len(set(faces[i]) & set(faces[j])) >= 2 and any(sides):
+                # Distinct planes with a shared edge intersect on that edge only.
+                continue
+            normal = np.cross(tri[1] - tri[0], tri[2] - tri[0])
+            if not any(sides):
                 from shapely.geometry import Polygon
 
                 axes = [x for x in range(3) if x != np.argmax(np.abs(normal))]
-                if (
-                    Polygon(tri[:, axes]).intersection(Polygon(other[:, axes])).area
-                    > 1e-12
-                ):
+                if Polygon(tri[:, axes]).intersection(Polygon(other[:, axes])).area > 0:
                     return True
+                # Exact coplanarity and zero projected area prove no interior
+                # overlap. Segment/triangle ratios are singular on this plane.
+                continue
             for a, b in ((0, 1), (1, 2), (2, 0)):
                 if segment_hit(tri[a], tri[b], other) or segment_hit(
                     other[a], other[b], tri
                 ):
                     return True
-    components = tm.split()
+    components = tm.split(only_watertight=False)
     if len(components) > 1:
-        union = trimesh.boolean.union(list(components), engine="manifold")
-        if sum(abs(c.volume) for c in components) - union.volume > 1e-9:
-            return True
+        for i, component in enumerate(components):
+            for other in components[i + 1 :]:
+                if np.any(component.bounds[1] <= other.bounds[0]) or np.any(
+                    other.bounds[1] <= component.bounds[0]
+                ):
+                    continue
+                if component.is_volume and other.is_volume:
+                    if solid_boolean([component, other], "intersection").volume > 0:
+                        return True
     return False
+
+
+def self_intersection_evidence(mesh):
+    """Three-way evidence consumed by the independent validator."""
+    try:
+        hit = has_self_intersection(mesh)
+        return {
+            "status": "CONFIRMED" if hit else "CLEAN",
+            "method": "adaptive-exact-plane/triangle-crossing/manifold-components-v1",
+        }
+    except Exception as exc:
+        return {"status": "UNCERTAIN", "reason": str(exc)}

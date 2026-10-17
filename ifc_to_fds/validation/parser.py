@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 import numpy as np
+from ifc_to_fds.diagnostics import operation
 from ifc_to_fds.core.canonical import BoundingBox, TriangleMesh
 from ifc_to_fds.geometry.mesh import box_mesh
 
@@ -70,6 +71,7 @@ def parse_value(token):
         raise ValueError(f"Unsupported or invalid value: {token[:80]}")
 
 
+@operation("FDS_PARSE")
 def parse_fds(text):
     parsed = ParsedFDS()
     source = {}

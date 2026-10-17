@@ -109,7 +109,7 @@
                     var data = event.data || {};
                     if (data.type === 'error') {
                         cleanup();
-                        reject(new Error(data.message || 'parse shard failed'));
+                        reject(Object.assign(new Error(data.message || 'parse shard failed'), data.error || {}));
                         return;
                     }
                     if (data.type !== 'parse-shard-result') return;
@@ -212,6 +212,11 @@
     }
 
     function processEntity(ctx, entity) {
+        try { return processEntityGeometry(ctx, entity); }
+        catch (error) { error.entityId = entity.id; if (!error.stage) error.stage = 'ifc_geometry'; throw error; }
+    }
+
+    function processEntityGeometry(ctx, entity) {
         if (!isSupportedProduct(entity, ctx.stairChildIds)) return;
         var step = ctx.step;
 
@@ -235,7 +240,7 @@
         items.forEach(function (item) {
             var itemMesh = meshForRepresentationItem(step, item, placement, ctx.diagnostics, ctx.unsupported);
             if (displayMesh) {
-                var carved = carveItemOpenings(itemMesh, openingExtrusions, ctx.diagnostics, ctx.voidStats, { skipBoxOpenings: ctx.skipBoxOpenings });
+                var carved = ns.core.atStage('openings', function () { return carveItemOpenings(itemMesh, openingExtrusions, ctx.diagnostics, ctx.voidStats, { skipBoxOpenings: ctx.skipBoxOpenings }); });
                 appendMesh(mesh, carved.exportMesh);
                 appendMesh(displayMesh, carved.displayMesh);
                 if (carved.displayMesh !== carved.exportMesh) displayDiffers = true;
@@ -940,14 +945,13 @@
         var openingNormal = normalize(opening.offset, [0, 0, 1]);
         if (Math.abs(dot(basis.normal, openingNormal)) < 0.9999) return null;
 
-        var allOpeningPoints = opening.base.concat(opening.base.map(function (point) {
-            return addVector(point, opening.offset);
-        }));
-        var heights = allOpeningPoints.map(function (point) {
-            return dot(subtractVector(point, basis.origin), basis.normal);
+        var minHeight = Infinity, maxHeight = -Infinity;
+        opening.base.forEach(function (point) {
+            var bottom = dot(subtractVector(point, basis.origin), basis.normal);
+            var top = dot(subtractVector(addVector(point, opening.offset), basis.origin), basis.normal);
+            minHeight = Math.min(minHeight, bottom, top);
+            maxHeight = Math.max(maxHeight, bottom, top);
         });
-        var minHeight = Math.min.apply(Math, heights);
-        var maxHeight = Math.max.apply(Math, heights);
         if (minHeight > 1e-7 || maxHeight < hostLength - 1e-7) return null;
 
         var outer2d = host.base.map(function (point) { return projectToBasis2d(point, basis); });

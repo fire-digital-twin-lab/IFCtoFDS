@@ -2,6 +2,7 @@
 
 from ifc_to_fds.core.canonical import MappingStrategy, MappingStatus, ScopeDecision
 from ifc_to_fds.geometry.mesh import is_axis_aligned_box, valid_solid
+from ifc_to_fds.diagnostics import operation
 
 NON_OBSTACLE_TYPES = {
     "IFCSPACE",
@@ -78,8 +79,12 @@ def determine_element_strategy(
         and element.representation_bounds is None
     ):
         return MappingStrategy.NONE
-    if not element.mesh or not valid_solid(element.mesh):
-        return MappingStrategy.GEOM
+    if (
+        not element.mesh
+        or not valid_solid(element.mesh)
+        or any(not o.mesh or not valid_solid(o.mesh) for o in element.openings)
+    ):
+        return MappingStrategy.NONE
     if (
         not force_all_geom
         and not element.openings
@@ -89,6 +94,7 @@ def determine_element_strategy(
     return MappingStrategy.GEOM
 
 
+@operation("MAPPING")
 def plan_mapping(
     model,
     force_all_geom=False,
@@ -96,6 +102,11 @@ def plan_mapping(
     decisions=None,
     boundary_policy=None,
 ):
+    if include_review_solids:
+        raise ValueError(
+            "include_review=True is not supported without explicit reviewed decisions; "
+            "provide decisions with action='PASSIVE_OBSTACLE' and required promotion factors"
+        )
     decisions = decisions or {}
     validate_decisions(decisions)
     unknown = set(decisions) - {e.entity_key for e in model.elements}
@@ -180,6 +191,27 @@ def plan_mapping(
             e.mapping_status = MappingStatus.EXCLUDED_APPROVED
         elif e.mapping_strategy == MappingStrategy.SEMANTIC_ONLY:
             e.mapping_status = MappingStatus.SEMANTIC_ONLY
+        elif e.role == "PHYSICAL" and (
+            not e.mesh
+            or not valid_solid(e.mesh)
+            or any(not o.mesh or not valid_solid(o.mesh) for o in e.openings)
+        ):
+            e.mapping_status = MappingStatus.UNSUPPORTED
+            e.geometry_preservation = (
+                "FAILED" if e.mesh and not valid_solid(e.mesh) else "INCONCLUSIVE"
+            )
+            details = list(e.validation_notes)
+            details.extend(
+                f"Opening STEP {o.opening_step_id}: {getattr(o, 'extraction_diagnostic', None) or 'missing or invalid opening solid'}"
+                for o in e.openings
+                if not o.mesh or not valid_solid(o.mesh)
+            )
+            suffix = "; ".join(details)
+            e.mapping_rationale = (
+                f"Source physical geometry is missing or invalid; no FDS representation authorized. {suffix}"
+                if suffix
+                else "Source physical geometry is missing or invalid; no FDS representation authorized."
+            )
         elif e.review_status == "REVIEW_REQUIRED":
             e.mapping_status = MappingStatus.REVIEW_REQUIRED
     return model

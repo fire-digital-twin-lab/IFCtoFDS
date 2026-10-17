@@ -6,14 +6,14 @@ from ifc_to_fds.mep.classifier import classify_mep_element
 
 
 def test_classification_precedence():
-    assert classify_mep_element("IfcPipeSegment", "water") == ("PLUMBING", False)
+    assert classify_mep_element("IfcPipeSegment", "water") == ("UNRESOLVED", False)
     assert classify_mep_element("IfcPipeSegment", "pipe", "PCCC") == (
-        "FIRE_SUPPRESSION",
-        True,
+        "UNRESOLVED",
+        False,
     )
     assert classify_mep_element("IfcFan", "fan", "SMOKE EXTRACTION") == (
-        "SMOKE_EXTRACT",
-        True,
+        "VENTILATION",
+        False,
     )
     assert classify_mep_element("IfcDuctSegment", "duct") == ("VENTILATION", False)
 
@@ -82,8 +82,10 @@ def test_ifc2x3_explicit_port_ownership(tmp_path):
     assert edge.target_element_id == f"{model.source.source_id}:{members[1].id()}"
     assert edge.distance_meters == 0
     owners = [e for e in model.elements if e.step_id in {x.id() for x in members}]
-    assert all(e.mep_category == "SMOKE_EXTRACT" and len(e.ports) == 1 for e in owners)
+    assert all(e.mep_category == "UNRESOLVED" and len(e.ports) == 1 for e in owners)
     assert all(np.allclose(e.ports[0].world_position, [1.0, 0.0, 0.0]) for e in owners)
+    assert all(e.ports[0].ownership_relation_type == "IfcRelConnectsPortToElement" for e in owners)
+    assert all(len(e.ports[0].ownership_relation_keys) == 1 for e in owners)
 
 
 def test_ports_edges_positions_system_deduplication(tiny_ifc):
@@ -142,7 +144,28 @@ def test_ports_edges_positions_system_deduplication(tiny_ifc):
     extract_mep_graph(model, source)
     assert graph == model.mep_graph.model_dump(), "Extraction must be idempotent"
     elements = [e for e in model.elements if e.global_id in (a.GlobalId, b.GlobalId)]
-    assert all(e.mep_category == "SMOKE_EXTRACT" for e in elements)
+    assert all(e.mep_category == "VENTILATION" for e in elements)
     assert all(np.allclose(e.ports[0].world_position, [1, 0, 0]) for e in elements)
     assert elements[0].ports[0].connected_port_ids == [elements[1].ports[0].port_key]
     assert model.mep_graph.connections[0].distance_meters == 0
+
+
+def test_graph_differences_safe_keys_and_mixed_type_sort():
+    from ifc_to_fds.mep.compare import graph_differences
+
+    expected = {
+        "systems": [
+            {"system_id": "sys-1", "element_keys": [101, "key-202"]},
+            {"invalid_no_id": True},
+        ]
+    }
+    actual = {
+        "systems": [
+            {"system_id": "sys-1", "element_keys": ["key-202", 303]},
+        ]
+    }
+    diffs = graph_differences(expected, actual)
+    assert len(diffs) == 1
+    assert diffs[0]["relation_key"] == "sys-1"
+    assert diffs[0]["entities"] == [101, 303, "key-202"]
+

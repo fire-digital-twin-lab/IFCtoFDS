@@ -26,12 +26,18 @@ FIXTURES = {
 
 
 def adapter_digest():
-    directory = Path(__file__).parents[1] / "validation"
+    mapping_dir = Path(__file__).parent
+    validation_dir = Path(__file__).parents[1] / "validation"
+    files = [
+        mapping_dir / "boundary.py",
+        mapping_dir / "policy.py",
+        mapping_dir / "exporter.py",
+        validation_dir / "effective.py",
+        validation_dir / "boundary_fixtures.py",
+        validation_dir / "solver.py",
+    ]
     return hashlib.sha256(
-        "".join(
-            (directory / name).read_text(encoding="utf-8")
-            for name in ("effective.py", "boundary_fixtures.py", "solver.py")
-        ).encode()
+        "".join(p.read_text(encoding="utf-8") for p in files).encode()
     ).hexdigest()
 
 

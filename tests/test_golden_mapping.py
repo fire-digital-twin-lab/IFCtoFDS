@@ -88,7 +88,7 @@ def test_storey_interval_is_within_building(box_model):
 def test_proxy_and_reference_mep_do_not_become_obstacles(box_model):
     e = box_model.elements[0]
     e.ifc_type = "IfcBuildingElementProxy"
-    plan_mapping(box_model, include_review_solids=True)
+    plan_mapping(box_model)
     text, _, package, report, _ = checked(box_model)
     assert e.review_status == "REVIEW_REQUIRED"
     assert e.simulation_role == "REFERENCE_GEOMETRY"
@@ -103,6 +103,16 @@ def test_proxy_and_reference_mep_do_not_become_obstacles(box_model):
     _, _, _, report, _ = checked(box_model)
     assert e.review_status == "NOT_REQUIRED"
     assert report.element_statuses[e.entity_key] == "REFERENCE_PRESERVED"
+
+
+def test_include_review_without_decisions_is_rejected(box_model):
+    from ifc_to_fds.application.dto.configuration import validate_configuration
+
+    with pytest.raises(ValueError, match="include_review=True is not supported"):
+        plan_mapping(box_model, include_review_solids=True)
+    with pytest.raises(ValueError, match="include_review=True is not supported"):
+        validate_configuration({"include_review": True})
+
 
 
 def test_promotion_requires_all_factors():
@@ -123,7 +133,7 @@ def test_promotion_requires_all_factors():
 
 @pytest.mark.parametrize(
     "type_class, category",
-    [("IfcDuctSegmentType", "VENTILATION"), ("IfcPipeSegmentType", "PLUMBING")],
+    [("IfcDuctSegmentType", "VENTILATION"), ("IfcPipeSegmentType", "UNRESOLVED")],
 )
 def test_ifc2x3_type_class_used(type_class, category):
     assert (
@@ -253,6 +263,11 @@ def test_golden_mutations(golden, mutation):
         target = item.entity_key
         for v in item.mesh.vertices:
             v[0] += 2
+        # Keep the mutant internally coherent so serialization can run; golden
+        # must detect the altered solid rather than a stale cached source bbox.
+        from ifc_to_fds.geometry.mesh import bounds_for_vertices
+
+        item.bounding_box = bounds_for_vertices(item.mesh.vertices)
     elif mutation.startswith("include "):
         item = model.elements[0].model_copy(deep=True)
         item.entity_key = "fixture:extra"

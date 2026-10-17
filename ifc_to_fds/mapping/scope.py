@@ -1,20 +1,34 @@
 """Scope selection retains whole intersecting solids; never clips geometry."""
 
-from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
 from ifc_to_fds.core.canonical import BoundingBox, ScopeDecision
-from ifc_to_fds.geometry.mesh import intersects_box
+from ifc_to_fds.domain.scope import (
+    SelectionScope as SelectionScope,
+    SpatialScope as SpatialScope,
+)
+from ifc_to_fds.geometry.mesh import intersects_box, bounds_for_vertices
+from ifc_to_fds.diagnostics import operation
 
 
-class SpatialScope(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    name: str = "FullModel"
-    bounding_box: Optional[BoundingBox] = None
-    storeys: List[str] = Field(default_factory=list)
-    include_connecting_structures: bool = True
-
-
+@operation("SCOPE")
 def apply_spatial_scope(model, scope):
+    if scope.elements:
+        raise ValueError(
+            "Element-scoped selection is not implemented; use storeys or bounding_box"
+        )
+    building_bounds = {}
+    for e in model.elements:
+        if e.mesh and e.building_id and e.role == "PHYSICAL":
+            bounds = bounds_for_vertices(e.mesh.vertices)
+            if bounds:
+                building_bounds.setdefault((e.source_id, e.building_id), []).extend(
+                    [
+                        [bounds.xmin, bounds.ymin, bounds.zmin],
+                        [bounds.xmax, bounds.ymax, bounds.zmax],
+                    ]
+                )
+    building_bounds = {
+        key: bounds_for_vertices(points) for key, points in building_bounds.items()
+    }
     selected = []
     for selector in scope.storeys:
         hits = [s for s in model.storey_references if selector in (s.name, s.storey_id)]
@@ -40,9 +54,23 @@ def apply_spatial_scope(model, scope):
             ),
             None,
         )
-        if s.elevation_m is not None and model.model_bounds:
-            if upper is not None:
-                intervals.append((s, s.elevation_m, upper))
+        if upper is None:
+            # Top storey: derive the upper limit only from this source/building,
+            # or an explicitly requested scope bound. Never invent a floor height.
+            if scope.bounding_box:
+                upper = scope.bounding_box.zmax
+            else:
+                bounds = [
+                    bounds_for_vertices(e.mesh.vertices)
+                    for e in model.elements
+                    if e.mesh
+                    and e.role == "PHYSICAL"
+                    and e.source_id == s.source_id
+                    and e.building_id == s.building_id
+                ]
+                upper = max((b.zmax for b in bounds if b), default=None)
+        if s.elevation_m is not None and upper is not None and upper > s.elevation_m:
+            intervals.append((s, s.elevation_m, upper))
     selected_ids = {s.storey_id for s in selected}
     model.requested_scope = scope.model_dump(mode="json")
     for e in model.elements:
@@ -61,14 +89,33 @@ def apply_spatial_scope(model, scope):
             for region in regions:
                 for owner, low, high in intervals:
                     if (
-                        e.building_id != owner.building_id
-                        or e.source_id != owner.source_id
-                    ):
+                        e.building_id is not None and e.building_id != owner.building_id
+                    ) or e.source_id != owner.source_id:
                         continue
-                    zlo, zhi = max(region.zmin, low), min(region.zmax, high)
+                    building = building_bounds.get((owner.source_id, owner.building_id))
+                    candidate = region
+                    if building:
+                        candidate = (
+                            BoundingBox(
+                                xmin=max(region.xmin, building.xmin),
+                                xmax=min(region.xmax, building.xmax),
+                                ymin=max(region.ymin, building.ymin),
+                                ymax=min(region.ymax, building.ymax),
+                                zmin=region.zmin,
+                                zmax=region.zmax,
+                            )
+                            if min(region.xmax, building.xmax)
+                            > max(region.xmin, building.xmin)
+                            and min(region.ymax, building.ymax)
+                            > max(region.ymin, building.ymin)
+                            else None
+                        )
+                    if candidate is None:
+                        continue
+                    zlo, zhi = max(candidate.zmin, low), min(candidate.zmax, high)
                     if zhi > zlo:
                         clipped.append(
-                            region.model_copy(update={"zmin": zlo, "zmax": zhi})
+                            candidate.model_copy(update={"zmin": zlo, "zmax": zhi})
                         )
             regions = clipped
         hit = False
@@ -81,7 +128,8 @@ def apply_spatial_scope(model, scope):
                     except Exception:
                         uncertain = True
         elif e.has_3d_geometry and e.role == "PHYSICAL":
-            uncertain = True
+            if regions:
+                uncertain = True
         if (
             selected
             and not intervals

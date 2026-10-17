@@ -10,6 +10,7 @@ import subprocess
 import uuid
 import platform
 import psutil
+from ifc_to_fds.diagnostics import operation
 from .acceptance import GateResult, GateStatus
 from .effective import effective_obstructions
 
@@ -27,6 +28,7 @@ def stop_tree(process):
         pass
 
 
+@operation("SOLVER")
 def solver_gates(fds_text, config):
     executable = config.solver_executable or shutil.which("fds")
     effective = GateResult(

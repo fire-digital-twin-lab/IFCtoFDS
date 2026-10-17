@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import ifcopenshell
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
+from ifc_to_fds.diagnostics import operation
 
 from .canonical import (
     CanonicalElement,
@@ -58,6 +59,12 @@ def find_containing_storey(element: Any) -> Optional[str]:
     return None
 
 
+@operation("IFC_PARSE")
+def open_ifc(file_path):
+    return ifcopenshell.open(file_path)
+
+
+@operation("IFC_READ")
 def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"IFC file not found: {file_path}")
@@ -65,7 +72,7 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     file_size = os.path.getsize(file_path)
     file_hash = compute_file_sha256(file_path)
 
-    ifc_file = ifcopenshell.open(file_path)
+    ifc_file = open_ifc(file_path)
     schema = ifc_file.schema
     unit_name, unit_scale = get_length_unit_scale(ifc_file)
 
@@ -139,14 +146,14 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     elements: List[CanonicalElement] = []
 
     # Map opening elements to their fillings and hosts
-    openings_by_host: Dict[str, List[OpeningReference]] = {}
+    openings_by_host: Dict[int, List[OpeningReference]] = {}
     for rel in ifc_file.by_type("IfcRelVoidsElement"):
         host = rel.RelatingBuildingElement
         opening = rel.RelatedOpeningElement
         if not host or not opening:
             continue
 
-        host_id = host.GlobalId
+        host_id = host.id()
         fillings = []
         for fill_rel in getattr(opening, "HasFillings", []):
             filling_el = getattr(fill_rel, "RelatedBuildingElement", None)
@@ -154,6 +161,20 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
                 fillings.append(filling_el.GlobalId)
 
         ref = OpeningReference(
+            entity_key=f"{file_hash}:{opening.id()}",
+            host_entity_key=f"{file_hash}:{host.id()}",
+            void_relation_key=f"{file_hash}:{rel.id()}",
+            filling_entity_keys=[
+                f"{file_hash}:{r.RelatedBuildingElement.id()}"
+                for r in getattr(opening, "HasFillings", ())
+                if getattr(r, "RelatedBuildingElement", None) is not None
+            ],
+            filling_relation_keys=[
+                f"{file_hash}:{r.id()}"
+                for r in getattr(opening, "HasFillings", ())
+                if getattr(r, "RelatedBuildingElement", None) is not None
+            ],
+            placement=extract_placement(opening, unit_scale),
             opening_global_id=opening.GlobalId,
             opening_step_id=opening.id(),
             opening_name=opening.Name or "Opening",
@@ -184,7 +205,7 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
                 )
         if container and container.is_a("IfcBuildingStorey"):
             storey = container.Name or container.GlobalId
-        openings = openings_by_host.get(guid, [])
+        openings = openings_by_host.get(step_id, [])
 
         has_geom = bool(getattr(prod, "Representation", None))
 

@@ -1,0 +1,177 @@
+{
+  "case_id": "case_d_mep",
+  "source_sha256": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a",
+  "status": "INCONCLUSIVE",
+  "mapping_status": "INCONCLUSIVE",
+  "simulation_status": "INCONCLUSIVE",
+  "output_complete": false,
+  "elements_count": 4,
+  "elements": [
+    {
+      "entity_key": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:10",
+      "ifc_type": "IfcFlowSegment",
+      "name": "Duct",
+      "storey": null,
+      "scope_decision": "IN_SCOPE",
+      "mapping_strategy": "NONE",
+      "simulation_role": "REFERENCE_GEOMETRY",
+      "operational_status": "NOT_CONFIGURED",
+      "fds_representation": "NONE",
+      "review_status": "NOT_REQUIRED",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "boundary_policy": null,
+      "has_3d_geometry": false,
+      "openings_count": 0,
+      "ports_count": 1,
+      "system_names": [
+        "Smoke Extract"
+      ],
+      "fds_primitive_ids": []
+    },
+    {
+      "entity_key": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:11",
+      "ifc_type": "IfcFlowFitting",
+      "name": "Elbow",
+      "storey": null,
+      "scope_decision": "IN_SCOPE",
+      "mapping_strategy": "NONE",
+      "simulation_role": "REFERENCE_GEOMETRY",
+      "operational_status": "NOT_CONFIGURED",
+      "fds_representation": "NONE",
+      "review_status": "NOT_REQUIRED",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "boundary_policy": null,
+      "has_3d_geometry": false,
+      "openings_count": 0,
+      "ports_count": 1,
+      "system_names": [
+        "Smoke Extract"
+      ],
+      "fds_primitive_ids": []
+    },
+    {
+      "entity_key": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:15",
+      "ifc_type": "IfcDistributionPort",
+      "name": "Port",
+      "storey": null,
+      "scope_decision": "IN_SCOPE",
+      "mapping_strategy": "SEMANTIC_ONLY",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "operational_status": "NOT_APPLICABLE",
+      "fds_representation": "NONE",
+      "review_status": "NOT_REQUIRED",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "boundary_policy": null,
+      "has_3d_geometry": false,
+      "openings_count": 0,
+      "ports_count": 0,
+      "system_names": [],
+      "fds_primitive_ids": []
+    },
+    {
+      "entity_key": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:21",
+      "ifc_type": "IfcDistributionPort",
+      "name": "Port",
+      "storey": null,
+      "scope_decision": "IN_SCOPE",
+      "mapping_strategy": "SEMANTIC_ONLY",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "operational_status": "NOT_APPLICABLE",
+      "fds_representation": "NONE",
+      "review_status": "NOT_REQUIRED",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "boundary_policy": null,
+      "has_3d_geometry": false,
+      "openings_count": 0,
+      "ports_count": 0,
+      "system_names": [],
+      "fds_primitive_ids": []
+    }
+  ],
+  "records_count": 4,
+  "records": [
+    {
+      "entity_key": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:10",
+      "mapping_status": "UNSUPPORTED",
+      "mapping_strategy": "NONE",
+      "simulation_role": "REFERENCE_GEOMETRY",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "fds_primitive_ids": [],
+      "openings_count": 0,
+      "ports_count": 1
+    },
+    {
+      "entity_key": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:11",
+      "mapping_status": "UNSUPPORTED",
+      "mapping_strategy": "NONE",
+      "simulation_role": "REFERENCE_GEOMETRY",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "fds_primitive_ids": [],
+      "openings_count": 0,
+      "ports_count": 1
+    },
+    {
+      "entity_key": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:15",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "fds_primitive_ids": [],
+      "openings_count": 0,
+      "ports_count": 0
+    },
+    {
+      "entity_key": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:21",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
+      "simulation_role": "PASSIVE_OBSTACLE",
+      "boundary_treatment": "NOT_APPLICABLE",
+      "fds_primitive_ids": [],
+      "openings_count": 0,
+      "ports_count": 0
+    }
+  ],
+  "mep_systems_count": 1,
+  "mep_connections_count": 1,
+  "fds_summary": {
+    "obst_count": 0,
+    "geom_count": 0,
+    "mesh_count": 0,
+    "total_primitives": 0
+  },
+  "fds_primitives": [],
+  "gates": {
+    "syntax": "INCONCLUSIVE",
+    "source_inventory": "PASS",
+    "traceability": "PASS",
+    "scope": "PASS",
+    "geometry": "INCONCLUSIVE",
+    "openings": "NOT_APPLICABLE",
+    "mep": "INCONCLUSIVE",
+    "representation": "PASS",
+    "boundary": "PASS",
+    "domain": "INCONCLUSIVE",
+    "solver": "NOT_RUN",
+    "effective_geometry": "NOT_RUN",
+    "geometry_preservation": "INCONCLUSIVE",
+    "placement": "PASS",
+    "golden_reference_parity": "NOT_APPLICABLE"
+  },
+  "findings_count": 2,
+  "findings": [
+    {
+      "category": "geometry",
+      "severity": "P2",
+      "element_id": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:10",
+      "title": "Required evidence unavailable"
+    },
+    {
+      "category": "geometry",
+      "severity": "P2",
+      "element_id": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:11",
+      "title": "Required evidence unavailable"
+    }
+  ],
+  "geometry_package_sha256": "1ba665a88f7e0d8d17a029d94b471af936d660950eda1a78bdcdc4e3dec7b137",
+  "manifest_csv_sha256": "7bf0f43d04efca255510bee7efea89757651cee7af81a08a2a028da206074f13"
+}

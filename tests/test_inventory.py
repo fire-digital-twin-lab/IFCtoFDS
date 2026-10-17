@@ -55,3 +55,33 @@ def test_nonphysical_products_remain_accounted():
     }
     assert sum(e.role == "OPENING" for e in model.elements) == 17
     assert len({e.entity_key for e in model.elements}) == len(model.elements)
+
+
+def test_dangling_opening_filling_does_not_crash(tiny_ifc, tmp_path):
+    import ifcopenshell.api.root
+
+    path, file, wall = tiny_ifc
+    opening = ifcopenshell.api.root.create_entity(
+        file, ifc_class="IfcOpeningElement", name="Void with dangling fill"
+    )
+    opening.ObjectPlacement = wall.ObjectPlacement
+    file.create_entity(
+        "IfcRelVoidsElement",
+        GlobalId=ifcopenshell.guid.new(),
+        RelatingBuildingElement=wall,
+        RelatedOpeningElement=opening,
+    )
+    # Dangling filling relationship where RelatedBuildingElement is None
+    file.create_entity(
+        "IfcRelFillsElement",
+        GlobalId=ifcopenshell.guid.new(),
+        RelatingOpeningElement=opening,
+        RelatedBuildingElement=None,
+    )
+    dangling_path = tmp_path / "dangling.ifc"
+    file.write(str(dangling_path))
+    model, _ = extract_inventory(str(dangling_path))
+    host_wall = next(e for e in model.elements if e.step_id == wall.id())
+    assert len(host_wall.openings) == 1
+    assert host_wall.openings[0].filling_entity_keys == []
+

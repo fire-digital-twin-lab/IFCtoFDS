@@ -1,13 +1,13 @@
 """Authoritative Geometry Engine powered by IfcOpenShell OpenCASCADE kernel.
 
-Generates exact, watertight meshes for all spatial and building elements,
-ensuring boolean openings (doors, windows, penetrations) are properly carved
-and spatial coordinates are preserved.
+Extracts meshes and reports kernel/topology failures explicitly. Extraction
+does not establish independent geometry or opening verification.
 """
 
 from typing import Any, List, Optional
 import ifcopenshell
 import ifcopenshell.geom
+from ifc_to_fds.diagnostics import operation
 
 from ifc_to_fds.core.canonical import (
     CanonicalElement,
@@ -73,6 +73,7 @@ def extract_element_geometry(
         return None
 
 
+@operation("IFC_GEOMETRY")
 def process_model_geometry(
     canonical_model: CanonicalModel,
     ifc_file: ifcopenshell.file,
@@ -144,6 +145,9 @@ def process_model_geometry(
                 )
                 if opening.mesh:
                     opening.bounding_box = bounds_for_vertices(opening.mesh.vertices)
+                opening.extraction_diagnostic = opening_diagnostic(
+                    opening.mesh, opening_elem.validation_notes
+                )
         else:
             elem.geometry_status = GeometryStatus.FAILED
             if elem.has_3d_geometry and elem.mapping_status != MappingStatus.DEVIATED:
@@ -154,3 +158,11 @@ def process_model_geometry(
         canonical_model.model_bounds = bounds_for_vertices(all_verts)
 
     return canonical_model
+
+
+def opening_diagnostic(mesh, notes):
+    if mesh is None:
+        return "; ".join(notes) or "No opening mesh generated"
+    if not valid_solid(mesh):
+        return f"Invalid opening solid: {inspect_mesh_quality(mesh)}"
+    return None
