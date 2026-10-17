@@ -92,7 +92,7 @@
   "records": [
     {
       "entity_key": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:10",
-      "mapping_status": "INCONCLUSIVE",
+      "mapping_status": "UNSUPPORTED",
       "mapping_strategy": "NONE",
       "simulation_role": "REFERENCE_GEOMETRY",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -102,7 +102,7 @@
     },
     {
       "entity_key": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:11",
-      "mapping_status": "INCONCLUSIVE",
+      "mapping_status": "UNSUPPORTED",
       "mapping_strategy": "NONE",
       "simulation_role": "REFERENCE_GEOMETRY",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -147,7 +147,7 @@
     "scope": "PASS",
     "geometry": "INCONCLUSIVE",
     "openings": "NOT_APPLICABLE",
-    "mep": "PASS",
+    "mep": "INCONCLUSIVE",
     "representation": "PASS",
     "boundary": "PASS",
     "domain": "INCONCLUSIVE",
@@ -157,8 +157,21 @@
     "placement": "PASS",
     "golden_reference_parity": "NOT_APPLICABLE"
   },
-  "findings_count": 0,
-  "findings": [],
+  "findings_count": 2,
+  "findings": [
+    {
+      "category": "geometry",
+      "severity": "P2",
+      "element_id": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:10",
+      "title": "Required evidence unavailable"
+    },
+    {
+      "category": "geometry",
+      "severity": "P2",
+      "element_id": "182543d11a4febbb19b128fe1a43b9be8642a7cffb6cddcfca2044a588377c3a:11",
+      "title": "Required evidence unavailable"
+    }
+  ],
   "geometry_package_sha256": "7001e17b21e518f6d6e4d5d3601abb0dd2b10684aecc775f5bd75f1ede37613a",
-  "manifest_csv_sha256": "5e6866ff46481ee14a66f26abf6d317033304c5df98ad6da0d9896f6ea7977f7"
+  "manifest_csv_sha256": "a35f3ddcf698555ce6150a2d2a116de2fbe94131f6e765cafab0fbbf07fea15a"
 }

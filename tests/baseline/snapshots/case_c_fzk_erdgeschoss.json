@@ -13,10 +13,10 @@
       "name": "Wendeltreppe",
       "storey": "Erdgeschoss",
       "scope_decision": "IN_SCOPE",
-      "mapping_strategy": "GEOM",
+      "mapping_strategy": "NONE",
       "simulation_role": "PASSIVE_OBSTACLE",
       "operational_status": "NOT_APPLICABLE",
-      "fds_representation": "GEOM",
+      "fds_representation": "NONE",
       "review_status": "NOT_REQUIRED",
       "boundary_treatment": "NOT_APPLICABLE",
       "boundary_policy": null,
@@ -467,8 +467,8 @@
       "ifc_type": "IfcSpace",
       "name": "4",
       "storey": null,
-      "scope_decision": "OUT_OF_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "scope_decision": "BOUNDARY_RETAINED",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "operational_status": "NOT_APPLICABLE",
       "fds_representation": "NONE",
@@ -486,8 +486,8 @@
       "ifc_type": "IfcSpace",
       "name": "3",
       "storey": null,
-      "scope_decision": "OUT_OF_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "scope_decision": "BOUNDARY_RETAINED",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "operational_status": "NOT_APPLICABLE",
       "fds_representation": "NONE",
@@ -505,8 +505,8 @@
       "ifc_type": "IfcSpace",
       "name": "2",
       "storey": null,
-      "scope_decision": "OUT_OF_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "scope_decision": "BOUNDARY_RETAINED",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "operational_status": "NOT_APPLICABLE",
       "fds_representation": "NONE",
@@ -1067,8 +1067,8 @@
       "ifc_type": "IfcSpace",
       "name": "5",
       "storey": null,
-      "scope_decision": "OUT_OF_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "scope_decision": "BOUNDARY_RETAINED",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "operational_status": "NOT_APPLICABLE",
       "fds_representation": "NONE",
@@ -1086,8 +1086,8 @@
       "ifc_type": "IfcSpace",
       "name": "1",
       "storey": null,
-      "scope_decision": "OUT_OF_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "scope_decision": "BOUNDARY_RETAINED",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "operational_status": "NOT_APPLICABLE",
       "fds_representation": "NONE",
@@ -1126,8 +1126,8 @@
       "ifc_type": "IfcSpace",
       "name": "6",
       "storey": null,
-      "scope_decision": "OUT_OF_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "scope_decision": "BOUNDARY_RETAINED",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "operational_status": "NOT_APPLICABLE",
       "fds_representation": "NONE",
@@ -2477,8 +2477,8 @@
   "records": [
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:14502",
-      "mapping_status": "MISSING",
-      "mapping_strategy": "GEOM",
+      "mapping_status": "UNSUPPORTED",
+      "mapping_strategy": "NONE",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [],
@@ -2725,8 +2725,8 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:20909",
-      "mapping_status": "EXCLUDED_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [],
@@ -2735,8 +2735,8 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21283",
-      "mapping_status": "EXCLUDED_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [],
@@ -2745,8 +2745,8 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21640",
-      "mapping_status": "EXCLUDED_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [],
@@ -3055,8 +3055,8 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33774",
-      "mapping_status": "EXCLUDED_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [],
@@ -3065,8 +3065,8 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:34191",
-      "mapping_status": "EXCLUDED_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [],
@@ -3087,8 +3087,8 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:34763",
-      "mapping_status": "EXCLUDED_SCOPE",
-      "mapping_strategy": "EXCLUDED_SCOPE",
+      "mapping_status": "SEMANTIC_ONLY",
+      "mapping_strategy": "SEMANTIC_ONLY",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [],
@@ -3933,8 +3933,8 @@
       "xb": [
         11.805,
         11.88,
-        6.5024,
-        8.5024,
+        6.502394,
+        8.502394,
         0.8,
         2.0
       ]
@@ -4123,7 +4123,7 @@
   "gates": {
     "syntax": "INCONCLUSIVE",
     "source_inventory": "PASS",
-    "traceability": "FAIL",
+    "traceability": "PASS",
     "scope": "PASS",
     "geometry": "FAIL",
     "openings": "FAIL",
@@ -4137,8 +4137,14 @@
     "placement": "PASS",
     "golden_reference_parity": "NOT_APPLICABLE"
   },
-  "findings_count": 48,
+  "findings_count": 47,
   "findings": [
+    {
+      "category": "geometry",
+      "severity": "P1",
+      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:14502",
+      "title": "Unsupported source geometry: entity=ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d"
+    },
     {
       "category": "geometry",
       "severity": "P1",
@@ -4406,12 +4412,6 @@
     {
       "category": "openings",
       "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
-      "title": "Opening passage changed, including fills/blockers: 0seqbT9MlcQAX_K0YLzD86"
-    },
-    {
-      "category": "openings",
-      "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31470",
       "title": "Opening passage changed, including fills/blockers: 2OW0PH61vS77xxyX1o74u8"
     },
@@ -4420,14 +4420,8 @@
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31470",
       "title": "Opening passage changed, including fills/blockers: 2cFXkmvNz6q8TXoCpAWu5Y"
-    },
-    {
-      "category": "traceability",
-      "severity": "P0",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:14502",
-      "title": "Missing required FDS solid: 38a9vdh9bF5Qg28GWyHhlr"
     }
   ],
-  "geometry_package_sha256": "91e435bf447cd884fe557442ed4cd1cb33c7b084557a8cf70c475d7dcd65b1f8",
-  "manifest_csv_sha256": "b1e8ad0ba46b79088f50dfff60bc8f1ea73fce7e9aacba48d0c5ee339530e654"
+  "geometry_package_sha256": "43eb399bf105286b824d557acb98eb51dcc6df27e5652f3b0df04820a02b44df",
+  "manifest_csv_sha256": "3bc8f0750471ae445cec87ad9557c68cf87404faad6c5b2c76c9aee071d00b98"
 }
