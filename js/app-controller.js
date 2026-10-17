@@ -1503,7 +1503,15 @@
         rows.forEach(function (pair) {
             var row = document.createElement('div');
             row.className = 'property-row';
-            row.innerHTML = '<span class="property-key">' + pair[0] + '</span><span class="property-val" title="' + pair[1] + '">' + pair[1] + '</span>';
+            var keySpan = document.createElement('span');
+            keySpan.className = 'property-key';
+            keySpan.textContent = String(pair[0]);
+            var valSpan = document.createElement('span');
+            valSpan.className = 'property-val';
+            valSpan.title = String(pair[1]);
+            valSpan.textContent = String(pair[1]);
+            row.appendChild(keySpan);
+            row.appendChild(valSpan);
             view.appendChild(row);
         });
     }
@@ -1655,6 +1663,12 @@
         if (gatesContainer && report.gates) {
             Object.keys(report.gates).forEach(function (gateName) {
                 var card = gatesContainer.querySelector('[data-gate="' + gateName + '"]');
+                if (!card && gateName === 'golden_reference_parity') {
+                    card = gatesContainer.querySelector('[data-gate="golden"]');
+                }
+                if (!card && gateName === 'golden') {
+                    card = gatesContainer.querySelector('[data-gate="golden_reference_parity"]');
+                }
                 if (card) {
                     var gate = report.gates[gateName];
                     var dot = card.querySelector('.status-dot');
@@ -1682,13 +1696,37 @@
             } else {
                 findings.forEach(function (f) {
                     var tr = document.createElement('tr');
-                    var isErr = f.severity === 'ERROR' || f.severity === 'P1';
+                    var isErr = f.severity === 'P0' || f.severity === 'ERROR' || f.severity === 'P1';
                     var sevColor = isErr ? 'var(--status-error-text)' : 'var(--status-warning-text)';
-                    tr.innerHTML = '<td><span class="brand-badge" style="color:' + sevColor + '">' + (f.severity || 'WARN') + '</span></td>' +
-                        '<td><span class="source-meta-tag">' + (f.category || 'general') + '</span></td>' +
-                        '<td style="font-family:var(--font-mono);color:var(--text-primary)">' + (f.element_id || '&mdash;') + '</td>' +
-                        '<td style="color:var(--text-secondary)">' + (f.detail || f.title || '') + '</td>' +
-                        '<td style="text-align:right"></td>';
+
+                    var tdSev = document.createElement('td');
+                    var badge = document.createElement('span');
+                    badge.className = 'brand-badge';
+                    badge.style.color = sevColor;
+                    badge.textContent = f.severity || 'WARN';
+                    tdSev.appendChild(badge);
+                    tr.appendChild(tdSev);
+
+                    var tdCat = document.createElement('td');
+                    var catTag = document.createElement('span');
+                    catTag.className = 'source-meta-tag';
+                    catTag.textContent = f.category || 'general';
+                    tdCat.appendChild(catTag);
+                    tr.appendChild(tdCat);
+
+                    var tdKey = document.createElement('td');
+                    tdKey.style.fontFamily = 'var(--font-mono)';
+                    tdKey.style.color = 'var(--text-primary)';
+                    tdKey.textContent = f.element_id || '—';
+                    tr.appendChild(tdKey);
+
+                    var tdDesc = document.createElement('td');
+                    tdDesc.style.color = 'var(--text-secondary)';
+                    tdDesc.textContent = f.detail || f.title || '';
+                    tr.appendChild(tdDesc);
+
+                    var tdAct = document.createElement('td');
+                    tdAct.style.textAlign = 'right';
                     if (f.element_id) {
                         var btn = document.createElement('button');
                         btn.className = 'btn';
@@ -1699,8 +1737,9 @@
                         btn.addEventListener('click', function () {
                             if (viewer && viewer.selectElementByKey) viewer.selectElementByKey(f.element_id);
                         });
-                        tr.querySelector('td:last-child').appendChild(btn);
+                        tdAct.appendChild(btn);
                     }
+                    tr.appendChild(tdAct);
                     findingsTbody.appendChild(tr);
                 });
             }

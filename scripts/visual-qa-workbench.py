@@ -79,7 +79,9 @@ def main():
 
             # Clear dummy storey and keep domain unchecked for full model
             page.evaluate("""() => {
-                document.getElementById('verified-storeys').replaceChildren();
+                const sel = document.getElementById('verified-storeys');
+                sel.replaceChildren();
+                sel.dispatchEvent(new Event('change'));
                 document.getElementById('verified-use-domain').checked = false;
                 document.getElementById('verified-use-domain').dispatchEvent(new Event('change'));
             }""")
