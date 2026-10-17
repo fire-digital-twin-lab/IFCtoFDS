@@ -112,3 +112,20 @@ def test_storey_interval_uses_same_building_geometry(box_model, selected_top):
     assert crossing.scope_decision == "BOUNDARY_RETAINED"
     assert unrelated.scope_decision == "OUT_OF_SCOPE"
     assert crossing.mesh.model_dump() == before
+
+
+def test_unassigned_crossing_geometry_is_not_lost(box_model):
+    from ifc_to_fds.domain.bim import StoreyReference
+    from ifc_to_fds.domain.scope import SpatialScope
+    from ifc_to_fds.mapping.scope import apply_spatial_scope
+    e = box_model.elements[0]
+    e.building_id, e.storey_id = "fixture:building", "fixture:top"
+    unassigned = e.model_copy(deep=True)
+    unassigned.entity_key, unassigned.step_id = "fixture:2", 2
+    unassigned.building_id = unassigned.storey_id = None
+    box_model.elements.append(unassigned)
+    box_model.storey_references = [StoreyReference(
+        storey_id=e.storey_id, source_id=e.source_id, building_id=e.building_id, name="Top", elevation_m=0,
+    )]
+    apply_spatial_scope(box_model, SpatialScope(storeys=[e.storey_id]))
+    assert unassigned.scope_decision == "BOUNDARY_RETAINED"
