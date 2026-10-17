@@ -1,0 +1,286 @@
+/**
+ * Selection Store for IFCtoFDS Research Workbench.
+ * Manages deterministic EntityKey selections, provides O(1) entity lookups,
+ * and synchronizes selection state across the 3D Viewer, Model Tree, and Inspector.
+ */
+(function (root) {
+    root.IfcFds = root.IfcFds || {};
+    root.IfcFds.workbench = root.IfcFds.workbench || {};
+    root.IfcFds.workbench.state = root.IfcFds.workbench.state || {};
+
+    var normalizeEntityDescriptor = root.IfcFds.workbench.normalizeEntityDescriptor;
+    var createEntityKey = root.IfcFds.workbench.createEntityKey;
+    var events = root.IfcFds.workbench.events;
+    var WORKBENCH_EVENTS = root.IfcFds.workbench.WORKBENCH_EVENTS;
+
+    function SelectionStore() {
+        this._selectedKeys = {}; // entityKey -> true
+        this._selectedItems = []; // Array of descriptors
+        this._entityIndex = {}; // entityKey -> descriptor
+        this._byStepId = {}; // stepId (str) -> descriptor
+        this._byGlobalId = {}; // globalId (str) -> descriptor
+        this._aliasMap = {}; // aliasKey -> canonicalKey
+        this._listeners = [];
+    }
+
+    SelectionStore.prototype.indexElements = function (elements, defaultSourceId) {
+        if (!elements) return;
+        var list = Array.isArray(elements) ? elements : Object.values(elements);
+        for (var i = 0; i < list.length; i++) {
+            var item = list[i];
+            if (!item) continue;
+            // Bind identity once on the scene input, before either tree or mesh is built.
+            var raw = item.raw || {};
+            if (!item.sourceId && !item.source_id && !raw.source_id && !(item.ifcSource && (item.ifcSource.sourceId || item.ifcSource.fileName))) {
+                item.sourceId = defaultSourceId || 'ifc';
+            }
+            item.entityKey = createEntityKey(item);
+            var desc = normalizeEntityDescriptor(item);
+            if (!desc || !desc.entityKey) continue;
+            this._entityIndex[desc.entityKey] = desc;
+            if (desc.stepId !== null && desc.stepId !== undefined) {
+                this._byStepId[String(desc.stepId)] = desc;
+            }
+            if (desc.globalId) {
+                this._byGlobalId[String(desc.globalId)] = desc;
+            }
+        }
+        if (events && WORKBENCH_EVENTS) {
+            events.emit(WORKBENCH_EVENTS.MODEL_INDEXED, {
+                totalIndexed: Object.keys(this._entityIndex).length
+            });
+        }
+    };
+
+    SelectionStore.prototype.hydrateManifest = function (records, report) {
+        if (!records || !records.length) return;
+        var elementStatuses = (report && report.element_statuses) || {};
+        for (var i = 0; i < records.length; i++) {
+            var rec = records[i];
+            if (!rec) continue;
+            var canonicalKey = rec.entity_key;
+            var stepId = rec.step_id !== undefined ? String(rec.step_id) : null;
+            var globalId = rec.global_id ? String(rec.global_id) : null;
+
+            var desc = this._entityIndex[canonicalKey] ||
+                (stepId && this._byStepId[stepId]) ||
+                (globalId && this._byGlobalId[globalId]);
+
+            if (desc) {
+                desc.canonicalKey = canonicalKey;
+                desc.simulationRole = rec.simulation_role || desc.simulationRole;
+                desc.mappingStrategy = rec.mapping_strategy || desc.mappingStrategy;
+                desc.representation = rec.fds_representation || desc.representation;
+                desc.boundaryTreatment = rec.boundary_treatment || desc.boundaryTreatment;
+                desc.reviewStatus = rec.review_status || desc.reviewStatus;
+                desc.fdsPrimitiveIds = rec.fds_primitive_ids || desc.fdsPrimitiveIds;
+                if (elementStatuses[canonicalKey]) {
+                    desc.verificationStatus = elementStatuses[canonicalKey];
+                    if (!desc.raw) desc.raw = {};
+                    desc.raw.verification_status = elementStatuses[canonicalKey];
+                    desc.raw.review_status = elementStatuses[canonicalKey];
+                }
+                if (rec.mep_data) {
+                    desc.mepCategory = rec.mep_data.category || desc.mepCategory;
+                    desc.systemNames = rec.mep_data.system_names || desc.systemNames;
+                    desc.systemIds = rec.mep_data.system_ids || desc.systemIds;
+                    desc.portsCount = (rec.mep_data.ports && rec.mep_data.ports.length) || desc.portsCount;
+                }
+                this._aliasMap[canonicalKey] = desc.entityKey;
+                this._aliasMap[desc.entityKey] = canonicalKey;
+                this._entityIndex[canonicalKey] = desc;
+            } else {
+                var newDesc = normalizeEntityDescriptor({
+                    entityKey: canonicalKey,
+                    sourceId: rec.source_id,
+                    globalId: rec.global_id,
+                    stepId: rec.step_id,
+                    ifcType: rec.ifc_type,
+                    name: rec.name || (rec.ifc_type + ' #' + rec.step_id),
+                    storey: rec.storey,
+                    simulationRole: rec.simulation_role,
+                    mappingStrategy: rec.mapping_strategy,
+                    representation: rec.fds_representation,
+                    boundaryTreatment: rec.boundary_treatment,
+                    reviewStatus: elementStatuses[canonicalKey] || rec.review_status || 'NOT_REQUIRED',
+                    raw: rec
+                });
+                if (newDesc && newDesc.entityKey) {
+                    this._entityIndex[newDesc.entityKey] = newDesc;
+                    if (newDesc.stepId) this._byStepId[String(newDesc.stepId)] = newDesc;
+                    if (newDesc.globalId) this._byGlobalId[String(newDesc.globalId)] = newDesc;
+                }
+            }
+        }
+        if (events && WORKBENCH_EVENTS) {
+            events.emit(WORKBENCH_EVENTS.MODEL_INDEXED, {
+                totalIndexed: Object.keys(this._entityIndex).length,
+                hydrated: true
+            });
+        }
+    };
+
+    SelectionStore.prototype.clearIndex = function () {
+        this._entityIndex = {};
+        this._byStepId = {};
+        this._byGlobalId = {};
+        this._aliasMap = {};
+        this.clearSelection('system');
+        if (events && WORKBENCH_EVENTS) events.emit(WORKBENCH_EVENTS.MODEL_INDEXED, {totalIndexed: 0});
+    };
+
+    SelectionStore.prototype.getDescriptor = function (key) {
+        if (!key) return null;
+        var k = String(key);
+        if (this._entityIndex[k]) return this._entityIndex[k];
+        if (this._aliasMap[k] && this._entityIndex[this._aliasMap[k]]) return this._entityIndex[this._aliasMap[k]];
+        var parts = k.split(':');
+        var idPart = parts.length > 1 ? parts.slice(1).join(':') : k;
+        if (this._byStepId[idPart]) return this._byStepId[idPart];
+        if (this._byGlobalId[idPart]) return this._byGlobalId[idPart];
+        return null;
+    };
+
+    SelectionStore.prototype.getAllDescriptors = function () {
+        var self = this;
+        return Object.keys(this._entityIndex).map(function (k) {
+            return self._entityIndex[k];
+        });
+    };
+
+    SelectionStore.prototype.getSelection = function () {
+        return this._selectedItems.slice();
+    };
+
+    SelectionStore.prototype.getSelectedKeys = function () {
+        return Object.keys(this._selectedKeys);
+    };
+
+    SelectionStore.prototype.isSelected = function (keyOrItem) {
+        if (!keyOrItem) return false;
+        var key = typeof keyOrItem === 'string' ? keyOrItem : createEntityKey(keyOrItem);
+        return !!this._selectedKeys[key];
+    };
+
+    SelectionStore.prototype.setSelection = function (itemsOrKeys, source) {
+        var prevKeys = this.getSelectedKeys();
+        this._selectedKeys = {};
+        this._selectedItems = [];
+
+        var list = Array.isArray(itemsOrKeys) ? itemsOrKeys : (itemsOrKeys ? [itemsOrKeys] : []);
+        for (var i = 0; i < list.length; i++) {
+            var entry = list[i];
+            if (!entry) continue;
+            var desc = null;
+            if (typeof entry === 'string') {
+                desc = this._entityIndex[entry] || { entityKey: entry, name: entry, ifcType: 'UNKNOWN' };
+            } else {
+                desc = normalizeEntityDescriptor(entry);
+                if (desc && desc.entityKey && !this._entityIndex[desc.entityKey]) {
+                    this._entityIndex[desc.entityKey] = desc;
+                }
+            }
+            if (desc && desc.entityKey) {
+                this._selectedKeys[desc.entityKey] = true;
+                this._selectedItems.push(desc);
+            }
+        }
+
+        this._notifyChanged(source, prevKeys);
+    };
+
+    SelectionStore.prototype.addSelection = function (itemsOrKeys, source) {
+        var prevKeys = this.getSelectedKeys();
+        var list = Array.isArray(itemsOrKeys) ? itemsOrKeys : (itemsOrKeys ? [itemsOrKeys] : []);
+        for (var i = 0; i < list.length; i++) {
+            var entry = list[i];
+            if (!entry) continue;
+            var desc = null;
+            if (typeof entry === 'string') {
+                desc = this._entityIndex[entry] || { entityKey: entry, name: entry, ifcType: 'UNKNOWN' };
+            } else {
+                desc = normalizeEntityDescriptor(entry);
+            }
+            if (desc && desc.entityKey && !this._selectedKeys[desc.entityKey]) {
+                this._selectedKeys[desc.entityKey] = true;
+                this._selectedItems.push(desc);
+            }
+        }
+        this._notifyChanged(source, prevKeys);
+    };
+
+    SelectionStore.prototype.removeSelection = function (itemsOrKeys, source) {
+        var prevKeys = this.getSelectedKeys();
+        var list = Array.isArray(itemsOrKeys) ? itemsOrKeys : (itemsOrKeys ? [itemsOrKeys] : []);
+        var removeMap = {};
+        for (var i = 0; i < list.length; i++) {
+            var key = typeof list[i] === 'string' ? list[i] : createEntityKey(list[i]);
+            if (key) removeMap[key] = true;
+        }
+
+        for (var k in removeMap) {
+            delete this._selectedKeys[k];
+        }
+        this._selectedItems = this._selectedItems.filter(function (item) {
+            return !removeMap[item.entityKey];
+        });
+
+        this._notifyChanged(source, prevKeys);
+    };
+
+    SelectionStore.prototype.toggleSelection = function (itemOrKey, source) {
+        if (!itemOrKey) return;
+        var key = typeof itemOrKey === 'string' ? itemOrKey : createEntityKey(itemOrKey);
+        if (this._selectedKeys[key]) {
+            this.removeSelection([key], source);
+        } else {
+            this.addSelection([itemOrKey], source);
+        }
+    };
+
+    SelectionStore.prototype.clearSelection = function (source) {
+        if (!this.getSelectedKeys().length) return;
+        var prevKeys = this.getSelectedKeys();
+        this._selectedKeys = {};
+        this._selectedItems = [];
+        this._notifyChanged(source, prevKeys);
+    };
+
+    SelectionStore.prototype.subscribe = function (listener) {
+        if (typeof listener !== 'function') return function () {};
+        this._listeners.push(listener);
+        var self = this;
+        return function () {
+            self._listeners = self._listeners.filter(function (l) { return l !== listener; });
+        };
+    };
+
+    SelectionStore.prototype._notifyChanged = function (source, prevKeys) {
+        var currentSelection = this.getSelection();
+        var currentKeys = this.getSelectedKeys();
+        var payload = {
+            selection: currentSelection,
+            keys: currentKeys,
+            previousKeys: prevKeys || [],
+            source: source || 'unknown'
+        };
+
+        for (var i = 0; i < this._listeners.length; i++) {
+            try {
+                this._listeners[i](payload);
+            } catch (err) {
+                console.error('[SelectionStore] Listener error:', err);
+            }
+        }
+
+        if (events && WORKBENCH_EVENTS) {
+            events.emit(WORKBENCH_EVENTS.SELECTION_CHANGED, payload);
+        }
+    };
+
+    var defaultSelectionStore = new SelectionStore();
+
+    root.IfcFds.workbench.state.SelectionStore = SelectionStore;
+    root.IfcFds.workbench.state.selectionStore = defaultSelectionStore;
+
+})(typeof window !== 'undefined' ? window : globalThis);

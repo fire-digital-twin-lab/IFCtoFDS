@@ -24,7 +24,11 @@
         exportRequestId: 0,
         exportWorker: null,
         exportWorkerUrl: null,
-        helpTrigger: null
+        helpTrigger: null,
+        lastAuditReport: null,
+        lastManifest: null,
+        backendOnline: false,
+        currentIfcFile: null
     };
 
     var els = {};
@@ -46,85 +50,43 @@
         viewer.setNavigationModeChangeHandler(updateWalkModeButton);
         applyTheme(readSavedTheme());
         if (window.lucide) window.lucide.createIcons();
+        if (ns.ui && ns.ui.domainPanel) ns.ui.domainPanel.init(els);
+        if (ns.workbench && ns.workbench.inspector && ns.workbench.inspector.inspectorController) {
+            ns.workbench.inspector.inspectorController.init(els, viewer);
+        } else if (ns.ui && ns.ui.inspectorPanel) {
+            ns.ui.inspectorPanel.init(els, viewer);
+        }
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore) {
+            ns.workbench.state.selectionStore.subscribe(function (payload) {
+                if (payload.source !== 'viewer' && viewer && typeof viewer.selectByEntityKeys === 'function') {
+                    viewer.selectByEntityKeys(payload.keys);
+                }
+            });
+        }
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.visibilityStore) {
+            ns.workbench.state.visibilityStore.subscribe(function () {
+                if (viewer && typeof viewer.applyVisibilityState === 'function') {
+                    viewer.applyVisibilityState(ns.workbench.state.visibilityStore);
+                }
+            });
+        }
+        if (ns.workbench && ns.workbench.navigation) {
+            if (ns.workbench.navigation.colorOverlay) ns.workbench.navigation.colorOverlay.setViewer(viewer);
+            if (ns.workbench.navigation.sectionBox) ns.workbench.navigation.sectionBox.setViewer(viewer);
+            if (ns.workbench.navigation.modelTree) ns.workbench.navigation.modelTree.init();
+        }
+        if (ns.ui && ns.ui.auditDrawer) ns.ui.auditDrawer.init(els, viewer);
         bindEvents();
+        ns.verified.init();
         clearFdsModel();
+        checkBackendHealth();
+        window.addEventListener('focus', checkBackendHealth);
     });
 
     function cacheElements() {
-        els.viewer = document.getElementById('viewer');
-        els.ifcFile = document.getElementById('ifc-file');
-        els.toggleTheme = document.getElementById('toggle-theme');
-        els.toggleWalk = document.getElementById('toggle-walk');
-        els.openHelp = document.getElementById('open-help');
-        els.footerHelp = document.getElementById('footer-help');
-        els.helpModal = document.getElementById('help-modal');
-        els.closeHelp = document.getElementById('close-help');
-        els.resetCamera = document.getElementById('reset-camera');
-        els.convertIfc = document.getElementById('convert-ifc');
-        els.convertSelectedObst = document.getElementById('convert-selected-obst');
-        els.saveFds = document.getElementById('save-fds');
-        els.fdsSourceName = document.getElementById('fds-source-name');
-        els.ifcSourceName = document.getElementById('ifc-source-name');
-        els.diagnostics = document.getElementById('diagnostics');
-        els.inspectCard = document.getElementById('inspect-card');
-        els.inspectTitle = document.getElementById('inspect-title');
-        els.inspectBody = document.getElementById('inspect-body');
-        els.countMeshes = document.getElementById('count-meshes');
-        els.countObsts = document.getElementById('count-obsts');
-        els.countVents = document.getElementById('count-vents');
-        els.countGeoms = document.getElementById('count-geoms');
-        els.countTriangles = document.getElementById('count-triangles');
-        els.countIfc = document.getElementById('count-ifc');
-        els.countIfcConvertible = document.getElementById('count-ifc-convertible');
-        els.ifcMapping = document.getElementById('ifc-mapping');
-        els.fdsOpacity = document.getElementById('fds-opacity');
-        els.ifcOpacity = document.getElementById('ifc-opacity');
-        els.meshCellSize = document.getElementById('mesh-cell-size');
-        els.voxelSize = document.getElementById('voxel-size');
-        els.openingThickening = document.getElementById('opening-thickening');
-        els.openingVoxelPolicy = document.getElementById('opening-voxel-policy');
-        els.includeFillSolids = document.getElementById('include-fill-solids');
-        els.includeReviewSolids = document.getElementById('include-review-solids');
-        els.conversionApproach = document.getElementById('conversion-approach');
-        els.obstThreshold = document.getElementById('obst-threshold');
-        els.obstThresholdVal = document.getElementById('obst-threshold-val');
-        els.openCredits = document.getElementById('open-credits');
-        els.creditsModal = document.getElementById('credits-modal');
-        els.closeCredits = document.getElementById('close-credits');
-        els.ifcLoading = document.getElementById('ifc-loading');
-        els.ifcLoadingTitle = document.getElementById('ifc-loading-title');
-        els.ifcLoadingPercent = document.getElementById('ifc-loading-percent');
-        els.ifcLoadingFill = document.getElementById('ifc-loading-fill');
-        els.ifcLoadingStage = document.getElementById('ifc-loading-stage');
-        els.saveProcessed = document.getElementById('save-processed');
-        els.showIfcEdges = document.getElementById('show-ifc-edges');
-        els.showGrid = document.getElementById('show-grid');
-        els.showStructure = document.getElementById('show-structure');
-        els.showFills = document.getElementById('show-fills');
-        els.showOther = document.getElementById('show-other');
-        els.showObst = document.getElementById('show-obst');
-        els.showHole = document.getElementById('show-hole');
-        els.showGeom = document.getElementById('show-geom');
-        els.deleteSelected = document.getElementById('delete-selected-ifc');
-        els.undoLast = document.getElementById('undo-last');
-        els.clipPanel = document.getElementById('clip-panel');
-        els.clipReset = document.getElementById('clip-reset');
-        els.clipSliders = {
-            xmin: document.getElementById('clip-xmin'),
-            xmax: document.getElementById('clip-xmax'),
-            ymin: document.getElementById('clip-ymin'),
-            ymax: document.getElementById('clip-ymax'),
-            zmin: document.getElementById('clip-zmin'),
-            zmax: document.getElementById('clip-zmax')
-        };
-        els.clipInputs = {
-            xmin: document.getElementById('clip-xmin-val'),
-            xmax: document.getElementById('clip-xmax-val'),
-            ymin: document.getElementById('clip-ymin-val'),
-            ymax: document.getElementById('clip-ymax-val'),
-            zmin: document.getElementById('clip-zmin-val'),
-            zmax: document.getElementById('clip-zmax-val')
-        };
+        if (ns.ui && ns.ui.domCache) {
+            els = ns.ui.domCache.init();
+        }
     }
 
     function applyClip(id, value) {
@@ -229,12 +191,42 @@
         state.lastDisplayMeshes = displayMeshes || null;
         if (oversizeNotice && model && model.diagnostics) model.diagnostics.unshift(oversizeNotice);
         setLoadingProgress(1, 'Rendering…');
-        viewer.loadIfcModel(model, displayMeshes);
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore) {
+            if (model && model.elements) {
+                ns.workbench.state.selectionStore.indexElements(
+                    model.elements,
+                    state.currentIfcFile ? state.currentIfcFile.name : 'ifc'
+                );
+            }
+        }
+        viewer.sourceId = state.currentIfcFile ? state.currentIfcFile.name : 'ifc';
+        if (!model.backendPreview) viewer.loadIfcModel(model, displayMeshes);
+        else ns.verified.usePreviewInventory(model.inventorySummary, state.currentIfcFile);
         viewer.setIfcOpacity(Number(els.ifcOpacity.value));
         updateIfcMetrics(model);
+        updateSourcePill(state.currentIfcFile, model);
         setExportEnabled(countConvertibleIfc(model) > 0);
-        setSaveProcessedEnabled(!!(model && model.elements && model.elements.length));
+        setSaveProcessedEnabled(!!(model && !model.backendPreview && model.elements && model.elements.length));
         setupClippingForBounds(boundsForClipping());
+        if (ns.workbench && ns.workbench.navigation) {
+            if (ns.workbench.navigation.sectionBox) {
+                ns.workbench.navigation.sectionBox.setNativeExtents(boundsForClipping());
+            }
+            if (ns.workbench.navigation.modelTree) {
+                ns.workbench.navigation.modelTree.render();
+            }
+            var clipStoreySelect = document.getElementById('clip-storey-select');
+            if (clipStoreySelect && model && model.storeys) {
+                clipStoreySelect.innerHTML = '<option value="" selected>Full Height</option>';
+                model.storeys.forEach(function (st) {
+                    var opt = document.createElement('option');
+                    var name = typeof st === 'string' ? st : (st.name || st.storey_id || 'Storey');
+                    opt.value = name;
+                    opt.textContent = name;
+                    clipStoreySelect.appendChild(opt);
+                });
+            }
+        }
         renderDiagnostics();
         hideLoading();
     }
@@ -264,7 +256,7 @@
             fileName: fileName,
             elements: [],
             diagnostics: [
-                new ns.core.Diagnostic('error', 'IFC import failed', error && error.message ? error.message : String(error))
+                new ns.core.Diagnostic('error', 'IFC import failed', error && error.message ? error.message : String(error), ns.core.failure(error, {stage: 'ifc_read'}))
             ]
         };
         state.lastDisplayMeshes = null;
@@ -312,14 +304,25 @@
         if (els.closeCredits) els.closeCredits.addEventListener('click', closeCredits);
         if (els.creditsModal) els.creditsModal.querySelector('[data-close-credits]').addEventListener('click', closeCredits);
 
+        if (els.openAudit) els.openAudit.addEventListener('click', openAudit);
+        if (els.closeAudit) els.closeAudit.addEventListener('click', closeAudit);
+        if (els.auditModal) {
+            var auditBackdrop = els.auditModal.querySelector('[data-close-audit]');
+            if (auditBackdrop) auditBackdrop.addEventListener('click', closeAudit);
+        }
+
         window.addEventListener('keydown', function (event) {
             if (event.key === 'Escape' && !els.helpModal.hidden) closeHelp();
             if (event.key === 'Escape' && els.creditsModal && !els.creditsModal.hidden) closeCredits();
+            if (event.key === 'Escape' && els.auditModal && !els.auditModal.hidden) closeAudit();
         });
 
         els.ifcFile.addEventListener('change', function (event) {
             var file = event.target.files[0];
             if (!file) return;
+            ns.ifc.backendPreview.cancel();
+            state.currentIfcFile = file;
+            ns.verified.setFallback(file);
             cancelPendingExport();
             clearGeneratedFds();
             clearFdsModel();
@@ -342,23 +345,22 @@
             els.ifcSourceName.textContent = file.name;
             showLoading('Loading ' + file.name, 'Reading file…');
 
-            // Mirrors the demo's fast open: regex-index for sidebar/selection metadata, web-ifc
-            // for display. The heavy ifc-adapter parse runs later, only when Convert to FDS is
-            // clicked. Above WEB_IFC_MAX_BYTES we still skip the WASM display path to keep the
-            // tab stable — the meta index by itself is fine on any size.
-            var WEB_IFC_MAX_BYTES = 32 * 1024 * 1024;
+            // Large sources go directly to an isolated backend worker. Never
+            // decode their entire STEP content or send them to the legacy parser.
+            var WEB_IFC_MAX_BYTES = 8 * 1024 * 1024;
+            if (file.size > WEB_IFC_MAX_BYTES) {
+                ns.ifc.backendPreview.load(file, viewer, setLoadingProgress).then(function (model) {
+                    if (state.currentIfcFile === file) finishIfcLoad(model, null, null);
+                }).catch(function (error) {
+                    if (state.currentIfcFile === file && error.name !== 'AbortError') failIfcLoad(file.name, error);
+                });
+                return;
+            }
             var useWebIfcDisplay = webIfcDisplay && file.size <= WEB_IFC_MAX_BYTES;
-            var oversizeNotice = (webIfcDisplay && file.size > WEB_IFC_MAX_BYTES)
-                ? new ns.core.Diagnostic(
-                    'info',
-                    'High-detail preview disabled',
-                    'IFC file is ' + (file.size / (1024 * 1024)).toFixed(1)
-                        + ' MB; the WASM display engine is skipped to keep the tab stable. '
-                        + 'FDS conversion is unaffected.'
-                )
-                : null;
+            var oversizeNotice = null;
 
             file.arrayBuffer().then(function (buffer) {
+                if (state.currentIfcFile !== file) return;
                 setLoadingProgress(0.1, 'Indexing entities…');
                 var text = new TextDecoder().decode(new Uint8Array(buffer));
                 state.ifcSourceText = text;
@@ -371,6 +373,7 @@
                     })
                     : Promise.resolve(null);
                 return displayPromise.then(function (displayMeshes) {
+                    if (state.currentIfcFile !== file) return;
                     if (displayMeshes && displayMeshes.length) {
                         finishIfcLoad(meta, displayMeshes, oversizeNotice);
                         return;
@@ -380,11 +383,13 @@
                     return ifcAdapter.parseAsync(text, file.name, function (fraction) {
                         setLoadingProgress(fraction, 'Parsing legacy mesh…');
                     }).then(function (fullModel) {
+                        if (state.currentIfcFile !== file) return;
                         state.fullModel = fullModel;
                         finishIfcLoad(fullModel, null, oversizeNotice);
                     });
                 });
             }).catch(function (error) {
+                if (state.currentIfcFile !== file) return;
                 failIfcLoad(file.name, error);
             });
         });
@@ -396,6 +401,12 @@
         els.convertIfc.addEventListener('click', function () {
             exportIfc('convert');
         });
+
+        if (els.convertVerified) {
+            els.convertVerified.addEventListener('click', function () {
+                exportVerified();
+            });
+        }
 
         els.convertSelectedObst.addEventListener('click', function () {
             var stepIds = selectedGeneratedGeomStepIds(state.selection);
@@ -495,6 +506,18 @@
             downloadText(state.generatedFdsName, state.generatedFdsText);
         });
 
+        if (els.saveManifest) {
+            els.saveManifest.addEventListener('click', function () {
+                if (state.lastArtifactLinks) {
+                    var link = document.createElement('a'); link.href = state.lastArtifactLinks.manifest.url;
+                    link.download = ''; link.click(); return;
+                }
+                if (!state.lastManifest) return;
+                var base = ((state.lastManifest || {}).source_filename || state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
+                downloadText(base + '_manifest.json', JSON.stringify(state.lastManifest, null, 2));
+            });
+        }
+
         if (els.saveProcessed) {
             els.saveProcessed.addEventListener('click', function () {
                 var processed = ns.ifc.ProcessedFile;
@@ -563,6 +586,236 @@
                 viewer.setIfcCategoryVisible('other', event.target.checked);
             });
         }
+
+        // Workflow Mode Switcher
+        if (els.modeTabVerified) {
+            els.modeTabVerified.addEventListener('click', function () { setWorkflowMode('verified'); });
+        }
+        if (els.modeTabQuick) {
+            els.modeTabQuick.addEventListener('click', function () { setWorkflowMode('quick'); });
+        }
+
+        // Viewport Floating Toolbar Popovers
+        var btnLayers = document.getElementById('toggle-layers-popover');
+        var popLayers = document.getElementById('layers-popover');
+        var btnCamera = document.getElementById('toggle-camera-views');
+        var popCamera = document.getElementById('camera-popover');
+        if (btnLayers && popLayers) {
+            btnLayers.addEventListener('click', function (e) {
+                e.stopPropagation();
+                popLayers.style.display = popLayers.style.display === 'none' ? 'flex' : 'none';
+                if (popCamera) popCamera.style.display = 'none';
+            });
+        }
+        if (btnCamera && popCamera) {
+            btnCamera.addEventListener('click', function (e) {
+                e.stopPropagation();
+                popCamera.style.display = popCamera.style.display === 'none' ? 'flex' : 'none';
+                if (popLayers) popLayers.style.display = 'none';
+            });
+        }
+        document.addEventListener('click', function () {
+            if (popLayers) popLayers.style.display = 'none';
+            if (popCamera) popCamera.style.display = 'none';
+        });
+
+        var btnClip = document.getElementById('toggle-clip');
+        if (btnClip && els.clipPanel) {
+            btnClip.addEventListener('click', function () {
+                els.clipPanel.hidden = !els.clipPanel.hidden;
+            });
+        }
+
+        Array.prototype.forEach.call(document.querySelectorAll('[data-cam]'), function (btn) {
+            btn.addEventListener('click', function () {
+                var dir = btn.getAttribute('data-cam');
+                if (dir && viewer && viewer.setView) viewer.setView(dir);
+            });
+        });
+
+        // Sidebar Nav Switcher (Workflow vs Model Tree)
+        var tabWorkflow = document.getElementById('sidebar-tab-workflow');
+        var tabTree = document.getElementById('sidebar-tab-tree');
+        var panelWorkflow = document.getElementById('sidebar-panel-workflow');
+        var panelTree = document.getElementById('sidebar-panel-tree');
+
+        if (tabWorkflow && tabTree && panelWorkflow && panelTree) {
+            tabWorkflow.addEventListener('click', function () {
+                tabWorkflow.classList.add('active');
+                tabWorkflow.setAttribute('aria-selected', 'true');
+                tabTree.classList.remove('active');
+                tabTree.setAttribute('aria-selected', 'false');
+                panelWorkflow.style.display = 'block';
+                panelTree.style.display = 'none';
+            });
+            tabTree.addEventListener('click', function () {
+                tabTree.classList.add('active');
+                tabTree.setAttribute('aria-selected', 'true');
+                tabWorkflow.classList.remove('active');
+                tabWorkflow.setAttribute('aria-selected', 'false');
+                panelWorkflow.style.display = 'none';
+                panelTree.style.display = 'flex';
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.modelTree) {
+                    ns.workbench.navigation.modelTree.render();
+                }
+            });
+        }
+
+        // Semantic Tree Group & Search
+        var treeGroupBy = document.getElementById('tree-group-by');
+        if (treeGroupBy) {
+            treeGroupBy.addEventListener('change', function () {
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.modelTree) {
+                    ns.workbench.navigation.modelTree.setGroupBy(treeGroupBy.value);
+                }
+            });
+        }
+        var treeSearch = document.getElementById('tree-search-input');
+        if (treeSearch) {
+            treeSearch.addEventListener('input', function () {
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.modelTree) {
+                    ns.workbench.navigation.modelTree.setSearchQuery(treeSearch.value);
+                }
+            });
+        }
+
+        // Color Mode Selector
+        var colorSelect = document.getElementById('color-mode-select');
+        if (colorSelect) {
+            colorSelect.addEventListener('change', function () {
+                updateColorModeLegend(colorSelect.value);
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.colorOverlay) {
+                    ns.workbench.navigation.colorOverlay.applyColorMode(colorSelect.value);
+                }
+            });
+        }
+
+        // Section Box Storey Cut & Reset
+        var clipStoreySelect = document.getElementById('clip-storey-select');
+        if (clipStoreySelect) {
+            clipStoreySelect.addEventListener('change', function () {
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.sectionBox) {
+                    if (!clipStoreySelect.value) {
+                        ns.workbench.navigation.sectionBox.reset();
+                    } else {
+                        ns.workbench.navigation.sectionBox.cutToStorey(clipStoreySelect.value);
+                    }
+                }
+            });
+        }
+        var clipReset = document.getElementById('clip-reset');
+        if (clipReset) {
+            clipReset.addEventListener('click', function () {
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.sectionBox) {
+                    ns.workbench.navigation.sectionBox.reset();
+                }
+                if (clipStoreySelect) clipStoreySelect.value = '';
+                setupClippingForBounds(boundsForClipping());
+            });
+        }
+
+        // Domain Estimates & Preflight Scoped Domain Warning
+        ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'].forEach(function (axis) {
+            var input = document.getElementById('verified-domain-' + axis);
+            if (input) input.addEventListener('input', updateDomainEstimates);
+        });
+        if (els.verifiedCellSize) {
+            els.verifiedCellSize.addEventListener('input', updateDomainEstimates);
+        }
+        if (els.verifiedStoreys) {
+            els.verifiedStoreys.addEventListener('change', checkScopedDomainPreflight);
+        }
+        if (els.verifiedUseDomain) {
+            els.verifiedUseDomain.addEventListener('change', function () {
+                var box = document.getElementById('verified-domain-box');
+                if (box) box.style.display = els.verifiedUseDomain.checked ? 'grid' : 'none';
+                checkScopedDomainPreflight();
+            });
+        }
+        var useBoundsCheck = document.getElementById('verified-use-bounds');
+        var boundsBox = document.getElementById('verified-bounds-box');
+        if (useBoundsCheck && boundsBox) {
+            useBoundsCheck.addEventListener('change', function () {
+                boundsBox.style.display = useBoundsCheck.checked ? 'grid' : 'none';
+            });
+        }
+
+        // Reviewed Decisions Upload Summary Preview
+        var decisionsInput = document.getElementById('verified-decisions');
+        var decisionsChip = document.getElementById('decisions-summary-chip');
+        if (decisionsInput && decisionsChip) {
+            decisionsInput.addEventListener('change', async function () {
+                if (!decisionsInput.files || !decisionsInput.files.length) {
+                    decisionsChip.style.display = 'none';
+                    return;
+                }
+                try {
+                    var data = JSON.parse(await decisionsInput.files[0].text());
+                    var keys = Object.keys(data);
+                    var passive = keys.filter(function (k) { return data[k].action === 'PASSIVE_OBSTACLE'; }).length;
+                    var ref = keys.filter(function (k) { return data[k].action === 'REFERENCE_GEOMETRY'; }).length;
+                    var excl = keys.filter(function (k) { return data[k].action === 'EXCLUDE'; }).length;
+                    decisionsChip.style.display = 'flex';
+                    decisionsChip.textContent = '✓ ' + keys.length + ' decisions loaded (' + passive + ' Obstacle, ' + ref + ' Reference, ' + excl + ' Excluded)';
+                } catch (e) {
+                    decisionsChip.style.display = 'flex';
+                    decisionsChip.textContent = '⚠️ Malformed decisions JSON';
+                }
+            });
+        }
+
+        // Inspector Tabs
+        ['id', 'map', 'geom', 'mep'].forEach(function (tab) {
+            var btn = document.getElementById('inspect-tab-' + tab);
+            if (btn) {
+                btn.addEventListener('click', function () {
+                    activeInspectorTab = tab;
+                    ['id', 'map', 'geom', 'mep'].forEach(function (t) {
+                        var b = document.getElementById('inspect-tab-' + t);
+                        if (b) b.classList.toggle('active', t === tab);
+                    });
+                    if (state.selection && state.selection.length) {
+                        renderStructuredInspector(state.selection[0]);
+                    }
+                });
+            }
+        });
+
+        // Bottom Audit Drawer Toggle & Tabs
+        if (els.toggleDrawer && els.auditDrawer) {
+            els.toggleDrawer.addEventListener('click', function (e) {
+                e.stopPropagation();
+                toggleAuditDrawer();
+            });
+            var drawerHeader = document.querySelector('.audit-drawer-header');
+            if (drawerHeader) {
+                drawerHeader.addEventListener('click', function (e) {
+                    if (e.target.closest('.audit-tab-btn')) return;
+                    toggleAuditDrawer();
+                });
+            }
+        }
+        ['gates', 'findings', 'artifacts'].forEach(function (tab) {
+            var btn = document.getElementById('drawer-tab-' + tab);
+            var panel = document.getElementById('panel-' + tab);
+            if (btn && panel) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (els.auditDrawer && els.auditDrawer.classList.contains('minimized')) {
+                        els.auditDrawer.classList.remove('minimized');
+                        var icon = document.getElementById('drawer-toggle-icon');
+                        if (icon) icon.setAttribute('data-lucide', 'chevron-down');
+                        if (window.lucide) window.lucide.createIcons();
+                    }
+                    ['gates', 'findings', 'artifacts'].forEach(function (t) {
+                        var b = document.getElementById('drawer-tab-' + t);
+                        var p = document.getElementById('panel-' + t);
+                        if (b) b.classList.toggle('active', t === tab);
+                        if (p) p.style.display = t === tab ? (t === 'artifacts' || t === 'gates' ? 'grid' : 'block') : 'none';
+                    });
+                });
+            }
+        });
     }
 
     function bindToggle(id, layer) {
@@ -628,10 +881,15 @@
     }
 
     function loadFdsText(text, sourceName, preparedModel) {
-        var model = preparedModel || adapter.toSceneModel(parser.parse(text));
+        var parsed = preparedModel ? null : ns.core.atStage('fds_parse', function () { return parser.parse(text); });
+        var model = preparedModel || ns.core.atStage('scene_model', function () { return adapter.toSceneModel(parsed); });
         state.fdsModel = model;
         els.fdsSourceName.textContent = sourceName;
-        viewer.loadFdsModel(model);
+        if (ns.workbench && ns.workbench.state) {
+            var sceneItems = [].concat(model.obsts || [], model.geoms || [], model.vents || [], model.holes || []);
+            ns.workbench.state.selectionStore.indexElements(sceneItems, sourceName || 'fds');
+        }
+        ns.core.atStage('viewer', function () { viewer.loadFdsModel(model); });
         viewer.setFdsOpacity(Number(els.fdsOpacity.value));
         viewer.setExclusions(state.excludedStepIds, state.excludedItemIds);
         updateMetrics(model);
@@ -653,6 +911,9 @@
         state.fdsModel = model;
         els.fdsSourceName.textContent = 'No conversion';
         viewer.loadFdsModel(model);
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.workbenchStore) {
+            ns.workbench.state.workbenchStore.resetAll();
+        }
         updateMetrics(model);
         renderDiagnostics();
         showSelection(null);
@@ -715,6 +976,16 @@
             item.querySelector('strong').textContent = diag.title;
             item.querySelector('span').textContent = diag.detail;
             els.diagnostics.appendChild(item);
+            if (diag.ref && diag.ref.kind === 'conversion-failure') {
+                var download = document.createElement('button');
+                download.type = 'button'; download.textContent = 'Download diagnostic';
+                download.addEventListener('click', function () {
+                    var url = URL.createObjectURL(new Blob([JSON.stringify(diag.ref, null, 2)], {type: 'application/json'}));
+                    var link = document.createElement('a'); link.href = url; link.download = 'conversion-diagnostic.json';
+                    link.click(); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+                });
+                item.appendChild(download);
+            }
         });
     }
 
@@ -722,18 +993,24 @@
         var selection = normalizeSelection(data);
         state.selection = selection;
         refreshConversionActions();
-        if (!selection.length) {
-            els.inspectCard.hidden = true;
-            return;
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore) {
+            ns.workbench.state.selectionStore.setSelection(selection, 'viewer');
+        } else {
+            if (!selection.length) {
+                els.inspectCard.hidden = true;
+                return;
+            }
+            els.inspectCard.hidden = false;
+            if (selection.length === 1) {
+                els.inspectTitle.textContent = selection[0].type + (selection[0].id ? ': ' + selection[0].id : '');
+                renderStructuredInspector(selection[0]);
+                els.inspectBody.textContent = JSON.stringify(selectionDetails(selection[0]), null, 2);
+                return;
+            }
+            els.inspectTitle.textContent = 'Selected objects: ' + selection.length;
+            renderStructuredInspector(null);
+            els.inspectBody.textContent = JSON.stringify(selection.map(selectionDetails), null, 2);
         }
-        els.inspectCard.hidden = false;
-        if (selection.length === 1) {
-            els.inspectTitle.textContent = selection[0].type + (selection[0].id ? ': ' + selection[0].id : '');
-            els.inspectBody.textContent = JSON.stringify(selectionDetails(selection[0]), null, 2);
-            return;
-        }
-        els.inspectTitle.textContent = 'Selected objects: ' + selection.length;
-        els.inspectBody.textContent = JSON.stringify(selection.map(selectionDetails), null, 2);
     }
 
     function selectionDetails(data) {
@@ -759,6 +1036,9 @@
 
     function refreshConversionActions() {
         els.convertIfc.disabled = state.exportBusy || !state.exportEnabled;
+        if (els.convertVerified) {
+            els.convertVerified.disabled = state.exportBusy || (!state.exportEnabled && !ns.verified.hasFiles());
+        }
         els.convertSelectedObst.disabled = state.exportBusy || !selectedGeneratedGeomStepIds(state.selection).length;
         if (els.deleteSelected) {
             var split = splitSelectionForDelete(state.selection);
@@ -766,6 +1046,12 @@
         }
         if (els.undoLast) {
             els.undoLast.disabled = state.exportBusy || !state.undoStack.length;
+        }
+        if (els.openAudit) {
+            els.openAudit.disabled = !state.lastAuditReport;
+        }
+        if (els.saveManifest) {
+            els.saveManifest.disabled = !state.lastManifest && !state.lastArtifactLinks;
         }
     }
 
@@ -798,25 +1084,44 @@
         state.exportBusy = !!busy;
         state.exportAction = state.exportBusy ? action : null;
         els.convertIfc.classList.toggle('is-busy', state.exportBusy && action === 'convert');
+        if (els.convertVerified) {
+            els.convertVerified.classList.toggle('is-busy', state.exportBusy && action === 'convert-verified');
+            els.convertVerified.setAttribute('aria-busy', state.exportBusy && action === 'convert-verified' ? 'true' : 'false');
+            var span = els.convertVerified.querySelector('span');
+            if (span) {
+                span.textContent = (state.exportBusy && action === 'convert-verified')
+                    ? 'Verifying...'
+                    : 'Verified Conversion (Audit)';
+            }
+        }
         els.convertSelectedObst.classList.toggle('is-busy', state.exportBusy && action === 'voxelize');
         els.convertIfc.setAttribute('aria-busy', state.exportBusy && action === 'convert' ? 'true' : 'false');
         els.convertSelectedObst.setAttribute('aria-busy', state.exportBusy && action === 'voxelize' ? 'true' : 'false');
-        els.convertIfc.querySelector('span').textContent = state.exportBusy && action === 'convert'
-            ? 'Converting...'
-            : 'Convert to FDS';
-        els.convertSelectedObst.querySelector('span').textContent = state.exportBusy && action === 'voxelize'
-            ? 'Voxelizing selected GEOM...'
-            : 'Voxelize selected GEOM to OBST';
+        var spanIfc = els.convertIfc ? els.convertIfc.querySelector('span') : null;
+        if (spanIfc) {
+            spanIfc.textContent = state.exportBusy && action === 'convert'
+                ? 'Converting...'
+                : 'Run Quick Preview (Legacy)';
+        }
+        var spanObst = els.convertSelectedObst ? els.convertSelectedObst.querySelector('span') : null;
+        if (spanObst) {
+            spanObst.textContent = state.exportBusy && action === 'voxelize'
+                ? 'Voxelizing selected GEOM...'
+                : 'Voxelize selected GEOM to OBST';
+        }
         refreshConversionActions();
     }
 
     function exportIfc(action) {
         if (state.exportBusy) return;
         if (!state.ifcModel || !state.ifcModel.elements || !state.ifcModel.elements.length) return;
+        var generation = state.exportRequestId;
         ensureFullModel().then(function (fullModel) {
+            if (generation !== state.exportRequestId) return;
             runExportWithModel(fullModel, action);
         }).catch(function (err) {
-            addExportDiagnostic(err && err.message ? err.message : String(err));
+            if (generation !== state.exportRequestId) return;
+            addExportDiagnostic(err, {stage: 'ifc_parse'});
         });
     }
 
@@ -824,20 +1129,19 @@
     // ifc-adapter parse (placements, void carving, classifications). We do it on demand
     // the first time the user clicks Convert, and cache the result for repeated exports.
     function ensureFullModel() {
-        if (state.fullModel) return Promise.resolve(state.fullModel);
+        if (state.fullModel && !state.fullModel.elements.some(function (e) { return e.exportGeometryComplete === false; })) return Promise.resolve(state.fullModel);
         if (!state.ifcSourceText) {
             return Promise.reject(new Error('IFC source not in memory — please reopen the file.'));
         }
         showLoading('Preparing FDS conversion', 'Parsing entities…');
-        // When web-ifc rendered the preview, the heavy box-subtracted displayMesh built by
-        // ifc-adapter is never shown, so we can skip that per-wall CSG pass for a 5–10×
-        // parse speed-up. The watertight export mesh is unaffected.
-        var displayMeshesAvailable = !!(state.lastDisplayMeshes && state.lastDisplayMeshes.length);
-        var parseOptions = displayMeshesAvailable ? { skipBoxOpenings: true } : undefined;
-        var parsePromise = ifcAdapter.parseAsync(state.ifcSourceText, state.ifcFileName, function (fraction) {
+        var generation = state.exportRequestId;
+        // Export completes openings independently of the preview source.
+        var parseOptions = { skipBoxOpenings: false };
+        var parsePromise = ns.core.atStage('ifc_parse', function () { return ifcAdapter.parseAsync(state.ifcSourceText, state.ifcFileName, function (fraction) {
             setLoadingProgress(fraction, 'Parsing entities…');
-        }, parseOptions);
+        }, parseOptions); });
         return parsePromise.then(function (model) {
+            if (generation !== state.exportRequestId) { var aborted = new Error('Conversion cancelled'); aborted.name = 'AbortError'; throw aborted; }
             state.fullModel = model;
             // Swap the displayed model to the precise one so sidebar counts and the IFC
             // mapping reflect the actual parser output instead of the meta heuristic.
@@ -877,7 +1181,7 @@
                     return;
                 }
                 if (result.type === 'error') {
-                    finishExportWithError(result.message || 'Background conversion failed.');
+                    finishExportWithError(result.error || new Error(result.message || 'Background conversion failed.'));
                     return;
                 }
                 if (result.type !== 'complete') return;
@@ -885,11 +1189,11 @@
                 cleanupExportWorker();
                 try {
                     var base = (fullModel.fileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
-                    var fileName = base + '_obst-geom.fds';
-                    loadFdsText(result.text, fileName, result.model);
+                    var fileName = base + '_quick_preview_legacy.fds';
                     state.generatedFdsText = result.text;
                     state.generatedFdsName = fileName;
                     els.saveFds.disabled = false;
+                    loadFdsText(result.text, fileName, result.model);
                     hideLoading();
                     // The reveal animation clears any partial clip box from before this
                     // convert; mirror that on the UI so the bars sit at the full extent.
@@ -900,14 +1204,14 @@
                     // change a single OBST.
                     if (viewer.playConversionReveal && action !== 'voxelize') viewer.playConversionReveal();
                 } catch (error) {
-                    addExportDiagnostic(error && error.message ? error.message : String(error));
+                    addExportDiagnostic(error, {stage: 'viewer', requestId: requestId});
                     hideLoading();
                 }
                 setExportBusy(false);
             });
             worker.addEventListener('error', function (event) {
                 if (requestId !== state.exportRequestId) return;
-                finishExportWithError(event.message || 'Background conversion worker failed.');
+                finishExportWithError(ns.core.failure(event, {stage: 'worker', requestId: requestId}));
             });
             worker.postMessage({
                 type: 'export',
@@ -916,7 +1220,7 @@
                 options: options
             });
         } catch (error) {
-            finishExportWithError(error && error.message ? error.message : String(error));
+            finishExportWithError(error);
         }
     }
 
@@ -927,10 +1231,13 @@
         setExportBusy(false);
     }
 
-    function addExportDiagnostic(message) {
-        if (!state.ifcModel || !state.ifcModel.diagnostics) return;
+    function addExportDiagnostic(error, context) {
+        var failure = ns.core.failure(error, Object.assign({requestId: state.exportRequestId}, context || {}));
+        if (!state.ifcModel) state.ifcModel = { diagnostics: [] };
+        if (!state.ifcModel.diagnostics) state.ifcModel.diagnostics = [];
         state.ifcModel.diagnostics.push(
-            new ns.core.Diagnostic('error', 'FDS export failed', message)
+            new ns.core.Diagnostic('error', failure.stage === 'viewer' ? 'FDS display failed' : 'FDS export failed',
+                failure.message + ' (stage: ' + failure.stage + ')', failure)
         );
         renderDiagnostics();
     }
@@ -944,14 +1251,188 @@
 
     function cancelPendingExport() {
         state.exportRequestId += 1;
+        if (ns.verified.cancel) ns.verified.cancel().catch(function () {});
         cleanupExportWorker();
         setExportBusy(false);
     }
 
     function clearGeneratedFds() {
+        state.verifiedJobId = null;
         state.generatedFdsText = null;
         state.generatedFdsName = null;
+        if (viewer.cancelVerifiedLoad) viewer.cancelVerifiedLoad();
+        state.lastArtifactLinks = null;
+        state.lastAuditReport = null;
+        state.lastManifest = null;
         if (els.saveFds) els.saveFds.disabled = true;
+        if (els.openAudit) els.openAudit.disabled = true;
+        if (els.saveManifest) els.saveManifest.disabled = true;
+    }
+
+    function exportVerified() {
+        if (state.exportBusy) return;
+        if (!state.ifcSourceText && !state.currentIfcFile && !ns.verified.hasFiles()) {
+            addExportDiagnostic('IFC source not in memory — please reopen the file.');
+            return;
+        }
+
+        var fileLabel = (state.ifcFileName || (state.ifcModel && state.ifcModel.fileName) || 'IFC model');
+        showLoading('Verified Conversion: ' + fileLabel, 'Processing with IfcOpenShell & OpenCASCADE...');
+        setExportBusy(true, 'convert-verified');
+        var generation = ++state.exportRequestId;
+
+        var blob = state.currentIfcFile || new File([state.ifcSourceText || ''], state.ifcFileName || 'model.ifc');
+        var forceGeom = !!(els.verifiedForceGeom && els.verifiedForceGeom.checked);
+        var cellSize = Number(els.verifiedCellSize && els.verifiedCellSize.value) || Number(els.meshCellSize && els.meshCellSize.value) || 0.20;
+        ns.verified.run(blob, {
+            cell_size: cellSize,
+            all_geom: forceGeom,
+        })
+        .then(async function (data) {
+            if (generation !== state.exportRequestId) return;
+            state.verifiedJobId = data && data.job_id;
+            hideLoading(); setExportBusy(false);
+            if (!data || !data.artifacts) throw new Error('Missing conversion artifacts');
+            state.lastArtifactLinks = data.artifacts;
+            var summary = Object.assign({}, data, {configuration: {}, matched_count: (data.coverage || {}).matched || 0});
+            state.lastAuditReport = summary;
+            state.lastManifest = null;
+            if (els.openAudit) els.openAudit.disabled = false;
+            if (els.saveManifest) els.saveManifest.disabled = false;
+            if (viewer.bindVerifiedArtifacts) viewer.bindVerifiedArtifacts(data.artifacts);
+
+            var manifestPromise = (data.artifacts.manifest && data.artifacts.manifest.url)
+                ? fetch(data.artifacts.manifest.url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+                : Promise.resolve(null);
+            var reportPromise = (data.artifacts.report && data.artifacts.report.url)
+                ? fetch(data.artifacts.report.url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+                : Promise.resolve(null);
+
+            var extraArtifacts = await Promise.all([manifestPromise, reportPromise]);
+            var manifestData = extraArtifacts[0];
+            var fullReport = extraArtifacts[1] || summary;
+            state.lastManifest = manifestData;
+            state.lastAuditReport = fullReport;
+
+            if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore && manifestData) {
+                var records = manifestData.records || manifestData.elements || [];
+                ns.workbench.state.selectionStore.hydrateManifest(records, fullReport);
+            }
+
+            renderAuditReport(fullReport); openAudit();
+            var response = await fetch(data.artifacts.fds.url);
+            if (!response.ok) throw new Error('FDS artifact unavailable');
+            var text = await response.text();
+            if (generation !== state.exportRequestId) return;
+            var base = (data.source_filename || state.ifcFileName || 'model').replace(/\.[^.]+$/, '');
+            var fileName = base + (data.status === 'MAPPING_VERIFIED' ? '_mapping_verified.fds' : '_diagnostic_unaccepted.fds');
+            state.generatedFdsText = text; state.generatedFdsName = fileName;
+            if (els.saveFds) els.saveFds.disabled = false;
+            loadFdsText(text, fileName);
+            if (ns.workbench && ns.workbench.state && ns.workbench.state.scenarioStore) {
+                var mSha = (data.artifacts && data.artifacts.manifest && data.artifacts.manifest.sha256) ||
+                           (manifestData && (manifestData.bundle_sha256 || manifestData.source_sha256));
+                if (mSha) {
+                    ns.workbench.state.scenarioStore.setBaseMapping(mSha);
+                }
+            }
+            setupClippingForBounds(boundsForClipping());
+        })
+        .catch(function (err) {
+            if (generation !== state.exportRequestId || err.name === 'AbortError') return;
+            hideLoading();
+            setExportBusy(false);
+            addExportDiagnostic(err, {stage: 'verified_conversion', jobId: state.verifiedJobId});
+            updateGlobalStatusBadge('FAILED');
+            if (state.verifiedJobId) exposeFailedCheckpoints(state.verifiedJobId);
+        }).finally(function () {
+            if (generation === state.exportRequestId) { hideLoading(); setExportBusy(false); }
+        });
+    }
+
+    function renderAuditReport(report) {
+        if (!report) return;
+        updateGlobalStatusBadge(report.status);
+        if (!els.auditBody) return;
+        if (!report) {
+            els.auditBody.innerHTML = '<p>No audit report available. Run <strong>Verified Conversion</strong> to generate a complete 3-tier audit.</p>';
+            return;
+        }
+        els.auditBody.replaceChildren();
+        function line(tag, text, parent) {
+            var node = document.createElement(tag);
+            node.textContent = text;
+            (parent || els.auditBody).appendChild(node);
+            return node;
+        }
+        line('h3', 'Acceptance: ' + report.status);
+        line('p', 'Mapping: ' + report.mapping_status + '; simulation: ' + report.simulation_status);
+        var roles = (report.coverage || {}).representation || {};
+        line('p', 'Reference objects: ' + (roles.REFERENCE_GEOMETRY || 0) + '; passive obstacles: ' + (roles.PASSIVE_OBSTACLE || 0) + '; operational objects: ' + (roles.OPERATIONAL_MEP || 0));
+        var pending = (report.coverage || {}).boundary_pending || 0;
+        line('p', 'Pending boundary treatment: ' + (Array.isArray(pending) ? pending.length : pending));
+        if (report.research) line('p', 'Research acceptance: ' + report.research.research_acceptance + '; reference parity: ' + report.research.parity_status);
+        var domain = (report.configuration || {}).simulation_domain;
+        if (domain) line('p', 'Fixed domain (m): X ' + domain.xmin + ' to ' + domain.xmax + '; Y ' + domain.ymin + ' to ' + domain.ymax + '; Z ' + domain.zmin + ' to ' + domain.zmax);
+        if (report.total_elements_checked !== undefined) line('p', 'Matched solids: ' + report.matched_count + ' / accounted entities: ' + report.total_elements_checked);
+        var scope = (report.configuration || {}).scope || {};
+        var storeys = (((report.coverage || {}).scope || {}).selected_storeys || []);
+        if (!Array.isArray(storeys)) storeys = [String(storeys) + ' selected (see configuration artifact)'];
+        line('p', 'Export storeys: ' + (storeys.length ? storeys.join(', ') : 'All storeys'));
+        if (scope.bounding_box) line('p', 'Export volume (m): ' + ['xmin','xmax','ymin','ymax','zmin','zmax'].map(function (key) { return key + ': ' + scope.bounding_box[key]; }).join(', '));
+        line('p', 'Retained crossing elements: ' + (((report.coverage || {}).scope || {}).BOUNDARY_RETAINED || 0));
+        var list = line('ul', '');
+        Object.keys(report.gates || {}).forEach(function (name) {
+            var gate = report.gates[name];
+            line('li', name + ': ' + gate.status + (gate.reason ? ' — ' + gate.reason : ''), list);
+        });
+        (report.findings || []).forEach(function (f) { line('p', f.severity + ' — ' + f.element_id + ': ' + f.detail); });
+        renderAuditDrawer(report);
+    }
+
+    function openAudit() {
+        if (!els.auditModal) return;
+        renderAuditReport(state.lastAuditReport);
+        els.auditModal.hidden = false;
+    }
+
+    function closeAudit() {
+        if (!els.auditModal) return;
+        els.auditModal.hidden = true;
+    }
+
+    function checkBackendHealth() {
+        var apiUrl = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+            ? '/api/health'
+            : 'http://127.0.0.1:8000/api/health';
+
+        fetch(apiUrl, { method: 'GET' })
+            .then(function (res) {
+                if (res.ok) return res.json();
+                throw new Error('HTTP ' + res.status);
+            })
+            .then(function (data) {
+                if (data && data.status === 'ok') {
+                    state.backendOnline = true;
+                    if (els.backendStatusIndicator) {
+                        els.backendStatusIndicator.className = 'status-indicator online';
+                    }
+                    if (els.backendStatusText) {
+                        els.backendStatusText.textContent = 'Backend: Online (IfcOpenShell v' + (data.version || '0.2.0') + ')';
+                    }
+                    refreshConversionActions();
+                }
+            })
+            .catch(function () {
+                state.backendOnline = false;
+                if (els.backendStatusIndicator) {
+                    els.backendStatusIndicator.className = 'status-indicator offline';
+                }
+                if (els.backendStatusText) {
+                    els.backendStatusText.textContent = 'Backend: Offline (Run: python -m ifc_to_fds serve)';
+                }
+                refreshConversionActions();
+            });
     }
 
     function downloadText(fileName, text) {
@@ -1031,6 +1512,117 @@
             if (primitiveId) itemIds.push(String(primitiveId));
         });
         return { stepIds: stepIds, itemIds: itemIds };
+    }
+
+    function renderStructuredInspector(item) {
+        if (ns.ui && ns.ui.inspectorPanel) {
+            ns.ui.inspectorPanel.renderStructuredInspector(item);
+        }
+    }
+
+    function updateSourcePill(file, model) {
+        var nameEl = document.getElementById('ifc-source-name');
+        if (nameEl) nameEl.textContent = file ? file.name : ((model && model.fileName) || 'Loaded model');
+        var sizeEl = document.getElementById('ifc-size-tag');
+        if (sizeEl) sizeEl.textContent = file ? (file.size / (1024 * 1024)).toFixed(1) + ' MB' : '-- MB';
+        var schemaEl = document.getElementById('ifc-schema-tag');
+        if (schemaEl) schemaEl.textContent = (model && model.schema) || 'IFC';
+
+        var b = model && (model.convertibleBounds || model.bounds);
+        if (b) {
+            ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'].forEach(function (axis) {
+                var domainInput = document.getElementById('verified-domain-' + axis);
+                if (domainInput && b[axis] !== undefined) {
+                    domainInput.value = Number(b[axis]).toFixed(2);
+                }
+            });
+            updateDomainEstimates();
+        }
+    }
+
+    function setWorkflowMode(mode) {
+        var isVerified = mode === 'verified';
+        if (els.modeTabVerified) els.modeTabVerified.classList.toggle('active', isVerified);
+        if (els.modeTabQuick) els.modeTabQuick.classList.toggle('active', !isVerified);
+        var target = isVerified ? els.containerVerified : els.containerQuick;
+        if (target && target.scrollIntoView) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    function updateDomainEstimates() {
+        if (ns.ui && ns.ui.domainPanel) {
+            ns.ui.domainPanel.updateDomainEstimates(els);
+        }
+    }
+
+    function checkScopedDomainPreflight() {
+        if (ns.ui && ns.ui.domainPanel) {
+            ns.ui.domainPanel.checkScopedDomainPreflight(els);
+        }
+    }
+
+    function toggleAuditDrawer() {
+        if (ns.ui && ns.ui.auditDrawer) {
+            ns.ui.auditDrawer.toggleAuditDrawer(els);
+        }
+    }
+
+    function updateGlobalStatusBadge(status) {
+        var badge = document.getElementById('global-run-status');
+        var label = document.getElementById('global-status-label');
+        if (!badge || !label) return;
+        badge.className = 'global-status-badge';
+        if (status === 'MAPPING_VERIFIED' || status === 'SIMULATION_VERIFIED') {
+            badge.classList.add('verified');
+            label.textContent = 'VERIFIED';
+        } else if (status === 'INCONCLUSIVE') {
+            badge.classList.add('inconclusive');
+            label.textContent = 'INCONCLUSIVE';
+        } else if (status === 'REJECTED' || status === 'FAILED') {
+            badge.classList.add('rejected');
+            label.textContent = status;
+        } else {
+            label.textContent = status || 'NOT RUN';
+        }
+    }
+
+    function updateColorModeLegend(mode) {
+        var container = document.getElementById('legend-swatches');
+        if (!container) return;
+        if (mode === 'mapping') {
+            container.innerHTML = '<div class="legend-swatch-item"><span class="swatch-color" style="background:#3b82f6"></span><span>OBST</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#f59e0b"></span><span>GEOM</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#64748b"></span><span>Reference</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#ef4444"></span><span>Unsupported</span></div>';
+        } else if (mode === 'verification') {
+            container.innerHTML = '<div class="legend-swatch-item"><span class="swatch-color" style="background:#10b981"></span><span>PASS</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#f59e0b"></span><span>INCONCLUSIVE</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#ef4444"></span><span>FAIL / REJECT</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#64748b"></span><span>NOT RUN</span></div>';
+        } else if (mode === 'ifc-type') {
+            container.innerHTML = '<div class="legend-swatch-item"><span class="swatch-color" style="background:#60a5fa"></span><span>Wall / Column</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#a78bfa"></span><span>Slab / Roof</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#34d399"></span><span>Door / Window</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#f472b6"></span><span>MEP / Flow</span></div>';
+        } else if (mode === 'mep') {
+            container.innerHTML = '<div class="legend-swatch-item"><span class="swatch-color" style="background:#ef4444"></span><span>Fire Suppression</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#f97316"></span><span>Smoke Extract</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#06b6d4"></span><span>Ventilation</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#3b82f6"></span><span>Plumbing</span></div>';
+        }
+    }
+
+    function renderAuditDrawer(report) {
+        if (ns.ui && ns.ui.auditDrawer) {
+            ns.ui.auditDrawer.renderAuditDrawer(report, viewer);
+        }
+    }
+
+    function exposeFailedCheckpoints(jobId) {
+        if (ns.ui && ns.ui.auditDrawer) {
+            ns.ui.auditDrawer.exposeFailedCheckpoints(jobId);
+        }
     }
 
 })(window.IfcFds);

@@ -133,6 +133,9 @@
 
     SceneViewer.prototype.animate = function (time) {
         requestAnimationFrame(this.animate.bind(this));
+        // Leave CPU/GPU time for payload decoding while a large import grows.
+        if (this.backendPreviewLoading && time - (this.lastPreviewFrame || 0) < 1000) return;
+        this.lastPreviewFrame = time;
         var delta = this.lastFrameTime ? Math.min((time - this.lastFrameTime) / 1000, 0.1) : 0;
         this.lastFrameTime = time;
         if (this.navigationMode === 'walk') this.updateWalkMovement(delta);
@@ -183,6 +186,141 @@
 
         this.clearHover();
         this.applyFdsClipVisibility();
+        this.applyVisibilityState(this.visibilityStore);
+    };
+
+    SceneViewer.prototype.bindVerifiedArtifacts = function (artifacts) {
+        var self = this, generation = 0, controller;
+        if (this.cancelVerifiedLoad) this.cancelVerifiedLoad();
+        function reset() {
+            generation++;
+            if (controller) controller.abort();
+            if (self.verifiedReferenceGroup) clearGroup(self.verifiedReferenceGroup);
+        }
+        this.cancelVerifiedLoad = reset;
+        var toggle = document.getElementById('verified-show-reference');
+        toggle.checked = false;
+        toggle.onchange = async function () {
+            reset();
+            if (!toggle.checked) return;
+            controller = new AbortController();
+            var token = generation, signal = controller.signal;
+            try {
+                var response = await fetch(artifacts.geometry.url, {signal:signal});
+                if (!response.ok) throw new Error('Geometry index unavailable');
+                var index = await response.json();
+                if (token !== generation) return;
+                if (self.verifiedReferenceGroup) self.ifcGroup.remove(self.verifiedReferenceGroup);
+                self.verifiedReferenceGroup = new THREE.Group();
+                self.ifcGroup.add(self.verifiedReferenceGroup);
+                var entries = Object.values(index.elements).filter(function (entry) {
+                    return entry.mesh && entry.simulation_role === 'REFERENCE_GEOMETRY' && entry.scope_decision !== 'OUT_OF_SCOPE';
+                });
+                var next = 0;
+                async function worker() {
+                    while (next < entries.length && token === generation) {
+                        var entry = entries[next++], ref = entry.mesh;
+                        var url = artifacts.geometry.url.replace(/\/artifacts\/geometry$/, '/geometry/' + ref.payload);
+                        var res = await fetch(url, {signal:signal});
+                        if (!res.ok) throw new Error('Geometry payload unavailable: ' + entry.entity_key);
+                        var buffer = await res.arrayBuffer();
+                        var hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))).map(function (x) {return x.toString(16).padStart(2, '0');}).join('');
+                        if (hash !== ref.payload || buffer.byteLength !== ref.byte_length) throw new Error('Geometry payload checksum mismatch');
+                        var view = new DataView(buffer), vertices = [], faces = [];
+                        for (var i=0; i<ref.vertex_count; i++) vertices.push([0,1,2].map(function (axis) {return view.getFloat64(i*24+axis*8,true);}));
+                        for (var j=0; j<ref.face_count; j++) faces.push([0,1,2].map(function (axis) {return view.getUint32(ref.faces_offset+j*12+axis*4,true);}));
+                        if (token !== generation) return;
+                        var mesh = self.makeIfcElement({mesh:{vertices:vertices,faces:faces}, ifcType:entry.ifc_type,
+                            name:entry.name, globalId:entry.global_id, stepId:entry.step_id, convertible:false, fdsRole:entry.simulation_role});
+                        mesh.userData.entityKey = entry.entity_key;
+                        self.verifiedReferenceGroup.add(mesh);
+                    }
+                }
+                await Promise.all([worker(), worker()]);
+            } catch (error) {
+                if (error.name !== 'AbortError' && token === generation) {
+                    reset(); toggle.checked = false;
+                    document.getElementById('verified-progress').textContent = error.message;
+                }
+            }
+        };
+    };
+
+    SceneViewer.prototype.loadVerifiedGeometry = function (packageData, manifest) {
+        if (this.verifiedReferenceGroup) {
+            clearGroup(this.verifiedReferenceGroup);
+            this.ifcGroup.remove(this.verifiedReferenceGroup);
+        }
+        this.verifiedReferenceGroup = new THREE.Group();
+        this.verifiedReferenceGroup.name = 'Verified source reference (not FDS obstacles)';
+        this.ifcGroup.add(this.verifiedReferenceGroup);
+        var entries = (packageData || {}).elements || {}, self = this;
+        (manifest.records || []).forEach(function (record) {
+            var entry = entries[record.entity_key];
+            if (!entry || !entry.mesh || record.simulation_role !== 'REFERENCE_GEOMETRY' || record.scope_decision === 'OUT_OF_SCOPE') return;
+            var mesh = self.makeIfcElement({mesh: entry.mesh, ifcType: record.ifc_type, name: record.name,
+                globalId: record.global_id, stepId: record.step_id, convertible: false,
+                fdsRole: record.simulation_role, raw: record});
+            mesh.userData.entityKey = record.entity_key;
+            mesh.userData.simulationRole = record.simulation_role;
+            self.verifiedReferenceGroup.add(mesh);
+        });
+        this.verifiedReferenceGroup.visible = document.getElementById('verified-show-reference').checked;
+        var group = this.verifiedReferenceGroup;
+        document.getElementById('verified-show-reference').onchange = function (event) { group.visible = event.target.checked; };
+    };
+
+    SceneViewer.prototype.loadBackendPreview = async function (index, jobId, signal, onProgress) {
+        var self = this, entries = Object.values(index.elements).filter(function (e) { return e.mesh; });
+        var loadingToken = {}; this.backendPreviewLoading = loadingToken;
+        var batches = [], batch = [], bytes = 0;
+        entries.forEach(function (entry) {
+            if (batch.length && (batch.length === 16 || bytes + entry.mesh.byte_length > 16 * 1024 * 1024)) {
+                batches.push(batch); batch = []; bytes = 0;
+            }
+            batch.push(entry); bytes += entry.mesh.byte_length;
+        });
+        if (batch.length) batches.push(batch);
+        var next = 0, done = 0;
+        async function worker() {
+            while (next < batches.length) {
+                if (signal.aborted) throw new DOMException('Preview cancelled', 'AbortError');
+                var group = batches[next++], expectedBytes = group.reduce(function (sum, e) { return sum + e.mesh.byte_length; }, 0);
+                var endpoint = group.length === 1 && expectedBytes > 16 * 1024 * 1024
+                    ? '/geometry/' + group[0].mesh.payload
+                    : '/geometry-batch?' + group.map(function (e) { return 'payloads=' + e.mesh.payload; }).join('&');
+                var res = await fetch('/api/jobs/' + jobId + endpoint, {signal:signal});
+                if (!res.ok) throw new Error('Geometry batch unavailable');
+                var buffer = await res.arrayBuffer();
+                if (buffer.byteLength !== expectedBytes) throw new Error('Geometry batch length mismatch');
+                var offset = 0;
+                for (var item = 0; item < group.length; item++) {
+                var entry = group[item], ref = entry.mesh;
+                var hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(buffer, offset, ref.byte_length)))).map(function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+                if (hash !== ref.payload ||
+                    ref.faces_offset !== ref.vertex_count * 24 ||
+                    ref.byte_length !== ref.vertex_count * 24 + ref.face_count * 12) throw new Error('Invalid geometry payload: ' + entry.entity_key);
+                var view = new DataView(buffer, offset, ref.byte_length), vertices = [], faces = [];
+                offset += ref.byte_length;
+                for (var i = 0; i < ref.vertex_count; i++) vertices.push([0,1,2].map(function (axis) { return view.getFloat64(i*24+axis*8,true); }));
+                for (var j = 0; j < ref.face_count; j++) faces.push([0,1,2].map(function (axis) { return view.getUint32(ref.faces_offset+j*12+axis*4,true); }));
+                if (signal.aborted) throw new DOMException('Preview cancelled', 'AbortError');
+                self.ifcSolidGroup.add(self.makeIfcElement({mesh:{vertices:vertices,faces:faces},
+                    entityKey:entry.entity_key, sourceId:entry.source_id, stepId:entry.step_id,
+                    ifcType:entry.ifc_type, globalId:entry.global_id, name:entry.name, bounds:entry.bounds,
+                    convertible:false, backendSourcePreview:true, deferEdges:true, raw:entry}));
+                if ((done + 1) % 32 === 0) self.applyIfcCategoryVisibility();
+                onProgress(++done, entries.length);
+                }
+            }
+        }
+        // Two batches, at most 16 payloads / 16 MiB each, in flight.
+        try {
+            await Promise.all([worker(), worker()]);
+            self.applyIfcCategoryVisibility();
+        } finally {
+            if (self.backendPreviewLoading === loadingToken) self.backendPreviewLoading = null;
+        }
     };
 
     SceneViewer.prototype.loadIfcModel = function (model, displayMeshes) {
@@ -369,15 +507,15 @@
         var box = new THREE.Box3();
         this.fdsGroup.traverse(function (node) {
             if (!node.isMesh && !node.isLineSegments) return;
-            if (isExcludedMesh(node, excludedSteps, excludedItems)) { node.visible = false; return; }
-            if (noActiveClip) { node.visible = true; return; }
+            setVisibilityChannel(node, 'exclusion', !isExcludedMesh(node, excludedSteps, excludedItems));
+            if (noActiveClip) { setVisibilityChannel(node, 'section', true); return; }
             box.makeEmpty().expandByObject(node);
-            if (box.isEmpty()) { node.visible = true; return; }
+            if (box.isEmpty()) { setVisibilityChannel(node, 'section', true); return; }
             // Three world -> IFC native: Three Y is IFC Z (height), Three Z is IFC Y.
             var inside = box.min.x >= range.xmin && box.max.x <= range.xmax
                 && box.min.y >= range.zmin && box.max.y <= range.zmax
                 && box.min.z >= range.ymin && box.max.z <= range.ymax;
-            node.visible = inside;
+            setVisibilityChannel(node, 'section', inside);
         });
     };
 
@@ -547,6 +685,9 @@
             if (element) {
                 mesh.userData = {
                     type: 'IFC',
+                    entityKey: element.entityKey || element.entity_key || ns.workbench.createEntityKey(element),
+                    sourceId: element.sourceId || (element.raw && element.raw.source_id),
+                    stepId: element.stepId,
                     id: element.name || element.ifcType + ' #' + element.stepId,
                     ifcType: element.ifcType,
                     ifcCategory: categoryForIfcType(element.ifcType),
@@ -561,6 +702,8 @@
             } else {
                 mesh.userData = {
                     type: 'IFC',
+                    sourceId: self.sourceId || 'ifc',
+                    entityKey: (self.sourceId || 'ifc') + ':' + entry.expressID,
                     id: 'IFC #' + entry.expressID,
                     ifcType: 'IFC',
                     ifcCategory: 'other',
@@ -579,7 +722,7 @@
                 new THREE.EdgesGeometry(geom, 50),
                 edgeMaterial
             );
-            edges.visible = style.openingSurface || self.showIfcEdges;
+            setVisibilityChannel(edges, 'edgeDisplay', style.openingSurface || self.showIfcEdges);
             edges._isIfcEdge = true;
             edges._isIfcOpeningEdge = !!style.openingSurface;
             edges.userData = mesh.userData;
@@ -661,8 +804,9 @@
 
         var positions = [];
         var indices = [];
+        var origin = geom.vertices.length ? geom.vertices[0] : [0,0,0];
         geom.vertices.forEach(function (v) {
-            var converted = toThree(v[0], v[1], v[2]);
+            var converted = toThree(v[0] - origin[0], v[1] - origin[1], v[2] - origin[2]);
             positions.push(converted.x, converted.y, converted.z);
         });
         geom.faces.forEach(function (f) { indices.push(f[0], f[1], f[2]); });
@@ -684,6 +828,7 @@
             side: THREE.DoubleSide
         });
         var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(toThree(origin[0], origin[1], origin[2]));
         mesh.userData = makeUserData('GEOM', geom);
         var edges = new THREE.LineSegments(
             new THREE.EdgesGeometry(geometry, 25),
@@ -700,8 +845,11 @@
         // Prefer the display mesh (host walls carry their window/door voids there); the
         // solid element.mesh is reserved for the FDS export pipeline.
         var source = element.displayMesh || element.mesh;
+        var origin = source.vertices.length ? source.vertices[0] : [0,0,0];
         source.vertices.forEach(function (v) {
-            var converted = toThree(v[0], v[1], v[2]);
+            // Keep Float32 vertex coordinates near the product origin. The
+            // Object3D placement remains in the original double-precision world.
+            var converted = toThree(v[0] - origin[0], v[1] - origin[1], v[2] - origin[2]);
             positions.push(converted.x, converted.y, converted.z);
         });
         source.faces.forEach(function (f) {
@@ -713,7 +861,7 @@
         geometry.setIndex(indices);
         geometry.computeVertexNormals();
 
-        var style = styleForIfcType(element.ifcType, element.convertible === false);
+        var style = styleForIfcType(element.ifcType, element.convertible === false && !element.backendSourcePreview);
         var opacity = scaleIfcOpacity(style.opacity, this.ifcOpacity);
         var isTransparent = opacity < 1;
         var material = new THREE.MeshPhongMaterial({
@@ -729,9 +877,13 @@
         material.userData.isIfcFace = true;
         material.userData.isIfcOpeningSurface = !!style.openingSurface;
         var mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(toThree(origin[0], origin[1], origin[2]));
         mesh.renderOrder = isTransparent ? 1 : 0;
         mesh.userData = {
             type: 'IFC',
+            entityKey: element.entityKey || element.entity_key || ns.workbench.createEntityKey(element),
+            sourceId: element.sourceId || (element.raw && element.raw.source_id),
+            stepId: element.stepId,
             id: element.name || element.ifcType + ' #' + element.stepId,
             ifcType: element.ifcType,
             ifcCategory: categoryForIfcType(element.ifcType),
@@ -744,6 +896,8 @@
             raw: element.raw
         };
 
+        // Large backend previews build selection outlines only when selected.
+        if (element.deferEdges) return mesh;
         var edgeMaterial = new THREE.LineBasicMaterial({
             color: style.edgeColor,
             transparent: true,
@@ -755,7 +909,7 @@
             new THREE.EdgesGeometry(geometry, 50),
             edgeMaterial
         );
-        edges.visible = style.openingSurface || this.showIfcEdges;
+        setVisibilityChannel(edges, 'edgeDisplay', style.openingSurface || this.showIfcEdges);
         edges._isIfcEdge = true;
         edges._isIfcOpeningEdge = !!style.openingSurface;
         edges.userData = mesh.userData;
@@ -1088,9 +1242,10 @@
 
     SceneViewer.prototype.setIfcEdgesVisible = function (visible) {
         this.showIfcEdges = !!visible;
-        [this.ifcSolidGroup, this.ifcReferenceGroup].forEach(function (group) {
+        [this.ifcSolidGroup, this.ifcReferenceGroup, this.verifiedReferenceGroup].forEach(function (group) {
+            if (!group) return;
             group.traverse(function (node) {
-                if (node._isIfcEdge) node.visible = node._isIfcOpeningEdge || !!visible;
+                if (node._isIfcEdge) setVisibilityChannel(node, 'edgeDisplay', node._isIfcOpeningEdge || !!visible);
             });
         });
     };
@@ -1111,12 +1266,12 @@
         var excludedItems = this.excludedItemIds || {};
         [this.ifcSolidGroup, this.ifcReferenceGroup].forEach(function (group) {
             group.children.forEach(function (mesh) {
-                if (isExcludedMesh(mesh, excludedSteps, excludedItems)) { mesh.visible = false; return; }
+                setVisibilityChannel(mesh, 'exclusion', !isExcludedMesh(mesh, excludedSteps, excludedItems));
                 var category = mesh.userData && mesh.userData.ifcCategory;
-                if (category && categoryState[category] === false) mesh.visible = false;
-                else mesh.visible = true;
+                setVisibilityChannel(mesh, 'category', !category || categoryState[category] !== false);
             });
         });
+        this.applyVisibilityState(this.visibilityStore);
     };
 
     // Hides FDS / IFC meshes whose source IFC stepId is in the source-exclusion set OR whose
@@ -1126,14 +1281,7 @@
     SceneViewer.prototype.setExclusions = function (stepIdMap, itemIdMap) {
         this.excludedStepIds = stepIdMap || {};
         this.excludedItemIds = itemIdMap || {};
-        var excludedSteps = this.excludedStepIds;
-        var excludedItems = this.excludedItemIds;
-        [this.fdsGroup, this.obstGroup, this.ventGroup, this.holeGroup, this.geomGroup].forEach(function (group) {
-            if (!group) return;
-            group.children.forEach(function (mesh) {
-                mesh.visible = !isExcludedMesh(mesh, excludedSteps, excludedItems);
-            });
-        });
+        this.applyFdsClipVisibility();
         this.applyIfcCategoryVisibility();
     };
 
@@ -1145,12 +1293,14 @@
         [this.meshGroup, this.obstGroup, this.ventGroup, this.geomGroup].forEach(function (group) {
             group.traverse(function (node) {
                 if (node.material && node.material.opacity !== undefined) {
+                    applyGhostMaterial(node.material, false);
                     node.material.opacity = fdsOpacity;
                     node.material.transparent = true;
                 }
             });
         });
         this.syncRootLayerVisibility();
+        this.applyVisibilityState(this.visibilityStore);
     };
 
     SceneViewer.prototype.setIfcOpacity = function (opacity) {
@@ -1160,6 +1310,7 @@
         var ifcOpacity = this.ifcOpacity;
         [this.ifcSolidGroup, this.ifcReferenceGroup].forEach(function (group) {
             group.traverse(function (node) {
+                (Array.isArray(node.material) ? node.material : [node.material]).forEach(function (material) { applyGhostMaterial(material, false); });
                 setIfcMaterialOpacity(node.material, ifcOpacity);
                 if (node.isMesh && node.userData && node.userData.type === 'IFC') {
                     node.renderOrder = ifcOpacity < 1 ? 1 : 0;
@@ -1167,6 +1318,7 @@
             });
         });
         this.syncRootLayerVisibility();
+        this.applyVisibilityState(this.visibilityStore);
     };
 
     SceneViewer.prototype.syncRootLayerVisibility = function () {
@@ -1440,6 +1592,7 @@
         });
         var helper = new THREE.LineSegments(geometry, material);
         helper.name = 'Selected object outline';
+        helper._isSelectionHelper = true;
         // Mirror the object's full local transform via the matrix, not just PQS — web-ifc
         // meshes drive their placement through mesh.matrix directly (matrixAutoUpdate=false),
         // so position/quaternion/scale are stuck at defaults and copying them lands the
@@ -1451,6 +1604,87 @@
         helper.raycast = function () {};
         object.parent.add(helper);
         return helper;
+    };
+
+    SceneViewer.prototype.focusSelection = function () {
+        if (!this.selectedObjects || !this.selectedObjects.length) return;
+        var box = new THREE.Box3();
+        this.selectedObjects.forEach(function (obj) {
+            box.expandByObject(obj);
+        });
+        if (!box.isEmpty()) {
+            var center = box.getCenter(new THREE.Vector3());
+            var size = box.getSize(new THREE.Vector3());
+            var span = Math.max(size.x, size.y, size.z, 0.5);
+            this.controls.target.copy(center);
+            this.camera.position.set(center.x + span * 1.5, center.y + span * 1.2, center.z + span * 1.5);
+            this.controls.update();
+        }
+    };
+
+    SceneViewer.prototype.selectByEntityKeys = function (keys) {
+        if (!keys || !keys.length) {
+            this.setSelectedObjects([]);
+            return;
+        }
+        var keyMap = {};
+        var stepIdMap = {};
+        var globalIdMap = {};
+        var store = (window.IfcFds && window.IfcFds.workbench && window.IfcFds.workbench.state && window.IfcFds.workbench.state.selectionStore);
+
+        for (var i = 0; i < keys.length; i++) {
+            var rawK = String(keys[i]);
+            keyMap[rawK] = true;
+            if (store && store._aliasMap && store._aliasMap[rawK]) {
+                keyMap[store._aliasMap[rawK]] = true;
+            }
+            var parts = rawK.split(':');
+            var idPart = parts.length > 1 ? parts.slice(1).join(':') : rawK;
+            stepIdMap[idPart] = true;
+            globalIdMap[idPart] = true;
+        }
+
+        var matched = [];
+        var createEntityKey = (window.IfcFds && window.IfcFds.workbench && window.IfcFds.workbench.createEntityKey) || function () { return ''; };
+
+        function checkNode(node) {
+            if (node._isSelectionHelper || (node.parent && node.parent.isMesh)) return;
+            if (!node || !node.userData || !node.userData.type) return;
+            var k = createEntityKey(node.userData);
+            var u = node.userData;
+            var raw = u.raw || {};
+            var stepId = String(u.stepId || raw.step_id || u.expressID || u.id || '');
+            var globalId = String(u.globalId || raw.global_id || raw.GlobalId || '');
+
+            if (keyMap[k] || (stepId && stepIdMap[stepId]) || (globalId && globalIdMap[globalId])) {
+                matched.push(node);
+            }
+        }
+
+        if (this.fdsGroup) this.fdsGroup.traverse(checkNode);
+        if (this.ifcGroup) this.ifcGroup.traverse(checkNode);
+        this.setSelectedObjects(matched);
+    };
+
+    SceneViewer.prototype.applyVisibilityState = function (visStore) {
+        if (!visStore) return;
+        this.visibilityStore = visStore;
+        var createEntityKey = (window.IfcFds && window.IfcFds.workbench && window.IfcFds.workbench.createEntityKey) || function () { return ''; };
+
+        function updateNode(node) {
+            if (!node.isMesh && !node.isLineSegments) return;
+            if (!node.userData || !node.userData.type) return;
+            var k = createEntityKey(node.userData);
+            if (node._isSelectionHelper) return;
+            var visible = visStore.isKeyVisible(k, ns.workbench.normalizeEntityDescriptor(node.userData));
+            setVisibilityChannel(node, 'workbench', visible);
+            var ghosted = visStore.isKeyGhosted(k);
+            var materials = Array.isArray(node.material) ? node.material : [node.material];
+            materials.forEach(function (material) { applyGhostMaterial(material, ghosted); });
+        }
+
+        if (this.fdsGroup) this.fdsGroup.traverse(updateNode);
+        if (this.ifcGroup) this.ifcGroup.traverse(updateNode);
     };
 
     SceneViewer.prototype.clearHover = function () {
@@ -1642,6 +1876,8 @@
     function makeUserData(type, item) {
         return {
             type: type,
+            entityKey: item.entityKey || item.entity_key || (ns.workbench && ns.workbench.createEntityKey(item)),
+            sourceId: item.sourceId || item.source_id,
             id: item.id,
             surf_id: item.surf_id || null,
             ifcSource: item.ifcSource || null,
@@ -1649,6 +1885,30 @@
             raw: item.raw || item
         };
     }
+
+    // Each subsystem owns one channel. Parent groups independently retain layer/root visibility.
+    function setVisibilityChannel(node, channel, visible) {
+        var channels = node._visibilityChannels || (node._visibilityChannels = {});
+        channels[channel] = !!visible;
+        node.visible = Object.keys(channels).every(function (key) { return channels[key]; });
+    }
+
+    function applyGhostMaterial(material, ghosted) {
+        if (!material) return;
+        if (ghosted && !material._ghostBase) {
+            material._ghostBase = {opacity: material.opacity, transparent: material.transparent, depthWrite: material.depthWrite};
+            material.transparent = true;
+            material.opacity = 0.15;
+            material.depthWrite = false;
+            material.needsUpdate = true;
+        } else if (!ghosted && material._ghostBase) {
+            Object.assign(material, material._ghostBase);
+            delete material._ghostBase;
+            material.needsUpdate = true;
+        }
+    }
+
+    ns.viewer.setVisibilityChannel = setVisibilityChannel;
 
     function findSelectableNode(object) {
         var node = object;

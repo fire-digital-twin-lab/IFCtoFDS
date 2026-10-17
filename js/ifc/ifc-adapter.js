@@ -21,7 +21,18 @@
         IFCPIPESEGMENT: true,
         IFCAIRTERMINAL: true,
         IFCELEMENTASSEMBLY: true,
-        IFCSPACE: true
+        IFCSPACE: true,
+        IFCCOVERING: true,
+        IFCFOOTING: true,
+        IFCRAMP: true,
+        IFCRAMPFLIGHT: true,
+        IFCFLOWCONTROLLER: true,
+        IFCFLOWMOVINGDEVICE: true,
+        IFCFLOWSTORAGEDEVICE: true,
+        IFCFLOWMETER: true,
+        IFCFIRESUPPRESSIONTERMINAL: true,
+        IFCDISTRIBUTIONCHAMBERELEMENT: true,
+        IFCDISTRIBUTIONPORT: true
     };
     var REVIEW_TYPES = {
         IFCBUILDINGELEMENTPROXY: 'Building element proxy',
@@ -33,7 +44,18 @@
         IFCPIPESEGMENT: 'Pipe segment',
         IFCAIRTERMINAL: 'Air terminal',
         IFCELEMENTASSEMBLY: 'Element assembly',
-        IFCRAILING: 'Railing'
+        IFCRAILING: 'Railing',
+        IFCCOVERING: 'Covering',
+        IFCFOOTING: 'Footing',
+        IFCRAMP: 'Ramp',
+        IFCRAMPFLIGHT: 'Ramp flight',
+        IFCFLOWCONTROLLER: 'Flow controller (valve / damper)',
+        IFCFLOWMOVINGDEVICE: 'Flow moving device (fan / pump)',
+        IFCFLOWSTORAGEDEVICE: 'Flow storage device (tank)',
+        IFCFLOWMETER: 'Flow meter',
+        IFCFIRESUPPRESSIONTERMINAL: 'Fire suppression terminal (sprinkler)',
+        IFCDISTRIBUTIONCHAMBERELEMENT: 'Distribution chamber',
+        IFCDISTRIBUTIONPORT: 'Distribution port'
     };
 
     function IfcAdapter() {}
@@ -87,7 +109,7 @@
                     var data = event.data || {};
                     if (data.type === 'error') {
                         cleanup();
-                        reject(new Error(data.message || 'parse shard failed'));
+                        reject(Object.assign(new Error(data.message || 'parse shard failed'), data.error || {}));
                         return;
                     }
                     if (data.type !== 'parse-shard-result') return;
@@ -190,6 +212,11 @@
     }
 
     function processEntity(ctx, entity) {
+        try { return processEntityGeometry(ctx, entity); }
+        catch (error) { error.entityId = entity.id; if (!error.stage) error.stage = 'ifc_geometry'; throw error; }
+    }
+
+    function processEntityGeometry(ctx, entity) {
         if (!isSupportedProduct(entity, ctx.stairChildIds)) return;
         var step = ctx.step;
 
@@ -213,7 +240,7 @@
         items.forEach(function (item) {
             var itemMesh = meshForRepresentationItem(step, item, placement, ctx.diagnostics, ctx.unsupported);
             if (displayMesh) {
-                var carved = carveItemOpenings(itemMesh, openingExtrusions, ctx.diagnostics, ctx.voidStats, { skipBoxOpenings: ctx.skipBoxOpenings });
+                var carved = ns.core.atStage('openings', function () { return carveItemOpenings(itemMesh, openingExtrusions, ctx.diagnostics, ctx.voidStats, { skipBoxOpenings: ctx.skipBoxOpenings }); });
                 appendMesh(mesh, carved.exportMesh);
                 appendMesh(displayMesh, carved.displayMesh);
                 if (carved.displayMesh !== carved.exportMesh) displayDiffers = true;
@@ -258,6 +285,8 @@
             fillHostStepIds: fillOpenings.map(function (opening) {
                 return ctx.hostIdsByOpening[opening.stepId];
             }).filter(Boolean),
+            geomExportMesh: (displayMesh && displayDiffers) ? displayMesh : mesh,
+            exportGeometryComplete: (!ctx.skipBoxOpenings || !hostOpenings.length) && hostOpenings.every(function (opening) { return !!ctx.voidStats.applied[opening.id]; }),
             mesh: mesh,
             displayMesh: (displayMesh && displayDiffers) ? displayMesh : undefined,
             bounds: bounds,
@@ -767,9 +796,7 @@
         }
 
         var displayMesh = exportMesh;
-        // The box-subtraction is by far the heaviest per-wall work. Skip it when the
-        // caller is going to render through another path (e.g. web-ifc) — the export
-        // mesh stays watertight either way because boxOpenings only touch displayMesh.
+        // Preview may skip this pass; the export completeness flag prevents reuse.
         if (!(options && options.skipBoxOpenings)) {
             boxOpenings.forEach(function (opening) {
                 var box = boxFromExtrusion(opening.extrusion);
@@ -817,36 +844,94 @@
         return { origin: basis.origin.slice(), axes: axes, mins: mins, maxs: maxs };
     }
 
-    // host solid minus box, built by partitioning the host into the six capped regions that
-    // surround the box and unioning them. Reuses the half-space mesh clipper, so it works for
-    // any host shape and for openings at any orientation (parallel or across the extrusion).
+    // BSP solid difference. Partition pieces must be unioned as solids: simply
+    // appending capped pieces can introduce internal faces across existing voids.
     function subtractBoxFromMesh(mesh, box) {
-        function planeAt(axisIndex, value, keepPositive) {
-            return {
-                origin: addVector(box.origin, scaleVector(box.axes[axisIndex], value)),
-                normal: box.axes[axisIndex].slice(),
-                keepPositive: keepPositive
-            };
+        var epsilon = 1e-7;
+        function polygon(vertices) {
+            var n = normalize(cross(subtractVector(vertices[1], vertices[0]), subtractVector(vertices[2], vertices[0])), [0, 0, 1]);
+            return { vertices: vertices, normal: n, w: dot(n, vertices[0]) };
         }
-
-        var insideA = [planeAt(0, box.mins[0], true), planeAt(0, box.maxs[0], false)];
-        var insideB = [planeAt(1, box.mins[1], true), planeAt(1, box.maxs[1], false)];
-        var regions = [
-            [planeAt(0, box.mins[0], false)],
-            [planeAt(0, box.maxs[0], true)],
-            insideA.concat([planeAt(1, box.mins[1], false)]),
-            insideA.concat([planeAt(1, box.maxs[1], true)]),
-            insideA.concat(insideB, [planeAt(2, box.mins[2], false)]),
-            insideA.concat(insideB, [planeAt(2, box.maxs[2], true)])
-        ];
-
-        var result = emptyMesh();
-        regions.forEach(function (planes) {
-            var piece = mesh;
-            for (var k = 0; k < planes.length && piece.faces.length; k += 1) {
-                piece = clipMeshByPlane(piece, planes[k]);
+        function flip(p) { p.vertices.reverse(); p.normal = scaleVector(p.normal, -1); p.w = -p.w; }
+        function split(plane, p, coFront, coBack, front, back) {
+            var types = [], kind = 0;
+            p.vertices.forEach(function (v) {
+                var distance = dot(plane.normal, v) - plane.w;
+                var t = distance < -epsilon ? 2 : distance > epsilon ? 1 : 0;
+                kind |= t; types.push(t);
+            });
+            if (kind === 0) (dot(plane.normal, p.normal) > 0 ? coFront : coBack).push(p);
+            else if (kind === 1) front.push(p);
+            else if (kind === 2) back.push(p);
+            else {
+                var f = [], b = [];
+                p.vertices.forEach(function (v, i) {
+                    var j = (i + 1) % p.vertices.length, next = p.vertices[j];
+                    if (types[i] !== 2) f.push(v);
+                    if (types[i] !== 1) b.push(v);
+                    if ((types[i] | types[j]) === 3) {
+                        var delta = subtractVector(next, v);
+                        var t = (plane.w - dot(plane.normal, v)) / dot(plane.normal, delta);
+                        var point = addVector(v, scaleVector(delta, t));
+                        f.push(point); b.push(point.slice());
+                    }
+                });
+                f = removeDuplicateLoopPoints(f); b = removeDuplicateLoopPoints(b);
+                if (f.length >= 3) front.push(polygon(f));
+                if (b.length >= 3) back.push(polygon(b));
             }
-            if (piece.faces.length) appendMesh(result, piece);
+        }
+        function Node(polygons) { this.polygons = []; this.plane = null; this.front = null; this.back = null; if (polygons) this.build(polygons); }
+        Node.prototype.build = function (polygons) {
+            if (!polygons.length) return;
+            if (!this.plane) this.plane = { normal: polygons[0].normal.slice(), w: polygons[0].w };
+            var front = [], back = [], node = this;
+            polygons.forEach(function (p) { split(node.plane, p, node.polygons, node.polygons, front, back); });
+            if (front.length) { if (!this.front) this.front = new Node(); this.front.build(front); }
+            if (back.length) { if (!this.back) this.back = new Node(); this.back.build(back); }
+        };
+        Node.prototype.invert = function () {
+            this.polygons.forEach(flip);
+            if (this.plane) { this.plane.normal = scaleVector(this.plane.normal, -1); this.plane.w = -this.plane.w; }
+            if (this.front) this.front.invert(); if (this.back) this.back.invert();
+            var temp = this.front; this.front = this.back; this.back = temp;
+        };
+        Node.prototype.all = function () { return this.polygons.concat(this.front ? this.front.all() : [], this.back ? this.back.all() : []); };
+        Node.prototype.clip = function (polygons) {
+            if (!this.plane) return polygons.slice();
+            var front = [], back = [], node = this;
+            polygons.forEach(function (p) { split(node.plane, p, front, back, front, back); });
+            if (this.front) front = this.front.clip(front);
+            back = this.back ? this.back.clip(back) : [];
+            return front.concat(back);
+        };
+        Node.prototype.clipTo = function (other) {
+            this.polygons = other.clip(this.polygons);
+            if (this.front) this.front.clipTo(other); if (this.back) this.back.clipTo(other);
+        };
+        var signedVolume = 0;
+        mesh.faces.forEach(function (f) { signedVolume += dot(mesh.vertices[f[0]], cross(mesh.vertices[f[1]], mesh.vertices[f[2]])) / 6; });
+        var input = mesh.faces.map(function (f) {
+            var points = f.map(function (index) { return mesh.vertices[index].slice(); });
+            if (signedVolume < 0) points.reverse();
+            return polygon(points);
+        });
+        var corners = [];
+        for (var mask = 0; mask < 8; mask += 1) {
+            var point = box.origin.slice();
+            for (var axis = 0; axis < 3; axis += 1) point = addVector(point, scaleVector(box.axes[axis], mask & (1 << axis) ? box.maxs[axis] : box.mins[axis]));
+            corners.push(point);
+        }
+        var faces = [[0,4,6,2],[1,3,7,5],[0,1,5,4],[2,6,7,3],[0,2,3,1],[4,5,7,6]];
+        var a = new Node(input), b = new Node(faces.map(function (f) { return polygon(f.map(function (i) { return corners[i]; })); }));
+        a.invert(); a.clipTo(b); b.clipTo(a); b.invert(); b.clipTo(a); b.invert(); a.build(b.all()); a.invert();
+        var result = emptyMesh(), vertexMap = {};
+        a.all().forEach(function (p) {
+            var indices = p.vertices.map(function (v) { return addUniqueVertex(result, vertexMap, v); });
+            for (var i = 1; i < indices.length - 1; i += 1) {
+                var points = [result.vertices[indices[0]], result.vertices[indices[i]], result.vertices[indices[i+1]]];
+                if (vectorLength(cross(subtractVector(points[1],points[0]),subtractVector(points[2],points[0]))) > 1e-10) result.faces.push([indices[0],indices[i],indices[i+1]]);
+            }
         });
         return result;
     }
@@ -860,14 +945,13 @@
         var openingNormal = normalize(opening.offset, [0, 0, 1]);
         if (Math.abs(dot(basis.normal, openingNormal)) < 0.9999) return null;
 
-        var allOpeningPoints = opening.base.concat(opening.base.map(function (point) {
-            return addVector(point, opening.offset);
-        }));
-        var heights = allOpeningPoints.map(function (point) {
-            return dot(subtractVector(point, basis.origin), basis.normal);
+        var minHeight = Infinity, maxHeight = -Infinity;
+        opening.base.forEach(function (point) {
+            var bottom = dot(subtractVector(point, basis.origin), basis.normal);
+            var top = dot(subtractVector(addVector(point, opening.offset), basis.origin), basis.normal);
+            minHeight = Math.min(minHeight, bottom, top);
+            maxHeight = Math.max(maxHeight, bottom, top);
         });
-        var minHeight = Math.min.apply(Math, heights);
-        var maxHeight = Math.max.apply(Math, heights);
         if (minHeight > 1e-7 || maxHeight < hostLength - 1e-7) return null;
 
         var outer2d = host.base.map(function (point) { return projectToBasis2d(point, basis); });
@@ -954,6 +1038,10 @@
         }
 
         var mappedTransform = composeTransform(productTransform, target);
+        if (!isIdentityish(origin)) {
+            var invOrigin = invertTransform(origin);
+            mappedTransform = composeTransform(mappedTransform, invOrigin);
+        }
         items.forEach(function (mappedItem) {
             appendMesh(mesh, meshForRepresentationItem(step, mappedItem, mappedTransform, diagnostics, unsupported));
         });
@@ -1149,6 +1237,7 @@
     function addClipCaps(mesh, vertexMap, segments, plane) {
         var unused = {};
         var adjacency = {};
+        var capLoops = [];
 
         segments.forEach(function (segment) {
             var a = pointKey(segment[0]);
@@ -1188,23 +1277,49 @@
 
             if (currentKey !== startKey || loop.length < 4) return;
             loop.pop();
-            addCapLoop(mesh, vertexMap, loop, plane);
+            capLoops.push(loop);
         });
+        addCapLoops(mesh, vertexMap, capLoops, plane);
     }
 
-    function addCapLoop(mesh, vertexMap, loop, plane) {
-        var desiredNormal = plane.keepPositive ? scaleVector(plane.normal, -1) : plane.normal;
-        if (dot(polygonNormal(loop), desiredNormal) < 0) loop.reverse();
-
-        var center = [0, 0, 0];
-        loop.forEach(function (point) { center = addVector(center, point); });
-        center = scaleVector(center, 1 / loop.length);
-
-        var centerIndex = addUniqueVertex(mesh, vertexMap, center);
-        var indices = loop.map(function (point) { return addUniqueVertex(mesh, vertexMap, point); });
-        for (var i = 0; i < indices.length; i += 1) {
-            mesh.faces.push([centerIndex, indices[i], indices[(i + 1) % indices.length]]);
-        }
+    // Triangulate concave sections and nested holes together. A center fan fills
+    // previous window voids when another opening clips the same host later.
+    function addCapLoops(mesh, vertexMap, loops, plane) {
+        if (!loops.length) return;
+        var triangulate = earcutFunction();
+        if (!triangulate) throw new Error('Earcut is required for closed export caps');
+        var normal = normalize(plane.normal, [0, 0, 1]);
+        var u = perpendicularVector(normal);
+        var v = cross(normal, u);
+        var desired = plane.keepPositive ? scaleVector(normal, -1) : normal;
+        var projected = loops.map(function (loop) {
+            return loop.map(function (point) { return [dot(point, u), dot(point, v)]; });
+        });
+        var depths = projected.map(function (loop, index) {
+            return projected.reduce(function (count, other, j) {
+                return count + (j !== index && pointStrictlyInsidePolygon(loop[0], other) ? 1 : 0);
+            }, 0);
+        });
+        loops.forEach(function (outer, index) {
+            if (depths[index] % 2) return;
+            var rings = [index];
+            loops.forEach(function (hole, j) {
+                if (depths[j] === depths[index] + 1 && pointStrictlyInsidePolygon(projected[j][0], projected[index])) rings.push(j);
+            });
+            var flat = [], holes = [], points = [];
+            rings.forEach(function (ring, r) {
+                if (r) holes.push(points.length);
+                loops[ring].forEach(function (point, k) {
+                    flat.push(projected[ring][k][0], projected[ring][k][1]); points.push(point);
+                });
+            });
+            var faces = triangulate(flat, holes, 2);
+            for (var k = 0; k < faces.length; k += 3) {
+                var triangle = [points[faces[k]], points[faces[k + 1]], points[faces[k + 2]]];
+                if (dot(polygonNormal(triangle), desired) < 0) triangle.reverse();
+                mesh.faces.push(triangle.map(function (point) { return addUniqueVertex(mesh, vertexMap, point); }));
+            }
+        });
     }
 
     function polygonNormal(points) {
@@ -1748,6 +1863,23 @@
             xAxis: transformVector(a, b.xAxis),
             yAxis: transformVector(a, b.yAxis),
             zAxis: transformVector(a, b.zAxis)
+        };
+    }
+
+    function invertTransform(t) {
+        var invX = [t.xAxis[0], t.yAxis[0], t.zAxis[0]];
+        var invY = [t.xAxis[1], t.yAxis[1], t.zAxis[1]];
+        var invZ = [t.xAxis[2], t.yAxis[2], t.zAxis[2]];
+        var invOrigin = [
+            -(invX[0] * t.origin[0] + invX[1] * t.origin[1] + invX[2] * t.origin[2]),
+            -(invY[0] * t.origin[0] + invY[1] * t.origin[1] + invY[2] * t.origin[2]),
+            -(invZ[0] * t.origin[0] + invZ[1] * t.origin[1] + invZ[2] * t.origin[2])
+        ];
+        return {
+            origin: invOrigin,
+            xAxis: invX,
+            yAxis: invY,
+            zAxis: invZ
         };
     }
 
