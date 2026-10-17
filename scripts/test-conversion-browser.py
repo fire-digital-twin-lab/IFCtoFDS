@@ -178,10 +178,17 @@ def main():
                         page.evaluate(
                             "() => { IfcFds.viewer.SceneViewer.prototype.loadFdsModel = window.originalFdsLoader; }"
                         )
+                        # Verified default: box.ifc is an exact box, so policy emits OBST (not forced GEOM)
                         page.locator("#convert-verified").click(force=True)
                         page.wait_for_function(
-                            "Number(document.getElementById('count-geoms').textContent) > 0"
+                            "Number(document.getElementById('count-obsts').textContent) > 0"
                         )
+                        assert (
+                            page.evaluate(
+                                "Number(document.getElementById('count-geoms').textContent)"
+                            )
+                            == 0
+                        ), "Verified default must NOT force all_geom"
                         page.locator("#close-audit").click()
                         results.append(
                             dict(

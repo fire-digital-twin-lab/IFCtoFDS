@@ -140,6 +140,23 @@
             zmin: document.getElementById('clip-zmin-val'),
             zmax: document.getElementById('clip-zmax-val')
         };
+        els.modeTabVerified = document.getElementById('mode-tab-verified');
+        els.modeTabQuick = document.getElementById('mode-tab-quick');
+        els.containerVerified = document.getElementById('container-verified');
+        els.containerQuick = document.getElementById('container-quick');
+        els.verifiedWorkflowBanner = document.getElementById('verified-workflow-banner');
+        els.quickWorkflowBanner = document.getElementById('quick-workflow-banner');
+        els.verifiedStoreys = document.getElementById('verified-storeys');
+        els.verifiedUseDomain = document.getElementById('verified-use-domain');
+        els.verifiedDomainWarning = document.getElementById('verified-domain-warning');
+        els.verifiedForceGeom = document.getElementById('verified-force-geom');
+        els.verifiedCellSize = document.getElementById('verified-cell-size');
+        els.domainEstCells = document.getElementById('domain-est-cells');
+        els.domainEstBudget = document.getElementById('domain-est-budget');
+        els.domainDimensionsText = document.getElementById('domain-dimensions-text');
+        els.auditDrawer = document.getElementById('audit-drawer');
+        els.toggleDrawer = document.getElementById('toggle-drawer');
+        els.closeInspector = document.getElementById('close-inspector');
     }
 
     function applyClip(id, value) {
@@ -247,6 +264,7 @@
         viewer.loadIfcModel(model, displayMeshes);
         viewer.setIfcOpacity(Number(els.ifcOpacity.value));
         updateIfcMetrics(model);
+        updateSourcePill(state.currentIfcFile, model);
         setExportEnabled(countConvertibleIfc(model) > 0);
         setSaveProcessedEnabled(!!(model && model.elements && model.elements.length));
         setupClippingForBounds(boundsForClipping());
@@ -610,6 +628,169 @@
                 viewer.setIfcCategoryVisible('other', event.target.checked);
             });
         }
+
+        // Workflow Mode Switcher
+        if (els.modeTabVerified) {
+            els.modeTabVerified.addEventListener('click', function () { setWorkflowMode('verified'); });
+        }
+        if (els.modeTabQuick) {
+            els.modeTabQuick.addEventListener('click', function () { setWorkflowMode('quick'); });
+        }
+
+        // Viewport Floating Toolbar Popovers
+        var btnLayers = document.getElementById('toggle-layers-popover');
+        var popLayers = document.getElementById('layers-popover');
+        var btnCamera = document.getElementById('toggle-camera-views');
+        var popCamera = document.getElementById('camera-popover');
+        if (btnLayers && popLayers) {
+            btnLayers.addEventListener('click', function (e) {
+                e.stopPropagation();
+                popLayers.style.display = popLayers.style.display === 'none' ? 'flex' : 'none';
+                if (popCamera) popCamera.style.display = 'none';
+            });
+        }
+        if (btnCamera && popCamera) {
+            btnCamera.addEventListener('click', function (e) {
+                e.stopPropagation();
+                popCamera.style.display = popCamera.style.display === 'none' ? 'flex' : 'none';
+                if (popLayers) popLayers.style.display = 'none';
+            });
+        }
+        document.addEventListener('click', function () {
+            if (popLayers) popLayers.style.display = 'none';
+            if (popCamera) popCamera.style.display = 'none';
+        });
+
+        var btnClip = document.getElementById('toggle-clip');
+        if (btnClip && els.clipPanel) {
+            btnClip.addEventListener('click', function () {
+                els.clipPanel.hidden = !els.clipPanel.hidden;
+            });
+        }
+
+        Array.prototype.forEach.call(document.querySelectorAll('[data-cam]'), function (btn) {
+            btn.addEventListener('click', function () {
+                var dir = btn.getAttribute('data-cam');
+                if (dir && viewer && viewer.setView) viewer.setView(dir);
+            });
+        });
+
+        // Color Mode Selector
+        var colorSelect = document.getElementById('color-mode-select');
+        if (colorSelect) {
+            colorSelect.addEventListener('change', function () {
+                updateColorModeLegend(colorSelect.value);
+            });
+        }
+
+        // Domain Estimates & Preflight Scoped Domain Warning
+        ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'].forEach(function (axis) {
+            var input = document.getElementById('verified-domain-' + axis);
+            if (input) input.addEventListener('input', updateDomainEstimates);
+        });
+        if (els.verifiedCellSize) {
+            els.verifiedCellSize.addEventListener('input', updateDomainEstimates);
+        }
+        if (els.verifiedStoreys) {
+            els.verifiedStoreys.addEventListener('change', checkScopedDomainPreflight);
+        }
+        if (els.verifiedUseDomain) {
+            els.verifiedUseDomain.addEventListener('change', function () {
+                var box = document.getElementById('verified-domain-box');
+                if (box) box.style.display = els.verifiedUseDomain.checked ? 'grid' : 'none';
+                checkScopedDomainPreflight();
+            });
+        }
+        var useBoundsCheck = document.getElementById('verified-use-bounds');
+        var boundsBox = document.getElementById('verified-bounds-box');
+        if (useBoundsCheck && boundsBox) {
+            useBoundsCheck.addEventListener('change', function () {
+                boundsBox.style.display = useBoundsCheck.checked ? 'grid' : 'none';
+            });
+        }
+
+        // Reviewed Decisions Upload Summary Preview
+        var decisionsInput = document.getElementById('verified-decisions');
+        var decisionsChip = document.getElementById('decisions-summary-chip');
+        if (decisionsInput && decisionsChip) {
+            decisionsInput.addEventListener('change', async function () {
+                if (!decisionsInput.files || !decisionsInput.files.length) {
+                    decisionsChip.style.display = 'none';
+                    return;
+                }
+                try {
+                    var data = JSON.parse(await decisionsInput.files[0].text());
+                    var keys = Object.keys(data);
+                    var passive = keys.filter(function (k) { return data[k].action === 'PASSIVE_OBSTACLE'; }).length;
+                    var ref = keys.filter(function (k) { return data[k].action === 'REFERENCE_GEOMETRY'; }).length;
+                    var excl = keys.filter(function (k) { return data[k].action === 'EXCLUDE'; }).length;
+                    decisionsChip.style.display = 'flex';
+                    decisionsChip.textContent = '✓ ' + keys.length + ' decisions loaded (' + passive + ' Obstacle, ' + ref + ' Reference, ' + excl + ' Excluded)';
+                } catch (e) {
+                    decisionsChip.style.display = 'flex';
+                    decisionsChip.textContent = '⚠️ Malformed decisions JSON';
+                }
+            });
+        }
+
+        // Inspector Tabs
+        ['id', 'map', 'geom', 'mep'].forEach(function (tab) {
+            var btn = document.getElementById('inspect-tab-' + tab);
+            if (btn) {
+                btn.addEventListener('click', function () {
+                    activeInspectorTab = tab;
+                    ['id', 'map', 'geom', 'mep'].forEach(function (t) {
+                        var b = document.getElementById('inspect-tab-' + t);
+                        if (b) b.classList.toggle('active', t === tab);
+                    });
+                    if (state.selection && state.selection.length) {
+                        renderStructuredInspector(state.selection[0]);
+                    }
+                });
+            }
+        });
+        if (els.closeInspector) {
+            els.closeInspector.addEventListener('click', function () {
+                if (els.inspectCard) els.inspectCard.hidden = true;
+                if (viewer && viewer.setSelectedObjects) viewer.setSelectedObjects([]);
+            });
+        }
+
+        // Bottom Audit Drawer Toggle & Tabs
+        if (els.toggleDrawer && els.auditDrawer) {
+            els.toggleDrawer.addEventListener('click', function (e) {
+                e.stopPropagation();
+                toggleAuditDrawer();
+            });
+            var drawerHeader = document.querySelector('.audit-drawer-header');
+            if (drawerHeader) {
+                drawerHeader.addEventListener('click', function (e) {
+                    if (e.target.closest('.audit-tab-btn')) return;
+                    toggleAuditDrawer();
+                });
+            }
+        }
+        ['gates', 'findings', 'artifacts'].forEach(function (tab) {
+            var btn = document.getElementById('drawer-tab-' + tab);
+            var panel = document.getElementById('panel-' + tab);
+            if (btn && panel) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (els.auditDrawer && els.auditDrawer.classList.contains('minimized')) {
+                        els.auditDrawer.classList.remove('minimized');
+                        var icon = document.getElementById('drawer-toggle-icon');
+                        if (icon) icon.setAttribute('data-lucide', 'chevron-down');
+                        if (window.lucide) window.lucide.createIcons();
+                    }
+                    ['gates', 'findings', 'artifacts'].forEach(function (t) {
+                        var b = document.getElementById('drawer-tab-' + t);
+                        var p = document.getElementById('panel-' + t);
+                        if (b) b.classList.toggle('active', t === tab);
+                        if (p) p.style.display = t === tab ? (t === 'artifacts' || t === 'gates' ? 'grid' : 'block') : 'none';
+                    });
+                });
+            }
+        });
     }
 
     function bindToggle(id, layer) {
@@ -787,10 +968,12 @@
         els.inspectCard.hidden = false;
         if (selection.length === 1) {
             els.inspectTitle.textContent = selection[0].type + (selection[0].id ? ': ' + selection[0].id : '');
+            renderStructuredInspector(selection[0]);
             els.inspectBody.textContent = JSON.stringify(selectionDetails(selection[0]), null, 2);
             return;
         }
         els.inspectTitle.textContent = 'Selected objects: ' + selection.length;
+        renderStructuredInspector(null);
         els.inspectBody.textContent = JSON.stringify(selection.map(selectionDetails), null, 2);
     }
 
@@ -878,12 +1061,18 @@
         els.convertSelectedObst.classList.toggle('is-busy', state.exportBusy && action === 'voxelize');
         els.convertIfc.setAttribute('aria-busy', state.exportBusy && action === 'convert' ? 'true' : 'false');
         els.convertSelectedObst.setAttribute('aria-busy', state.exportBusy && action === 'voxelize' ? 'true' : 'false');
-        els.convertIfc.querySelector('span').textContent = state.exportBusy && action === 'convert'
-            ? 'Converting...'
-            : 'Convert to FDS';
-        els.convertSelectedObst.querySelector('span').textContent = state.exportBusy && action === 'voxelize'
-            ? 'Voxelizing selected GEOM...'
-            : 'Voxelize selected GEOM to OBST';
+        var spanIfc = els.convertIfc ? els.convertIfc.querySelector('span') : null;
+        if (spanIfc) {
+            spanIfc.textContent = state.exportBusy && action === 'convert'
+                ? 'Converting...'
+                : 'Run Quick Preview (Legacy)';
+        }
+        var spanObst = els.convertSelectedObst ? els.convertSelectedObst.querySelector('span') : null;
+        if (spanObst) {
+            spanObst.textContent = state.exportBusy && action === 'voxelize'
+                ? 'Voxelizing selected GEOM...'
+                : 'Voxelize selected GEOM to OBST';
+        }
         refreshConversionActions();
     }
 
@@ -964,7 +1153,7 @@
                 cleanupExportWorker();
                 try {
                     var base = (fullModel.fileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
-                    var fileName = base + '_obst-geom.fds';
+                    var fileName = base + '_quick_preview_legacy.fds';
                     state.generatedFdsText = result.text;
                     state.generatedFdsName = fileName;
                     els.saveFds.disabled = false;
@@ -1057,9 +1246,11 @@
         var generation = ++state.exportRequestId;
 
         var blob = state.currentIfcFile || new File([state.ifcSourceText || ''], state.ifcFileName || 'model.ifc');
+        var forceGeom = !!(els.verifiedForceGeom && els.verifiedForceGeom.checked);
+        var cellSize = Number(els.verifiedCellSize && els.verifiedCellSize.value) || Number(els.meshCellSize && els.meshCellSize.value) || 0.20;
         ns.verified.run(blob, {
-            cell_size: Number(els.meshCellSize.value || 0.2), all_geom: true,
-            include_review: !!(els.includeReviewSolids && els.includeReviewSolids.checked)
+            cell_size: cellSize,
+            all_geom: forceGeom,
         })
         .then(async function (data) {
             if (generation !== state.exportRequestId) return;
@@ -1079,7 +1270,7 @@
             var text = await response.text();
             if (generation !== state.exportRequestId) return;
             var base = (data.source_filename || state.ifcFileName || 'model').replace(/\.[^.]+$/, '');
-            var fileName = base + (data.status === 'MAPPING_VERIFIED' ? '_mapping_verified.fds' : '_diagnostic.fds');
+            var fileName = base + (data.status === 'MAPPING_VERIFIED' ? '_mapping_verified.fds' : '_diagnostic_unaccepted.fds');
             state.generatedFdsText = text; state.generatedFdsName = fileName;
             if (els.saveFds) els.saveFds.disabled = false;
             loadFdsText(text, fileName);
@@ -1090,12 +1281,16 @@
             hideLoading();
             setExportBusy(false);
             addExportDiagnostic(err, {stage: 'verified_conversion', jobId: state.verifiedJobId});
+            updateGlobalStatusBadge('FAILED');
+            if (state.verifiedJobId) exposeFailedCheckpoints(state.verifiedJobId);
         }).finally(function () {
             if (generation === state.exportRequestId) { hideLoading(); setExportBusy(false); }
         });
     }
 
     function renderAuditReport(report) {
+        if (!report) return;
+        updateGlobalStatusBadge(report.status);
         if (!els.auditBody) return;
         if (!report) {
             els.auditBody.innerHTML = '<p>No audit report available. Run <strong>Verified Conversion</strong> to generate a complete 3-tier audit.</p>';
@@ -1130,6 +1325,7 @@
             line('li', name + ': ' + gate.status + (gate.reason ? ' — ' + gate.reason : ''), list);
         });
         (report.findings || []).forEach(function (f) { line('p', f.severity + ' — ' + f.element_id + ': ' + f.detail); });
+        renderAuditDrawer(report);
     }
 
     function openAudit() {
@@ -1254,6 +1450,338 @@
             if (primitiveId) itemIds.push(String(primitiveId));
         });
         return { stepIds: stepIds, itemIds: itemIds };
+    }
+
+    var activeInspectorTab = 'id';
+    function renderStructuredInspector(item) {
+        var view = document.getElementById('inspect-structured-view');
+        if (!view) return;
+        view.innerHTML = '';
+        if (!item) {
+            view.innerHTML = '<p style="color:var(--text-muted);font-size:11px">Multi-object selection active.</p>';
+            return;
+        }
+        var raw = item.raw || {};
+        var rows = [];
+        if (activeInspectorTab === 'id') {
+            rows = [
+                ['IFC Type', item.ifcType || item.type || '--'],
+                ['GlobalId', item.globalId || raw.global_id || '--'],
+                ['STEP ID', item.id || raw.step_id || '--'],
+                ['Source File', item.ifcSource ? item.ifcSource.fileName : (raw.source_id || '--')],
+                ['Building', raw.building_id || '--'],
+                ['Storey', raw.storey || '--']
+            ];
+        } else if (activeInspectorTab === 'map') {
+            rows = [
+                ['Simulation Role', raw.simulation_role || item.fdsRole || '--'],
+                ['Mapping Strategy', raw.mapping_strategy || (item.canExportAsSolid ? 'OBST/GEOM' : 'NONE')],
+                ['FDS Representation', raw.fds_representation || item.type || '--'],
+                ['Review Status', raw.review_status || 'NOT_REQUIRED'],
+                ['Boundary Treatment', raw.boundary_treatment || 'NOT_APPLICABLE']
+            ];
+        } else if (activeInspectorTab === 'geom') {
+            var b = item.bounds || raw.bounding_box || {};
+            var dx = (b.xmax !== undefined && b.xmin !== undefined) ? Math.abs(b.xmax - b.xmin).toFixed(3) : '--';
+            var dy = (b.ymax !== undefined && b.ymin !== undefined) ? Math.abs(b.ymax - b.ymin).toFixed(3) : '--';
+            var dz = (b.zmax !== undefined && b.zmin !== undefined) ? Math.abs(b.zmax - b.zmin).toFixed(3) : '--';
+            rows = [
+                ['Extents dx×dy×dz', dx + ' × ' + dy + ' × ' + dz + ' m'],
+                ['FDS Primitive IDs', (raw.fds_primitive_ids || []).join(', ') || '--'],
+                ['Surface Area', raw.surface_area_m2 ? raw.surface_area_m2.toFixed(3) + ' m²' : '--'],
+                ['Volume', raw.volume_m3 ? raw.volume_m3.toFixed(3) + ' m³' : '--']
+            ];
+        } else if (activeInspectorTab === 'mep') {
+            rows = [
+                ['MEP Category', raw.mep_category || 'NOT_APPLICABLE'],
+                ['System Names', (raw.system_names || []).join(', ') || '--'],
+                ['System IDs', (raw.system_ids || []).join(', ') || '--'],
+                ['Ports Count', raw.ports ? raw.ports.length : (item.ports_count || 0)],
+                ['Operational Status', raw.operational_status || 'NOT_APPLICABLE']
+            ];
+        }
+        rows.forEach(function (pair) {
+            var row = document.createElement('div');
+            row.className = 'property-row';
+            var keySpan = document.createElement('span');
+            keySpan.className = 'property-key';
+            keySpan.textContent = String(pair[0]);
+            var valSpan = document.createElement('span');
+            valSpan.className = 'property-val';
+            valSpan.title = String(pair[1]);
+            valSpan.textContent = String(pair[1]);
+            row.appendChild(keySpan);
+            row.appendChild(valSpan);
+            view.appendChild(row);
+        });
+    }
+
+    function updateSourcePill(file, model) {
+        var nameEl = document.getElementById('ifc-source-name');
+        if (nameEl) nameEl.textContent = file ? file.name : ((model && model.fileName) || 'Loaded model');
+        var sizeEl = document.getElementById('ifc-size-tag');
+        if (sizeEl) sizeEl.textContent = file ? (file.size / (1024 * 1024)).toFixed(1) + ' MB' : '-- MB';
+        var schemaEl = document.getElementById('ifc-schema-tag');
+        if (schemaEl) schemaEl.textContent = (model && model.schema) || 'IFC';
+
+        var b = model && (model.convertibleBounds || model.bounds);
+        if (b) {
+            ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'].forEach(function (axis) {
+                var domainInput = document.getElementById('verified-domain-' + axis);
+                if (domainInput && b[axis] !== undefined) {
+                    domainInput.value = Number(b[axis]).toFixed(2);
+                }
+            });
+            updateDomainEstimates();
+        }
+    }
+
+    function setWorkflowMode(mode) {
+        var isVerified = mode === 'verified';
+        if (els.modeTabVerified) els.modeTabVerified.classList.toggle('active', isVerified);
+        if (els.modeTabQuick) els.modeTabQuick.classList.toggle('active', !isVerified);
+        var target = isVerified ? els.containerVerified : els.containerQuick;
+        if (target && target.scrollIntoView) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    function updateDomainEstimates() {
+        var xminInput = document.getElementById('verified-domain-xmin');
+        var xmaxInput = document.getElementById('verified-domain-xmax');
+        var yminInput = document.getElementById('verified-domain-ymin');
+        var ymaxInput = document.getElementById('verified-domain-ymax');
+        var zminInput = document.getElementById('verified-domain-zmin');
+        var zmaxInput = document.getElementById('verified-domain-zmax');
+        var cellInput = document.getElementById('verified-cell-size') || els.meshCellSize;
+
+        var xmin = Number(xminInput ? xminInput.value : 0) || 0;
+        var xmax = Number(xmaxInput ? xmaxInput.value : 10) || 10;
+        var ymin = Number(yminInput ? yminInput.value : 0) || 0;
+        var ymax = Number(ymaxInput ? ymaxInput.value : 10) || 10;
+        var zmin = Number(zminInput ? zminInput.value : 0) || 0;
+        var zmax = Number(zmaxInput ? zmaxInput.value : 3) || 3;
+        var cellSize = Math.max(0.01, Number(cellInput ? cellInput.value : 0.20) || 0.20);
+
+        var dx = Math.max(0.01, Math.abs(xmax - xmin));
+        var dy = Math.max(0.01, Math.abs(ymax - ymin));
+        var dz = Math.max(0.01, Math.abs(zmax - zmin));
+
+        var cellsX = Math.ceil(dx / cellSize);
+        var cellsY = Math.ceil(dy / cellSize);
+        var cellsZ = Math.ceil(dz / cellSize);
+        var totalCells = cellsX * cellsY * cellsZ;
+
+        if (els.domainDimensionsText) {
+            els.domainDimensionsText.textContent = dx.toFixed(1) + ' × ' + dy.toFixed(1) + ' × ' + dz.toFixed(1) + ' m';
+        }
+        if (els.domainEstCells) {
+            els.domainEstCells.textContent = totalCells.toLocaleString() + ' cells';
+        }
+        if (els.domainEstBudget) {
+            if (totalCells <= 10000000) {
+                els.domainEstBudget.className = 'domain-budget-chip reasonable';
+                els.domainEstBudget.textContent = '● OK';
+            } else if (totalCells <= 50000000) {
+                els.domainEstBudget.className = 'domain-budget-chip heavy';
+                els.domainEstBudget.textContent = '▲ Heavy';
+            } else {
+                els.domainEstBudget.className = 'domain-budget-chip heavy';
+                els.domainEstBudget.textContent = '⚠️ Critical (>50M)';
+            }
+        }
+    }
+
+    function checkScopedDomainPreflight() {
+        if (!els.verifiedStoreys || !els.verifiedUseDomain || !els.verifiedDomainWarning) return;
+        var hasSelectedStoreys = Array.prototype.some.call(els.verifiedStoreys.options, function (o) { return o.selected; });
+        var hasDomain = els.verifiedUseDomain.checked;
+        els.verifiedDomainWarning.style.display = (hasSelectedStoreys && !hasDomain) ? 'flex' : 'none';
+    }
+
+    function toggleAuditDrawer() {
+        if (!els.auditDrawer) return;
+        var isMin = els.auditDrawer.classList.toggle('minimized');
+        var icon = document.getElementById('drawer-toggle-icon');
+        if (icon) {
+            icon.setAttribute('data-lucide', isMin ? 'chevron-up' : 'chevron-down');
+            if (window.lucide) window.lucide.createIcons();
+        }
+    }
+
+    function updateGlobalStatusBadge(status) {
+        var badge = document.getElementById('global-run-status');
+        var label = document.getElementById('global-status-label');
+        if (!badge || !label) return;
+        badge.className = 'global-status-badge';
+        if (status === 'MAPPING_VERIFIED' || status === 'SIMULATION_VERIFIED') {
+            badge.classList.add('verified');
+            label.textContent = 'VERIFIED';
+        } else if (status === 'INCONCLUSIVE') {
+            badge.classList.add('inconclusive');
+            label.textContent = 'INCONCLUSIVE';
+        } else if (status === 'REJECTED' || status === 'FAILED') {
+            badge.classList.add('rejected');
+            label.textContent = status;
+        } else {
+            label.textContent = status || 'NOT RUN';
+        }
+    }
+
+    function updateColorModeLegend(mode) {
+        var container = document.getElementById('legend-swatches');
+        if (!container) return;
+        if (mode === 'mapping') {
+            container.innerHTML = '<div class="legend-swatch-item"><span class="swatch-color" style="background:#3b82f6"></span><span>OBST</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#f59e0b"></span><span>GEOM</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#64748b"></span><span>Reference</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#ef4444"></span><span>Unsupported</span></div>';
+        } else if (mode === 'verification') {
+            container.innerHTML = '<div class="legend-swatch-item"><span class="swatch-color" style="background:#10b981"></span><span>PASS</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#f59e0b"></span><span>INCONCLUSIVE</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#ef4444"></span><span>FAIL / REJECT</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#64748b"></span><span>NOT RUN</span></div>';
+        } else if (mode === 'ifc-type') {
+            container.innerHTML = '<div class="legend-swatch-item"><span class="swatch-color" style="background:#60a5fa"></span><span>Wall / Column</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#a78bfa"></span><span>Slab / Roof</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#34d399"></span><span>Door / Window</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#f472b6"></span><span>MEP / Flow</span></div>';
+        } else if (mode === 'mep') {
+            container.innerHTML = '<div class="legend-swatch-item"><span class="swatch-color" style="background:#ef4444"></span><span>Fire Suppression</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#f97316"></span><span>Smoke Extract</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#06b6d4"></span><span>Ventilation</span></div>' +
+                '<div class="legend-swatch-item"><span class="swatch-color" style="background:#3b82f6"></span><span>Plumbing</span></div>';
+        }
+    }
+
+    function renderAuditDrawer(report) {
+        if (!report) return;
+        var verdictText = document.getElementById('drawer-verdict-summary');
+        if (verdictText) verdictText.textContent = report.status || 'INCONCLUSIVE';
+
+        var gatesContainer = document.getElementById('panel-gates');
+        if (gatesContainer && report.gates) {
+            Object.keys(report.gates).forEach(function (gateName) {
+                var card = gatesContainer.querySelector('[data-gate="' + gateName + '"]');
+                if (!card && gateName === 'golden_reference_parity') {
+                    card = gatesContainer.querySelector('[data-gate="golden"]');
+                }
+                if (!card && gateName === 'golden') {
+                    card = gatesContainer.querySelector('[data-gate="golden_reference_parity"]');
+                }
+                if (card) {
+                    var gate = report.gates[gateName];
+                    var dot = card.querySelector('.status-dot');
+                    var reason = card.querySelector('.gate-card-reason');
+                    if (dot) {
+                        dot.className = 'status-dot ' + (gate.status === 'PASS' ? 'online' : (gate.status === 'FAIL' ? 'offline' : ''));
+                        if (gate.status === 'FAIL') dot.style.background = 'var(--status-error)';
+                    }
+                    if (reason && gate.reason) {
+                        reason.textContent = gate.status + ': ' + gate.reason;
+                    }
+                }
+            });
+        }
+
+        var findings = report.findings || [];
+        var findingCountBadge = document.getElementById('drawer-finding-count');
+        if (findingCountBadge) findingCountBadge.textContent = findings.length;
+
+        var findingsTbody = document.getElementById('findings-table-body');
+        if (findingsTbody) {
+            findingsTbody.innerHTML = '';
+            if (!findings.length) {
+                findingsTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">No active findings. All evaluated gates satisfied.</td></tr>';
+            } else {
+                findings.forEach(function (f) {
+                    var tr = document.createElement('tr');
+                    var isErr = f.severity === 'P0' || f.severity === 'ERROR' || f.severity === 'P1';
+                    var sevColor = isErr ? 'var(--status-error-text)' : 'var(--status-warning-text)';
+
+                    var tdSev = document.createElement('td');
+                    var badge = document.createElement('span');
+                    badge.className = 'brand-badge';
+                    badge.style.color = sevColor;
+                    badge.textContent = f.severity || 'WARN';
+                    tdSev.appendChild(badge);
+                    tr.appendChild(tdSev);
+
+                    var tdCat = document.createElement('td');
+                    var catTag = document.createElement('span');
+                    catTag.className = 'source-meta-tag';
+                    catTag.textContent = f.category || 'general';
+                    tdCat.appendChild(catTag);
+                    tr.appendChild(tdCat);
+
+                    var tdKey = document.createElement('td');
+                    tdKey.style.fontFamily = 'var(--font-mono)';
+                    tdKey.style.color = 'var(--text-primary)';
+                    tdKey.textContent = f.element_id || '—';
+                    tr.appendChild(tdKey);
+
+                    var tdDesc = document.createElement('td');
+                    tdDesc.style.color = 'var(--text-secondary)';
+                    tdDesc.textContent = f.detail || f.title || '';
+                    tr.appendChild(tdDesc);
+
+                    var tdAct = document.createElement('td');
+                    tdAct.style.textAlign = 'right';
+                    if (f.element_id) {
+                        var btn = document.createElement('button');
+                        btn.className = 'btn';
+                        btn.style.height = '22px';
+                        btn.style.padding = '0 6px';
+                        btn.style.fontSize = '10px';
+                        btn.textContent = 'Locate';
+                        btn.addEventListener('click', function () {
+                            if (viewer && viewer.selectElementByKey) viewer.selectElementByKey(f.element_id);
+                        });
+                        tdAct.appendChild(btn);
+                    }
+                    tr.appendChild(tdAct);
+                    findingsTbody.appendChild(tr);
+                });
+            }
+        }
+
+        if (report.artifacts) {
+            var fdsBtn = document.getElementById('btn-download-fds');
+            if (fdsBtn && report.artifacts.fds) fdsBtn.href = report.artifacts.fds.url;
+            var manifestBtn = document.getElementById('btn-download-manifest');
+            if (manifestBtn && report.artifacts.manifest) manifestBtn.href = report.artifacts.manifest.url;
+            var geomBtn = document.getElementById('btn-download-geom-pkg');
+            if (geomBtn && report.artifacts.geometry) geomBtn.href = report.artifacts.geometry.url;
+        }
+    }
+
+    function exposeFailedCheckpoints(jobId) {
+        if (!jobId) return;
+        var fdsBtn = document.getElementById('btn-download-fds');
+        if (fdsBtn) {
+            fdsBtn.href = '/api/jobs/' + jobId + '/checkpoints/fds';
+            fdsBtn.textContent = 'Download Checkpoint FDS (UNACCEPTED)';
+        }
+        var manifestBtn = document.getElementById('btn-download-manifest');
+        if (manifestBtn) {
+            manifestBtn.href = '/api/jobs/' + jobId + '/checkpoints/manifest';
+            manifestBtn.textContent = 'Download Checkpoint Manifest (UNACCEPTED)';
+        }
+        var geomBtn = document.getElementById('btn-download-geom-pkg');
+        if (geomBtn) {
+            geomBtn.href = '/api/jobs/' + jobId + '/checkpoints/geometry';
+            geomBtn.textContent = 'Download Checkpoint Geometries (AUDIT INCOMPLETE)';
+        }
+        var panelArtifacts = document.getElementById('panel-artifacts');
+        if (panelArtifacts) {
+            panelArtifacts.style.display = 'grid';
+            var tabs = document.querySelectorAll('.audit-tab-btn');
+            tabs.forEach(function (t) { t.classList.remove('active'); });
+            var artTab = document.getElementById('drawer-tab-artifacts');
+            if (artTab) artTab.classList.add('active');
+            var panelGates = document.getElementById('panel-gates');
+            if (panelGates) panelGates.style.display = 'none';
+        }
     }
 
 })(window.IfcFds);

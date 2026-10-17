@@ -43,3 +43,4 @@ demo/demo.mp4
 # Local research fixtures and model-derived private evidence
 .local-reference-cases/
 *.source-map.local.json
+.agents/
