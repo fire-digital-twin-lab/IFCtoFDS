@@ -22,7 +22,7 @@ def test_large_upload_avoids_browser_step_decoding(tiny_ifc, tmp_path):
     import ifcopenshell.api.geometry
 
     placement = np.eye(4)
-    placement[:3, 3] = [578753.123456, 2318413.987654, 0]
+    placement[:3, 3] = [600000.123456, 2400000.987654, 0]
     ifcopenshell.api.geometry.edit_object_placement(
         file, product=wall, matrix=placement
     )
@@ -132,7 +132,7 @@ def test_large_upload_avoids_browser_step_decoding(tiny_ifc, tmp_path):
                     }""")
                     assert page.evaluate("""() => {
                         const v = IfcFds.workbench.navigation.colorOverlay.viewer;
-                        const x=578753.123456, y=2318413.987654;
+                        const x=600000.123456, y=2400000.987654;
                         const vertices=[[x,y,0],[x+2,y,0],[x+2,y+.03,0],[x,y+.03,0],
                                         [x,y,3],[x+2,y,3],[x+2,y+.03,3],[x,y+.03,3]];
                         const faces=[[0,2,1],[0,3,2],[4,5,6],[4,6,7],[0,1,5],[0,5,4],
