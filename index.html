@@ -77,8 +77,26 @@
             <!-- Left Sidebar: Configuration & Workflow -->
             <aside class="left-panel" aria-label="Workflow configuration">
                 <div class="left-panel-content">
-                    <!-- Mode Selector: Verified (Primary) vs Quick (Secondary) -->
-                    <div class="mode-selector-grid" role="tablist" aria-label="Workflow Mode">
+                    <!-- Sidebar Tab Switcher: Workflow vs Semantic Model Tree -->
+                    <div class="sidebar-nav-tabs" role="tablist" style="display:flex;gap:4px;margin-bottom:10px">
+                        <button id="sidebar-tab-workflow" class="mode-card active" style="flex:1;padding:6px;justify-content:center;height:32px" type="button" role="tab" aria-selected="true">
+                            <span class="mode-card-title" style="font-size:11px">
+                                <i data-lucide="git-branch" style="width:13px;height:13px"></i>
+                                <span>Workflow</span>
+                            </span>
+                        </button>
+                        <button id="sidebar-tab-tree" class="mode-card" style="flex:1;padding:6px;justify-content:center;height:32px" type="button" role="tab" aria-selected="false">
+                            <span class="mode-card-title" style="font-size:11px">
+                                <i data-lucide="network" style="width:13px;height:13px"></i>
+                                <span>Model Tree</span>
+                            </span>
+                        </button>
+                    </div>
+
+                    <!-- Panel 1: Workflow Configuration -->
+                    <div id="sidebar-panel-workflow">
+                        <!-- Mode Selector: Verified (Primary) vs Quick (Secondary) -->
+                        <div class="mode-selector-grid" role="tablist" aria-label="Workflow Mode">
                         <button id="mode-tab-verified" class="mode-card active" type="button" role="tab" aria-selected="true">
                             <span class="mode-card-title">
                                 <i data-lucide="shield-check" style="width:14px;height:14px;color:var(--status-pass)"></i>
@@ -337,6 +355,25 @@
                         <ol id="diagnostics" class="diagnostics" style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;list-style:none"></ol>
                     </section>
                 </div>
+
+                <!-- Panel 2: Semantic Model Tree (PR-3) -->
+                <div id="sidebar-panel-tree" style="display:none;flex-direction:column;gap:8px">
+                    <div style="display:flex;gap:6px">
+                        <select id="tree-group-by" class="form-select" style="flex:1;height:26px;font-size:11px">
+                            <option value="storey" selected>Group: By Storey</option>
+                            <option value="ifc-type">Group: By IFC Type</option>
+                            <option value="system">Group: By MEP System</option>
+                            <option value="role">Group: By Mapping Role</option>
+                            <option value="validation">Group: By Validation State</option>
+                        </select>
+                    </div>
+                    <div style="position:relative">
+                        <input id="tree-search-input" class="form-input" style="height:26px;font-size:11px;padding-left:24px" placeholder="Filter entities…">
+                        <i data-lucide="search" style="position:absolute;left:7px;top:6px;width:12px;height:12px;color:var(--text-muted)"></i>
+                    </div>
+                    <div id="semantic-model-tree" style="max-height:calc(100vh - 220px);overflow-y:auto;padding-right:2px"></div>
+                </div>
+                </div>
             </aside>
 
             <!-- Center: 3D Engineering Viewport -->
@@ -398,6 +435,8 @@
                             <option value="verification">Verification Status</option>
                             <option value="ifc-type">IFC Product Type</option>
                             <option value="mep">MEP System</option>
+                            <option value="storey">Building Storey</option>
+                            <option value="original">Original Materials</option>
                         </select>
                     </div>
                     <div id="legend-swatches" class="legend-swatches-grid">
@@ -418,15 +457,18 @@
                 <!-- Interactive Clip Box Panel -->
                 <div id="clip-panel" class="clip-panel" hidden>
                     <span style="font-size:10px;font-weight:700;letter-spacing:0.04em">CLIP</span>
+                    <select id="clip-storey-select" class="form-select" style="height:22px;padding:0 4px;font-size:10px;width:95px" title="Cut Section Box to Storey">
+                        <option value="" selected>Full Height</option>
+                    </select>
                     <span>X</span>
-                    <input type="range" id="clip-xmin" class="clip-slider" style="width:60px">
-                    <input type="range" id="clip-xmax" class="clip-slider" style="width:60px">
+                    <input type="range" id="clip-xmin" class="clip-slider" style="width:50px">
+                    <input type="range" id="clip-xmax" class="clip-slider" style="width:50px">
                     <span>Y</span>
-                    <input type="range" id="clip-ymin" class="clip-slider" style="width:60px">
-                    <input type="range" id="clip-ymax" class="clip-slider" style="width:60px">
+                    <input type="range" id="clip-ymin" class="clip-slider" style="width:50px">
+                    <input type="range" id="clip-ymax" class="clip-slider" style="width:50px">
                     <span>Z</span>
-                    <input type="range" id="clip-zmin" class="clip-slider" style="width:60px">
-                    <input type="range" id="clip-zmax" class="clip-slider" style="width:60px">
+                    <input type="range" id="clip-zmin" class="clip-slider" style="width:50px">
+                    <input type="range" id="clip-zmax" class="clip-slider" style="width:50px">
                     <button id="clip-reset" class="btn" style="height:24px;padding:0 8px;font-size:10px" type="button">Reset</button>
 
                     <!-- Hidden legacy inputs for compatibility -->
@@ -734,6 +776,11 @@
     <script src="js/workbench/selection/selection-manager.js"></script>
     <script src="js/workbench/inspector/inspector-view.js"></script>
     <script src="js/workbench/inspector/inspector-controller.js"></script>
+
+    <!-- Workbench Navigation (Phase 3) -->
+    <script src="js/workbench/navigation/color-overlay.js"></script>
+    <script src="js/workbench/navigation/model-tree.js"></script>
+    <script src="js/workbench/navigation/section-box.js"></script>
 
     <script src="js/ui/audit-drawer.js"></script>
     <script src="js/app-controller.js"></script>

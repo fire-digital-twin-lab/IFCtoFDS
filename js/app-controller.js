@@ -70,6 +70,11 @@
                 }
             });
         }
+        if (ns.workbench && ns.workbench.navigation) {
+            if (ns.workbench.navigation.colorOverlay) ns.workbench.navigation.colorOverlay.setViewer(viewer);
+            if (ns.workbench.navigation.sectionBox) ns.workbench.navigation.sectionBox.setViewer(viewer);
+            if (ns.workbench.navigation.modelTree) ns.workbench.navigation.modelTree.init();
+        }
         if (ns.ui && ns.ui.auditDrawer) ns.ui.auditDrawer.init(els, viewer);
         bindEvents();
         ns.verified.init();
@@ -201,6 +206,25 @@
         setExportEnabled(countConvertibleIfc(model) > 0);
         setSaveProcessedEnabled(!!(model && model.elements && model.elements.length));
         setupClippingForBounds(boundsForClipping());
+        if (ns.workbench && ns.workbench.navigation) {
+            if (ns.workbench.navigation.sectionBox) {
+                ns.workbench.navigation.sectionBox.setNativeExtents(boundsForClipping());
+            }
+            if (ns.workbench.navigation.modelTree) {
+                ns.workbench.navigation.modelTree.render();
+            }
+            var clipStoreySelect = document.getElementById('clip-storey-select');
+            if (clipStoreySelect && model && model.storeys) {
+                clipStoreySelect.innerHTML = '<option value="" selected>Full Height</option>';
+                model.storeys.forEach(function (st) {
+                    var opt = document.createElement('option');
+                    var name = typeof st === 'string' ? st : (st.name || st.storey_id || 'Storey');
+                    opt.value = name;
+                    opt.textContent = name;
+                    clipStoreySelect.appendChild(opt);
+                });
+            }
+        }
         renderDiagnostics();
         hideLoading();
     }
@@ -608,11 +632,84 @@
             });
         });
 
+        // Sidebar Nav Switcher (Workflow vs Model Tree)
+        var tabWorkflow = document.getElementById('sidebar-tab-workflow');
+        var tabTree = document.getElementById('sidebar-tab-tree');
+        var panelWorkflow = document.getElementById('sidebar-panel-workflow');
+        var panelTree = document.getElementById('sidebar-panel-tree');
+
+        if (tabWorkflow && tabTree && panelWorkflow && panelTree) {
+            tabWorkflow.addEventListener('click', function () {
+                tabWorkflow.classList.add('active');
+                tabWorkflow.setAttribute('aria-selected', 'true');
+                tabTree.classList.remove('active');
+                tabTree.setAttribute('aria-selected', 'false');
+                panelWorkflow.style.display = 'block';
+                panelTree.style.display = 'none';
+            });
+            tabTree.addEventListener('click', function () {
+                tabTree.classList.add('active');
+                tabTree.setAttribute('aria-selected', 'true');
+                tabWorkflow.classList.remove('active');
+                tabWorkflow.setAttribute('aria-selected', 'false');
+                panelWorkflow.style.display = 'none';
+                panelTree.style.display = 'flex';
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.modelTree) {
+                    ns.workbench.navigation.modelTree.render();
+                }
+            });
+        }
+
+        // Semantic Tree Group & Search
+        var treeGroupBy = document.getElementById('tree-group-by');
+        if (treeGroupBy) {
+            treeGroupBy.addEventListener('change', function () {
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.modelTree) {
+                    ns.workbench.navigation.modelTree.setGroupBy(treeGroupBy.value);
+                }
+            });
+        }
+        var treeSearch = document.getElementById('tree-search-input');
+        if (treeSearch) {
+            treeSearch.addEventListener('input', function () {
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.modelTree) {
+                    ns.workbench.navigation.modelTree.setSearchQuery(treeSearch.value);
+                }
+            });
+        }
+
         // Color Mode Selector
         var colorSelect = document.getElementById('color-mode-select');
         if (colorSelect) {
             colorSelect.addEventListener('change', function () {
                 updateColorModeLegend(colorSelect.value);
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.colorOverlay) {
+                    ns.workbench.navigation.colorOverlay.applyColorMode(colorSelect.value);
+                }
+            });
+        }
+
+        // Section Box Storey Cut & Reset
+        var clipStoreySelect = document.getElementById('clip-storey-select');
+        if (clipStoreySelect) {
+            clipStoreySelect.addEventListener('change', function () {
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.sectionBox) {
+                    if (!clipStoreySelect.value) {
+                        ns.workbench.navigation.sectionBox.reset();
+                    } else {
+                        ns.workbench.navigation.sectionBox.cutToStorey(clipStoreySelect.value);
+                    }
+                }
+            });
+        }
+        var clipReset = document.getElementById('clip-reset');
+        if (clipReset) {
+            clipReset.addEventListener('click', function () {
+                if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.sectionBox) {
+                    ns.workbench.navigation.sectionBox.reset();
+                }
+                if (clipStoreySelect) clipStoreySelect.value = '';
+                setupClippingForBounds(boundsForClipping());
             });
         }
 
