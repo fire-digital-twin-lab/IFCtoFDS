@@ -5,10 +5,8 @@ from typing import Any
 from .model import MappingDecision, MappingPlan
 
 
-def build_mapping_plan(
-    model: Any, cell_size: float = 0.2
-) -> MappingPlan:
-    """Constructs an immutable MappingPlan from canonical elements after mapping policy execution."""
+def build_mapping_plan(model: Any, cell_size: float = 0.2) -> MappingPlan:
+    """Snapshot mapping intent without sharing mutable policy evidence with the model."""
     decisions = []
     for e in model.elements:
         decisions.append(
@@ -31,9 +29,12 @@ def build_mapping_plan(
         )
     return MappingPlan(
         decisions=decisions,
-        simulation_domain=model.simulation_domain or (
-            model.model_bounds if not model.requested_scope.get("storeys")
-            and not model.requested_scope.get("bounding_box") else None
+        simulation_domain=model.simulation_domain
+        or (
+            model.model_bounds
+            if not model.requested_scope.get("storeys")
+            and not model.requested_scope.get("bounding_box")
+            else None
         ),
         domain_origin=model.domain_origin,
         cell_size=cell_size,

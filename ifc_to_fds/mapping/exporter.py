@@ -114,14 +114,6 @@ def _serialize_planned_model(model, cell_size):
     ]
     bounds = bounds_for_vertices([v for e in active for v in e.mesh.vertices])
     model.exported_bounds = bounds
-    # Unscoped legacy callers may freeze a full-model domain. Scoped conversion
-    # requires a separately declared domain, never the extent of retained solids.
-    if model.simulation_domain is None and not (
-        model.requested_scope.get("storeys")
-        or model.requested_scope.get("bounding_box")
-    ):
-        model.simulation_domain = model.model_bounds or bounds
-        model.domain_origin = "FULL_MODEL"
     if model.simulation_domain:
         ijk, mesh_xb = compute_mesh_grid(model.simulation_domain, cell_size=cell_size)
         lines.append(

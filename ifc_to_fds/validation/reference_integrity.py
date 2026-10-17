@@ -28,12 +28,12 @@ FIELDS = (
     "decision",
 )
 
+
 def snapshot(manifest):
     return {
         r.entity_key: {field: getattr(r, field) for field in FIELDS}
         for r in manifest.records
     }
-
 
 
 def validate_reference(values):

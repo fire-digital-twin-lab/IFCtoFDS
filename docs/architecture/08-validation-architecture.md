@@ -21,7 +21,7 @@ ValidationContext
 GateResult[]
        │
        ▼
-AcceptanceEvaluator ──> Immutable AcceptanceReport
+AcceptanceEvaluator ──> Finalized AcceptanceReport
 ```
 
 ## 2. Checker Contract — `[IMPLEMENTED]`
@@ -36,6 +36,9 @@ class GateChecker(Protocol):
 ```
 `ValidationContext` carries the model, fds_text, manifest, config, and a lazy `parsed` FDS parser property so shared parse artifacts are not repeatedly recalculated.
 
-## 3. Evaluator Fail-Safe & Immutability — `[IMPLEMENTED]`
+## 3. Evaluator Fail-Safe & Result Isolation — `[IMPLEMENTED]`
 - **Fail-Safe Principle**: `AcceptanceEvaluator` initializes all unexecuted gates to `GateStatus.NOT_RUN`. A gate only transitions to `PASS` when its corresponding checker successfully validates all assertions.
-- **Immutability**: Checkers **never mutate** the `AcceptanceReport` directly. Outcomes return isolated `findings`, `metrics`, and `evidence`. `AcceptanceEvaluator` constructs the finalized report.
+- **Result isolation**: Checkers **never mutate** the `AcceptanceReport` directly. Outcomes return isolated `findings`, `metrics`, and `evidence`. `AcceptanceEvaluator` copies outcomes and constructs a finalized report. The Pydantic report remains mutable; it does not share nested evidence with checker inputs.
+
+## Runtime integration
+The production audit still uses `run_independent_validation` and its complete existing checks. The new syntax/domain checkers and AcceptanceEvaluator are transitional contracts; they do not replace missing geometry, openings, MEP or solver checkers.

@@ -2,35 +2,16 @@
 
 import copy
 import json
+from ifc_to_fds.adapters.reference import FILES as FILES, FilesystemReferenceRepository
 from ifc_to_fds.core.compare import normalize
 from pathlib import Path
 from ifc_to_fds.core.canonical import SCHEMA_VERSION, TriangleMesh
-from ifc_to_fds.geometry.package import digest, verify_package, metrics_pass
-from ifc_to_fds.mapping.manifest import MappingManifest
+from ifc_to_fds.geometry.package import verify_package, metrics_pass
 from .metrics import compare_solids, passage_metrics
 from .acceptance import GateResult, GateStatus, Finding, Severity
 
 from .reference_integrity import FIELDS, snapshot
 
-FILES = (
-    "sources.json",
-    "scope.json",
-    "expected-inventory.json",
-    "structural-reference.json",
-    "openings-reference.json",
-    "hvac-reference.json",
-    "fire-protection-reference.json",
-    "exclusions.json",
-    "boundary-elements.json",
-    "alias-decisions.json",
-    "golden-manifest.json",
-    "golden-geometry-metrics.json",
-    "geometry-package.json",
-    "fds-geometry.json",
-    "mep-reference.json",
-    "acceptance-profile.json",
-    "review-queue.json",
-)
 
 
 def source_signature(sources):
@@ -51,7 +32,6 @@ def source_signature(sources):
     )
 
 
-from ifc_to_fds.adapters.reference import FILES, FilesystemReferenceRepository
 
 _repo = FilesystemReferenceRepository()
 

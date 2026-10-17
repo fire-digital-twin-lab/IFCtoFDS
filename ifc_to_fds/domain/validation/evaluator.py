@@ -1,4 +1,4 @@
-"""AcceptanceEvaluator: aggregates gate checker outcomes into an immutable AcceptanceReport."""
+"""AcceptanceEvaluator: aggregates gate checker outcomes into a detached, finalized AcceptanceReport."""
 
 from typing import List
 from copy import deepcopy
