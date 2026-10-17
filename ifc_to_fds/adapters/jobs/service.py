@@ -51,6 +51,7 @@ class JobService:
             Path(directory, "request.json").write_text(
                 json.dumps(
                     dict(
+                        job_id=jid,
                         paths=[str(p) for p in paths],
                         configuration=configuration,
                         mode=mode,
@@ -95,6 +96,18 @@ class JobService:
             path.unlink(missing_ok=True)
         (directory / "request.json").unlink(missing_ok=True)
 
+    @staticmethod
+    def _terminal_diagnostic(job, name, message):
+        directory = Path(job["directory"])
+        try:
+            progress = json.loads((directory / "progress.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            progress = {}
+        (directory / "diagnostics.json").write_text(json.dumps(dict(
+            name=name, message=message, stage=progress.get("stage", "IFC_READ"),
+            jobId=job["id"], stack="", entity=None,
+        )), encoding="utf-8")
+
     def cancel(self, jid):
         with self.lock:
             job = self.repository.get(jid)
@@ -102,6 +115,7 @@ class JobService:
                 job["state"] = "CANCELLED"
                 job["finished"] = time.time()
                 self._stop(job["process"])
+                self._terminal_diagnostic(job, "AbortError", "Job cancelled by user")
                 self._cleanup(job)
             return self.snapshot(jid)
 
@@ -140,6 +154,7 @@ class JobService:
                             error="Job deadline exceeded",
                             finished=time.time(),
                         )
+                        self._terminal_diagnostic(running, "TimeoutError", "Job deadline exceeded")
                         self._cleanup(running)
                     elif proc.poll() is not None:
                         directory = Path(running["directory"])

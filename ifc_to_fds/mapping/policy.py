@@ -2,6 +2,7 @@
 
 from ifc_to_fds.core.canonical import MappingStrategy, MappingStatus, ScopeDecision
 from ifc_to_fds.geometry.mesh import is_axis_aligned_box, valid_solid
+from ifc_to_fds.diagnostics import operation
 
 NON_OBSTACLE_TYPES = {
     "IFCSPACE",
@@ -91,6 +92,7 @@ def determine_element_strategy(
     return MappingStrategy.GEOM
 
 
+@operation("MAPPING")
 def plan_mapping(
     model,
     force_all_geom=False,

@@ -108,9 +108,18 @@
                 if (stopped || runGeneration !== generation) return Promise.reject(cancelled());
                 return fetch('/api/jobs/' + localJobId).then(response).then(function (job) {
                     if (runGeneration !== generation) throw cancelled();
-                    progress(job.state);
+                    progress(job.state + (job.progress ? ' — ' + job.progress.stage : ''));
                     if (job.state === 'COMPLETED') return fetch('/api/jobs/' + localJobId + '/result').then(response);
-                    if (['FAILED','TIMED_OUT','CANCELLED'].indexOf(job.state) !== -1) throw new Error(job.error || job.state);
+                    if (['FAILED','TIMED_OUT','CANCELLED'].indexOf(job.state) !== -1) {
+                        var error = new Error(job.error || job.state);
+                        error.stage = job.progress ? job.progress.stage : 'VALIDATION';
+                        if (job.diagnostics_url) {
+                            var link = document.createElement('a'); link.href = job.diagnostics_url;
+                            link.textContent = 'Download conversion diagnostics'; link.download = '';
+                            get('artifacts').replaceChildren(link);
+                        }
+                        throw error;
+                    }
                     return new Promise(function (resolve) { setTimeout(resolve, 700); }).then(poll);
                 });
             }

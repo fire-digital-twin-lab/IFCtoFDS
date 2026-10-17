@@ -35,11 +35,19 @@ class JobRepository:
     def snapshot(self, jid: str) -> Dict[str, Any]:
         if jid not in self._jobs:
             raise KeyError(jid)
-        return {
+        snapshot = {
             k: v
             for k, v in self._jobs[jid].items()
             if k not in ("process", "directory") and not k.startswith("_")
         }
+        directory = Path(self._jobs[jid]["directory"])
+        try:
+            snapshot["progress"] = json.loads((directory / "progress.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        if (directory / "diagnostics.json").is_file():
+            snapshot["diagnostics_url"] = f"/api/jobs/{jid}/diagnostics"
+        return snapshot
 
     def read_result(self, jid: str) -> Dict[str, Any]:
         job = self._jobs[jid]

@@ -237,6 +237,18 @@ def result(jid: str):
         raise HTTPException(409, str(exc))
 
 
+@app.get("/api/jobs/{jid}/diagnostics")
+def diagnostics(jid: str):
+    with manager.lock:
+        job = manager.jobs.get(jid)
+        if not job:
+            raise HTTPException(404, "Unknown job")
+        path = Path(job["directory"]) / "diagnostics.json"
+        if not path.is_file():
+            raise HTTPException(404, "No diagnostic produced")
+        return FileResponse(path, filename="diagnostics.json", media_type="application/json")
+
+
 @app.get("/api/jobs/{jid}/artifacts/{artifact}")
 def artifact(jid: str, artifact: str):
     if artifact not in ARTIFACTS:
