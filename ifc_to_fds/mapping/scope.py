@@ -124,7 +124,8 @@ def apply_spatial_scope(model, scope):
                     except Exception:
                         uncertain = True
         elif e.has_3d_geometry and e.role == "PHYSICAL":
-            uncertain = True
+            if regions:
+                uncertain = True
         if (
             selected
             and not intervals

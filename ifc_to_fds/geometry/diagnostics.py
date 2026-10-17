@@ -116,7 +116,11 @@ def inspect_host_openings(source_path, host_step):
             dict(
                 **describe(opening),
                 void_relation_step_id=relation.id(),
-                fillings=[r.RelatedBuildingElement.id() for r in opening.HasFillings],
+                fillings=[
+                    r.RelatedBuildingElement.id()
+                    for r in getattr(opening, "HasFillings", ())
+                    if getattr(r, "RelatedBuildingElement", None) is not None
+                ],
                 mesh=metrics(mesh),
                 source_residual=residual(cut, mesh),
                 material_overlap_before_relational_subtraction=residual(uncut, mesh),

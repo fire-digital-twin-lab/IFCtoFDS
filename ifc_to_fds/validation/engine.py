@@ -234,19 +234,23 @@ def run_independent_validation(
         len(e.openings)
         for e in model.elements
         if e.scope_decision != ScopeDecision.OUT_OF_SCOPE
+        and e.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
     )
-    reference_solids = SolidCandidateIndex(
-        x.mesh
-        for x in model.elements
-        if x.mesh
-        and x.role == "PHYSICAL"
-        and x.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
-        and x.scope_decision
-        in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
-    )
-    exported_solids = SolidCandidateIndex(
-        mesh for group in primitives.values() for mesh in group
-    )
+    reference_solids = None
+    exported_solids = None
+    if opening_count > 0:
+        reference_solids = SolidCandidateIndex(
+            x.mesh
+            for x in model.elements
+            if x.mesh
+            and x.role == "PHYSICAL"
+            and x.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
+            and x.scope_decision
+            in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+        )
+        exported_solids = SolidCandidateIndex(
+            mesh for group in primitives.values() for mesh in group
+        )
     for e in model.elements:
         key = e.entity_key
         if e.scope_decision == ScopeDecision.UNRESOLVED:
@@ -490,10 +494,12 @@ def run_independent_validation(
                         f"Opening blocked in emitted host: {opening.opening_global_id}",
                         key,
                     )
-                passage = passage_metrics(
-                    reference_solids, exported_solids, opening.mesh
+                passage = (
+                    passage_metrics(reference_solids, exported_solids, opening.mesh)
+                    if reference_solids is not None and exported_solids is not None
+                    else {}
                 )
-                if (
+                if passage and (
                     passage["normalized_symmetric_difference"] > opening_tolerance
                     or passage["source_free_components"]
                     != passage["output_free_components"]

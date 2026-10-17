@@ -167,9 +167,12 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
             filling_entity_keys=[
                 f"{file_hash}:{r.RelatedBuildingElement.id()}"
                 for r in getattr(opening, "HasFillings", ())
+                if getattr(r, "RelatedBuildingElement", None) is not None
             ],
             filling_relation_keys=[
-                f"{file_hash}:{r.id()}" for r in getattr(opening, "HasFillings", ())
+                f"{file_hash}:{r.id()}"
+                for r in getattr(opening, "HasFillings", ())
+                if getattr(r, "RelatedBuildingElement", None) is not None
             ],
             placement=extract_placement(opening, unit_scale),
             opening_global_id=opening.GlobalId,

@@ -141,3 +141,19 @@ def test_research_recognition_does_not_select_or_accept_profile(monkeypatch):
     )
     assert exact["known_cases"][0]["source_match"] == "EXACT"
     assert exact["research_acceptance"] == "NOT_RUN"
+
+
+def test_geometry_payload_returns_404_when_index_file_missing(tmp_path):
+    from ifc_to_fds.server import manager
+
+    job_id = "test-job-no-geometry"
+    manager.jobs[job_id] = {
+        "job_id": job_id,
+        "state": "COMPLETED",
+        "directory": str(tmp_path),
+    }
+    dummy_payload = "a" * 64
+    response = client.get(f"/api/jobs/{job_id}/geometry/{dummy_payload}")
+    assert response.status_code == 404
+    assert "Geometry index not available" in response.json()["detail"]
+

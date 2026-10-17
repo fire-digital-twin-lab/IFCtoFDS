@@ -113,12 +113,24 @@ def load_sources(paths, source_options=None, reference=False):
         if not np.allclose(matrix, np.eye(4)):
             for e in model.elements:
                 for mesh in [e.mesh, *[o.mesh for o in e.openings]]:
-                    if mesh:
+                    if mesh and len(mesh.vertices) > 0:
                         v = np.asarray(mesh.vertices)
                         mesh.vertices = (v @ matrix[:3, :3].T + matrix[:3, 3]).tolist()
                 e.bounding_box = (
                     bounds_for_vertices(e.mesh.vertices) if e.mesh else None
                 )
+                if e.representation_bounds is not None:
+                    rb = e.representation_bounds
+                    corners = [
+                        [x, y, z]
+                        for x in (rb.xmin, rb.xmax)
+                        for y in (rb.ymin, rb.ymax)
+                        for z in (rb.zmin, rb.zmax)
+                    ]
+                    transformed_corners = (
+                        np.asarray(corners) @ matrix[:3, :3].T + matrix[:3, 3]
+                    ).tolist()
+                    e.representation_bounds = bounds_for_vertices(transformed_corners)
                 for o in e.openings:
                     o.bounding_box = (
                         bounds_for_vertices(o.mesh.vertices) if o.mesh else None

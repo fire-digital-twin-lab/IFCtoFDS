@@ -18,7 +18,7 @@ from .validation.acceptance import AuditConfig
 
 manager = JobManager(
     max_waiting=int(os.getenv("IFCFDS_MAX_WAITING", "2")),
-    timeout_s=float(os.getenv("IFCFDS_TIMEOUT_S", "1800")),
+    timeout_s=int(os.getenv("IFCFDS_TIMEOUT_S", "1800")),
 )
 MAX_FILE = int(os.getenv("IFCFDS_MAX_FILE_BYTES", str(200 * 1024**2)))
 MAX_TOTAL = int(os.getenv("IFCFDS_MAX_JOB_BYTES", str(500 * 1024**2)))
@@ -278,6 +278,8 @@ def geometry_payload(jid: str, payload: str):
         if job["state"] != "COMPLETED":
             raise HTTPException(409, "Job is not complete")
         index_path = Path(job["directory"]) / "model_geometry.json"
+        if not index_path.is_file():
+            raise HTTPException(404, "Geometry index not available for this job")
         if "_geometry_payloads" not in job:
             index = json.loads(index_path.read_text(encoding="utf-8"))
             job["_geometry_payloads"] = {

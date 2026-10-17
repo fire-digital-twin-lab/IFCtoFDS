@@ -142,3 +142,31 @@ def test_self_intersecting_components_are_rejected(box_model):
         vertices=combined.vertices.tolist(), faces=combined.faces.tolist()
     )
     assert has_self_intersection(mesh)
+
+
+def test_openings_gate_not_applicable_when_hosts_do_not_emit(box_model):
+    from ifc_to_fds.domain.bim import OpeningReference
+    from ifc_to_fds.domain.mapping import MappingStrategy
+    from ifc_to_fds.domain.validation import GateStatus
+
+    e = box_model.elements[0]
+    e.mapping_strategy = MappingStrategy.EXCLUDED_APPROVED
+    e.review_status = "EXCLUDED_APPROVED"
+    e.fds_representation = "NONE"
+    e.openings = [
+        OpeningReference(
+            entity_key="fixture:opening1",
+            host_entity_key=e.entity_key,
+            void_relation_key="fixture:void1",
+            placement={},
+            opening_global_id="opening_guid",
+            opening_step_id=999,
+            opening_name="Void",
+            opening_type="IfcOpeningElement",
+        )
+    ]
+    text, _ = serialize_fds(box_model)
+    report = audit(box_model, text)
+    assert report.gates["openings"].status == GateStatus.NOT_APPLICABLE
+    assert "No mapped host has source openings" in report.gates["openings"].reason
+

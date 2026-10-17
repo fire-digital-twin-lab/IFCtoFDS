@@ -70,3 +70,32 @@ def test_malformed_source_opening_is_explicit_not_bypassed(tiny_ifc):
         for x in report.findings
     )
     assert report.status != "MAPPING_VERIFIED"
+
+
+def test_inspect_host_openings_handles_dangling_filling(tiny_ifc, tmp_path):
+    import ifcopenshell.api.root
+
+    path, f, wall = tiny_ifc
+    opening = ifcopenshell.api.root.create_entity(
+        f, ifc_class="IfcOpeningElement", name="Void with dangling fill"
+    )
+    opening.ObjectPlacement = wall.ObjectPlacement
+    f.create_entity(
+        "IfcRelVoidsElement",
+        GlobalId=ifcopenshell.guid.new(),
+        RelatingBuildingElement=wall,
+        RelatedOpeningElement=opening,
+    )
+    f.create_entity(
+        "IfcRelFillsElement",
+        GlobalId=ifcopenshell.guid.new(),
+        RelatingOpeningElement=opening,
+        RelatedBuildingElement=None,
+    )
+    dangling_path = tmp_path / "dangling_diag.ifc"
+    f.write(str(dangling_path))
+    evidence = inspect_host_openings(str(dangling_path), wall.id())
+    assert evidence["host"]["step_id"] == wall.id()
+    assert len(evidence["openings"]) == 1
+    assert evidence["openings"][0]["fillings"] == []
+

@@ -31,6 +31,20 @@ def test_fire_pipe_requires_structured_evidence():
     ) == ("UNRESOLVED", False)
 
 
+def test_pressurization_american_spelling_classified():
+    assert classify_mep_element(
+        "IfcFlowSegment",
+        "duct",
+        type_class="IfcDuctSegmentType",
+        system_categories=["PRESSURIZATION"],
+    ) == ("SMOKE_EXTRACT", True)
+    assert classify_mep_element(
+        "IfcDuctSegment",
+        "duct",
+        property_sets={"Pset_Source": {"SystemClassification": "PRESSURIZATION"}},
+    ) == ("SMOKE_EXTRACT", True)
+
+
 def test_unknown_pipe_remains_reference_geometry(box_model):
     e = box_model.elements[0]
     e.ifc_type, e.type_class = "IfcFlowSegment", "IfcPipeSegmentType"

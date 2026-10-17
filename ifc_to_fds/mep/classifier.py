@@ -56,6 +56,7 @@ def classify_mep_element(
             "SMOKE EXTRACT",
             "SMOKECONTROL",
             "PRESSURISATION",
+            "PRESSURIZATION",
         },
         "VENTILATION": {"VENTILATION", "AIRCONDITIONING", "EXHAUST"},
         "PLUMBING": {
@@ -76,7 +77,19 @@ def classify_mep_element(
     for category, values in enum_categories.items():
         if p in values:
             return result(category)
-    categories = {x for x in system_categories if x not in ("OTHER", "UNRESOLVED")}
+    def resolve_category(cat):
+        if cat in enum_categories:
+            return cat
+        for enum_cat, values in enum_categories.items():
+            if cat in values:
+                return enum_cat
+        return cat
+
+    categories = {
+        resolve_category(x)
+        for x in system_categories
+        if x not in ("OTHER", "UNRESOLVED")
+    }
     if len(categories) > 1:
         return "UNRESOLVED", False
     if categories:

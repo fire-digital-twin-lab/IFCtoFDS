@@ -35,6 +35,7 @@ ifc-to-fds = "ifc_to_fds.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-m 'not solver'"
 markers = ["solver: requires an installed FDS solver"]
 

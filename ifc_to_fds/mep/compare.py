@@ -6,8 +6,16 @@ from ifc_to_fds.core.compare import normalize
 def graph_differences(expected, actual):
     differences = []
     for group, identity in (("systems", "system_id"), ("connections", "connection_id")):
-        left = {x[identity]: x for x in expected.get(group, [])}
-        right = {x.get(identity): x for x in actual.get(group, [])}
+        left = {
+            x.get(identity): x
+            for x in expected.get(group, [])
+            if x.get(identity) is not None
+        }
+        right = {
+            x.get(identity): x
+            for x in actual.get(group, [])
+            if x.get(identity) is not None
+        }
         for key in sorted(set(left) | set(right), key=str):
             before, after = left.get(key, {}), right.get(key, {})
             if normalize(before) == normalize(after):
@@ -23,7 +31,7 @@ def graph_differences(expected, actual):
             differences.append(
                 dict(
                     relation_key=key,
-                    entities=sorted(related),
+                    entities=sorted(related, key=str),
                     expected=before,
                     actual=after,
                 )

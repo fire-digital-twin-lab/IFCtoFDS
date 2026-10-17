@@ -271,7 +271,7 @@ def has_self_intersection(mesh):
                     other[a], other[b], tri
                 ):
                     return True
-    components = tm.split()
+    components = tm.split(only_watertight=False)
     if len(components) > 1:
         for i, component in enumerate(components):
             for other in components[i + 1 :]:
@@ -279,8 +279,9 @@ def has_self_intersection(mesh):
                     other.bounds[1] <= component.bounds[0]
                 ):
                     continue
-                if solid_boolean([component, other], "intersection").volume > 0:
-                    return True
+                if component.is_volume and other.is_volume:
+                    if solid_boolean([component, other], "intersection").volume > 0:
+                        return True
     return False
 
 

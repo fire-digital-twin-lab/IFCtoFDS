@@ -68,3 +68,32 @@ def test_failed_geometry_never_semantic(box_model):
     e = box_model.elements[0]
     e.mesh = None
     assert determine_element_strategy(e) == "NONE"
+
+
+def test_meshless_unselected_source_resolves_out_of_scope(box_model):
+    from ifc_to_fds.domain.scope import ScopeDecision
+    from ifc_to_fds.domain.bim import CanonicalElement
+
+    box_model.elements[0].source_id = "selected_src"
+    box_model.elements[0].storey_id = "selected_src:storey_1"
+    box_model.storey_references = [
+        StoreyReference(
+            storey_id="selected_src:storey_1",
+            source_id="selected_src",
+            name="Level 1",
+            elevation_m=0.0,
+        )
+    ]
+    unselected_element = CanonicalElement(
+        global_id="unselected_guid",
+        step_id=999,
+        ifc_type="IfcWall",
+        source_id="unselected_src",
+        role="PHYSICAL",
+        has_3d_geometry=True,
+        mesh=None,
+    )
+    box_model.elements.append(unselected_element)
+    apply_spatial_scope(box_model, SpatialScope(storeys=["Level 1"]))
+    assert unselected_element.scope_decision == ScopeDecision.OUT_OF_SCOPE
+

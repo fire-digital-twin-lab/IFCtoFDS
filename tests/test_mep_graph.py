@@ -146,3 +146,24 @@ def test_ports_edges_positions_system_deduplication(tiny_ifc):
     assert all(np.allclose(e.ports[0].world_position, [1, 0, 0]) for e in elements)
     assert elements[0].ports[0].connected_port_ids == [elements[1].ports[0].port_key]
     assert model.mep_graph.connections[0].distance_meters == 0
+
+
+def test_graph_differences_safe_keys_and_mixed_type_sort():
+    from ifc_to_fds.mep.compare import graph_differences
+
+    expected = {
+        "systems": [
+            {"system_id": "sys-1", "element_keys": [101, "key-202"]},
+            {"invalid_no_id": True},
+        ]
+    }
+    actual = {
+        "systems": [
+            {"system_id": "sys-1", "element_keys": ["key-202", 303]},
+        ]
+    }
+    diffs = graph_differences(expected, actual)
+    assert len(diffs) == 1
+    assert diffs[0]["relation_key"] == "sys-1"
+    assert diffs[0]["entities"] == [101, 303, "key-202"]
+

@@ -195,14 +195,17 @@ def plan_mapping(
             e.geometry_preservation = (
                 "FAILED" if e.mesh and not valid_solid(e.mesh) else "INCONCLUSIVE"
             )
+            details = list(e.validation_notes)
+            details.extend(
+                f"Opening STEP {o.opening_step_id}: {getattr(o, 'extraction_diagnostic', None) or 'missing or invalid opening solid'}"
+                for o in e.openings
+                if not o.mesh or not valid_solid(o.mesh)
+            )
+            suffix = "; ".join(details)
             e.mapping_rationale = (
-                "Source physical geometry is missing or invalid; no FDS representation authorized. "
-                + "; ".join(e.validation_notes)
-                + "; ".join(
-                    f"Opening STEP {o.opening_step_id}: {getattr(o, 'extraction_diagnostic', None) or 'missing or invalid opening solid'}"
-                    for o in e.openings
-                    if not o.mesh or not valid_solid(o.mesh)
-                )
+                f"Source physical geometry is missing or invalid; no FDS representation authorized. {suffix}"
+                if suffix
+                else "Source physical geometry is missing or invalid; no FDS representation authorized."
             )
         elif e.review_status == "REVIEW_REQUIRED":
             e.mapping_status = MappingStatus.REVIEW_REQUIRED
