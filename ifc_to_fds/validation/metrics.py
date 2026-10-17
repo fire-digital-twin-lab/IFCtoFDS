@@ -2,11 +2,12 @@
 
 import numpy as np
 import trimesh
+from ifc_to_fds.geometry.boolean import solid_boolean
 from ifc_to_fds.geometry.mesh import (
     as_trimesh,
     valid_solid,
     is_axis_aligned_box,
-    has_self_intersection,
+    self_intersection_evidence,
 )
 
 
@@ -74,18 +75,28 @@ def compare_solids(reference, outputs):
         or not all(valid_solid(m) for m in outputs)
     ):
         raise ValueError("Cannot measure invalid solids")
-    if has_self_intersection(reference) or any(
-        has_self_intersection(m) for m in outputs
-    ):
-        raise ValueError("Self-intersecting solid")
+    for mesh in [reference, *outputs]:
+        evidence = self_intersection_evidence(mesh)
+        if evidence["status"] == "CONFIRMED":
+            raise ValueError("Self-intersecting solid")
+        if evidence["status"] == "UNCERTAIN":
+            raise RuntimeError(f"Self-intersection uncertain: {evidence['reason']}")
     a = as_trimesh(reference)
     pieces = [as_trimesh(m) for m in outputs]
     b = (
         pieces[0]
         if len(pieces) == 1
-        else trimesh.boolean.union(pieces, engine="manifold")
+        else solid_boolean(pieces, "union")
     )
-    intersection = trimesh.boolean.intersection([a, b], engine="manifold")
+    if len(pieces) == 1 and np.array_equal(a.vertices, b.vertices) and np.array_equal(a.faces, b.faces):
+        # Independently reconstructed coordinates and oriented triangles are equal.
+        # This is a full-surface identity proof, not a sampled/bounds shortcut.
+        components = len(a.split(only_watertight=False))
+        return dict(solid_iou=1.0, relative_volume_error=0.0, relative_area_error=0.0,
+                    surface_distance_m=0.0, surface_proven=True,
+                    reference_components=components, output_components=components,
+                    comparison_method="EXACT_ORIENTED_TRIANGLES")
+    intersection = solid_boolean([a, b], "intersection")
     vi = max(0.0, float(intersection.volume))
     union = float(a.volume + b.volume - vi)
     # Corresponding triangles give a direct bound over entire surfaces. For
@@ -140,9 +151,7 @@ def opening_residual(hosts, opening):
         residual += max(
             0.0,
             float(
-                trimesh.boolean.intersection(
-                    [as_trimesh(host), void], engine="manifold"
-                ).volume
+                solid_boolean([as_trimesh(host), void], "intersection").volume
             ),
         )
     return residual / max(float(void.volume), 1e-12)
@@ -159,12 +168,35 @@ def verify_opening_retention(elem):
         return False
 
 
+class SolidCandidateIndex:
+    """Audit-local broad phase only. Exact Boolean checks still decide passage."""
+
+    def __init__(self, meshes):
+        from rtree.index import Index, Property
+        self.meshes = list(meshes)
+        self.tree = Index(properties=Property(dimension=3))
+        self.unbounded = False
+        for i, mesh in enumerate(self.meshes):
+            vertices = np.asarray(mesh.vertices, dtype=float)
+            if vertices.ndim != 2 or vertices.shape[1:] != (3,) or not len(vertices) or not np.isfinite(vertices).all():
+                self.unbounded = True
+                continue
+            self.tree.insert(i, np.r_[vertices.min(axis=0), vertices.max(axis=0)].tolist())
+
+    def candidates(self, bounds):
+        if self.unbounded:
+            raise RuntimeError("Cannot bound an audit obstacle; passage candidates uncertain")
+        return [self.meshes[i] for i in sorted(self.tree.intersection(np.r_[bounds[0], bounds[1]].tolist()))]
+
+
 def passage_metrics(reference_meshes, output_meshes, opening):
     """Compare entire free volumes, including source door/window fills and blockers."""
     void = as_trimesh(opening)
 
     def free_volume(meshes):
         pieces = []
+        if isinstance(meshes, SolidCandidateIndex):
+            meshes = meshes.candidates(void.bounds)
         for mesh in meshes:
             tm = as_trimesh(mesh)
             if np.any(tm.bounds[1] <= void.bounds[0]) or np.any(
@@ -173,16 +205,16 @@ def passage_metrics(reference_meshes, output_meshes, opening):
                 continue
             if not valid_solid(mesh):
                 raise ValueError("Invalid obstacle near source opening")
-            intersection = trimesh.boolean.intersection([void, tm], engine="manifold")
+            intersection = solid_boolean([void, tm], "intersection")
             if intersection.volume > 1e-12:
                 pieces.append(intersection)
         if not pieces:
             return void
-        return trimesh.boolean.difference([void, *pieces], engine="manifold")
+        return solid_boolean([void, *pieces], "difference")
 
     a, b = free_volume(reference_meshes), free_volume(output_meshes)
     intersection = (
-        trimesh.boolean.intersection([a, b], engine="manifold")
+        solid_boolean([a, b], "intersection")
         if len(a.faces) and len(b.faces)
         else None
     )
