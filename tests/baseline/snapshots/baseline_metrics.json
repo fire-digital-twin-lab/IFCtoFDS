@@ -21,8 +21,8 @@
       "code_lines": 983
     },
     "index.html": {
-      "total_lines": 722,
-      "code_lines": 663
+      "total_lines": 726,
+      "code_lines": 666
     }
   },
   "python_files": {
@@ -31,8 +31,8 @@
       "code_lines": 559
     },
     "ifc_to_fds/validation/golden.py": {
-      "total_lines": 624,
-      "code_lines": 588
+      "total_lines": 0,
+      "code_lines": 0
     },
     "ifc_to_fds/domain/bim/model.py": {
       "total_lines": 148,
@@ -43,8 +43,8 @@
       "code_lines": 177
     },
     "ifc_to_fds/application/use_cases/audit_conversion.py": {
-      "total_lines": 312,
-      "code_lines": 300
+      "total_lines": 268,
+      "code_lines": 257
     },
     "ifc_to_fds/server.py": {
       "total_lines": 353,

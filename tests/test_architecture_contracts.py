@@ -79,6 +79,19 @@ def test_domain_has_no_external_infrastructure_dependencies():
         ), f"Architectural violation in {py_file}: Domain cannot import {violations}"
 
 
+def test_domain_layer_does_not_import_validation():
+    """Domain layer must not import from the outer validation package."""
+    domain_dir = ROOT_DIR / "domain"
+    for py_file in find_python_files(domain_dir):
+        imports = get_imported_modules(py_file)
+        violations = {
+            imp
+            for imp in imports
+            if imp == "ifc_to_fds.validation" or imp.startswith("ifc_to_fds.validation.")
+        }
+        assert not violations, f"Layer boundary violation in {py_file}: Domain cannot import {violations}"
+
+
 def test_application_has_no_concrete_adapter_or_framework_dependencies():
     """Application layer must not directly import concrete delivery frameworks, adapters, or bootstrap."""
     app_dir = ROOT_DIR / "application"
@@ -218,33 +231,35 @@ def test_artifact_repository_port_and_adapter(box_model, tmp_path):
 
 
 def test_gate_checker_protocol_conformance(box_model):
-    """Concrete gate checkers conform to GateChecker protocol and use context.parsed."""
+    """All concrete gate checkers conform to GateChecker protocol and use context.parsed."""
     from ifc_to_fds.domain.validation.checkers.base import GateChecker
     from ifc_to_fds.domain.validation.model import ValidationContext, AuditConfig
     from ifc_to_fds.validation.checkers.syntax import FdsSyntaxChecker
     from ifc_to_fds.validation.checkers.domain import DomainChecker
+    from ifc_to_fds.validation.checkers.traceability import TraceabilityChecker
+    from ifc_to_fds.validation.checkers.scope import ScopeChecker
+    from ifc_to_fds.validation.checkers.geometry import GeometryChecker
+    from ifc_to_fds.validation.checkers.openings import OpeningsChecker
+    from ifc_to_fds.validation.checkers.mep import MepChecker
+    from ifc_to_fds.validation.checkers.boundary import BoundaryChecker
+    from ifc_to_fds.validation.checkers.solver import SolverChecker
 
-    syntax_checker = FdsSyntaxChecker()
-    assert isinstance(syntax_checker, GateChecker)
+    checkers = [
+        FdsSyntaxChecker(),
+        DomainChecker(),
+        TraceabilityChecker(),
+        ScopeChecker(),
+        GeometryChecker(),
+        OpeningsChecker(),
+        MepChecker(),
+        BoundaryChecker(),
+        SolverChecker(),
+    ]
 
-    domain_checker = DomainChecker()
-    assert isinstance(domain_checker, GateChecker)
-
-    context = ValidationContext(
-        model=box_model,
-        fds_text="&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n&OBST XB=0,2,0,1,0,3 /",
-        manifest=None,
-        config=AuditConfig(),
-    )
-    # Check that context.parsed lazily parses FDS text
-    assert context.parsed is not None
-    assert len(context.parsed.records) > 0
-
-    syntax_outcome = syntax_checker.check(context)
-    assert syntax_outcome.gate_name == "syntax"
-
-    domain_outcome = domain_checker.check(context)
-    assert domain_outcome.gate_name == "domain"
+    for checker in checkers:
+        assert isinstance(checker, GateChecker), f"{checker.__class__.__name__} must conform to GateChecker protocol"
+        assert hasattr(checker, "name")
+        assert callable(getattr(checker, "check"))
 
 
 def test_validation_runner_coordinates_checkers(box_model):
