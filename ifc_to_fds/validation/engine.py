@@ -11,7 +11,12 @@ from .acceptance import (
     Severity,
 )
 from .parser import parse_fds
-from .metrics import compare_solids, opening_residual, passage_metrics, SolidCandidateIndex
+from .metrics import (
+    compare_solids,
+    opening_residual,
+    passage_metrics,
+    SolidCandidateIndex,
+)
 from .solver import solver_gates
 from ifc_to_fds.core.compare import normalize
 from ifc_to_fds.core.canonical import MappingStrategy, ScopeDecision
@@ -68,10 +73,16 @@ def run_independent_validation(
             report.gates[gate].status = GateStatus.INCONCLUSIVE
             report.gates[gate].reason += reason + "; "
         if key:
-            report.findings.append(Finding(
-                id=f"INC-{len(report.findings)+1:04}", severity=Severity.P2,
-                category=gate, title="Required evidence unavailable", detail=reason, element_id=key,
-            ))
+            report.findings.append(
+                Finding(
+                    id=f"INC-{len(report.findings) + 1:04}",
+                    severity=Severity.P2,
+                    category=gate,
+                    title="Required evidence unavailable",
+                    detail=reason,
+                    element_id=key,
+                )
+            )
 
     parsed = parse_fds(fds_text)
     for error in parsed.errors:
@@ -147,6 +158,7 @@ def run_independent_validation(
             p.source.get("global_id") != e.global_id
             or p.source.get("step_id") != e.step_id
             or (not p.source.get("legacy") and p.source.get("source_id") != e.source_id)
+            or (not p.source.get("legacy") and p.source.get("ifc_type") != e.ifc_type)
         ):
             finding("traceability", f"Conflicting provenance for primitive {p.id}", key)
         if e.scope_decision == ScopeDecision.OUT_OF_SCOPE:
@@ -219,15 +231,22 @@ def run_independent_validation(
     else:
         unknown("traceability", "No manifest supplied")
     opening_count = sum(
-        len(e.openings) for e in model.elements
+        len(e.openings)
+        for e in model.elements
         if e.scope_decision != ScopeDecision.OUT_OF_SCOPE
     )
     reference_solids = SolidCandidateIndex(
-        x.mesh for x in model.elements if x.mesh and x.role == "PHYSICAL"
+        x.mesh
+        for x in model.elements
+        if x.mesh
+        and x.role == "PHYSICAL"
         and x.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
-        and x.scope_decision in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+        and x.scope_decision
+        in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
     )
-    exported_solids = SolidCandidateIndex(mesh for group in primitives.values() for mesh in group)
+    exported_solids = SolidCandidateIndex(
+        mesh for group in primitives.values() for mesh in group
+    )
     for e in model.elements:
         key = e.entity_key
         if e.scope_decision == ScopeDecision.UNRESOLVED:
@@ -242,6 +261,26 @@ def run_independent_validation(
         # Do not trust a manifest that silently changes the independently planned disposition.
         if key in by_key:
             r = by_key[key]
+            if (
+                r.ifc_type,
+                r.name,
+                r.storey,
+                r.building_id,
+                r.type_class,
+                r.systems,
+            ) != (
+                e.ifc_type,
+                e.name,
+                e.storey,
+                e.building_id,
+                e.type_class,
+                e.system_names,
+            ):
+                finding(
+                    "traceability",
+                    "Manifest source type/name/spatial/system metadata differs from IFC",
+                    key,
+                )
             if (
                 r.global_id,
                 r.step_id,
@@ -311,7 +350,9 @@ def run_independent_validation(
                     ]
                 if normalize(getattr(record, field)) != normalize(expected_value):
                     finding(
-                        "representation",
+                        "mep"
+                        if field in ("ports", "system_ids", "classification_evidence")
+                        else "representation",
                         f"Manifest {field} differs from independent policy",
                         key,
                     )
@@ -361,11 +402,19 @@ def run_independent_validation(
                 else:
                     unknown("geometry", detail, key)
                 if e.openings:
-                    unknown("openings", f"Host geometry unavailable for opening proof: {key}", key)
+                    unknown(
+                        "openings",
+                        f"Host geometry unavailable for opening proof: {key}",
+                        key,
+                    )
                 continue
             if any(not o.mesh or not valid_solid(o.mesh) for o in e.openings):
                 report.element_statuses[key] = "UNSUPPORTED"
-                unknown("openings", f"Host {key}: incomplete source opening extraction; {e.mapping_rationale}", key)
+                unknown(
+                    "openings",
+                    f"Host {key}: incomplete source opening extraction; {e.mapping_rationale}",
+                    key,
+                )
                 continue
             report.element_statuses[key] = (
                 "REVIEW_REQUIRED"
@@ -479,8 +528,10 @@ def run_independent_validation(
         for issue in model.mep_graph.issues:
             finding("mep", issue)
     if any(
-        e.classification_evidence and e.mep_category in ("OTHER", "UNRESOLVED")
-        and e.scope_decision != ScopeDecision.OUT_OF_SCOPE for e in model.elements
+        e.classification_evidence
+        and e.mep_category in ("OTHER", "UNRESOLVED")
+        and e.scope_decision != ScopeDecision.OUT_OF_SCOPE
+        for e in model.elements
     ):
         unknown(
             "mep", "MEP classification is unresolved for one or more source elements"

@@ -42,7 +42,9 @@ class JobRepository:
         }
         directory = Path(self._jobs[jid]["directory"])
         try:
-            snapshot["progress"] = json.loads((directory / "progress.json").read_text(encoding="utf-8"))
+            snapshot["progress"] = json.loads(
+                (directory / "progress.json").read_text(encoding="utf-8")
+            )
         except (OSError, ValueError):
             pass
         if (directory / "diagnostics.json").is_file():

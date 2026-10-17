@@ -145,7 +145,9 @@ def process_model_geometry(
                 )
                 if opening.mesh:
                     opening.bounding_box = bounds_for_vertices(opening.mesh.vertices)
-                opening.extraction_diagnostic = opening_diagnostic(opening.mesh, opening_elem.validation_notes)
+                opening.extraction_diagnostic = opening_diagnostic(
+                    opening.mesh, opening_elem.validation_notes
+                )
         else:
             elem.geometry_status = GeometryStatus.FAILED
             if elem.has_3d_geometry and elem.mapping_status != MappingStatus.DEVIATED:

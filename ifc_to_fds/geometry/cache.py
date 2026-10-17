@@ -30,7 +30,9 @@ def cached_geometry(model, file):
     key = hashlib.sha256(json.dumps(signature, sort_keys=True).encode()).hexdigest()
     path = directory / (key + ".json")
     try:
-        cached = CanonicalModel.model_validate_json(path.with_suffix(".inventory.json").read_text(encoding="utf-8"))
+        cached = CanonicalModel.model_validate_json(
+            path.with_suffix(".inventory.json").read_text(encoding="utf-8")
+        )
         package = DiskPackage(path)
         package.verify_index()
         by_key = {e.entity_key: e for e in cached.elements}
@@ -56,11 +58,18 @@ def cached_geometry(model, file):
                     TriangleMesh.model_validate(payload) if payload else None,
                     old_opening.bounding_box,
                 )
-                opening.bounding_box = bounds_for_vertices(opening.mesh.vertices) if opening.mesh else None
-                opening.extraction_diagnostic = opening_diagnostic(opening.mesh, [old_opening.extraction_diagnostic] if old_opening.extraction_diagnostic else [])
+                opening.bounding_box = (
+                    bounds_for_vertices(opening.mesh.vertices) if opening.mesh else None
+                )
+                opening.extraction_diagnostic = opening_diagnostic(
+                    opening.mesh,
+                    [old_opening.extraction_diagnostic]
+                    if old_opening.extraction_diagnostic
+                    else [],
+                )
         model.model_bounds = cached.model_bounds
         return model
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError, KeyError, TypeError):
         # A partial cache read must not leave stale geometry on a failed retry.
         for e in model.elements:
             e.mesh = e.bounding_box = None
@@ -74,9 +83,19 @@ def cached_geometry(model, file):
         directory.mkdir(parents=True, exist_ok=True)
         write_package(model, path)
         temporary = directory / (key + "." + uuid.uuid4().hex + ".tmp")
-        temporary.write_text(model.model_dump_json(exclude={"elements": {"__all__": {
-            "mesh": True, "openings": {"__all__": {"mesh": True}}
-        }}}), encoding="utf-8")
+        temporary.write_text(
+            model.model_dump_json(
+                exclude={
+                    "elements": {
+                        "__all__": {
+                            "mesh": True,
+                            "openings": {"__all__": {"mesh": True}},
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
         temporary.replace(path.with_suffix(".inventory.json"))
     except (OSError, ValueError):
         # A read-only cache cannot change conversion correctness.

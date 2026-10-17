@@ -15,7 +15,6 @@ def build_mapping_plan(model: Any, cell_size: float = 0.2) -> MappingPlan:
                 strategy=e.mapping_strategy,
                 simulation_role=e.simulation_role,
                 fds_representation=e.fds_representation,
-                fds_primitive_ids=list(e.fds_primitive_ids),
                 representation_bounds=e.representation_bounds,
                 rationale=e.mapping_rationale,
                 boundary_treatment=e.boundary_treatment,

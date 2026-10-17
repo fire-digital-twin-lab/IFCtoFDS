@@ -14,7 +14,6 @@ from .acceptance import GateResult, GateStatus, Finding, Severity
 from .reference_integrity import FIELDS, snapshot
 
 
-
 def source_signature(sources):
     return normalize(
         [
@@ -31,7 +30,6 @@ def source_signature(sources):
             for s in sources
         ]
     )
-
 
 
 _repo = FilesystemReferenceRepository()

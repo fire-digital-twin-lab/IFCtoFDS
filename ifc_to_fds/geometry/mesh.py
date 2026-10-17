@@ -49,12 +49,24 @@ def inspect_mesh_quality(mesh):
     if usable:
         faces = np.asarray(usable, dtype=np.int64)
         a, b, c = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
-        repeated = (faces[:, 0] == faces[:, 1]) | (faces[:, 1] == faces[:, 2]) | (faces[:, 2] == faces[:, 0])
-        result["degenerate_faces"] = int(np.count_nonzero(repeated | (np.linalg.norm(np.cross(b-a, c-a), axis=1) < 1e-12)))
-        directed = np.concatenate((faces[:, [0,1]], faces[:, [1,2]], faces[:, [2,0]]))
+        repeated = (
+            (faces[:, 0] == faces[:, 1])
+            | (faces[:, 1] == faces[:, 2])
+            | (faces[:, 2] == faces[:, 0])
+        )
+        result["degenerate_faces"] = int(
+            np.count_nonzero(
+                repeated | (np.linalg.norm(np.cross(b - a, c - a), axis=1) < 1e-12)
+            )
+        )
+        directed = np.concatenate(
+            (faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])
+        )
         _, occurrences = np.unique(directed, axis=0, return_counts=True)
-        result["inconsistent_edges"] = int(np.sum(occurrences-1))
-        _, occurrences = np.unique(np.sort(directed, axis=1), axis=0, return_counts=True)
+        result["inconsistent_edges"] = int(np.sum(occurrences - 1))
+        _, occurrences = np.unique(
+            np.sort(directed, axis=1), axis=0, return_counts=True
+        )
         result["open_edges"] = int(np.count_nonzero(occurrences == 1))
         result["non_manifold_edges"] = int(np.count_nonzero(occurrences > 2))
     result["is_closed_manifold"] = int(
@@ -130,11 +142,21 @@ def has_self_intersection(mesh):
         for axis in range(3):
             if triangle[0, axis] == triangle[1, axis] == triangle[2, axis]:
                 # Axis-aligned planes have an exact binary64 sign comparison.
-                return int(point[axis] > triangle[0, axis]) - int(point[axis] < triangle[0, axis])
-        vectors = np.asarray([triangle[1] - triangle[0], triangle[2] - triangle[0], point - triangle[0]])
+                return int(point[axis] > triangle[0, axis]) - int(
+                    point[axis] < triangle[0, axis]
+                )
+        vectors = np.asarray(
+            [triangle[1] - triangle[0], triangle[2] - triangle[0], point - triangle[0]]
+        )
         a, b, c = vectors
-        terms = [a[0]*b[1]*c[2], a[1]*b[2]*c[0], a[2]*b[0]*c[1],
-                 -a[2]*b[1]*c[0], -a[1]*b[0]*c[2], -a[0]*b[2]*c[1]]
+        terms = [
+            a[0] * b[1] * c[2],
+            a[1] * b[2] * c[0],
+            a[2] * b[0] * c[1],
+            -a[2] * b[1] * c[0],
+            -a[1] * b[0] * c[2],
+            -a[0] * b[2] * c[1],
+        ]
         value = sum(terms)
         error = sum(abs(x) for x in terms) * np.finfo(float).eps * 16
         if abs(value) > error:
@@ -142,10 +164,15 @@ def has_self_intersection(mesh):
         # Exact arithmetic over the original binary64 coordinates, including
         # subtraction. A distance epsilon cannot establish coplanarity.
         origin = [Fraction(float(x)) for x in triangle[0]]
-        a, b, c = [[Fraction(float(x))-o for x, o in zip(p, origin)]
-                   for p in (triangle[1], triangle[2], point)]
-        exact = (a[0]*(b[1]*c[2]-b[2]*c[1]) - a[1]*(b[0]*c[2]-b[2]*c[0])
-                 + a[2]*(b[0]*c[1]-b[1]*c[0]))
+        a, b, c = [
+            [Fraction(float(x)) - o for x, o in zip(p, origin)]
+            for p in (triangle[1], triangle[2], point)
+        ]
+        exact = (
+            a[0] * (b[1] * c[2] - b[2] * c[1])
+            - a[1] * (b[0] * c[2] - b[2] * c[0])
+            + a[2] * (b[0] * c[1] - b[1] * c[0])
+        )
         return (exact > 0) - (exact < 0)
 
     def segment_hit(start, end, triangle):
@@ -154,51 +181,87 @@ def has_self_intersection(mesh):
         h = np.cross(direction, edge2)
         det = np.dot(edge1, h)
         q = np.cross(start - triangle[0], edge1)
-        numerators = np.asarray([np.dot(start-triangle[0], h), np.dot(direction, q), np.dot(edge2, q)])
-        bound = 64 * np.finfo(float).eps * max(float(np.linalg.norm(edge1)*np.linalg.norm(edge2)*np.linalg.norm(direction)), float(np.max(np.abs(numerators))), np.finfo(float).tiny)
+        numerators = np.asarray(
+            [np.dot(start - triangle[0], h), np.dot(direction, q), np.dot(edge2, q)]
+        )
+        bound = (
+            64
+            * np.finfo(float).eps
+            * max(
+                float(
+                    np.linalg.norm(edge1)
+                    * np.linalg.norm(edge2)
+                    * np.linalg.norm(direction)
+                ),
+                float(np.max(np.abs(numerators))),
+                np.finfo(float).tiny,
+            )
+        )
         if abs(det) > bound:
             u, v, t = numerators / det
             margin = bound / abs(det)
-            if min(u, v, t, 1-t, 1-u-v) > margin:
+            if min(u, v, t, 1 - t, 1 - u - v) > margin:
                 return True
-            if min(u, v, t, 1-t, 1-u-v) < -margin:
+            if min(u, v, t, 1 - t, 1 - u - v) < -margin:
                 return False
+
         # Uncertain ratios use exact rational predicates, not widened barycentric
         # tolerances. The endpoint rule is strict as in the original traversal.
-        def vector(p): return tuple(Fraction(float(x)) for x in p)
-        def sub(a,b): return tuple(x-y for x,y in zip(a,b))
-        def cross(a,b): return (a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0])
-        def dot(a,b): return sum(x*y for x,y in zip(a,b))
+        def vector(p):
+            return tuple(Fraction(float(x)) for x in p)
+
+        def sub(a, b):
+            return tuple(x - y for x, y in zip(a, b))
+
+        def cross(a, b):
+            return (
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0],
+            )
+
+        def dot(a, b):
+            return sum(x * y for x, y in zip(a, b))
+
         p0, p1, p2 = map(vector, triangle)
         origin = vector(start)
         direction = sub(vector(end), origin)
-        edge1, edge2, offset = sub(p1,p0), sub(p2,p0), sub(origin,p0)
-        h, q = cross(direction,edge2), cross(offset,edge1)
-        determinant = dot(edge1,h)
+        edge1, edge2, offset = sub(p1, p0), sub(p2, p0), sub(origin, p0)
+        h, q = cross(direction, edge2), cross(offset, edge1)
+        determinant = dot(edge1, h)
         if not determinant:
             return False
-        u, v, t = dot(offset,h)/determinant, dot(direction,q)/determinant, dot(edge2,q)/determinant
-        return 0 < t < 1 and u >= 0 and v >= 0 and u+v <= 1
+        u, v, t = (
+            dot(offset, h) / determinant,
+            dot(direction, q) / determinant,
+            dot(edge2, q) / determinant,
+        )
+        return 0 < t < 1 and u >= 0 and v >= 0 and u + v <= 1
 
     for i, tri in enumerate(triangles):
         bounds = np.r_[tri.min(axis=0), tri.max(axis=0)]
         for j in tree.intersection(bounds):
-            if j <= i or set(faces[i]) & set(faces[j]):
+            if j <= i:
                 continue
             other = triangles[j]
             sides = [plane_side(tri, p) for p in other]
             reverse_sides = [plane_side(other, p) for p in tri]
-            if all(s > 0 for s in sides) or all(s < 0 for s in sides) or all(s > 0 for s in reverse_sides) or all(s < 0 for s in reverse_sides):
+            if (
+                all(s > 0 for s in sides)
+                or all(s < 0 for s in sides)
+                or all(s > 0 for s in reverse_sides)
+                or all(s < 0 for s in reverse_sides)
+            ):
+                continue
+            if len(set(faces[i]) & set(faces[j])) >= 2 and any(sides):
+                # Distinct planes with a shared edge intersect on that edge only.
                 continue
             normal = np.cross(tri[1] - tri[0], tri[2] - tri[0])
             if not any(sides):
                 from shapely.geometry import Polygon
 
                 axes = [x for x in range(3) if x != np.argmax(np.abs(normal))]
-                if (
-                    Polygon(tri[:, axes]).intersection(Polygon(other[:, axes])).area
-                    > 0
-                ):
+                if Polygon(tri[:, axes]).intersection(Polygon(other[:, axes])).area > 0:
                     return True
             for a, b in ((0, 1), (1, 2), (2, 0)):
                 if segment_hit(tri[a], tri[b], other) or segment_hit(
@@ -207,9 +270,14 @@ def has_self_intersection(mesh):
                     return True
     components = tm.split()
     if len(components) > 1:
-        union = solid_boolean(list(components), "union")
-        if sum(abs(c.volume) for c in components) - union.volume > 1e-9:
-            return True
+        for i, component in enumerate(components):
+            for other in components[i + 1 :]:
+                if np.any(component.bounds[1] <= other.bounds[0]) or np.any(
+                    other.bounds[1] <= component.bounds[0]
+                ):
+                    continue
+                if solid_boolean([component, other], "intersection").volume > 0:
+                    return True
     return False
 
 
@@ -217,7 +285,9 @@ def self_intersection_evidence(mesh):
     """Three-way evidence consumed by the independent validator."""
     try:
         hit = has_self_intersection(mesh)
-        return {"status": "CONFIRMED" if hit else "CLEAN",
-                "method": "adaptive-exact-plane/triangle-crossing/manifold-components-v1"}
+        return {
+            "status": "CONFIRMED" if hit else "CLEAN",
+            "method": "adaptive-exact-plane/triangle-crossing/manifold-components-v1",
+        }
     except Exception as exc:
         return {"status": "UNCERTAIN", "reason": str(exc)}

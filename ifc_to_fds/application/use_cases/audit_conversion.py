@@ -8,7 +8,13 @@ from ifc_to_fds.core.federation import load_sources
 from ifc_to_fds.domain.bim import BoundingBox, CanonicalModel
 from ifc_to_fds.domain.mapping import MappingManifest
 from ifc_to_fds.domain.scope import SpatialScope
-from ifc_to_fds.domain.validation import AcceptanceReport, AuditConfig, GateResult, GateStatus
+from ifc_to_fds.domain.validation import (
+    AcceptanceReport,
+    AuditConfig,
+    GateResult,
+    GateStatus,
+)
+from ifc_to_fds.domain.validation import Finding, Severity
 from ifc_to_fds.geometry.package import audit_package
 from ifc_to_fds.mapping.manifest import build_manifest
 from ifc_to_fds.mapping.policy import plan_mapping
@@ -19,7 +25,9 @@ from ifc_to_fds.validation.golden import golden_gate
 from ..dto.configuration import validate_configuration
 
 
-def prepare_model(paths: list[str], configuration: Dict[str, Any], reference: bool = False) -> CanonicalModel:
+def prepare_model(
+    paths: list[str], configuration: Dict[str, Any], reference: bool = False
+) -> CanonicalModel:
     """Prepares canonical model with spatial scoping, simulation domain, and mapping plan."""
     configuration = validate_configuration(configuration)
     model = load_sources(paths, configuration.get("sources"), reference=reference)
@@ -45,7 +53,9 @@ def prepare_model(paths: list[str], configuration: Dict[str, Any], reference: bo
         configuration.get("decisions", {}),
         configuration.get("boundary_policy"),
     )
-    model.timings.update(scope_s=mapping_start-scope_start, mapping_s=perf_counter()-mapping_start)
+    model.timings.update(
+        scope_s=mapping_start - scope_start, mapping_s=perf_counter() - mapping_start
+    )
     included = {
         e.entity_key
         for e in model.elements
@@ -167,13 +177,32 @@ class AuditConversionUseCase:
         saved = configuration.get("mep_graph")
         if saved is None:
             report.gates["mep"] = GateResult(
-                status=GateStatus.INCONCLUSIVE, reason="No serialized MEP graph supplied"
+                status=GateStatus.INCONCLUSIVE,
+                reason="No serialized MEP graph supplied",
             )
         elif normalize(saved) != normalize(model.mep_graph.model_dump(mode="json")):
             report.gates["mep"] = GateResult(
                 status=GateStatus.FAIL,
                 reason="Saved MEP graph differs from IFC source relationships",
             )
+            from ifc_to_fds.mep.compare import graph_differences
+
+            differences = graph_differences(
+                model.mep_graph.model_dump(mode="json"), saved
+            )
+            report.gates["mep"].evidence["differences"] = differences
+            for difference in differences:
+                for key in difference["entities"] or [""]:
+                    report.findings.append(
+                        Finding(
+                            id=f"MEP-{len(report.findings) + 1}",
+                            severity=Severity.P1,
+                            category="mep",
+                            title="Saved MEP relationship differs from IFC",
+                            detail=str(difference),
+                            element_id=key,
+                        )
+                    )
         per_system = {}
         for category in (
             "VENTILATION",
@@ -223,7 +252,12 @@ class AuditConversionUseCase:
         report.coverage["mep_systems"] = per_system
         report.coverage["scope"] = {
             decision: sum(e.scope_decision.value == decision for e in model.elements)
-            for decision in ("IN_SCOPE", "OUT_OF_SCOPE", "BOUNDARY_RETAINED", "UNRESOLVED")
+            for decision in (
+                "IN_SCOPE",
+                "OUT_OF_SCOPE",
+                "BOUNDARY_RETAINED",
+                "UNRESOLVED",
+            )
         }
         selectors = model.requested_scope.get("storeys", [])
         report.coverage["scope"]["selected_storeys"] = [
@@ -253,7 +287,7 @@ class AuditConversionUseCase:
             report, model, audited_manifest, geometry_package, configuration, fds_text
         )
         report.metrics["stage_timings"] = dict(
-            independent_source_reread_s=source_done-source_start,
+            independent_source_reread_s=source_done - source_start,
             validation_s=validation_done - audit_start,
             package_audit_s=parity_start - validation_done,
             parity_s=perf_counter() - parity_start,

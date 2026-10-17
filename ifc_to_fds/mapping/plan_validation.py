@@ -63,7 +63,9 @@ def planned_model(model, plan):
         if not emits and d.strategy != e.mapping_strategy:
             reject("non-emitting disposition differs from source policy")
         if d.strategy != e.mapping_strategy:
-            reject("strategy differs from source policy; build a new plan through policy")
+            reject(
+                "strategy differs from source policy; build a new plan through policy"
+            )
         if d.fds_representation != (d.strategy.value if emits else "NONE"):
             reject("strategy and FDS representation conflict")
         if (

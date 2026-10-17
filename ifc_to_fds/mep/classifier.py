@@ -44,10 +44,27 @@ def classify_mep_element(
     if t == "IFCFIRESUPPRESSIONTERMINAL":
         return "FIRE_SUPPRESSION", True
     enum_categories = {
-        "FIRE_SUPPRESSION": {"FIREPROTECTION", "FIRE PROTECTION", "FIRE_SUPPRESSION", "SPRINKLER", "FIREHYDRANT"},
-        "SMOKE_EXTRACT": {"SMOKEEXHAUST", "SMOKE EXTRACT", "SMOKECONTROL", "PRESSURISATION"},
+        "FIRE_SUPPRESSION": {
+            "FIREPROTECTION",
+            "FIRE PROTECTION",
+            "FIRE_SUPPRESSION",
+            "SPRINKLER",
+            "FIREHYDRANT",
+        },
+        "SMOKE_EXTRACT": {
+            "SMOKEEXHAUST",
+            "SMOKE EXTRACT",
+            "SMOKECONTROL",
+            "PRESSURISATION",
+        },
         "VENTILATION": {"VENTILATION", "AIRCONDITIONING", "EXHAUST"},
-        "PLUMBING": {"DOMESTICCOLDWATER", "DOMESTICHOTWATER", "DRAINAGE", "SEWAGE", "WATERSUPPLY"},
+        "PLUMBING": {
+            "DOMESTICCOLDWATER",
+            "DOMESTICHOTWATER",
+            "DRAINAGE",
+            "SEWAGE",
+            "WATERSUPPLY",
+        },
     }
 
     def result(category):
@@ -73,8 +90,11 @@ def classify_mep_element(
                 if key.replace(" ", "").lower()
                 in ("systemtype", "systemclassification", "servicetype")
             )
-    categories = {category for category, values in enum_categories.items()
-                  if any(v in values for v in explicit_property_values)}
+    categories = {
+        category
+        for category, values in enum_categories.items()
+        if any(v in values for v in explicit_property_values)
+    }
     if len(categories) > 1:
         return "UNRESOLVED", False
     if categories:

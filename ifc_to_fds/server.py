@@ -246,7 +246,9 @@ def diagnostics(jid: str):
         path = Path(job["directory"]) / "diagnostics.json"
         if not path.is_file():
             raise HTTPException(404, "No diagnostic produced")
-        return FileResponse(path, filename="diagnostics.json", media_type="application/json")
+        return FileResponse(
+            path, filename="diagnostics.json", media_type="application/json"
+        )
 
 
 @app.get("/api/jobs/{jid}/artifacts/{artifact}")

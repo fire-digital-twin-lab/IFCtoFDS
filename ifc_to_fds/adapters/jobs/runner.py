@@ -11,6 +11,7 @@ class WorkerRunner:
     @staticmethod
     def run(directory: str | Path) -> int:
         from ifc_to_fds.diagnostics import execution_scope
+
         with execution_scope(directory):
             return WorkerRunner.execute(directory)
 
@@ -21,7 +22,9 @@ class WorkerRunner:
         try:
             from ifc_to_fds.pipeline import convert, save_artifacts
 
-            request = json.loads((directory / "request.json").read_text(encoding="utf-8"))
+            request = json.loads(
+                (directory / "request.json").read_text(encoding="utf-8")
+            )
             job_id = request.get("job_id", job_id)
             if request.get("mode") == "inventory":
                 from ifc_to_fds.core.inventory import extract_inventory
@@ -36,7 +39,9 @@ class WorkerRunner:
                     sources=[m.source.model_dump() for m in models],
                 )
             else:
-                result = convert(request["paths"], request["configuration"], str(directory))
+                result = convert(
+                    request["paths"], request["configuration"], str(directory)
+                )
                 save_artifacts(result, directory / "model.fds")
                 from ifc_to_fds.results import public_result
 
@@ -49,8 +54,11 @@ class WorkerRunner:
             return 0
         except Exception as exc:
             from ifc_to_fds.diagnostics import failure_diagnostic
+
             diagnostic = failure_diagnostic(exc, job_id)
-            (directory / "diagnostics.json").write_text(json.dumps(diagnostic), encoding="utf-8")
+            (directory / "diagnostics.json").write_text(
+                json.dumps(diagnostic), encoding="utf-8"
+            )
             (directory / "error.txt").write_text(
                 f"{type(exc).__name__}: {exc}", encoding="utf-8"
             )

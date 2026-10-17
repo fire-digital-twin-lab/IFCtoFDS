@@ -12,10 +12,16 @@ from ifc_to_fds.validation.parser import parse_fds
 def test_plan_cannot_switch_emitting_strategy(box_model, strategy):
     plan_mapping(box_model, force_all_geom=strategy == MappingStrategy.GEOM)
     plan = build_mapping_plan(box_model)
-    target = MappingStrategy.GEOM if strategy == MappingStrategy.OBST else MappingStrategy.OBST
+    target = (
+        MappingStrategy.GEOM
+        if strategy == MappingStrategy.OBST
+        else MappingStrategy.OBST
+    )
     plan.decisions[0].strategy = target
     plan.decisions[0].fds_representation = target.value
-    with pytest.raises(ValueError, match="fixture:1: strategy differs from source policy"):
+    with pytest.raises(
+        ValueError, match="fixture:1: strategy differs from source policy"
+    ):
         serialize_fds(box_model, mapping_plan=plan)
 
 
@@ -74,9 +80,33 @@ def test_pure_serializer_has_separate_assignments(box_model):
     before_model, before_plan = box_model.model_dump(), plan.model_dump()
     result = serialize_mapping(box_model, mapping_plan=plan)
     assert result.primitive_assignments["fixture:1"]
-    assert result.manifest.records[0].fds_primitive_ids == result.primitive_assignments["fixture:1"]
+    assert (
+        result.manifest.records[0].fds_primitive_ids
+        == result.primitive_assignments["fixture:1"]
+    )
     assert box_model.model_dump() == before_model
     assert plan.model_dump() == before_plan
+
+
+def test_serialization_output_does_not_alias_plan_or_source(box_model):
+    from ifc_to_fds.mapping.exporter import serialize_mapping
+
+    box_model.simulation_domain = box_model.model_bounds.model_copy()
+    box_model.elements[0].placement = {"nested": [1]}
+    plan = build_mapping_plan(box_model)
+    before_model, before_plan = box_model.model_dump(), plan.model_dump()
+    result = serialize_mapping(box_model, mapping_plan=plan)
+    result.manifest.records[0].placement["nested"].append(2)
+    result.domain.xmax = 50
+    assert box_model.model_dump() == before_model
+    assert plan.model_dump() == before_plan
+
+
+def test_new_plan_ignores_previous_serialization_results(box_model):
+    original = build_mapping_plan(box_model).model_dump()
+    serialize_fds(box_model)
+    assert box_model.elements[0].fds_primitive_ids
+    assert build_mapping_plan(box_model).model_dump() == original
 
 
 @pytest.mark.parametrize("selected_top", [True, False])
@@ -93,19 +123,40 @@ def test_storey_interval_uses_same_building_geometry(box_model, selected_top):
     crossing.storey_id = "fixture:other-storey"
     unrelated = source.model_copy(deep=True)
     unrelated.entity_key, unrelated.step_id = "fixture:3", 3
-    unrelated.building_id, unrelated.storey_id = "fixture:other-building", "fixture:foreign"
+    unrelated.building_id, unrelated.storey_id = (
+        "fixture:other-building",
+        "fixture:foreign",
+    )
     for v in unrelated.mesh.vertices:
         v[2] += 100
     unrelated.bounding_box = bounds_for_vertices(unrelated.mesh.vertices)
     box_model.elements += [crossing, unrelated]
     box_model.storey_references = [
-        StoreyReference(storey_id="fixture:storey", source_id="fixture", building_id=source.building_id, name="Top", elevation_m=0),
-        StoreyReference(storey_id="fixture:foreign", source_id="fixture", building_id=unrelated.building_id, name="Top", elevation_m=1),
+        StoreyReference(
+            storey_id="fixture:storey",
+            source_id="fixture",
+            building_id=source.building_id,
+            name="Top",
+            elevation_m=0,
+        ),
+        StoreyReference(
+            storey_id="fixture:foreign",
+            source_id="fixture",
+            building_id=unrelated.building_id,
+            name="Top",
+            elevation_m=1,
+        ),
     ]
     if not selected_top:
-        box_model.storey_references.append(StoreyReference(
-            storey_id="fixture:upper", source_id="fixture", building_id=source.building_id, name="Upper", elevation_m=4,
-        ))
+        box_model.storey_references.append(
+            StoreyReference(
+                storey_id="fixture:upper",
+                source_id="fixture",
+                building_id=source.building_id,
+                name="Upper",
+                elevation_m=4,
+            )
+        )
     before = crossing.mesh.model_dump()
     apply_spatial_scope(box_model, SpatialScope(storeys=["fixture:storey"]))
     assert source.scope_decision == "IN_SCOPE"
@@ -118,14 +169,21 @@ def test_unassigned_crossing_geometry_is_not_lost(box_model):
     from ifc_to_fds.domain.bim import StoreyReference
     from ifc_to_fds.domain.scope import SpatialScope
     from ifc_to_fds.mapping.scope import apply_spatial_scope
+
     e = box_model.elements[0]
     e.building_id, e.storey_id = "fixture:building", "fixture:top"
     unassigned = e.model_copy(deep=True)
     unassigned.entity_key, unassigned.step_id = "fixture:2", 2
     unassigned.building_id = unassigned.storey_id = None
     box_model.elements.append(unassigned)
-    box_model.storey_references = [StoreyReference(
-        storey_id=e.storey_id, source_id=e.source_id, building_id=e.building_id, name="Top", elevation_m=0,
-    )]
+    box_model.storey_references = [
+        StoreyReference(
+            storey_id=e.storey_id,
+            source_id=e.source_id,
+            building_id=e.building_id,
+            name="Top",
+            elevation_m=0,
+        )
+    ]
     apply_spatial_scope(box_model, SpatialScope(storeys=[e.storey_id]))
     assert unassigned.scope_decision == "BOUNDARY_RETAINED"

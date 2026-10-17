@@ -79,8 +79,10 @@ def determine_element_strategy(
         and element.representation_bounds is None
     ):
         return MappingStrategy.NONE
-    if not element.mesh or not valid_solid(element.mesh) or any(
-        not o.mesh or not valid_solid(o.mesh) for o in element.openings
+    if (
+        not element.mesh
+        or not valid_solid(element.mesh)
+        or any(not o.mesh or not valid_solid(o.mesh) for o in element.openings)
     ):
         return MappingStrategy.NONE
     if (
@@ -184,16 +186,23 @@ def plan_mapping(
             e.mapping_status = MappingStatus.EXCLUDED_APPROVED
         elif e.mapping_strategy == MappingStrategy.SEMANTIC_ONLY:
             e.mapping_status = MappingStatus.SEMANTIC_ONLY
-        elif e.role == "PHYSICAL" and (not e.mesh or not valid_solid(e.mesh) or any(
-            not o.mesh or not valid_solid(o.mesh) for o in e.openings
-        )):
+        elif e.role == "PHYSICAL" and (
+            not e.mesh
+            or not valid_solid(e.mesh)
+            or any(not o.mesh or not valid_solid(o.mesh) for o in e.openings)
+        ):
             e.mapping_status = MappingStatus.UNSUPPORTED
-            e.geometry_preservation = "FAILED" if e.mesh and not valid_solid(e.mesh) else "INCONCLUSIVE"
+            e.geometry_preservation = (
+                "FAILED" if e.mesh and not valid_solid(e.mesh) else "INCONCLUSIVE"
+            )
             e.mapping_rationale = (
                 "Source physical geometry is missing or invalid; no FDS representation authorized. "
                 + "; ".join(e.validation_notes)
-                + "; ".join(f"Opening STEP {o.opening_step_id}: {getattr(o, 'extraction_diagnostic', None) or 'missing or invalid opening solid'}"
-                            for o in e.openings if not o.mesh or not valid_solid(o.mesh))
+                + "; ".join(
+                    f"Opening STEP {o.opening_step_id}: {getattr(o, 'extraction_diagnostic', None) or 'missing or invalid opening solid'}"
+                    for o in e.openings
+                    if not o.mesh or not valid_solid(o.mesh)
+                )
             )
         elif e.review_status == "REVIEW_REQUIRED":
             e.mapping_status = MappingStatus.REVIEW_REQUIRED

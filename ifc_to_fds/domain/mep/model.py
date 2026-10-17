@@ -43,7 +43,9 @@ class MEPSystem(BaseModel):
     assignment_relation_keys: List[str] = Field(default_factory=list)
     system_id: str
     name: str
-    system_type: str  # e.g., "VENTILATION", "SMOKE_EXTRACT", "FIRE_SUPPRESSION", "PLUMBING"
+    system_type: (
+        str  # e.g., "VENTILATION", "SMOKE_EXTRACT", "FIRE_SUPPRESSION", "PLUMBING"
+    )
     element_global_ids: List[str] = Field(default_factory=list)
     is_fire_safety_critical: bool = False
     element_keys: List[str] = Field(default_factory=list)

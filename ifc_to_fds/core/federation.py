@@ -68,8 +68,10 @@ def load_sources(paths, source_options=None, reference=False):
                         o.bounding_box = (
                             bounds_for_vertices(o.mesh.vertices) if o.mesh else None
                         )
-                        o.extraction_diagnostic = opening_diagnostic(o.mesh, opening_element.validation_notes)
-            progress("IFC_GEOMETRY", "COMPLETED", perf_counter()-mep_done)
+                        o.extraction_diagnostic = opening_diagnostic(
+                            o.mesh, opening_element.validation_notes
+                        )
+            progress("IFC_GEOMETRY", "COMPLETED", perf_counter() - mep_done)
         else:
             from ifc_to_fds.geometry.cache import cached_geometry
 
@@ -101,9 +103,13 @@ def load_sources(paths, source_options=None, reference=False):
             federate_placement(e, matrix)
             for opening in e.openings:
                 if opening.placement.get("status") == "CONFIRMED":
-                    local = np.asarray(opening.placement["ifc_local_to_model"]).reshape(4, 4)
+                    local = np.asarray(opening.placement["ifc_local_to_model"]).reshape(
+                        4, 4
+                    )
                     opening.placement["model_to_common_world"] = matrix.ravel().tolist()
-                    opening.placement["effective_world"] = (matrix @ local).ravel().tolist()
+                    opening.placement["effective_world"] = (
+                        (matrix @ local).ravel().tolist()
+                    )
         if not np.allclose(matrix, np.eye(4)):
             for e in model.elements:
                 for mesh in [e.mesh, *[o.mesh for o in e.openings]]:
@@ -152,9 +158,14 @@ def load_sources(paths, source_options=None, reference=False):
         graph.coverage = {m.source.source_id: m.mep_graph.coverage for m in models}
         result.mep_graph = graph
     result.model_bounds = bounds_for_vertices(
-        [v for e in result.elements if e.bounding_box for v in (
-            [e.bounding_box.xmin, e.bounding_box.ymin, e.bounding_box.zmin],
-            [e.bounding_box.xmax, e.bounding_box.ymax, e.bounding_box.zmax],
-        )]
+        [
+            v
+            for e in result.elements
+            if e.bounding_box
+            for v in (
+                [e.bounding_box.xmin, e.bounding_box.ymin, e.bounding_box.zmin],
+                [e.bounding_box.xmax, e.bounding_box.ymax, e.bounding_box.zmax],
+            )
+        ]
     )
     return result

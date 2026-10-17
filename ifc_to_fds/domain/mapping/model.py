@@ -63,11 +63,15 @@ def _serialize_csv_value(value: Any) -> Any:
 
 class MappingDecision(BaseModel):
     """Explicit mapping decision for a single canonical element."""
+
     entity_key: str
     strategy: MappingStrategy
     simulation_role: str
     fds_representation: str
-    fds_primitive_ids: List[str] = Field(default_factory=list)
+    # Legacy read/explicit sync only. New plans do not carry serialization results.
+    fds_primitive_ids: List[str] = Field(
+        default_factory=list, json_schema_extra={"deprecated": True}
+    )
     representation_bounds: Optional[BoundingBox] = None
     rationale: Optional[str] = None
     boundary_treatment: str = "NOT_APPLICABLE"
@@ -81,6 +85,7 @@ class MappingDecision(BaseModel):
 
 class MappingPlan(BaseModel):
     """Intermediate mapping plan decoupled from FDS serialization."""
+
     decisions: List[MappingDecision] = Field(default_factory=list)
     simulation_domain: Optional[BoundingBox] = None
     cell_size: float = Field(0.2, gt=0, allow_inf_nan=False)
@@ -94,7 +99,7 @@ class MappingPlan(BaseModel):
         return None
 
     def sync_primitive_ids(self, model: Any) -> None:
-        """Synchronize emitted primitive IDs from canonical elements into mapping decisions."""
+        """Legacy explicit sync; IDs are ignored by serialization authorization."""
         for elem in model.elements:
             decision = self.get_decision(elem.entity_key)
             if decision is not None:

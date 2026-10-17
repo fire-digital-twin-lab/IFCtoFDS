@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import zipfile
 import numpy as np
+from uuid import uuid4
 from ifc_to_fds.diagnostics import operation
 
 from .package import seal
@@ -41,10 +42,16 @@ def store_mesh(mesh, directory):
     h.update(faces.tobytes())
     key = h.hexdigest()
     target = directory / (key + ".bin")
-    if not target.exists():
-        with target.open("wb") as stream:
+    if (
+        not target.is_file()
+        or target.stat().st_size != vertices.nbytes + faces.nbytes
+        or file_hash(target) != key
+    ):
+        temporary = directory / (key + "." + uuid4().hex + ".tmp")
+        with temporary.open("wb") as stream:
             stream.write(vertices.tobytes())
             stream.write(faces.tobytes())
+        temporary.replace(target)
     return dict(
         payload=key,
         vertex_count=len(vertices),

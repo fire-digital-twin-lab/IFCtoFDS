@@ -100,13 +100,24 @@ class JobService:
     def _terminal_diagnostic(job, name, message):
         directory = Path(job["directory"])
         try:
-            progress = json.loads((directory / "progress.json").read_text(encoding="utf-8"))
+            progress = json.loads(
+                (directory / "progress.json").read_text(encoding="utf-8")
+            )
         except (OSError, ValueError):
             progress = {}
-        (directory / "diagnostics.json").write_text(json.dumps(dict(
-            name=name, message=message, stage=progress.get("stage", "IFC_READ"),
-            jobId=job["id"], stack="", entity=None,
-        )), encoding="utf-8")
+        (directory / "diagnostics.json").write_text(
+            json.dumps(
+                dict(
+                    name=name,
+                    message=message,
+                    stage=progress.get("stage", "IFC_READ"),
+                    jobId=job["id"],
+                    stack="",
+                    entity=None,
+                )
+            ),
+            encoding="utf-8",
+        )
 
     def cancel(self, jid):
         with self.lock:
@@ -154,7 +165,9 @@ class JobService:
                             error="Job deadline exceeded",
                             finished=time.time(),
                         )
-                        self._terminal_diagnostic(running, "TimeoutError", "Job deadline exceeded")
+                        self._terminal_diagnostic(
+                            running, "TimeoutError", "Job deadline exceeded"
+                        )
                         self._cleanup(running)
                     elif proc.poll() is not None:
                         directory = Path(running["directory"])
@@ -177,7 +190,11 @@ class JobService:
                         pass
                 else:
                     queued = next(
-                        (j for j in self.repository.all_jobs() if j["state"] == "QUEUED"),
+                        (
+                            j
+                            for j in self.repository.all_jobs()
+                            if j["state"] == "QUEUED"
+                        ),
                         None,
                     )
                     if queued:

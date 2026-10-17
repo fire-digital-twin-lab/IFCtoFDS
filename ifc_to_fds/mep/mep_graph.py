@@ -37,8 +37,13 @@ def extract_mep_graph(model, file):
         gid = key(group)
         name = group.Name or gid
         predefined = str(getattr(group, "PredefinedType", "") or "")
-        category, critical = classify_mep_element(group.is_a(), name, name, predefined,
-                                                property_sets=ifcopenshell.util.element.get_psets(group))
+        category, critical = classify_mep_element(
+            group.is_a(),
+            name,
+            name,
+            predefined,
+            property_sets=ifcopenshell.util.element.get_psets(group),
+        )
         system = systems.setdefault(
             gid,
             MEPSystem(
@@ -189,16 +194,30 @@ def extract_mep_graph(model, file):
             entity_keys=[e.entity_key for e in members],
             assigned_to_systems=sum(bool(e.system_ids) for e in members),
             elements_with_ports=sum(bool(e.ports) for e in members),
-            connected_ports=sum(bool(p.connected_port_ids) for e in members for p in e.ports),
-            isolated_ports=sum(not p.connected_port_ids for e in members for p in e.ports),
-            unsupported_elements=[e.entity_key for e in members if e.geometry_status.value == "FAILED"],
+            connected_ports=sum(
+                bool(p.connected_port_ids) for e in members for p in e.ports
+            ),
+            isolated_ports=sum(
+                not p.connected_port_ids for e in members for p in e.ports
+            ),
+            unsupported_elements=[
+                e.entity_key for e in members if e.geometry_status.value == "FAILED"
+            ],
         )
     graph.coverage["source_relationships"] = dict(
         distribution_ports=len(safe_by_type(file, "IfcDistributionPort")),
         explicit_port_relations=len(safe_by_type(file, "IfcRelConnectsPorts")),
-        accounted_edge_relations=sum(len(c.source_relation_keys) for c in graph.connections),
-        unresolved_system_keys=[s.system_id for s in graph.systems if s.system_type == "UNRESOLVED"],
-        orphan_port_keys=[key(p) for p in safe_by_type(file, "IfcDistributionPort") if p.id() not in ports],
+        accounted_edge_relations=sum(
+            len(c.source_relation_keys) for c in graph.connections
+        ),
+        unresolved_system_keys=[
+            s.system_id for s in graph.systems if s.system_type == "UNRESOLVED"
+        ],
+        orphan_port_keys=[
+            key(p)
+            for p in safe_by_type(file, "IfcDistributionPort")
+            if p.id() not in ports
+        ],
     )
     model.mep_graph = graph
     return model

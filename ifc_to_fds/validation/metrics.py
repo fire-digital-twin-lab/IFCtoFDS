@@ -83,19 +83,25 @@ def compare_solids(reference, outputs):
             raise RuntimeError(f"Self-intersection uncertain: {evidence['reason']}")
     a = as_trimesh(reference)
     pieces = [as_trimesh(m) for m in outputs]
-    b = (
-        pieces[0]
-        if len(pieces) == 1
-        else solid_boolean(pieces, "union")
-    )
-    if len(pieces) == 1 and np.array_equal(a.vertices, b.vertices) and np.array_equal(a.faces, b.faces):
+    b = pieces[0] if len(pieces) == 1 else solid_boolean(pieces, "union")
+    if (
+        len(pieces) == 1
+        and np.array_equal(a.vertices, b.vertices)
+        and np.array_equal(a.faces, b.faces)
+    ):
         # Independently reconstructed coordinates and oriented triangles are equal.
         # This is a full-surface identity proof, not a sampled/bounds shortcut.
         components = len(a.split(only_watertight=False))
-        return dict(solid_iou=1.0, relative_volume_error=0.0, relative_area_error=0.0,
-                    surface_distance_m=0.0, surface_proven=True,
-                    reference_components=components, output_components=components,
-                    comparison_method="EXACT_ORIENTED_TRIANGLES")
+        return dict(
+            solid_iou=1.0,
+            relative_volume_error=0.0,
+            relative_area_error=0.0,
+            surface_distance_m=0.0,
+            surface_proven=True,
+            reference_components=components,
+            output_components=components,
+            comparison_method="EXACT_ORIENTED_TRIANGLES",
+        )
     intersection = solid_boolean([a, b], "intersection")
     vi = max(0.0, float(intersection.volume))
     union = float(a.volume + b.volume - vi)
@@ -150,9 +156,7 @@ def opening_residual(hosts, opening):
             raise ValueError("Invalid host solid")
         residual += max(
             0.0,
-            float(
-                solid_boolean([as_trimesh(host), void], "intersection").volume
-            ),
+            float(solid_boolean([as_trimesh(host), void], "intersection").volume),
         )
     return residual / max(float(void.volume), 1e-12)
 
@@ -173,20 +177,35 @@ class SolidCandidateIndex:
 
     def __init__(self, meshes):
         from rtree.index import Index, Property
+
         self.meshes = list(meshes)
         self.tree = Index(properties=Property(dimension=3))
         self.unbounded = False
         for i, mesh in enumerate(self.meshes):
             vertices = np.asarray(mesh.vertices, dtype=float)
-            if vertices.ndim != 2 or vertices.shape[1:] != (3,) or not len(vertices) or not np.isfinite(vertices).all():
+            if (
+                vertices.ndim != 2
+                or vertices.shape[1:] != (3,)
+                or not len(vertices)
+                or not np.isfinite(vertices).all()
+            ):
                 self.unbounded = True
                 continue
-            self.tree.insert(i, np.r_[vertices.min(axis=0), vertices.max(axis=0)].tolist())
+            self.tree.insert(
+                i, np.r_[vertices.min(axis=0), vertices.max(axis=0)].tolist()
+            )
 
     def candidates(self, bounds):
         if self.unbounded:
-            raise RuntimeError("Cannot bound an audit obstacle; passage candidates uncertain")
-        return [self.meshes[i] for i in sorted(self.tree.intersection(np.r_[bounds[0], bounds[1]].tolist()))]
+            raise RuntimeError(
+                "Cannot bound an audit obstacle; passage candidates uncertain"
+            )
+        return [
+            self.meshes[i]
+            for i in sorted(
+                self.tree.intersection(np.r_[bounds[0], bounds[1]].tolist())
+            )
+        ]
 
 
 def passage_metrics(reference_meshes, output_meshes, opening):
@@ -214,9 +233,7 @@ def passage_metrics(reference_meshes, output_meshes, opening):
 
     a, b = free_volume(reference_meshes), free_volume(output_meshes)
     intersection = (
-        solid_boolean([a, b], "intersection")
-        if len(a.faces) and len(b.faces)
-        else None
+        solid_boolean([a, b], "intersection") if len(a.faces) and len(b.faces) else None
     )
     overlap = float(intersection.volume) if intersection is not None else 0.0
     return dict(

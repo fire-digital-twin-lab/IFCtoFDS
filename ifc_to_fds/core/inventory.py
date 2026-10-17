@@ -59,6 +59,11 @@ def find_containing_storey(element: Any) -> Optional[str]:
     return None
 
 
+@operation("IFC_PARSE")
+def open_ifc(file_path):
+    return ifcopenshell.open(file_path)
+
+
 @operation("IFC_READ")
 def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     if not os.path.isfile(file_path):
@@ -67,7 +72,7 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     file_size = os.path.getsize(file_path)
     file_hash = compute_file_sha256(file_path)
 
-    ifc_file = ifcopenshell.open(file_path)
+    ifc_file = open_ifc(file_path)
     schema = ifc_file.schema
     unit_name, unit_scale = get_length_unit_scale(ifc_file)
 
@@ -159,8 +164,13 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
             entity_key=f"{file_hash}:{opening.id()}",
             host_entity_key=f"{file_hash}:{host.id()}",
             void_relation_key=f"{file_hash}:{rel.id()}",
-            filling_entity_keys=[f"{file_hash}:{r.RelatedBuildingElement.id()}" for r in getattr(opening, "HasFillings", ())],
-            filling_relation_keys=[f"{file_hash}:{r.id()}" for r in getattr(opening, "HasFillings", ())],
+            filling_entity_keys=[
+                f"{file_hash}:{r.RelatedBuildingElement.id()}"
+                for r in getattr(opening, "HasFillings", ())
+            ],
+            filling_relation_keys=[
+                f"{file_hash}:{r.id()}" for r in getattr(opening, "HasFillings", ())
+            ],
             placement=extract_placement(opening, unit_scale),
             opening_global_id=opening.GlobalId,
             opening_step_id=opening.id(),

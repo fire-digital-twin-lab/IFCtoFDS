@@ -26,7 +26,6 @@ class GeometryStatus(str, Enum):
     NO_REPRESENTATION = "NO_REPRESENTATION"
 
 
-
 class TriangleMesh(BaseModel):
     vertices: List[List[float]] = Field(default_factory=list)
     faces: List[List[int]] = Field(default_factory=list)

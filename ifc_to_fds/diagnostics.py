@@ -41,16 +41,22 @@ def operation(stage):
             except Exception as exc:
                 if not getattr(exc, "ifcfds_stage", None):
                     exc.ifcfds_stage = stage
-                progress(exc.ifcfds_stage, "FAILED", perf_counter()-started)
+                progress(exc.ifcfds_stage, "FAILED", perf_counter() - started)
                 raise
-            progress(stage, "COMPLETED", perf_counter()-started)
+            progress(stage, "COMPLETED", perf_counter() - started)
             return result
+
         return run
+
     return decorate
 
 
 def failure_diagnostic(error, job_id):
-    return dict(name=type(error).__name__, message=str(error)[:2000],
-                stack="".join(traceback.format_exception(error))[-12000:],
-                stage=getattr(error, "ifcfds_stage", "ARTIFACT"), jobId=job_id,
-                entity=getattr(error, "ifcfds_entity", None))
+    return dict(
+        name=type(error).__name__,
+        message=str(error)[:2000],
+        stack="".join(traceback.format_exception(error))[-12000:],
+        stage=getattr(error, "ifcfds_stage", "ARTIFACT"),
+        jobId=job_id,
+        entity=getattr(error, "ifcfds_entity", None),
+    )

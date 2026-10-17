@@ -48,7 +48,9 @@ def clean_fds_id(name: str, fallback: str) -> str:
 
 def format_xb(xb: List[float]) -> str:
     # Shortest binary64 round trip; keep integral bounds readable for legacy callers.
-    return ",".join(str(int(v)) if float(v).is_integer() else repr(float(v)) for v in xb)
+    return ",".join(
+        str(int(v)) if float(v).is_integer() else repr(float(v)) for v in xb
+    )
 
 
 def format_source_comment(elem: CanonicalElement) -> str:
@@ -86,7 +88,9 @@ def serialize_fds(
     """Legacy tuple API; mirrors only primitive IDs and exported bounds as outputs."""
     result = serialize_mapping(model, cell_size, mapping_plan)
     for element in model.elements:
-        element.fds_primitive_ids = list(result.primitive_assignments[element.entity_key])
+        element.fds_primitive_ids = list(
+            result.primitive_assignments[element.entity_key]
+        )
     model.exported_bounds = result.exported_bounds
     return result.fds_text, result.manifest
 
@@ -100,15 +104,21 @@ def serialize_mapping(model, cell_size=None, mapping_plan=None) -> Serialization
     if cell_size is not None and (not math.isfinite(cell_size) or cell_size <= 0):
         raise ValueError("cell_size must be finite and positive")
     if mapping_plan is None:
-        mapping_plan = build_mapping_plan(model, cell_size=0.2 if cell_size is None else cell_size)
+        mapping_plan = build_mapping_plan(
+            model, cell_size=0.2 if cell_size is None else cell_size
+        )
     elif cell_size is not None and cell_size != mapping_plan.cell_size:
         raise ValueError("cell_size conflicts with MappingPlan")
     view = planned_model(model, mapping_plan)
     text, manifest = _serialize_planned_model(view, mapping_plan.cell_size)
     return SerializationResult(
-        text, manifest,
+        text,
+        manifest.model_copy(deep=True),
         {e.entity_key: list(e.fds_primitive_ids) for e in view.elements},
-        view.exported_bounds, view.simulation_domain,
+        view.exported_bounds.model_copy(deep=True) if view.exported_bounds else None,
+        view.simulation_domain.model_copy(deep=True)
+        if view.simulation_domain
+        else None,
     )
 
 
@@ -134,15 +144,21 @@ def _serialize_planned_model(model, cell_size):
         and valid_solid(e.mesh)
     ]
     representation_bounds = [e.representation_bounds or e.bounding_box for e in active]
-    bounds = bounds_for_vertices([v for b in representation_bounds if b for v in (
-        [b.xmin, b.ymin, b.zmin], [b.xmax, b.ymax, b.zmax],
-    )])
+    bounds = bounds_for_vertices(
+        [
+            v
+            for b in representation_bounds
+            if b
+            for v in (
+                [b.xmin, b.ymin, b.zmin],
+                [b.xmax, b.ymax, b.zmax],
+            )
+        ]
+    )
     model.exported_bounds = bounds
     if model.simulation_domain:
         ijk, mesh_xb = compute_mesh_grid(model.simulation_domain, cell_size=cell_size)
-        lines.append(
-            f"&MESH IJK={ijk[0]},{ijk[1]},{ijk[2]}, XB={format_xb(mesh_xb)} /"
-        )
+        lines.append(f"&MESH IJK={ijk[0]},{ijk[1]},{ijk[2]}, XB={format_xb(mesh_xb)} /")
     else:
         lines.append("! INCOMPLETE: simulation domain has not been declared")
     lines.append("")
