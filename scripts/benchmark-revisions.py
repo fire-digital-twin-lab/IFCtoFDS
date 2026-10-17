@@ -72,9 +72,22 @@ def child(root, source, configuration, output):
     ):
         instrument(pipeline, name)
     instrument(storage, "write_package")
+    # The modular use cases import their collaborators directly. Instrumenting
+    # only the compatibility facade no longer observes the actual execution.
+    import importlib
+    for module_name, names in (
+        ("application.use_cases.audit_conversion", ("load_sources", "prepare_model", "run_independent_validation", "audit_package", "golden_gate")),
+        ("application.use_cases.convert_verified", ("prepare_model", "serialize_fds", "write_package")),
+    ):
+        try:
+            module = importlib.import_module("ifc_to_fds." + module_name)
+        except ImportError:
+            continue  # Historical pre-modular revision, observed through facade.
+        for name in names:
+            instrument(module, name)
     convert, save_artifacts = pipeline.convert, pipeline.save_artifacts
 
-    result = convert([source], json.loads(configuration.read_text(encoding="utf-8")))
+    result = convert([source], json.loads(configuration.read_text(encoding="utf-8")), output_directory=output)
     save_artifacts(result, output / "model.fds")
     if (root / "ifc_to_fds" / "results.py").exists():
         from ifc_to_fds.results import public_result

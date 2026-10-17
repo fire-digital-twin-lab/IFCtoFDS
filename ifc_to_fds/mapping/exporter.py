@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple
 import math
 import re
 from dataclasses import dataclass
+from ifc_to_fds.diagnostics import operation
 
 from ifc_to_fds.core.canonical import (
     BoundingBox,
@@ -90,6 +91,7 @@ def serialize_fds(
     return result.fds_text, result.manifest
 
 
+@operation("SERIALIZATION")
 def serialize_mapping(model, cell_size=None, mapping_plan=None) -> SerializationResult:
     """Render a validated plan without modifying the source model or plan."""
     from ifc_to_fds.domain.mapping import build_mapping_plan
@@ -131,7 +133,10 @@ def _serialize_planned_model(model, cell_size):
         and e.mesh
         and valid_solid(e.mesh)
     ]
-    bounds = bounds_for_vertices([v for e in active for v in e.mesh.vertices])
+    representation_bounds = [e.representation_bounds or e.bounding_box for e in active]
+    bounds = bounds_for_vertices([v for b in representation_bounds if b for v in (
+        [b.xmin, b.ymin, b.zmin], [b.xmax, b.ymax, b.zmax],
+    )])
     model.exported_bounds = bounds
     if model.simulation_domain:
         ijk, mesh_xb = compute_mesh_grid(model.simulation_domain, cell_size=cell_size)

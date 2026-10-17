@@ -2,6 +2,7 @@
 
 import copy
 import json
+from ifc_to_fds.diagnostics import operation
 from ifc_to_fds.adapters.reference import FILES as FILES, FilesystemReferenceRepository
 from ifc_to_fds.core.compare import normalize
 from pathlib import Path
@@ -211,6 +212,7 @@ def inspect_case(directory):
     return _repo.inspect_case(directory)
 
 
+@operation("GOLDEN")
 def golden_gate(report, model, manifest, package, configuration, fds_text=None):
     profile = configuration.get("profile", "mapping")
     case = configuration.get("reference_case")
@@ -426,7 +428,7 @@ def golden_gate(report, model, manifest, package, configuration, fds_text=None):
         unknown("Actual or reference FDS solid evidence missing/unsupported")
     else:
         from ifc_to_fds.geometry.mesh import as_trimesh
-        import trimesh
+        from ifc_to_fds.geometry.boolean import solid_boolean
 
         expected_solids = baseline_fds["entries"]
         actual_solids = actual_fds["entries"]
@@ -444,9 +446,7 @@ def golden_gate(report, model, manifest, package, configuration, fds_text=None):
                 if len(pieces) == 1:
                     reference = pieces[0]
                 else:
-                    union = trimesh.boolean.union(
-                        [as_trimesh(m) for m in pieces], engine="manifold"
-                    )
+                    union = solid_boolean([as_trimesh(m) for m in pieces], "union")
                     reference = TriangleMesh(
                         vertices=union.vertices.tolist(), faces=union.faces.tolist()
                     )

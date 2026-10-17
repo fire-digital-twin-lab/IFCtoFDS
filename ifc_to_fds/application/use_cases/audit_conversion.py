@@ -23,6 +23,7 @@ def prepare_model(paths: list[str], configuration: Dict[str, Any], reference: bo
     """Prepares canonical model with spatial scoping, simulation domain, and mapping plan."""
     configuration = validate_configuration(configuration)
     model = load_sources(paths, configuration.get("sources"), reference=reference)
+    scope_start = perf_counter()
     scope = SpatialScope.model_validate(configuration.get("scope", {}))
     if scope.storeys or scope.bounding_box:
         apply_spatial_scope(model, scope)
@@ -36,6 +37,7 @@ def prepare_model(paths: list[str], configuration: Dict[str, Any], reference: bo
     elif not scope.storeys and not scope.bounding_box:
         model.simulation_domain = model.model_bounds
         model.domain_origin = "FULL_MODEL"
+    mapping_start = perf_counter()
     plan_mapping(
         model,
         configuration.get("all_geom", False),
@@ -43,6 +45,7 @@ def prepare_model(paths: list[str], configuration: Dict[str, Any], reference: bo
         configuration.get("decisions", {}),
         configuration.get("boundary_policy"),
     )
+    model.timings.update(scope_s=mapping_start-scope_start, mapping_s=perf_counter()-mapping_start)
     included = {
         e.entity_key
         for e in model.elements
@@ -72,7 +75,9 @@ class AuditConversionUseCase:
         configuration = validate_configuration(configuration)
         if "mep_graph" not in configuration and "mep_graph" in manifest.configuration:
             configuration["mep_graph"] = manifest.configuration["mep_graph"]
+        source_start = perf_counter()
         model = prepare_model(paths, configuration, reference=True)
+        source_done = perf_counter()
         config = AuditConfig.model_validate(configuration.get("audit", {}))
         audit_start = perf_counter()
         report = run_independent_validation(model, fds_text, manifest, config)
@@ -153,10 +158,9 @@ class AuditConversionUseCase:
             report.gates["source_inventory"] = GateResult(
                 status=GateStatus.FAIL, reason="Source hashes differ from manifest"
             )
+        records_by_key = {r.entity_key: r for r in manifest.records}
         for e in model.elements:
-            record = next(
-                (r for r in manifest.records if r.entity_key == e.entity_key), None
-            )
+            record = records_by_key.get(e.entity_key)
             if record:
                 e.fds_primitive_ids = list(record.fds_primitive_ids)
         # MEP audit compares against the saved graph, not the converter object.
@@ -177,6 +181,7 @@ class AuditConversionUseCase:
             "FIRE_SUPPRESSION",
             "PLUMBING",
             "OTHER",
+            "UNRESOLVED",
         ):
             members = [
                 e
@@ -248,6 +253,7 @@ class AuditConversionUseCase:
             report, model, audited_manifest, geometry_package, configuration, fds_text
         )
         report.metrics["stage_timings"] = dict(
+            independent_source_reread_s=source_done-source_start,
             validation_s=validation_done - audit_start,
             package_audit_s=parity_start - validation_done,
             parity_s=perf_counter() - parity_start,

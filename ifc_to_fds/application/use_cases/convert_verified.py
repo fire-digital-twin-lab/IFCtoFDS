@@ -1,6 +1,7 @@
 """ConvertVerified use case: end-to-end verified BIM-to-FDS conversion."""
 
 import tempfile
+import json
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Dict, List, Optional, Union
@@ -54,6 +55,18 @@ class ConvertVerifiedUseCase:
         manifest.configuration = configuration
         manifest_path = workspace / "model_manifest.json"
         manifest_path.write_text(manifest.model_dump_json(), encoding="utf-8")
+        # Durable checkpoint before the independent audit. These are explicitly
+        # unaccepted artifacts, useful even when a large audit is interrupted.
+        for name, value in (
+            ("inventory", model.model_dump(mode="json", exclude={"elements": {"__all__": {"mesh": True, "openings": {"__all__": {"mesh": True}}}}})),
+            ("mep_graph", configuration["mep_graph"]),
+            ("configuration", configuration),
+        ):
+            (workspace / f"model_{name}.json").write_text(json.dumps(value), encoding="utf-8")
+        (workspace / "audit-state.json").write_text(json.dumps({
+            "stage": "VALIDATION", "status": "NOT_RUN", "output_complete": False,
+            "reason": "Artifacts saved; independent audit has not completed",
+        }), encoding="utf-8")
         manifest = MappingManifest.model_validate_json(
             manifest_path.read_text(encoding="utf-8")
         )
@@ -69,6 +82,10 @@ class ConvertVerifiedUseCase:
             **report.metrics.get("stage_timings", {}),
             audit_s=perf_counter() - serialized,
         )
+        (workspace / "audit-state.json").write_text(json.dumps({
+            "stage": "VALIDATION", "status": report.status.value,
+            "output_complete": manifest.output_complete, "timings": timings,
+        }), encoding="utf-8")
         audited.exported_bounds = model.exported_bounds
         audited.timings = timings
         report.metrics["exported_bounds"] = (
