@@ -6,6 +6,7 @@ from .inventory import extract_inventory
 from .canonical import MEPGraph
 from ifc_to_fds.geometry.mesh import bounds_for_vertices
 from ifc_to_fds.mep.mep_graph import extract_mep_graph
+from ifc_to_fds.diagnostics import progress
 
 
 def load_sources(paths, source_options=None, reference=False):
@@ -35,11 +36,13 @@ def load_sources(paths, source_options=None, reference=False):
             from ifc_to_fds.geometry.engine import (
                 create_geom_settings,
                 extract_element_geometry,
+                opening_diagnostic,
             )
             from .canonical import CanonicalElement, GeometryStatus
             from ifc_to_fds.geometry.mesh import valid_solid
 
             settings = create_geom_settings()
+            progress("IFC_GEOMETRY", "RUNNING")
             for e in model.elements:
                 if e.has_3d_geometry:
                     e.mesh = extract_element_geometry(file, e, settings)
@@ -52,18 +55,21 @@ def load_sources(paths, source_options=None, reference=False):
                         else GeometryStatus.FAILED
                     )
                     for o in e.openings:
+                        opening_element = CanonicalElement(
+                            global_id=o.opening_global_id,
+                            step_id=o.opening_step_id,
+                            ifc_type="IfcOpeningElement",
+                        )
                         o.mesh = extract_element_geometry(
                             file,
-                            CanonicalElement(
-                                global_id=o.opening_global_id,
-                                step_id=o.opening_step_id,
-                                ifc_type="IfcOpeningElement",
-                            ),
+                            opening_element,
                             settings,
                         )
                         o.bounding_box = (
                             bounds_for_vertices(o.mesh.vertices) if o.mesh else None
                         )
+                        o.extraction_diagnostic = opening_diagnostic(o.mesh, opening_element.validation_notes)
+            progress("IFC_GEOMETRY", "COMPLETED", perf_counter()-mep_done)
         else:
             from ifc_to_fds.geometry.cache import cached_geometry
 
@@ -93,6 +99,11 @@ def load_sources(paths, source_options=None, reference=False):
 
         for e in model.elements:
             federate_placement(e, matrix)
+            for opening in e.openings:
+                if opening.placement.get("status") == "CONFIRMED":
+                    local = np.asarray(opening.placement["ifc_local_to_model"]).reshape(4, 4)
+                    opening.placement["model_to_common_world"] = matrix.ravel().tolist()
+                    opening.placement["effective_world"] = (matrix @ local).ravel().tolist()
         if not np.allclose(matrix, np.eye(4)):
             for e in model.elements:
                 for mesh in [e.mesh, *[o.mesh for o in e.openings]]:
@@ -141,6 +152,9 @@ def load_sources(paths, source_options=None, reference=False):
         graph.coverage = {m.source.source_id: m.mep_graph.coverage for m in models}
         result.mep_graph = graph
     result.model_bounds = bounds_for_vertices(
-        [v for e in result.elements if e.mesh for v in e.mesh.vertices]
+        [v for e in result.elements if e.bounding_box for v in (
+            [e.bounding_box.xmin, e.bounding_box.ymin, e.bounding_box.zmin],
+            [e.bounding_box.xmax, e.bounding_box.ymax, e.bounding_box.zmax],
+        )]
     )
     return result

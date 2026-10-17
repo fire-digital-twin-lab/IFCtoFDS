@@ -1,6 +1,7 @@
 """Read serialized FDS and verify against a separate source reference model."""
 
 import hashlib
+from ifc_to_fds.diagnostics import operation
 from .acceptance import (
     AcceptanceReport,
     AuditConfig,
@@ -10,7 +11,7 @@ from .acceptance import (
     Severity,
 )
 from .parser import parse_fds
-from .metrics import compare_solids, opening_residual, passage_metrics
+from .metrics import compare_solids, opening_residual, passage_metrics, SolidCandidateIndex
 from .solver import solver_gates
 from ifc_to_fds.core.compare import normalize
 from ifc_to_fds.core.canonical import MappingStrategy, ScopeDecision
@@ -21,6 +22,7 @@ def parse_serialized_fds_primitives(text):
     return {r.id: r for r in parse_fds(text).primitives}
 
 
+@operation("VALIDATION")
 def run_independent_validation(
     model, fds_text, manifest=None, config=None, expected_mep=None
 ):
@@ -61,10 +63,15 @@ def run_independent_validation(
             )
         )
 
-    def unknown(gate, reason):
+    def unknown(gate, reason, key=""):
         if report.gates[gate].status != GateStatus.FAIL:
             report.gates[gate].status = GateStatus.INCONCLUSIVE
             report.gates[gate].reason += reason + "; "
+        if key:
+            report.findings.append(Finding(
+                id=f"INC-{len(report.findings)+1:04}", severity=Severity.P2,
+                category=gate, title="Required evidence unavailable", detail=reason, element_id=key,
+            ))
 
     parsed = parse_fds(fds_text)
     for error in parsed.errors:
@@ -211,7 +218,16 @@ def run_independent_validation(
                 )
     else:
         unknown("traceability", "No manifest supplied")
-    opening_count = 0
+    opening_count = sum(
+        len(e.openings) for e in model.elements
+        if e.scope_decision != ScopeDecision.OUT_OF_SCOPE
+    )
+    reference_solids = SolidCandidateIndex(
+        x.mesh for x in model.elements if x.mesh and x.role == "PHYSICAL"
+        and x.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
+        and x.scope_decision in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+    )
+    exported_solids = SolidCandidateIndex(mesh for group in primitives.values() for mesh in group)
     for e in model.elements:
         key = e.entity_key
         if e.scope_decision == ScopeDecision.UNRESOLVED:
@@ -334,6 +350,23 @@ def run_independent_validation(
                 )
             continue
         if strategy == MappingStrategy.NONE.value:
+            if e.role == "PHYSICAL" and (not e.mesh or not valid_solid(e.mesh)):
+                detail = (
+                    f"Unsupported source geometry: entity={key}, STEP={e.step_id}, "
+                    f"GlobalId={e.global_id}, IFC type={e.ifc_type}; {e.mapping_rationale}"
+                )
+                report.element_statuses[key] = "UNSUPPORTED"
+                if e.mesh:
+                    finding("geometry", detail, key)
+                else:
+                    unknown("geometry", detail, key)
+                if e.openings:
+                    unknown("openings", f"Host geometry unavailable for opening proof: {key}", key)
+                continue
+            if any(not o.mesh or not valid_solid(o.mesh) for o in e.openings):
+                report.element_statuses[key] = "UNSUPPORTED"
+                unknown("openings", f"Host {key}: incomplete source opening extraction; {e.mapping_rationale}", key)
+                continue
             report.element_statuses[key] = (
                 "REVIEW_REQUIRED"
                 if e.review_status == "REVIEW_REQUIRED"
@@ -387,7 +420,6 @@ def run_independent_validation(
             unknown("geometry", f"{key}: solid comparison failed: {exc}")
             report.element_statuses[key] = "INCONCLUSIVE"
         for opening in e.openings:
-            opening_count += 1
             try:
                 source_residual = opening_residual([e.mesh], opening.mesh)
                 output_residual = opening_residual(meshes, opening.mesh)
@@ -409,19 +441,6 @@ def run_independent_validation(
                         f"Opening blocked in emitted host: {opening.opening_global_id}",
                         key,
                     )
-                reference_solids = [
-                    x.mesh
-                    for x in model.elements
-                    if x.mesh
-                    and x.role == "PHYSICAL"
-                    and x.mapping_strategy
-                    in (MappingStrategy.OBST, MappingStrategy.GEOM)
-                    and x.scope_decision
-                    in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
-                ]
-                exported_solids = [
-                    mesh for group in primitives.values() for mesh in group
-                ]
                 passage = passage_metrics(
                     reference_solids, exported_solids, opening.mesh
                 )
@@ -444,7 +463,7 @@ def run_independent_validation(
                 )
             except Exception as exc:
                 unknown("openings", f"{opening.opening_global_id}: {exc}")
-    if not opening_count:
+    if not opening_count and report.gates["openings"].status == GateStatus.PASS:
         report.gates["openings"] = GateResult(
             status=GateStatus.NOT_APPLICABLE,
             reason="No mapped host has source openings",
@@ -460,7 +479,8 @@ def run_independent_validation(
         for issue in model.mep_graph.issues:
             finding("mep", issue)
     if any(
-        e.classification_evidence and e.mep_category == "OTHER" for e in model.elements
+        e.classification_evidence and e.mep_category in ("OTHER", "UNRESOLVED")
+        and e.scope_decision != ScopeDecision.OUT_OF_SCOPE for e in model.elements
     ):
         unknown(
             "mep", "MEP classification is unresolved for one or more source elements"

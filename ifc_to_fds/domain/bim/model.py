@@ -38,6 +38,12 @@ class TriangleMesh(BaseModel):
 
 
 class OpeningReference(BaseModel):
+    entity_key: str = ""
+    host_entity_key: str = ""
+    void_relation_key: str = ""
+    filling_entity_keys: List[str] = Field(default_factory=list)
+    filling_relation_keys: List[str] = Field(default_factory=list)
+    placement: Dict[str, Any] = Field(default_factory=dict)
     opening_global_id: str
     opening_step_id: int
     opening_name: str
@@ -47,6 +53,7 @@ class OpeningReference(BaseModel):
     is_subtracted: bool = False
     mesh: Optional[TriangleMesh] = None
     verification_status: str = "NOT_RUN"
+    extraction_diagnostic: Optional[str] = None
 
 
 class StoreyReference(BaseModel):

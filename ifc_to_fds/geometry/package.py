@@ -176,8 +176,7 @@ def audit_package(model, package, report, config):
         if not in_scope or e.role != "PHYSICAL":
             continue
         if not e.has_3d_geometry and not e.mesh:
-            if e.simulation_role == "REFERENCE_GEOMETRY":
-                unknown(e.entity_key, "Source reference has no geometry representation")
+            unknown(e.entity_key, "Source physical element has no geometry representation")
             continue
         pairs = [("solid", e.mesh, entry.get("mesh"))]
         pairs += [
@@ -190,7 +189,11 @@ def audit_package(model, package, report, config):
         ]
         preserved = True
         for label, source, output in pairs:
-            if source is None or not valid_solid(source):
+            if source is None:
+                unknown(e.entity_key, f"Source {label} extraction unavailable")
+                preserved = False
+                continue
+            if not valid_solid(source):
                 fail(e.entity_key, f"Invalid or missing source {label}")
                 preserved = False
                 continue
