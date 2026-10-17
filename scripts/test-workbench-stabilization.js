@@ -9,8 +9,28 @@ for (const file of [
     'state/scenario-store.js', 'state/workbench-store.js', 'navigation/color-overlay.js'
 ]) vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/workbench', file), 'utf8'), context);
 const wb = context.IfcFds.workbench;
+context.window = context;
+context.IfcFds.viewer = {};
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/viewer/scene-viewer.js'), 'utf8'), context);
 const tests = [];
 function test(name, fn) { tests.push([name, fn]); }
+test('edge-display preserves opening outlines and composes with hidden entities', () => {
+    const regular = {_isIfcEdge: true}, opening = {_isIfcEdge: true, _isIfcOpeningEdge: true};
+    const group = {traverse: fn => [regular, opening].forEach(fn)};
+    const viewer = {ifcSolidGroup: group, ifcReferenceGroup: {traverse: () => {}}};
+    const setEdges = context.IfcFds.viewer.SceneViewer.prototype.setIfcEdgesVisible;
+    const channel = context.IfcFds.viewer.setVisibilityChannel;
+    setEdges.call(viewer, false);
+    assert.equal(regular.visible, false);
+    assert.equal(opening.visible, true);
+    channel(regular, 'workbench', true);
+    assert.equal(regular.visible, false);
+    channel(opening, 'workbench', false);
+    setEdges.call(viewer, true);
+    assert.equal(opening.visible, false);
+    channel(opening, 'workbench', true);
+    assert.equal(opening.visible, true);
+});
 test('canonical identity survives indexing, descriptors and duplicate GUIDs across sources', () => {
     const store = new wb.state.SelectionStore();
     const a = {entityKey: 'sha-a:42', sourceId: 'sha-a', globalId: 'GUID', stepId: 42};
@@ -39,6 +59,11 @@ test('unknown mapping and review approval never imply verification', () => {
     assert.notEqual(colors._getColorForDescriptor({mappingStrategy: 'OBST', raw: {verification_status: 'FAIL'}}, 'mapping'), green);
     assert.notEqual(colors._getColorForDescriptor({mappingStrategy: 'OBST', raw: {geometry_status: 'FAILED'}}, 'mapping'), green);
     assert.notEqual(colors._getColorForDescriptor({mappingStrategy: 'OBST', raw: {boundary_treatment: 'PENDING_VALIDATION'}}, 'mapping'), green);
+    for (const geometryStatus of ['failed', 'Invalid', ' unsupported ']) {
+        assert.equal(colors._getColorForDescriptor({mappingStrategy: 'OBST', raw: {geometry_status: geometryStatus}}, 'mapping'), 0xef4444);
+    }
+    assert.equal(colors._getColorForDescriptor({mappingStrategy: 'OBST', raw: {review_status: 'review_required'}}, 'mapping'), 0xf97316);
+    assert.equal(colors._getColorForDescriptor({mappingStrategy: 'OBST', raw: {boundary_treatment: 'pending_validation'}}, 'mapping'), 0xf97316);
     const pass = colors._getColorForDescriptor({raw: {verification_status: 'PASS'}}, 'verification');
     assert.notEqual(colors._getColorForDescriptor({raw: {review_status: 'PASS'}}, 'verification'), pass);
     assert.notEqual(colors._getColorForDescriptor({raw: {verification_status: 'NOT_PASS'}}, 'verification'), pass);
