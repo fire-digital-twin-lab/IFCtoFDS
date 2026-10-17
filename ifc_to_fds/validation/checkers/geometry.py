@@ -1,0 +1,188 @@
+"""Geometric fidelity and 3D solid preservation validation checker."""
+
+from typing import Any, Dict, List
+from ifc_to_fds.domain.mapping.enums import MappingStrategy
+from ifc_to_fds.domain.scope.model import ScopeDecision
+from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
+from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, Severity, ValidationContext
+from ifc_to_fds.geometry.mesh import bounds_for_vertices, valid_solid
+from ifc_to_fds.mapping.boundary import target_mesh
+from ifc_to_fds.validation.metrics import compare_solids
+
+
+class GeometryChecker:
+    name = "geometry"
+
+    def check(self, context: ValidationContext, parsed: Any = None) -> CheckerOutcome:
+        parsed = parsed if parsed is not None else context.parsed
+        model = context.model
+        config = context.config
+        findings: List[Finding] = []
+        element_statuses: Dict[str, str] = {}
+        metrics_dict: Dict[str, Any] = {}
+        status = GateStatus.PASS
+        reasons = []
+
+        domains = [r.values.get("XB") for r in parsed.records if r.kind == "MESH"]
+        primitives: Dict[str, List[Any]] = {}
+
+        for p in parsed.primitives:
+            key = p.source.get("entity_key", "")
+            if p.kind in ("OBST", "GEOM"):
+                try:
+                    solid = p.mesh()
+                    bounds = bounds_for_vertices(solid.vertices)
+                    if bounds and len(domains) == 1:
+                        xb = domains[0]
+                        coordinates = bounds.to_xb()
+                        if any(
+                            coordinates[i] < xb[i] - 1e-6
+                            if i % 2 == 0
+                            else coordinates[i] > xb[i] + 1e-6
+                            for i in range(6)
+                        ):
+                            status = GateStatus.FAIL
+                            findings.append(
+                                Finding(
+                                    id=f"FND-{len(findings) + 1:04}",
+                                    severity=Severity.P1,
+                                    category="geometry",
+                                    title=f"Primitive outside computational mesh: {p.id}",
+                                    detail=f"Primitive outside computational mesh: {p.id}",
+                                    element_id=key,
+                                )
+                            )
+                    primitives.setdefault(key, []).append(solid)
+                except ValueError as exc:
+                    status = GateStatus.FAIL
+                    findings.append(
+                        Finding(
+                            id=f"FND-{len(findings) + 1:04}",
+                            severity=Severity.P1,
+                            category="syntax",
+                            title=str(exc),
+                            detail=str(exc),
+                            element_id=key,
+                        )
+                    )
+            else:
+                if status != GateStatus.FAIL:
+                    status = GateStatus.INCONCLUSIVE
+                reasons.append(f"{p.kind} effective semantics not supported")
+
+        for e in model.elements:
+            key = e.entity_key
+            if e.scope_decision == ScopeDecision.OUT_OF_SCOPE:
+                continue
+
+            strategy = e.mapping_strategy
+            if strategy in (MappingStrategy.EXCLUDED_SCOPE, MappingStrategy.EXCLUDED_APPROVED):
+                element_statuses[key] = strategy.value
+                continue
+            if strategy == MappingStrategy.SEMANTIC_ONLY:
+                element_statuses[key] = "SEMANTIC_ONLY"
+                continue
+            if strategy == MappingStrategy.NONE:
+                if e.role == "PHYSICAL" and (not e.mesh or not valid_solid(e.mesh)):
+                    detail = (
+                        f"Unsupported source geometry: entity={key}, STEP={e.step_id}, "
+                        f"GlobalId={e.global_id}, IFC type={e.ifc_type}; {e.mapping_rationale}"
+                    )
+                    element_statuses[key] = "UNSUPPORTED"
+                    if e.mesh:
+                        status = GateStatus.FAIL
+                        findings.append(
+                            Finding(
+                                id=f"FND-{len(findings) + 1:04}",
+                                severity=Severity.P1,
+                                category="geometry",
+                                title=detail[:100],
+                                detail=detail,
+                                element_id=key,
+                            )
+                        )
+                    else:
+                        if status != GateStatus.FAIL:
+                            status = GateStatus.INCONCLUSIVE
+                        reasons.append(detail)
+                continue
+
+            meshes = primitives.get(key, [])
+            if not meshes:
+                element_statuses[key] = "MISSING"
+                continue
+
+            if not e.mesh or not valid_solid(e.mesh):
+                element_statuses[key] = "UNSUPPORTED"
+                status = GateStatus.FAIL
+                findings.append(
+                    Finding(
+                        id=f"FND-{len(findings) + 1:04}",
+                        severity=Severity.P1,
+                        category="geometry",
+                        title=f"Source physical solid missing or invalid: {e.global_id}",
+                        detail=f"Source physical solid missing or invalid: {e.global_id}",
+                        element_id=key,
+                    )
+                )
+                continue
+
+            try:
+                m = compare_solids(target_mesh(e), meshes)
+                metrics_dict[key] = m
+                surface_tol = config.surface_tolerance_m if config else 0.001
+                vol_tol = config.relative_volume_tolerance if config else 0.001
+                iou_tol = config.min_solid_iou if config else 0.999
+
+                fail = (
+                    float(m["surface_distance_m"]) > surface_tol
+                    or float(m["relative_volume_error"]) > vol_tol
+                    or float(m["solid_iou"]) < iou_tol
+                    or m["reference_components"] != m["output_components"]
+                )
+                if fail:
+                    status = GateStatus.FAIL
+                    findings.append(
+                        Finding(
+                            id=f"FND-{len(findings) + 1:04}",
+                            severity=Severity.P1,
+                            category="geometry",
+                            title=f"Geometric deviation: {m}",
+                            detail=f"Geometric deviation: {m}",
+                            element_id=key,
+                        )
+                    )
+                    element_statuses[key] = "DEVIATED"
+                elif not m["surface_proven"]:
+                    if status != GateStatus.FAIL:
+                        status = GateStatus.INCONCLUSIVE
+                    reasons.append(f"Full surface distance not proven for {key}")
+                    element_statuses[key] = "INCONCLUSIVE"
+                else:
+                    element_statuses[key] = "MATCHED"
+            except ValueError as exc:
+                status = GateStatus.FAIL
+                findings.append(
+                    Finding(
+                        id=f"FND-{len(findings) + 1:04}",
+                        severity=Severity.P1,
+                        category="geometry",
+                        title=f"{key}: invalid solid comparison: {exc}",
+                        detail=f"{key}: invalid solid comparison: {exc}",
+                        element_id=key,
+                    )
+                )
+                element_statuses[key] = "DEVIATED"
+            except Exception as exc:
+                if status != GateStatus.FAIL:
+                    status = GateStatus.INCONCLUSIVE
+                reasons.append(f"{key}: solid comparison failed: {exc}")
+                element_statuses[key] = "INCONCLUSIVE"
+
+        return CheckerOutcome(
+            gate_name="geometry",
+            result=GateResult(status=status, reason="; ".join(reasons)),
+            findings=findings,
+            metrics=metrics_dict,
+            element_statuses=element_statuses,
+        )

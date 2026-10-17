@@ -3,12 +3,17 @@
 from typing import Any, List, Optional
 from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome, GateChecker
 from ifc_to_fds.domain.validation.evaluator import AcceptanceEvaluator
-from ifc_to_fds.domain.validation.model import AcceptanceReport, AuditConfig, GateResult, GateStatus, ValidationContext
+from ifc_to_fds.domain.validation.model import AcceptanceReport, AuditConfig, GateStatus, ValidationContext
 from ifc_to_fds.validation.parser import parse_fds
 from ifc_to_fds.validation.checkers.syntax import FdsSyntaxChecker
 from ifc_to_fds.validation.checkers.domain import DomainChecker
 from ifc_to_fds.validation.checkers.traceability import TraceabilityChecker
 from ifc_to_fds.validation.checkers.scope import ScopeChecker
+from ifc_to_fds.validation.checkers.geometry import GeometryChecker
+from ifc_to_fds.validation.checkers.openings import OpeningsChecker
+from ifc_to_fds.validation.checkers.mep import MepChecker
+from ifc_to_fds.validation.checkers.boundary import BoundaryChecker
+from ifc_to_fds.validation.checkers.solver import SolverChecker
 
 
 class ValidationRunner:
@@ -25,6 +30,11 @@ class ValidationRunner:
             DomainChecker(),
             TraceabilityChecker(),
             ScopeChecker(),
+            GeometryChecker(),
+            OpeningsChecker(),
+            MepChecker(),
+            BoundaryChecker(),
+            SolverChecker(),
         ]
 
     def create_context(
@@ -49,7 +59,13 @@ class ValidationRunner:
     ) -> AcceptanceReport:
         context = self.create_context(model, fds_text, manifest, config)
         outcomes: List[CheckerOutcome] = []
+        syntax_passed = True
         for checker in self.checkers:
-            outcome = checker.check(context)
+            if isinstance(checker, SolverChecker):
+                outcome = checker.check(context, syntax_passed=syntax_passed)
+            else:
+                outcome = checker.check(context)
+                if checker.name == "syntax" and outcome.result.status != GateStatus.PASS:
+                    syntax_passed = False
             outcomes.append(outcome)
         return self.evaluator.evaluate(context, outcomes)
