@@ -239,8 +239,10 @@ def run_independent_validation(
     reference_solids = None
     exported_solids = None
     if opening_count > 0:
+        from ifc_to_fds.mapping.boundary import target_mesh
+
         reference_solids = SolidCandidateIndex(
-            x.mesh
+            target_mesh(x)
             for x in model.elements
             if x.mesh
             and x.role == "PHYSICAL"
@@ -365,9 +367,9 @@ def run_independent_validation(
             and e.scope_decision != ScopeDecision.OUT_OF_SCOPE
         ):
             unknown("representation", f"Review decision required for {key}")
-        if (
-            e.boundary_treatment == "PENDING_VALIDATION"
-            and e.representation_bounds is None
+        if e.boundary_treatment == "PENDING_VALIDATION" and (
+            e.representation_bounds is None
+            or e.boundary_policy == "SOURCE_SOLID_DOMAIN_INTERSECTION"
         ):
             unknown(
                 "boundary",
@@ -473,6 +475,15 @@ def run_independent_validation(
             unknown("geometry", f"{key}: solid comparison failed: {exc}")
             report.element_statuses[key] = "INCONCLUSIVE"
         for opening in e.openings:
+            if not opening.mesh or not valid_solid(opening.mesh):
+                unknown(
+                    "openings",
+                    f"Host {key}, opening STEP {opening.opening_step_id}: "
+                    f"{opening.extraction_diagnostic or 'missing or invalid opening solid'}; "
+                    "valid host retained; void evidence incomplete",
+                    key,
+                )
+                continue
             try:
                 source_residual = opening_residual([e.mesh], opening.mesh)
                 output_residual = opening_residual(meshes, opening.mesh)
@@ -517,7 +528,7 @@ def run_independent_validation(
                     passage=passage,
                 )
             except Exception as exc:
-                unknown("openings", f"{opening.opening_global_id}: {exc}")
+                unknown("openings", f"{opening.opening_global_id}: {exc}", key)
     if not opening_count and report.gates["openings"].status == GateStatus.PASS:
         report.gates["openings"] = GateResult(
             status=GateStatus.NOT_APPLICABLE,
@@ -551,6 +562,20 @@ def run_independent_validation(
         openings=opening_count,
         mep=model.mep_graph.coverage,
     )
+    from ifc_to_fds.domain.validation.model import ValidationContext
+    from .checkers.structural import StructuralCompletenessChecker
+
+    structural = StructuralCompletenessChecker().check(
+        ValidationContext(
+            model=model,
+            fds_text=fds_text,
+            manifest=manifest,
+            parsed_fds=parsed,
+            config=config,
+        )
+    )
+    report.gates[structural.gate_name] = structural.result
+    report.metrics.update(structural.metrics)
     from time import perf_counter
 
     solver_start = perf_counter()

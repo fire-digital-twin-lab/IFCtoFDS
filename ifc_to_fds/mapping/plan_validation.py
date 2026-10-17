@@ -7,7 +7,7 @@ from ifc_to_fds.geometry.mesh import (
     is_axis_aligned_box,
     valid_solid,
 )
-from .boundary import POLICY, eligible_bounds
+from .boundary import POLICY, EXACT_POLICY, eligible_bounds, exact_bounds
 from .policy import NON_OBSTACLE_TYPES, validate_decisions
 
 
@@ -111,11 +111,14 @@ def planned_model(model, plan):
                 for i, v in enumerate(source_bounds.to_xb())
             )
             if crosses:
-                expected = eligible_bounds(e, view)
-                if (
+                if d.boundary_policy == EXACT_POLICY:
+                    expected = exact_bounds(e, view)
+                    if d.strategy != MappingStrategy.GEOM or not expected:
+                        reject("exact domain intersection requires valid GEOM solid")
+                elif (
                     d.strategy != MappingStrategy.OBST
                     or d.boundary_policy != POLICY
-                    or not expected
+                    or not (expected := eligible_bounds(e, view))
                 ):
                     reject("crossing requires eligible boundary OBST policy")
             elif d.boundary_policy:

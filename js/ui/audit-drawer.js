@@ -1,6 +1,6 @@
 /**
  * Audit & Acceptance Console Drawer for IFCtoFDS Research Workbench.
- * Renders 9-gate cards, filterable findings table with P0-P3 severity badges,
+ * Renders core gate cards, filterable findings table with P0-P3 severity badges,
  * locate-in-3D hooks, and failed simulation checkpoint downloads.
  */
 (function (root) {
@@ -49,7 +49,7 @@
         if (findingsTbody) {
             findingsTbody.innerHTML = '';
             if (!findings.length) {
-                findingsTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">No active findings. All evaluated gates satisfied.</td></tr>';
+                findingsTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">No findings reported. Check gate statuses for unverified requirements.</td></tr>';
             } else {
                 findings.forEach(function (f) {
                     var tr = document.createElement('tr');

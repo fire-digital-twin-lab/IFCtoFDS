@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 import shutil
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from .jobs import JobManager
 from .results import ARTIFACTS
@@ -211,6 +211,16 @@ async def submit(files: list[UploadFile] = File(...), configuration: str = Form(
         raise HTTPException(429, str(exc))
 
 
+@app.post("/api/preview-jobs", status_code=202)
+async def submit_preview(file: UploadFile = File(...)):
+    directory, paths = await store_uploads([file])
+    try:
+        return manager.submit(paths, {}, directory, mode="preview")
+    except OverflowError as exc:
+        shutil.rmtree(directory)
+        raise HTTPException(429, str(exc))
+
+
 @app.get("/api/jobs/{jid}")
 def status(jid: str):
     try:
@@ -283,6 +293,31 @@ def checkpoint_artifact(jid: str, artifact: str):
             "UNACCEPTED-AUDIT_INCOMPLETE-DO_NOT_USE_AS_VERIFIED_OUTPUT"
         )
         return response
+
+
+@app.get("/api/jobs/{jid}/geometry-batch")
+def geometry_batch(jid: str, payloads: list[str] = Query(...)):
+    if not 1 <= len(payloads) <= 16:
+        raise HTTPException(422, "Request between 1 and 16 geometry payloads")
+    # Reuse the job-local, completed-artifact whitelist for every member.
+    paths = [Path(geometry_payload(jid, key).path) for key in payloads]
+    length = sum(path.stat().st_size for path in paths)
+    if length > 16 * 1024**2:
+        raise HTTPException(
+            413, "Geometry batch exceeds 16 MiB; fetch large payloads individually"
+        )
+
+    def chunks():
+        for path in paths:
+            with path.open("rb") as stream:
+                for block in iter(lambda: stream.read(1024**2), b""):
+                    yield block
+
+    return StreamingResponse(
+        chunks(),
+        media_type="application/octet-stream",
+        headers={"Content-Length": str(length)},
+    )
 
 
 @app.get("/api/jobs/{jid}/geometry/{payload}")

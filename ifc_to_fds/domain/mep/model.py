@@ -42,6 +42,13 @@ class PortReference(BaseModel):
 
 
 class MEPSystem(BaseModel):
+    ifc_type: str = ""
+    object_type: str = ""
+    predefined_type: str = ""
+    description: str = ""
+    property_sets: Dict[str, Any] = Field(default_factory=dict)
+    classifications: List[Dict[str, Any]] = Field(default_factory=list)
+    classification_evidence: List[str] = Field(default_factory=list)
     assignment_relation_keys: List[str] = Field(default_factory=list)
     system_id: str
     name: str

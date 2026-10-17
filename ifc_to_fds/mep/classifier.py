@@ -1,5 +1,30 @@
 """Prefer explicit IFC type/system semantics to names."""
 
+import unicodedata
+import re
+
+
+def semantic_label(value):
+    text = unicodedata.normalize("NFKD", str(value or "")).casefold().replace("đ", "d")
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return re.sub(r"[\W_]+", " ", text).strip()
+
+
+# Exact declared IfcSystem.ObjectType vocabulary. These rules never inspect a
+# product/system Name or guess from a substring such as SPR/FP/SMOKE.
+SYSTEM_OBJECT_TYPES = {
+    "he thong chua chay sprinkler": "FIRE_SUPPRESSION",
+    "fp he thong chua chay sprinkler": "FIRE_SUPPRESSION",
+    "he thong tang ap": "SMOKE_EXTRACT",
+    "he thong hut khoi": "SMOKE_EXTRACT",
+    "he thong thong gio bai do xe": "VENTILATION",
+    "he thong cap gio tuoi": "VENTILATION",
+    "he thong thong gio ve sinh": "VENTILATION",
+    "m return air": "VENTILATION",
+    "return air": "VENTILATION",
+    "supply air": "VENTILATION",
+}
+
 HVAC_TYPES = {
     "IFCDUCTSEGMENT",
     "IFCDUCTFITTING",
@@ -36,6 +61,7 @@ def classify_mep_element(
     type_class="",
     property_sets=None,
     system_categories=(),
+    object_type="",
 ):
     t = (type_class or ifc_type or "").upper()
     if t.endswith("TYPE"):
@@ -74,9 +100,22 @@ def classify_mep_element(
             return "UNRESOLVED", False
         return category, category in ("FIRE_SUPPRESSION", "SMOKE_EXTRACT")
 
-    for category, values in enum_categories.items():
-        if p in values:
-            return result(category)
+    declared = {
+        category
+        for category, values in enum_categories.items()
+        if p in values
+        or (
+            object_type
+            and semantic_label(object_type) in {semantic_label(v) for v in values}
+        )
+    }
+    if semantic_label(object_type) in SYSTEM_OBJECT_TYPES:
+        declared.add(SYSTEM_OBJECT_TYPES[semantic_label(object_type)])
+    if len(declared) > 1:
+        return "UNRESOLVED", False
+    if declared:
+        return result(next(iter(declared)))
+
     def resolve_category(cat):
         if cat in enum_categories:
             return cat

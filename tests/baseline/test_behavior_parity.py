@@ -44,7 +44,9 @@ def assert_semantic_parity(actual: dict, expected: dict):
     assert actual["mep_systems_count"] == expected["mep_systems_count"]
     assert actual["mep_connections_count"] == expected["mep_connections_count"]
     assert actual["fds_summary"] == expected["fds_summary"]
-    assert actual["gates"] == expected["gates"]
+    # Preserve the frozen baseline, requiring the new completeness gate to pass
+    # as well. These six baseline cases have no withheld structural solids.
+    assert actual["gates"] == {**expected["gates"], "structural_completeness": "PASS"}
     assert actual["findings_count"] == expected["findings_count"]
     assert actual["geometry_package_sha256"] == expected["geometry_package_sha256"]
     assert actual["manifest_csv_sha256"] == expected["manifest_csv_sha256"]
