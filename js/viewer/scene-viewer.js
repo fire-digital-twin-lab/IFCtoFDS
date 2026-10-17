@@ -1534,6 +1534,72 @@
         return helper;
     };
 
+    SceneViewer.prototype.focusSelection = function () {
+        if (!this.selectedObjects || !this.selectedObjects.length) return;
+        var box = new THREE.Box3();
+        this.selectedObjects.forEach(function (obj) {
+            box.expandByObject(obj);
+        });
+        if (!box.isEmpty()) {
+            var center = box.getCenter(new THREE.Vector3());
+            var size = box.getSize(new THREE.Vector3());
+            var span = Math.max(size.x, size.y, size.z, 0.5);
+            this.controls.target.copy(center);
+            this.camera.position.set(center.x + span * 1.5, center.y + span * 1.2, center.z + span * 1.5);
+            this.controls.update();
+        }
+    };
+
+    SceneViewer.prototype.selectByEntityKeys = function (keys) {
+        if (!keys || !keys.length) {
+            this.setSelectedObjects([]);
+            return;
+        }
+        var keyMap = {};
+        for (var i = 0; i < keys.length; i++) keyMap[String(keys[i])] = true;
+        var matched = [];
+        var createEntityKey = (window.IfcFds && window.IfcFds.workbench && window.IfcFds.workbench.createEntityKey) || function () { return ''; };
+
+        function checkNode(node) {
+            if (!node || !node.userData || !node.userData.type) return;
+            var k = createEntityKey(node.userData);
+            if (keyMap[k]) {
+                matched.push(node);
+            }
+        }
+
+        if (this.fdsGroup) this.fdsGroup.traverse(checkNode);
+        if (this.ifcGroup) this.ifcGroup.traverse(checkNode);
+        this.setSelectedObjects(matched);
+    };
+
+    SceneViewer.prototype.applyVisibilityState = function (visStore) {
+        if (!visStore) return;
+        var createEntityKey = (window.IfcFds && window.IfcFds.workbench && window.IfcFds.workbench.createEntityKey) || function () { return ''; };
+
+        function updateNode(node) {
+            if (!node.isMesh && !node.isLineSegments) return;
+            if (!node.userData || !node.userData.type) return;
+            var k = createEntityKey(node.userData);
+            var visible = visStore.isKeyVisible(k, node.userData);
+            node.visible = visible;
+            var ghosted = visStore.isKeyGhosted(k);
+            if (node.material) {
+                if (ghosted) {
+                    if (node._origOpacity === undefined) node._origOpacity = node.material.opacity;
+                    node.material.transparent = true;
+                    node.material.opacity = 0.15;
+                } else if (node._origOpacity !== undefined) {
+                    node.material.opacity = node._origOpacity;
+                    delete node._origOpacity;
+                }
+            }
+        }
+
+        if (this.fdsGroup) this.fdsGroup.traverse(updateNode);
+        if (this.ifcGroup) this.ifcGroup.traverse(updateNode);
+    };
+
     SceneViewer.prototype.clearHover = function () {
         this.setHoveredObject(null);
         this.container.classList.remove('is-picking');

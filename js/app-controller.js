@@ -51,7 +51,25 @@
         applyTheme(readSavedTheme());
         if (window.lucide) window.lucide.createIcons();
         if (ns.ui && ns.ui.domainPanel) ns.ui.domainPanel.init(els);
-        if (ns.ui && ns.ui.inspectorPanel) ns.ui.inspectorPanel.init(els);
+        if (ns.workbench && ns.workbench.inspector && ns.workbench.inspector.inspectorController) {
+            ns.workbench.inspector.inspectorController.init(els, viewer);
+        } else if (ns.ui && ns.ui.inspectorPanel) {
+            ns.ui.inspectorPanel.init(els, viewer);
+        }
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore) {
+            ns.workbench.state.selectionStore.subscribe(function (payload) {
+                if (payload.source !== 'viewer' && viewer && typeof viewer.selectByEntityKeys === 'function') {
+                    viewer.selectByEntityKeys(payload.keys);
+                }
+            });
+        }
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.visibilityStore) {
+            ns.workbench.state.visibilityStore.subscribe(function () {
+                if (viewer && typeof viewer.applyVisibilityState === 'function') {
+                    viewer.applyVisibilityState(ns.workbench.state.visibilityStore);
+                }
+            });
+        }
         if (ns.ui && ns.ui.auditDrawer) ns.ui.auditDrawer.init(els, viewer);
         bindEvents();
         ns.verified.init();
@@ -170,6 +188,14 @@
         setLoadingProgress(1, 'Rendering…');
         viewer.loadIfcModel(model, displayMeshes);
         viewer.setIfcOpacity(Number(els.ifcOpacity.value));
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore) {
+            if (model && model.elements) {
+                ns.workbench.state.selectionStore.indexElements(
+                    model.elements,
+                    state.currentIfcFile ? state.currentIfcFile.name : 'ifc'
+                );
+            }
+        }
         updateIfcMetrics(model);
         updateSourcePill(state.currentIfcFile, model);
         setExportEnabled(countConvertibleIfc(model) > 0);
@@ -770,6 +796,10 @@
         ns.core.atStage('viewer', function () { viewer.loadFdsModel(model); });
         viewer.setFdsOpacity(Number(els.fdsOpacity.value));
         viewer.setExclusions(state.excludedStepIds, state.excludedItemIds);
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore) {
+            var fdsItems = [].concat(model.obsts || [], model.geoms || [], model.vents || [], model.holes || []);
+            ns.workbench.state.selectionStore.indexElements(fdsItems, sourceName || 'fds');
+        }
         updateMetrics(model);
         renderDiagnostics();
         showSelection(null);
@@ -789,6 +819,9 @@
         state.fdsModel = model;
         els.fdsSourceName.textContent = 'No conversion';
         viewer.loadFdsModel(model);
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.workbenchStore) {
+            ns.workbench.state.workbenchStore.resetAll();
+        }
         updateMetrics(model);
         renderDiagnostics();
         showSelection(null);
@@ -868,20 +901,24 @@
         var selection = normalizeSelection(data);
         state.selection = selection;
         refreshConversionActions();
-        if (!selection.length) {
-            els.inspectCard.hidden = true;
-            return;
+        if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore) {
+            ns.workbench.state.selectionStore.setSelection(selection, 'viewer');
+        } else {
+            if (!selection.length) {
+                els.inspectCard.hidden = true;
+                return;
+            }
+            els.inspectCard.hidden = false;
+            if (selection.length === 1) {
+                els.inspectTitle.textContent = selection[0].type + (selection[0].id ? ': ' + selection[0].id : '');
+                renderStructuredInspector(selection[0]);
+                els.inspectBody.textContent = JSON.stringify(selectionDetails(selection[0]), null, 2);
+                return;
+            }
+            els.inspectTitle.textContent = 'Selected objects: ' + selection.length;
+            renderStructuredInspector(null);
+            els.inspectBody.textContent = JSON.stringify(selection.map(selectionDetails), null, 2);
         }
-        els.inspectCard.hidden = false;
-        if (selection.length === 1) {
-            els.inspectTitle.textContent = selection[0].type + (selection[0].id ? ': ' + selection[0].id : '');
-            renderStructuredInspector(selection[0]);
-            els.inspectBody.textContent = JSON.stringify(selectionDetails(selection[0]), null, 2);
-            return;
-        }
-        els.inspectTitle.textContent = 'Selected objects: ' + selection.length;
-        renderStructuredInspector(null);
-        els.inspectBody.textContent = JSON.stringify(selection.map(selectionDetails), null, 2);
     }
 
     function selectionDetails(data) {
@@ -1181,6 +1218,11 @@
             state.generatedFdsText = text; state.generatedFdsName = fileName;
             if (els.saveFds) els.saveFds.disabled = false;
             loadFdsText(text, fileName);
+            if (ns.workbench && ns.workbench.state && ns.workbench.state.scenarioStore) {
+                if (data.artifacts && data.artifacts.manifest && data.artifacts.manifest.sha256) {
+                    ns.workbench.state.scenarioStore.setBaseMapping(data.artifacts.manifest.sha256);
+                }
+            }
             setupClippingForBounds(boundsForClipping());
         })
         .catch(function (err) {
