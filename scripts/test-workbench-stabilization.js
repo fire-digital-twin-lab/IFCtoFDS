@@ -16,17 +16,21 @@ const tests = [];
 function test(name, fn) { tests.push([name, fn]); }
 test('edge-display preserves opening outlines and composes with hidden entities', () => {
     const regular = {_isIfcEdge: true}, opening = {_isIfcEdge: true, _isIfcOpeningEdge: true};
+    const referenceEdge = {_isIfcEdge: true};
     const group = {traverse: fn => [regular, opening].forEach(fn)};
-    const viewer = {ifcSolidGroup: group, ifcReferenceGroup: {traverse: () => {}}};
+    const viewer = {ifcSolidGroup: group, ifcReferenceGroup: {traverse: () => {}},
+        verifiedReferenceGroup: {traverse: fn => fn(referenceEdge)}};
     const setEdges = context.IfcFds.viewer.SceneViewer.prototype.setIfcEdgesVisible;
     const channel = context.IfcFds.viewer.setVisibilityChannel;
     setEdges.call(viewer, false);
     assert.equal(regular.visible, false);
     assert.equal(opening.visible, true);
+    assert.equal(referenceEdge.visible, false);
     channel(regular, 'workbench', true);
     assert.equal(regular.visible, false);
     channel(opening, 'workbench', false);
     setEdges.call(viewer, true);
+    assert.equal(referenceEdge.visible, true);
     assert.equal(opening.visible, false);
     channel(opening, 'workbench', true);
     assert.equal(opening.visible, true);
