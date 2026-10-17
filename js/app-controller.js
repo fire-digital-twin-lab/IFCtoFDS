@@ -1300,7 +1300,26 @@
             if (els.openAudit) els.openAudit.disabled = false;
             if (els.saveManifest) els.saveManifest.disabled = false;
             if (viewer.bindVerifiedArtifacts) viewer.bindVerifiedArtifacts(data.artifacts);
-            renderAuditReport(summary); openAudit();
+
+            var manifestPromise = (data.artifacts.manifest && data.artifacts.manifest.url)
+                ? fetch(data.artifacts.manifest.url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+                : Promise.resolve(null);
+            var reportPromise = (data.artifacts.report && data.artifacts.report.url)
+                ? fetch(data.artifacts.report.url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+                : Promise.resolve(null);
+
+            var extraArtifacts = await Promise.all([manifestPromise, reportPromise]);
+            var manifestData = extraArtifacts[0];
+            var fullReport = extraArtifacts[1] || summary;
+            state.lastManifest = manifestData;
+            state.lastAuditReport = fullReport;
+
+            if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore && manifestData) {
+                var records = manifestData.records || manifestData.elements || [];
+                ns.workbench.state.selectionStore.hydrateManifest(records, fullReport);
+            }
+
+            renderAuditReport(fullReport); openAudit();
             var response = await fetch(data.artifacts.fds.url);
             if (!response.ok) throw new Error('FDS artifact unavailable');
             var text = await response.text();
@@ -1311,8 +1330,10 @@
             if (els.saveFds) els.saveFds.disabled = false;
             loadFdsText(text, fileName);
             if (ns.workbench && ns.workbench.state && ns.workbench.state.scenarioStore) {
-                if (data.artifacts && data.artifacts.manifest && data.artifacts.manifest.sha256) {
-                    ns.workbench.state.scenarioStore.setBaseMapping(data.artifacts.manifest.sha256);
+                var mSha = (data.artifacts && data.artifacts.manifest && data.artifacts.manifest.sha256) ||
+                           (manifestData && (manifestData.bundle_sha256 || manifestData.source_sha256));
+                if (mSha) {
+                    ns.workbench.state.scenarioStore.setBaseMapping(mSha);
                 }
             }
             setupClippingForBounds(boundsForClipping());

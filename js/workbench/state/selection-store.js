@@ -17,6 +17,9 @@
         this._selectedKeys = {}; // entityKey -> true
         this._selectedItems = []; // Array of descriptors
         this._entityIndex = {}; // entityKey -> descriptor
+        this._byStepId = {}; // stepId (str) -> descriptor
+        this._byGlobalId = {}; // globalId (str) -> descriptor
+        this._aliasMap = {}; // aliasKey -> canonicalKey
         this._listeners = [];
     }
 
@@ -35,6 +38,12 @@
             var desc = normalizeEntityDescriptor(item);
             if (!desc || !desc.entityKey) continue;
             this._entityIndex[desc.entityKey] = desc;
+            if (desc.stepId !== null && desc.stepId !== undefined) {
+                this._byStepId[String(desc.stepId)] = desc;
+            }
+            if (desc.globalId) {
+                this._byGlobalId[String(desc.globalId)] = desc;
+            }
         }
         if (events && WORKBENCH_EVENTS) {
             events.emit(WORKBENCH_EVENTS.MODEL_INDEXED, {
@@ -43,15 +52,93 @@
         }
     };
 
+    SelectionStore.prototype.hydrateManifest = function (records, report) {
+        if (!records || !records.length) return;
+        var elementStatuses = (report && report.element_statuses) || {};
+        for (var i = 0; i < records.length; i++) {
+            var rec = records[i];
+            if (!rec) continue;
+            var canonicalKey = rec.entity_key;
+            var stepId = rec.step_id !== undefined ? String(rec.step_id) : null;
+            var globalId = rec.global_id ? String(rec.global_id) : null;
+
+            var desc = this._entityIndex[canonicalKey] ||
+                (stepId && this._byStepId[stepId]) ||
+                (globalId && this._byGlobalId[globalId]);
+
+            if (desc) {
+                desc.canonicalKey = canonicalKey;
+                desc.simulationRole = rec.simulation_role || desc.simulationRole;
+                desc.mappingStrategy = rec.mapping_strategy || desc.mappingStrategy;
+                desc.representation = rec.fds_representation || desc.representation;
+                desc.boundaryTreatment = rec.boundary_treatment || desc.boundaryTreatment;
+                desc.reviewStatus = rec.review_status || desc.reviewStatus;
+                desc.fdsPrimitiveIds = rec.fds_primitive_ids || desc.fdsPrimitiveIds;
+                if (elementStatuses[canonicalKey]) {
+                    desc.verificationStatus = elementStatuses[canonicalKey];
+                    if (!desc.raw) desc.raw = {};
+                    desc.raw.verification_status = elementStatuses[canonicalKey];
+                    desc.raw.review_status = elementStatuses[canonicalKey];
+                }
+                if (rec.mep_data) {
+                    desc.mepCategory = rec.mep_data.category || desc.mepCategory;
+                    desc.systemNames = rec.mep_data.system_names || desc.systemNames;
+                    desc.systemIds = rec.mep_data.system_ids || desc.systemIds;
+                    desc.portsCount = (rec.mep_data.ports && rec.mep_data.ports.length) || desc.portsCount;
+                }
+                this._aliasMap[canonicalKey] = desc.entityKey;
+                this._aliasMap[desc.entityKey] = canonicalKey;
+                this._entityIndex[canonicalKey] = desc;
+            } else {
+                var newDesc = normalizeEntityDescriptor({
+                    entityKey: canonicalKey,
+                    sourceId: rec.source_id,
+                    globalId: rec.global_id,
+                    stepId: rec.step_id,
+                    ifcType: rec.ifc_type,
+                    name: rec.name || (rec.ifc_type + ' #' + rec.step_id),
+                    storey: rec.storey,
+                    simulationRole: rec.simulation_role,
+                    mappingStrategy: rec.mapping_strategy,
+                    representation: rec.fds_representation,
+                    boundaryTreatment: rec.boundary_treatment,
+                    reviewStatus: elementStatuses[canonicalKey] || rec.review_status || 'NOT_REQUIRED',
+                    raw: rec
+                });
+                if (newDesc && newDesc.entityKey) {
+                    this._entityIndex[newDesc.entityKey] = newDesc;
+                    if (newDesc.stepId) this._byStepId[String(newDesc.stepId)] = newDesc;
+                    if (newDesc.globalId) this._byGlobalId[String(newDesc.globalId)] = newDesc;
+                }
+            }
+        }
+        if (events && WORKBENCH_EVENTS) {
+            events.emit(WORKBENCH_EVENTS.MODEL_INDEXED, {
+                totalIndexed: Object.keys(this._entityIndex).length,
+                hydrated: true
+            });
+        }
+    };
+
     SelectionStore.prototype.clearIndex = function () {
         this._entityIndex = {};
+        this._byStepId = {};
+        this._byGlobalId = {};
+        this._aliasMap = {};
         this.clearSelection('system');
         if (events && WORKBENCH_EVENTS) events.emit(WORKBENCH_EVENTS.MODEL_INDEXED, {totalIndexed: 0});
     };
 
     SelectionStore.prototype.getDescriptor = function (key) {
         if (!key) return null;
-        return this._entityIndex[key] || null;
+        var k = String(key);
+        if (this._entityIndex[k]) return this._entityIndex[k];
+        if (this._aliasMap[k] && this._entityIndex[this._aliasMap[k]]) return this._entityIndex[this._aliasMap[k]];
+        var parts = k.split(':');
+        var idPart = parts.length > 1 ? parts.slice(1).join(':') : k;
+        if (this._byStepId[idPart]) return this._byStepId[idPart];
+        if (this._byGlobalId[idPart]) return this._byGlobalId[idPart];
+        return null;
     };
 
     SelectionStore.prototype.getAllDescriptors = function () {

@@ -11,6 +11,7 @@ from ifc_to_fds.validation.checkers.traceability import TraceabilityChecker
 from ifc_to_fds.validation.checkers.scope import ScopeChecker
 from ifc_to_fds.validation.checkers.geometry import GeometryChecker
 from ifc_to_fds.validation.checkers.structural import StructuralCompletenessChecker
+from ifc_to_fds.validation.checkers.air_path import AirPathTopologyChecker
 from ifc_to_fds.validation.checkers.openings import OpeningsChecker
 from ifc_to_fds.validation.checkers.mep import MepChecker
 from ifc_to_fds.validation.checkers.boundary import BoundaryChecker
@@ -33,6 +34,7 @@ class ValidationRunner:
             ScopeChecker(),
             GeometryChecker(),
             StructuralCompletenessChecker(),
+            AirPathTopologyChecker(),
             OpeningsChecker(),
             MepChecker(),
             BoundaryChecker(),

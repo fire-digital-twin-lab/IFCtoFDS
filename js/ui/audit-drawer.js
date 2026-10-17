@@ -42,8 +42,34 @@
         }
 
         var findings = report.findings || [];
+        var totalFindings = (typeof report.findings_count === 'number')
+            ? report.findings_count
+            : ((typeof report.total_findings === 'number') ? report.total_findings : findings.length);
         var findingCountBadge = document.getElementById('drawer-finding-count');
-        if (findingCountBadge) findingCountBadge.textContent = findings.length;
+        if (findingCountBadge) findingCountBadge.textContent = totalFindings;
+
+        var panelFindings = document.getElementById('panel-findings');
+        var truncationBanner = document.getElementById('findings-truncation-banner');
+        if (totalFindings > findings.length) {
+            if (!truncationBanner && panelFindings) {
+                truncationBanner = document.createElement('div');
+                truncationBanner.id = 'findings-truncation-banner';
+                truncationBanner.style.padding = '6px 12px';
+                truncationBanner.style.marginBottom = '8px';
+                truncationBanner.style.fontSize = '11px';
+                truncationBanner.style.background = 'var(--status-warning-bg)';
+                truncationBanner.style.color = 'var(--status-warning-text)';
+                truncationBanner.style.border = '1px solid var(--status-warning-border)';
+                truncationBanner.style.borderRadius = 'var(--radius-xs)';
+                panelFindings.insertBefore(truncationBanner, panelFindings.firstChild);
+            }
+            if (truncationBanner) {
+                truncationBanner.style.display = 'block';
+                truncationBanner.textContent = 'Showing first ' + findings.length + ' of ' + totalFindings + ' findings. Download full acceptance report or refine scope for complete list.';
+            }
+        } else if (truncationBanner) {
+            truncationBanner.style.display = 'none';
+        }
 
         var findingsTbody = document.getElementById('findings-table-body');
         if (findingsTbody) {
@@ -92,8 +118,16 @@
                         btn.style.fontSize = '10px';
                         btn.textContent = 'Locate';
                         btn.addEventListener('click', function () {
-                            if (activeViewer && activeViewer.selectElementByKey) {
-                                activeViewer.selectElementByKey(f.element_id);
+                            if (root.IfcFds && root.IfcFds.workbench && root.IfcFds.workbench.selection && root.IfcFds.workbench.selection.selectionManager) {
+                                root.IfcFds.workbench.selection.selectionManager.selectByEntityKeys([f.element_id]);
+                            }
+                            if (activeViewer) {
+                                if (typeof activeViewer.selectByEntityKeys === 'function') {
+                                    activeViewer.selectByEntityKeys([f.element_id]);
+                                }
+                                if (typeof activeViewer.focusSelection === 'function') {
+                                    activeViewer.focusSelection();
+                                }
                             }
                         });
                         tdAct.appendChild(btn);

@@ -1,7 +1,7 @@
 """Account for structural solids before reporting a complete enclosure mapping."""
 
 from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
-from ifc_to_fds.domain.validation.model import GateResult, GateStatus
+from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, Severity
 
 STRUCTURAL_TYPES = {
     "IFCWALL",
@@ -41,6 +41,31 @@ class StructuralCompletenessChecker:
                     missing.append(e.entity_key)
             else:
                 withheld.append(e.entity_key)
+
+        findings = []
+        for key in missing:
+            findings.append(
+                Finding(
+                    id=f"FND-{len(findings) + 1:04}",
+                    severity=Severity.P1,
+                    category=self.name,
+                    title=f"Missing required structural solid: {key}",
+                    detail=f"Structural entity {key} was mapped as OBST/GEOM but no corresponding FDS primitive was emitted.",
+                    element_id=key,
+                )
+            )
+        for key in withheld:
+            findings.append(
+                Finding(
+                    id=f"FND-{len(findings) + 1:04}",
+                    severity=Severity.P2,
+                    category=self.name,
+                    title=f"Withheld structural solid: {key}",
+                    detail=f"Structural entity {key} has an unresolved mapping strategy and was withheld from FDS output.",
+                    element_id=key,
+                )
+            )
+
         return CheckerOutcome(
             gate_name=self.name,
             result=GateResult(
@@ -56,7 +81,7 @@ class StructuralCompletenessChecker:
                     "reviewed_dispositions": disposed,
                 },
             ),
-            findings=[],
+            findings=findings,
             metrics={
                 "structural_completeness": {
                     "source_count": len(expected),

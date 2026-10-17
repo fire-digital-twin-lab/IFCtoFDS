@@ -603,6 +603,7 @@ def run_independent_validation(
         )
     )
     report.gates[structural.gate_name] = structural.result
+    report.findings.extend(structural.findings)
     report.metrics.update(structural.metrics)
     from time import perf_counter
 

@@ -537,7 +537,7 @@
                     <button id="drawer-tab-gates" class="audit-tab-btn active" type="button">
                         <i data-lucide="shield-check" style="width:14px;height:14px"></i>
                         <span>Validation Gates</span>
-                        <span id="drawer-gate-count" class="brand-badge" style="background:var(--bg-base);font-size:9px">10</span>
+                        <span id="drawer-gate-count" class="brand-badge" style="background:var(--bg-base);font-size:9px">11</span>
                     </button>
                     <button id="drawer-tab-findings" class="audit-tab-btn" type="button">
                         <i data-lucide="alert-circle" style="width:14px;height:14px"></i>
@@ -566,6 +566,7 @@
                     <div class="gate-card" data-gate="scope"><div class="gate-card-header"><span class="gate-card-title">Spatial Scope</span><span class="status-dot"></span></div><span class="gate-card-reason">Storeys &amp; domain boundary</span></div>
                     <div class="gate-card" data-gate="geometry"><div class="gate-card-header"><span class="gate-card-title">Geometry</span><span class="status-dot"></span></div><span class="gate-card-reason">Binary64 OpenCASCADE comparison</span></div>
                     <div class="gate-card" data-gate="structural_completeness"><div class="gate-card-header"><span class="gate-card-title">Structural Coverage</span><span class="status-dot"></span></div><span class="gate-card-reason">In-scope walls, floors and structure accounted for</span></div>
+                    <div class="gate-card" data-gate="air_path"><div class="gate-card-header"><span class="gate-card-title">Air Path &amp; Enclosure</span><span class="status-dot"></span></div><span class="gate-card-reason">Topological free-space airtightness &amp; leak detection</span></div>
                     <div class="gate-card" data-gate="openings"><div class="gate-card-header"><span class="gate-card-title">Openings</span><span class="status-dot"></span></div><span class="gate-card-reason">Void subtraction &amp; aperture checks</span></div>
                     <div class="gate-card" data-gate="mep"><div class="gate-card-header"><span class="gate-card-title">MEP Systems</span><span class="status-dot"></span></div><span class="gate-card-reason">Structured classification &amp; ports</span></div>
                     <div class="gate-card" data-gate="boundary"><div class="gate-card-header"><span class="gate-card-title">Boundary</span><span class="status-dot"></span></div><span class="gate-card-reason">Boundary treatment verification</span></div>
@@ -735,11 +736,11 @@
         </article>
     </section>
 
-    <!-- Dependencies -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <!-- Local Vendored Dependencies (100% Offline & Private) -->
+    <script src="js/vendor/three.min.js"></script>
+    <script src="js/vendor/OrbitControls.js"></script>
+    <script src="js/vendor/PointerLockControls.js"></script>
+    <script src="js/vendor/lucide.min.js"></script>
     <script src="js/vendor/earcut.min.js"></script>
 
     <!-- Core & Workflow Scripts -->

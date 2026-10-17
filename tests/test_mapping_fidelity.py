@@ -307,3 +307,104 @@ def test_rejected_source_preflight_does_not_claim_remaining_geometry_checked(
     assert full.status == "REJECTED"
     assert full.element_statuses[healthy.entity_key] == "MATCHED"
     assert len(calls) == 1
+
+
+def test_structural_completeness_checker_emits_findings_on_missing_solids(box_model):
+    from ifc_to_fds.validation.checkers.structural import StructuralCompletenessChecker
+    from ifc_to_fds.domain.validation.model import Severity, ValidationContext, AuditConfig
+
+    # box_model element[0] is IFCWALL
+    context = ValidationContext(
+        model=box_model,
+        fds_text="&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,1,0,1,0,1 /\n",  # No OBST or GEOM
+        manifest=None,
+        config=AuditConfig(),
+    )
+    checker = StructuralCompletenessChecker()
+    outcome = checker.check(context)
+    assert outcome.result.status == "FAIL"
+    assert len(outcome.findings) == 1
+    assert outcome.findings[0].severity == Severity.P1
+    assert outcome.findings[0].category == "structural_completeness"
+    assert outcome.findings[0].element_id == box_model.elements[0].entity_key
+
+
+def test_air_path_topology_checker_detects_leak_and_verifies_enclosure(box_model):
+    from ifc_to_fds.validation.checkers.air_path import AirPathTopologyChecker
+    from ifc_to_fds.domain.validation.model import Severity, ValidationContext, AuditConfig
+
+    checker = AirPathTopologyChecker()
+
+    # Case 1: Perfect match (OBST matches box model)
+    xb = [0.0, 2.0, 0.0, 1.0, 0.0, 3.0]
+    fds_perfect = f"&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n&OBST XB={','.join(map(str, xb))}, SURF_ID='INERT' /\n"
+    context_pass = ValidationContext(
+        model=box_model,
+        fds_text=fds_perfect,
+        manifest=None,
+        config=AuditConfig(),
+    )
+    outcome_pass = checker.check(context_pass)
+    assert outcome_pass.result.status == "PASS"
+    assert not outcome_pass.findings
+
+    # Case 2: Zero emitted obstacles when enclosure expected
+    context_zero = ValidationContext(
+        model=box_model,
+        fds_text="&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n",
+        manifest=None,
+        config=AuditConfig(),
+    )
+    outcome_zero = checker.check(context_zero)
+    assert outcome_zero.result.status == "FAIL"
+    assert len(outcome_zero.findings) == 1
+    assert outcome_zero.findings[0].severity == Severity.P1
+
+    # Case 3: Emitted obstacle only covers a fraction of the wall (unintended breach/leak)
+    # Shrunken wall leaving 75% open hole
+    xb_shrunk = [0.0, 0.5, 0.0, 1.0, 0.0, 3.0]
+    fds_leaked = f"&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n&OBST XB={','.join(map(str, xb_shrunk))}, SURF_ID='INERT' /\n"
+    context_leak = ValidationContext(
+        model=box_model,
+        fds_text=fds_leaked,
+        manifest=None,
+        config=AuditConfig(),
+    )
+    outcome_leak = checker.check(context_leak)
+    assert outcome_leak.result.status == "FAIL"
+    assert len(outcome_leak.findings) >= 1
+    assert any(f.severity == Severity.P1 for f in outcome_leak.findings)
+
+
+def test_multi_product_geometric_batch_generation(tiny_ifc, tmp_path):
+    """Verify that multiple real distinct geometric products chunk across spatial batches."""
+    _, file, wall = tiny_ifc
+    import ifcopenshell.api.geometry
+    import numpy as np
+    from ifc_to_fds.geometry.preview import preview_model
+
+    # Create 36 distinct structural walls across a 6x6 spatial grid
+    for i in range(6):
+        for j in range(6):
+            if i == 0 and j == 0:
+                continue
+            mat = np.eye(4)
+            mat[0, 3] = float(i * 5.0)
+            mat[1, 3] = float(j * 5.0)
+            new_wall = file.create_entity(
+                "IfcWall",
+                GlobalId=ifcopenshell.guid.new(),
+                Name=f"Grid Wall {i}_{j}",
+                ObjectPlacement=wall.ObjectPlacement,
+                Representation=wall.Representation,
+            )
+            ifcopenshell.api.geometry.edit_object_placement(file, product=new_wall, matrix=mat)
+
+    multi_ifc = tmp_path / "multi_grid.ifc"
+    file.write(str(multi_ifc))
+
+    preview = preview_model([multi_ifc], tmp_path / "out")
+    assert preview["total_elements"] >= 36
+    assert preview["rendered_elements"] >= 36
+    assert (tmp_path / "out" / "model_geometry.json").exists()
+

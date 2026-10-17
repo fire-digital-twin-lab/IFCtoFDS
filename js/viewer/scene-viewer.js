@@ -1628,7 +1628,22 @@
             return;
         }
         var keyMap = {};
-        for (var i = 0; i < keys.length; i++) keyMap[String(keys[i])] = true;
+        var stepIdMap = {};
+        var globalIdMap = {};
+        var store = (window.IfcFds && window.IfcFds.workbench && window.IfcFds.workbench.state && window.IfcFds.workbench.state.selectionStore);
+
+        for (var i = 0; i < keys.length; i++) {
+            var rawK = String(keys[i]);
+            keyMap[rawK] = true;
+            if (store && store._aliasMap && store._aliasMap[rawK]) {
+                keyMap[store._aliasMap[rawK]] = true;
+            }
+            var parts = rawK.split(':');
+            var idPart = parts.length > 1 ? parts.slice(1).join(':') : rawK;
+            stepIdMap[idPart] = true;
+            globalIdMap[idPart] = true;
+        }
+
         var matched = [];
         var createEntityKey = (window.IfcFds && window.IfcFds.workbench && window.IfcFds.workbench.createEntityKey) || function () { return ''; };
 
@@ -1636,7 +1651,12 @@
             if (node._isSelectionHelper || (node.parent && node.parent.isMesh)) return;
             if (!node || !node.userData || !node.userData.type) return;
             var k = createEntityKey(node.userData);
-            if (keyMap[k]) {
+            var u = node.userData;
+            var raw = u.raw || {};
+            var stepId = String(u.stepId || raw.step_id || u.expressID || u.id || '');
+            var globalId = String(u.globalId || raw.global_id || raw.GlobalId || '');
+
+            if (keyMap[k] || (stepId && stepIdMap[stepId]) || (globalId && globalIdMap[globalId])) {
                 matched.push(node);
             }
         }
