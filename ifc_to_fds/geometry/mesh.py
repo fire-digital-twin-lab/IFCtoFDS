@@ -263,6 +263,9 @@ def has_self_intersection(mesh):
                 axes = [x for x in range(3) if x != np.argmax(np.abs(normal))]
                 if Polygon(tri[:, axes]).intersection(Polygon(other[:, axes])).area > 0:
                     return True
+                # Exact coplanarity and zero projected area prove no interior
+                # overlap. Segment/triangle ratios are singular on this plane.
+                continue
             for a, b in ((0, 1), (1, 2), (2, 0)):
                 if segment_hit(tri[a], tri[b], other) or segment_hit(
                     other[a], other[b], tri
