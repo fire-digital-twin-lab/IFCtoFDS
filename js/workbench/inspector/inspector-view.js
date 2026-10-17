@@ -172,6 +172,8 @@
                 var cfgBtn = createActionButton('wind', 'Configure Fan Volume Flow', function () {
                     if (actionCallbacks.onConfigureHvac) actionCallbacks.onConfigureHvac(descriptor);
                 });
+                cfgBtn.disabled = true;
+                cfgBtn.title = 'Operational HVAC is not configured; reviewed parameters and provenance are required.';
                 hvacConfigRow.appendChild(cfgBtn);
                 rows.push(hvacConfigRow);
             }

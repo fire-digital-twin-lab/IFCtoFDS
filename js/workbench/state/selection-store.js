@@ -26,12 +26,14 @@
         for (var i = 0; i < list.length; i++) {
             var item = list[i];
             if (!item) continue;
+            // Bind identity once on the scene input, before either tree or mesh is built.
+            var raw = item.raw || {};
+            if (!item.sourceId && !item.source_id && !raw.source_id && !(item.ifcSource && (item.ifcSource.sourceId || item.ifcSource.fileName))) {
+                item.sourceId = defaultSourceId || 'ifc';
+            }
+            item.entityKey = createEntityKey(item);
             var desc = normalizeEntityDescriptor(item);
             if (!desc || !desc.entityKey) continue;
-            if (defaultSourceId && (!desc.sourceId || desc.sourceId === 'ifc')) {
-                desc.sourceId = defaultSourceId;
-                desc.entityKey = defaultSourceId + ':' + (desc.globalId || desc.stepId || desc.name);
-            }
             this._entityIndex[desc.entityKey] = desc;
         }
         if (events && WORKBENCH_EVENTS) {
@@ -44,6 +46,7 @@
     SelectionStore.prototype.clearIndex = function () {
         this._entityIndex = {};
         this.clearSelection('system');
+        if (events && WORKBENCH_EVENTS) events.emit(WORKBENCH_EVENTS.MODEL_INDEXED, {totalIndexed: 0});
     };
 
     SelectionStore.prototype.getDescriptor = function (key) {

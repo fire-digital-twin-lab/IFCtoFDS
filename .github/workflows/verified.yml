@@ -23,7 +23,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e ".[test]"
       - run: python -m pip check
-      - run: python -m pytest -q -m "not solver"
+      - run: python -m pytest -q -m "not solver and not browser"
       - run: python -m ifc_to_fds --help
   javascript:
     runs-on: ubuntu-latest
@@ -41,6 +41,7 @@ jobs:
       - run: node scripts/test-geom-opening-regression.js
       - run: node scripts/test-background-export-worker.js
       - run: node scripts/test-large-opening.js
+      - run: node scripts/test-workbench-stabilization.js
       - run: node scripts/generate-inline-parse-worker.js
       - run: node scripts/generate-inline-export-worker.js
       - run: git diff --exit-code -- js/workers/*-inline.js
@@ -54,6 +55,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -e ".[test]" playwright==1.58.0
       - run: python -m playwright install --with-deps chromium
+      - run: python -m pytest -q -m browser --junitxml=scripts/out/browser-conversion/workbench.xml
       - run: python scripts/test-conversion-browser.py
       - uses: actions/upload-artifact@v4
         if: always()

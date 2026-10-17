@@ -36,6 +36,16 @@
         return this._status;
     };
 
+    ScenarioStore.prototype.reset = function () {
+        this._mappingBundleSha = null;
+        this._status = 'DRAFT';
+        this._fireSources = [];
+        this._openingStates = {};
+        this._hvacOperations = {};
+        this._devices = [];
+        this._notifyChanged('reset');
+    };
+
     ScenarioStore.prototype.setStatus = function (status) {
         this._status = status;
         this._notifyChanged('status');
@@ -51,11 +61,11 @@
         var item = Object.assign({
             id: id,
             name: fire.name || ('Fire Source ' + id),
-            position: fire.position || [0, 0, 0],
-            type: fire.type || 'PRESCRIBED_HRR',
-            peakHrrKw: Number(fire.peakHrrKw) || 2000,
-            curve: fire.curve || 'T_SQUARED_MEDIUM',
-            fuel: fire.fuel || 'PROPANE'
+            position: null,
+            type: null,
+            peakHrrKw: null,
+            curve: null,
+            fuel: null
         }, fire);
         this._fireSources.push(item);
         this._status = 'CONFIGURING';
@@ -88,12 +98,19 @@
 
     ScenarioStore.prototype.configureHvac = function (entityKey, config) {
         if (!entityKey) return;
+        config = config || {};
+        if (config.flowRateM3s !== undefined && config.flowRateM3s !== null &&
+            (typeof config.flowRateM3s !== 'number' || !isFinite(config.flowRateM3s) || config.flowRateM3s <= 0)) {
+            throw new Error('HVAC volume flow must be a finite positive number in m³/s.');
+        }
         this._hvacOperations[entityKey] = Object.assign({
-            operational: true,
-            flowRateM3s: 0,
-            activation: 'ALWAYS',
-            activationTime: 0
-        }, config || {});
+            operational: false,
+            flowRateM3s: null,
+            activation: null,
+            activationTime: null,
+            provenance: null,
+            validationStatus: 'INCONCLUSIVE'
+        }, config, {validationStatus: 'INCONCLUSIVE'});
         this._status = 'CONFIGURING';
         this._notifyChanged('hvacOperation');
     };

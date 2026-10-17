@@ -191,8 +191,6 @@
         state.lastDisplayMeshes = displayMeshes || null;
         if (oversizeNotice && model && model.diagnostics) model.diagnostics.unshift(oversizeNotice);
         setLoadingProgress(1, 'Rendering…');
-        viewer.loadIfcModel(model, displayMeshes);
-        viewer.setIfcOpacity(Number(els.ifcOpacity.value));
         if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore) {
             if (model && model.elements) {
                 ns.workbench.state.selectionStore.indexElements(
@@ -201,6 +199,9 @@
                 );
             }
         }
+        viewer.sourceId = state.currentIfcFile ? state.currentIfcFile.name : 'ifc';
+        viewer.loadIfcModel(model, displayMeshes);
+        viewer.setIfcOpacity(Number(els.ifcOpacity.value));
         updateIfcMetrics(model);
         updateSourcePill(state.currentIfcFile, model);
         setExportEnabled(countConvertibleIfc(model) > 0);
@@ -779,12 +780,6 @@
                 });
             }
         });
-        if (els.closeInspector) {
-            els.closeInspector.addEventListener('click', function () {
-                if (els.inspectCard) els.inspectCard.hidden = true;
-                if (viewer && viewer.setSelectedObjects) viewer.setSelectedObjects([]);
-            });
-        }
 
         // Bottom Audit Drawer Toggle & Tabs
         if (els.toggleDrawer && els.auditDrawer) {
@@ -890,13 +885,13 @@
         var model = preparedModel || ns.core.atStage('scene_model', function () { return adapter.toSceneModel(parsed); });
         state.fdsModel = model;
         els.fdsSourceName.textContent = sourceName;
+        if (ns.workbench && ns.workbench.state) {
+            var sceneItems = [].concat(model.obsts || [], model.geoms || [], model.vents || [], model.holes || []);
+            ns.workbench.state.selectionStore.indexElements(sceneItems, sourceName || 'fds');
+        }
         ns.core.atStage('viewer', function () { viewer.loadFdsModel(model); });
         viewer.setFdsOpacity(Number(els.fdsOpacity.value));
         viewer.setExclusions(state.excludedStepIds, state.excludedItemIds);
-        if (ns.workbench && ns.workbench.state && ns.workbench.state.selectionStore) {
-            var fdsItems = [].concat(model.obsts || [], model.geoms || [], model.vents || [], model.holes || []);
-            ns.workbench.state.selectionStore.indexElements(fdsItems, sourceName || 'fds');
-        }
         updateMetrics(model);
         renderDiagnostics();
         showSelection(null);

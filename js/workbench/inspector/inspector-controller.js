@@ -53,8 +53,7 @@
         var closeBtn = (this.els && this.els.closeInspector) || document.getElementById('close-inspector');
         if (closeBtn) {
             closeBtn.addEventListener('click', function () {
-                var card = (self.els && self.els.inspectCard) || document.getElementById('inspect-card');
-                if (card) card.hidden = true;
+                commandBus.execute(new root.IfcFds.workbench.commands.SelectCommand([], 'clear', selectionStore));
             });
         }
 
@@ -137,16 +136,9 @@
                 }
             },
             onConfigureHvac: function (desc) {
-                var flow = window.prompt('Enter design volume flow rate (m³/s) for ' + desc.name + ':', '10.0');
-                if (flow !== null && !isNaN(Number(flow))) {
-                    root.IfcFds.workbench.state.scenarioStore.configureHvac(desc.entityKey, {
-                        operational: true,
-                        flowRateM3s: Number(flow),
-                        activation: 'TIME',
-                        activationTime: 60
-                    });
-                    self.refresh();
-                }
+                // Operational modeling requires reviewed source values and provenance.
+                // Keep this control disabled until that workflow exists.
+                return;
             }
         };
 
