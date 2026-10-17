@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import zipfile
 import numpy as np
+from ifc_to_fds.diagnostics import operation
 
 from .package import seal
 from ifc_to_fds.core.canonical import SCHEMA_VERSION
@@ -137,6 +138,7 @@ class DiskPackage(dict):
                 self.mesh(ref)
 
 
+@operation("ARTIFACT")
 def write_package(model, path, owner=None):
     path = Path(path)
     directory = payload_dir(path)
