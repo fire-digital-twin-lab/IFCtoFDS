@@ -69,7 +69,7 @@ def main():
             browser = playwright.chromium.launch(
                 **({"channel": "msedge"} if os.name == "nt" else {}),
                 headless=True,
-                args=["--enable-webgl", "--use-angle=swiftshader"],
+                args=["--enable-webgl", "--use-angle=swiftshader", "--allow-file-access-from-files", "--disable-web-security"],
             )
             try:
                 for protocol, preview in [

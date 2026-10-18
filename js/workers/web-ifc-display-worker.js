@@ -14,9 +14,8 @@ async function ensureInit() {
         try {
             WebIFC = await import('../vendor/web-ifc/web-ifc-api.js');
         } catch (localErr) {
-            console.warn('Local web-ifc vendor not available, trying CDN fallback:', localErr);
-            basePath = 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/';
-            WebIFC = await import('https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/web-ifc-api.js');
+            console.error('[web-ifc-display-worker] Strict offline error: local vendored web-ifc failed to load from ../vendor/web-ifc/', localErr);
+            throw new Error('Strict offline failure: local vendored web-ifc assets not available in ../vendor/web-ifc/. Offline mode does not allow CDN fallback: ' + localErr.message);
         }
         api = new WebIFC.IfcAPI();
         api.SetWasmPath(basePath);
