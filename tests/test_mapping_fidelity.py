@@ -334,10 +334,16 @@ def test_air_path_topology_checker_detects_leak_and_verifies_enclosure(box_model
     from ifc_to_fds.domain.validation.model import Severity, ValidationContext, AuditConfig
 
     checker = AirPathTopologyChecker()
+    wall_key = box_model.elements[0].entity_key
 
     # Case 1: Perfect match (OBST matches box model)
     xb = [0.0, 2.0, 0.0, 1.0, 0.0, 3.0]
-    fds_perfect = f"&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n&OBST XB={','.join(map(str, xb))}, SURF_ID='INERT' /\n"
+    fds_perfect = (
+        "&HEAD TITLE='test' /\n"
+        "&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n"
+        f"! IFC_SOURCE {{\"entity_key\": \"{wall_key}\"}}\n"
+        f"&OBST XB={','.join(map(str, xb))}, SURF_ID='INERT' /\n"
+    )
     context_pass = ValidationContext(
         model=box_model,
         fds_text=fds_perfect,
@@ -363,7 +369,12 @@ def test_air_path_topology_checker_detects_leak_and_verifies_enclosure(box_model
     # Case 3: Emitted obstacle only covers a fraction of the wall (unintended breach/leak)
     # Shrunken wall leaving 75% open hole
     xb_shrunk = [0.0, 0.5, 0.0, 1.0, 0.0, 3.0]
-    fds_leaked = f"&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n&OBST XB={','.join(map(str, xb_shrunk))}, SURF_ID='INERT' /\n"
+    fds_leaked = (
+        "&HEAD TITLE='test' /\n"
+        "&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n"
+        f"! IFC_SOURCE {{\"entity_key\": \"{wall_key}\"}}\n"
+        f"&OBST XB={','.join(map(str, xb_shrunk))}, SURF_ID='INERT' /\n"
+    )
     context_leak = ValidationContext(
         model=box_model,
         fds_text=fds_leaked,
@@ -423,6 +434,69 @@ def test_air_path_excludes_non_enclosure_mep_primitives(box_model):
     assert outcome.result.evidence["enclosure_count"] == 1
 
 
+def test_air_path_unprovenanced_obstacle_intersecting_envelope_fails_closed(box_model):
+    from ifc_to_fds.validation.checkers.air_path import AirPathTopologyChecker
+    from ifc_to_fds.domain.validation.model import ValidationContext, AuditConfig, GateStatus
+
+    wall_elem = box_model.elements[0]
+    # Wall is at [0, 2, 0, 1, 0, 3].
+    # An obstacle without ! IFC_SOURCE intersects the wall at [0.5, 1.5, 0.2, 0.8, 0.5, 2.5]
+    fds_text = (
+        "&HEAD TITLE='test' /\n"
+        "&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n"
+        f"! IFC_SOURCE {{\"entity_key\": \"{wall_elem.entity_key}\"}}\n"
+        "&OBST XB=0.0,2.0,0.0,1.0,0.0,3.0, SURF_ID='INERT' /\n"
+        "&OBST XB=0.5,1.5,0.2,0.8,0.5,2.5, SURF_ID='INERT' /\n"  # unprovenanced obstacle inside wall
+    )
+
+    checker = AirPathTopologyChecker()
+    context = ValidationContext(
+        model=box_model,
+        fds_text=fds_text,
+        manifest=None,
+        config=AuditConfig(),
+    )
+    outcome = checker.check(context)
+    assert outcome.result.status == GateStatus.INCONCLUSIVE
+    assert "Unprovenanced obstacle inside enclosure envelope" in outcome.result.reason
+    assert any(f.id == "FND-AIR-UNPROVENANCED" for f in outcome.findings)
+
+
+def test_air_path_opening_without_mesh_returns_inconclusive_on_leak(box_model):
+    from ifc_to_fds.validation.checkers.air_path import AirPathTopologyChecker
+    from ifc_to_fds.domain.validation.model import ValidationContext, AuditConfig, GateStatus
+    from ifc_to_fds.domain.bim import BoundingBox, OpeningReference
+
+    wall_elem = box_model.elements[0]
+    # Add an opening that only has a bounding box, NO mesh
+    wall_elem.openings = [
+        OpeningReference(
+            opening_global_id="void_no_mesh",
+            opening_step_id=88,
+            opening_name="VoidNoMesh",
+            bounding_box=BoundingBox(xmin=0.5, xmax=1.5, ymin=-0.1, ymax=1.1, zmin=0.5, zmax=2.0),
+        )
+    ]
+    # FDS emitted obstacle only covers a fraction of wall, creating a physical gap
+    fds_leaked = (
+        "&HEAD TITLE='test' /\n"
+        "&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n"
+        f"! IFC_SOURCE {{\"entity_key\": \"{wall_elem.entity_key}\"}}\n"
+        "&OBST XB=0.0,0.5,0.0,1.0,0.0,3.0, SURF_ID='INERT' /\n"
+    )
+    checker = AirPathTopologyChecker()
+    context = ValidationContext(
+        model=box_model,
+        fds_text=fds_leaked,
+        manifest=None,
+        config=AuditConfig(),
+    )
+    outcome = checker.check(context)
+    # Because the opening lacked a watertight mesh, it cannot use bounding box to claim the leak is intentional
+    assert outcome.result.status == GateStatus.INCONCLUSIVE
+    assert "OPENING_COMPARISON_INCONCLUSIVE" in outcome.result.reason
+
+
 def test_production_validation_engine_runs_air_path_gate(box_model):
     from ifc_to_fds.validation.engine import run_independent_validation
     from ifc_to_fds.domain.validation.model import GateStatus
@@ -474,4 +548,24 @@ def test_multi_product_geometric_batch_generation(tiny_ifc, tmp_path):
     assert preview["total_elements"] >= 36
     assert preview["rendered_elements"] >= 36
     assert (tmp_path / "out" / "model_geometry.json").exists()
+
+
+def test_manifest_sanitizes_file_paths_and_computes_bundle_sha256(box_model):
+    from ifc_to_fds.mapping.manifest import build_manifest
+
+    # Set an absolute local path on source metadata to verify it gets sanitized
+    box_model.source.file_path = "D:\\Users\\test\\secret\\project\\building.ifc"
+    manifest = build_manifest(box_model, fds_text="&HEAD TITLE='test' /\n")
+
+    # bundle_sha256 must be computed and non-empty
+    assert manifest.bundle_sha256
+    assert len(manifest.bundle_sha256) == 64
+
+    # file_path in serialized sources must be sanitized to basename only
+    assert len(manifest.sources) >= 1
+    for s in manifest.sources:
+        assert "\\" not in s["file_path"]
+        assert "/" not in s["file_path"]
+        assert s["file_path"] in (box_model.source.filename, "building.ifc")
+
 

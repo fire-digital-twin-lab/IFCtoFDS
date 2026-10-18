@@ -1643,10 +1643,15 @@
                 if (desc) {
                     if (desc.entityKey) keyMap[desc.entityKey] = true;
                     if (desc.canonicalKey) keyMap[desc.canonicalKey] = true;
-                    if (desc.sourceId && desc.stepId !== undefined && desc.stepId !== null) {
-                        sourceQualifiedMap[String(desc.sourceId) + ':' + String(desc.stepId)] = true;
-                    }
-                    if (desc.globalId) {
+                    if (desc.sourceId) {
+                        var sId = String(desc.sourceId);
+                        if (desc.stepId !== undefined && desc.stepId !== null) {
+                            sourceQualifiedMap[sId + ':' + String(desc.stepId)] = true;
+                        }
+                        if (desc.globalId) {
+                            sourceQualifiedMap[sId + ':' + String(desc.globalId)] = true;
+                        }
+                    } else if (desc.globalId) {
                         globalGuidMap[String(desc.globalId)] = true;
                     }
                 }
@@ -1656,9 +1661,6 @@
                 var srcPart = rawK.substring(0, colonIdx);
                 var idPart = rawK.substring(colonIdx + 1);
                 sourceQualifiedMap[srcPart + ':' + idPart] = true;
-                if (idPart.length >= 20 && !/^\d+$/.test(idPart)) {
-                    globalGuidMap[idPart] = true;
-                }
             } else {
                 if (rawK.length >= 20 && !/^\d+$/.test(rawK)) {
                     globalGuidMap[rawK] = true;
@@ -1684,13 +1686,17 @@
             var u = node.userData;
             var raw = u.raw || {};
             var globalId = String(u.globalId || raw.global_id || raw.GlobalId || '');
-            if (globalId && globalGuidMap[globalId]) {
+            var stepId = String(u.stepId || raw.step_id || u.expressID || u.id || '');
+            var nodeSource = String(u.sourceId || raw.source_id || (u.ifcSource && (u.ifcSource.sourceId || u.ifcSource.fileName)) || 'ifc');
+            if (globalId && sourceQualifiedMap[nodeSource + ':' + globalId]) {
                 matched.push(node);
                 return;
             }
-            var stepId = String(u.stepId || raw.step_id || u.expressID || u.id || '');
-            var nodeSource = String(u.sourceId || raw.source_id || (u.ifcSource && (u.ifcSource.sourceId || u.ifcSource.fileName)) || 'ifc');
             if (stepId && sourceQualifiedMap[nodeSource + ':' + stepId]) {
+                matched.push(node);
+                return;
+            }
+            if (globalId && globalGuidMap[globalId]) {
                 matched.push(node);
                 return;
             }

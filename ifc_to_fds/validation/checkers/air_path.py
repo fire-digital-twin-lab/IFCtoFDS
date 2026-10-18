@@ -53,23 +53,33 @@ class AirPathTopologyChecker:
         enclosure_keys = {e.entity_key for e in enclosure_elements}
         known_elements = {e.entity_key: e for e in elements} if elements else {}
         emitted_meshes = []
+        unprovenanced_solids = []
         if context.parsed and getattr(context.parsed, "primitives", None):
             for p in context.parsed.primitives:
                 if getattr(p, "kind", None) in ("OBST", "GEOM") and hasattr(p, "mesh"):
                     source_key = p.source.get("entity_key") if getattr(p, "source", None) else None
-                    if source_key:
-                        src_elem = known_elements.get(source_key)
-                        if src_elem:
-                            if src_elem.entity_key not in enclosure_keys:
-                                continue  # Exclude non-enclosure obstacles (MEP, columns, equipment)
-                        elif source_key not in enclosure_keys:
-                            continue
+                    m = None
                     try:
-                        m = p.mesh()
-                        if m and valid_solid(m):
-                            emitted_meshes.append(as_trimesh(m))
+                        raw_m = p.mesh()
+                        if raw_m and valid_solid(raw_m):
+                            m = as_trimesh(raw_m)
                     except Exception:
-                        pass
+                        continue
+                    if not m:
+                        continue
+
+                    if not source_key:
+                        unprovenanced_solids.append((p, m))
+                        continue
+
+                    src_elem = known_elements.get(source_key)
+                    if src_elem:
+                        if src_elem.entity_key not in enclosure_keys:
+                            continue  # Exclude non-enclosure obstacles (MEP, columns, equipment)
+                    elif source_key not in enclosure_keys:
+                        continue
+
+                    emitted_meshes.append(m)
 
         if not emitted_meshes:
             return CheckerOutcome(
@@ -92,13 +102,22 @@ class AirPathTopologyChecker:
             )
 
         try:
-            # Build unified reference envelope solid
+            # Build unified reference envelope solid with per-element fallback
             from ifc_to_fds.mapping.boundary import target_mesh
 
             ref_trimeshes = []
             for e in enclosure_elements:
-                m = target_mesh(e) if getattr(e, "boundary_policy", None) else e.mesh
-                if m and valid_solid(m):
+                m = None
+                if getattr(e, "boundary_policy", None):
+                    try:
+                        candidate = target_mesh(e)
+                        if candidate and valid_solid(candidate):
+                            m = candidate
+                    except Exception:
+                        m = None
+                if m is None and getattr(e, "mesh", None) and valid_solid(e.mesh):
+                    m = e.mesh
+                if m:
                     ref_trimeshes.append(as_trimesh(m))
             if not ref_trimeshes:
                 ref_trimeshes = [as_trimesh(e.mesh) for e in enclosure_elements]
@@ -106,7 +125,14 @@ class AirPathTopologyChecker:
             s_ref = solid_boolean(ref_trimeshes, "union") if len(ref_trimeshes) > 1 else ref_trimeshes[0]
             s_fds = solid_boolean(emitted_meshes, "union") if len(emitted_meshes) > 1 else emitted_meshes[0]
 
-            if s_ref is None or s_fds is None or not hasattr(s_ref, "bounds") or not hasattr(s_fds, "bounds"):
+            if (
+                s_ref is None
+                or s_fds is None
+                or not getattr(s_ref, "is_volume", False)
+                or s_ref.volume <= 0
+                or not getattr(s_fds, "is_volume", False)
+                or s_fds.volume <= 0
+            ):
                 return CheckerOutcome(
                     gate_name=self.name,
                     result=GateResult(
@@ -117,16 +143,69 @@ class AirPathTopologyChecker:
                     metrics={"air_path": {"enclosure_elements_count": len(enclosure_elements)}},
                 )
 
-            # Domain bounding box: constrain to explicit simulation domain when defined
+            # Check for unprovenanced obstacles intersecting the reference envelope
+            for p, unprov_mesh in unprovenanced_solids:
+                try:
+                    clash = solid_boolean([unprov_mesh, s_ref], "intersection")
+                    if clash and getattr(clash, "is_volume", False) and clash.volume > 1e-9:
+                        return CheckerOutcome(
+                            gate_name=self.name,
+                            result=GateResult(
+                                status=GateStatus.INCONCLUSIVE,
+                                reason=f"Unprovenanced obstacle inside enclosure envelope: {getattr(p, 'id', 'OBST')}. Air-path airtightness cannot be certified without full provenance.",
+                            ),
+                            findings=[
+                                Finding(
+                                    id="FND-AIR-UNPROVENANCED",
+                                    severity=Severity.P1,
+                                    category=self.name,
+                                    title="Unprovenanced obstacle inside enclosure envelope",
+                                    detail=f"Obstacle primitive {getattr(p, 'id', 'OBST')} lacks '! IFC_SOURCE' provenance to an enclosure element and intersects the reference envelope.",
+                                    element_id=enclosure_elements[0].entity_key,
+                                )
+                            ],
+                            metrics={"air_path": {"unprovenanced_count": len(unprovenanced_solids)}},
+                        )
+                except Exception:
+                    pass
+
+            # Domain bounding box: constrain symmetrically to explicit simulation domain when defined
             sim_domain = getattr(context.model, "simulation_domain", None)
-            if sim_domain:
+            is_explicit_domain = bool(sim_domain and getattr(context.model, "domain_origin", "") == "EXPLICIT_CONFIGURATION")
+            if is_explicit_domain:
                 m_domain = as_trimesh(box_mesh(sim_domain))
                 try:
                     s_ref_clipped = solid_boolean([s_ref, m_domain], "intersection")
-                    if s_ref_clipped and hasattr(s_ref_clipped, "volume") and s_ref_clipped.volume > 0:
-                        s_ref = s_ref_clipped
-                except Exception:
-                    pass
+                    s_fds_clipped = solid_boolean([s_fds, m_domain], "intersection")
+                except Exception as exc:
+                    return CheckerOutcome(
+                        gate_name=self.name,
+                        result=GateResult(
+                            status=GateStatus.INCONCLUSIVE,
+                            reason=f"DOMAIN_INTERSECTION_FAILED: CSG intersection exception: {exc}",
+                        ),
+                        findings=[],
+                        metrics={"air_path": {"error": f"DOMAIN_INTERSECTION_FAILED: {exc}"}},
+                    )
+                if (
+                    not s_ref_clipped
+                    or not getattr(s_ref_clipped, "is_volume", False)
+                    or s_ref_clipped.volume <= 0
+                    or not s_fds_clipped
+                    or not getattr(s_fds_clipped, "is_volume", False)
+                    or s_fds_clipped.volume <= 0
+                ):
+                    return CheckerOutcome(
+                        gate_name=self.name,
+                        result=GateResult(
+                            status=GateStatus.INCONCLUSIVE,
+                            reason="DOMAIN_INTERSECTION_FAILED: Domain clipping produced empty or non-volume geometry.",
+                        ),
+                        findings=[],
+                        metrics={"air_path": {"error": "DOMAIN_INTERSECTION_FAILED"}},
+                    )
+                s_ref = s_ref_clipped
+                s_fds = s_fds_clipped
             else:
                 b = s_ref.bounds
                 margin = 0.5
@@ -144,32 +223,66 @@ class AirPathTopologyChecker:
             f_ref = solid_boolean([m_domain, s_ref], "difference")
             f_fds = solid_boolean([m_domain, s_fds], "difference")
 
+            if (
+                not f_ref
+                or not getattr(f_ref, "is_volume", False)
+                or f_ref.volume <= 0
+                or not f_fds
+                or not getattr(f_fds, "is_volume", False)
+                or f_fds.volume <= 0
+            ):
+                return CheckerOutcome(
+                    gate_name=self.name,
+                    result=GateResult(
+                        status=GateStatus.INCONCLUSIVE,
+                        reason="Unable to compute valid free-space manifold for reference or emitted enclosure geometry.",
+                    ),
+                    findings=[],
+                    metrics={"air_path": {"free_space_failure": True}},
+                )
+
             # Topological connected components of free space
-            c_ref = f_ref.split(only_watertight=False) if getattr(f_ref, "is_volume", False) and f_ref.volume > 0 else []
-            c_fds = f_fds.split(only_watertight=False) if getattr(f_fds, "is_volume", False) and f_fds.volume > 0 else []
+            c_ref = f_ref.split(only_watertight=False)
+            c_fds = f_fds.split(only_watertight=False)
+            if len(c_ref) == 0 or len(c_fds) == 0:
+                return CheckerOutcome(
+                    gate_name=self.name,
+                    result=GateResult(
+                        status=GateStatus.INCONCLUSIVE,
+                        reason="Free space cavity analysis yielded 0 cavities in reference or FDS domain.",
+                    ),
+                    findings=[],
+                    metrics={"air_path": {"source_cavities": len(c_ref), "fds_cavities": len(c_fds)}},
+                )
 
             # Unintended leakage: free space in FDS intersecting solid envelope in reference
-            if getattr(f_fds, "is_volume", False) and f_fds.volume > 0 and getattr(s_ref, "is_volume", False) and s_ref.volume > 0:
-                leak_intersection = solid_boolean([f_fds, s_ref], "intersection")
-            else:
-                leak_intersection = None
+            leak_intersection = solid_boolean([f_fds, s_ref], "intersection")
 
-            # Subtract intentional openings from leak intersection if present
+            # Subtract intentional openings from leak intersection if present (watertight solid opening meshes only)
             opening_trimeshes = []
+            has_missing_opening_mesh = False
             for e in enclosure_elements:
                 for op in getattr(e, "openings", []):
                     if getattr(op, "mesh", None) and valid_solid(op.mesh):
                         opening_trimeshes.append(as_trimesh(op.mesh))
-                    elif getattr(op, "bounding_box", None):
-                        opening_trimeshes.append(as_trimesh(box_mesh(op.bounding_box)))
+                    else:
+                        has_missing_opening_mesh = True
             if opening_trimeshes and leak_intersection and hasattr(leak_intersection, "volume") and leak_intersection.volume > 0:
                 try:
                     u_openings = solid_boolean(opening_trimeshes, "union") if len(opening_trimeshes) > 1 else opening_trimeshes[0]
                     leak_sub = solid_boolean([leak_intersection, u_openings], "difference")
                     if leak_sub is not None:
                         leak_intersection = leak_sub
-                except Exception:
-                    pass
+                except Exception as exc:
+                    return CheckerOutcome(
+                        gate_name=self.name,
+                        result=GateResult(
+                            status=GateStatus.INCONCLUSIVE,
+                            reason=f"OPENING_DIFFERENCE_FAILED: CSG opening difference exception: {exc}",
+                        ),
+                        findings=[],
+                        metrics={"air_path": {"error": f"OPENING_DIFFERENCE_FAILED: {exc}"}},
+                    )
 
             v_leak = float(leak_intersection.volume) if leak_intersection and hasattr(leak_intersection, "volume") else 0.0
 
@@ -183,6 +296,30 @@ class AirPathTopologyChecker:
             reasons = []
 
             if leak_ratio > leak_tol:
+                if has_missing_opening_mesh:
+                    return CheckerOutcome(
+                        gate_name=self.name,
+                        result=GateResult(
+                            status=GateStatus.INCONCLUSIVE,
+                            reason=f"OPENING_COMPARISON_INCONCLUSIVE: Leak volume of {v_leak:.6f} m3 detected, but one or more intentional openings lack valid watertight solid mesh.",
+                            evidence={
+                                "enclosure_count": len(enclosure_elements),
+                                "leak_volume_m3": v_leak,
+                                "leak_ratio": leak_ratio,
+                                "source_cavities": len(c_ref),
+                                "fds_cavities": len(c_fds),
+                            },
+                        ),
+                        findings=[],
+                        metrics={
+                            "air_path": {
+                                "enclosure_count": len(enclosure_elements),
+                                "leak_volume_m3": v_leak,
+                                "leak_ratio": leak_ratio,
+                                "opening_inconclusive": True,
+                            }
+                        },
+                    )
                 status = GateStatus.FAIL
                 reasons.append(f"Unintended envelope leak volume: {v_leak:.6f} m3 ({leak_ratio*100:.3f}% of envelope)")
                 findings.append(

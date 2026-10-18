@@ -65,8 +65,11 @@
             }
             if (truncationBanner) {
                 truncationBanner.style.display = 'block';
-                var reportUrl = (report.artifacts && report.artifacts.report && report.artifacts.report.url) || '#';
-                truncationBanner.innerHTML = 'Showing first ' + findings.length + ' of ' + totalFindings + ' findings. <a href="' + reportUrl + '" download style="color:inherit;text-decoration:underline;font-weight:600">Download full acceptance report</a> for complete list.';
+                var reportUrl = (report.artifacts && report.artifacts.report && report.artifacts.report.url) || null;
+                var linkHtml = reportUrl
+                    ? '<a href="' + reportUrl + '" download style="color:inherit;text-decoration:underline;font-weight:600">Download full acceptance report</a> for complete list.'
+                    : '<span style="font-weight:600">Download full report from Artifacts tab</span> for complete list.';
+                truncationBanner.innerHTML = 'Showing first ' + findings.length + ' of ' + totalFindings + ' findings. ' + linkHtml;
             }
         } else if (truncationBanner) {
             truncationBanner.style.display = 'none';
@@ -139,15 +142,25 @@
             }
         }
 
-        if (report.artifacts) {
-            var fdsBtn = document.getElementById('btn-download-fds');
-            if (fdsBtn && report.artifacts.fds) fdsBtn.href = report.artifacts.fds.url;
-            var manifestBtn = document.getElementById('btn-download-manifest');
-            if (manifestBtn && report.artifacts.manifest) manifestBtn.href = report.artifacts.manifest.url;
-            var geomBtn = document.getElementById('btn-download-geom-pkg');
-            if (geomBtn && report.artifacts.geometry) geomBtn.href = report.artifacts.geometry.url;
-            var reportBtn = document.getElementById('btn-download-report');
-            if (reportBtn && report.artifacts.report) reportBtn.href = report.artifacts.report.url;
+        var fdsBtn = document.getElementById('btn-download-fds');
+        if (fdsBtn) {
+            fdsBtn.textContent = 'Download FDS';
+            if (report.artifacts && report.artifacts.fds) fdsBtn.href = report.artifacts.fds.url;
+        }
+        var manifestBtn = document.getElementById('btn-download-manifest');
+        if (manifestBtn) {
+            manifestBtn.textContent = 'Download Manifest';
+            if (report.artifacts && report.artifacts.manifest) manifestBtn.href = report.artifacts.manifest.url;
+        }
+        var geomBtn = document.getElementById('btn-download-geom-pkg');
+        if (geomBtn) {
+            geomBtn.textContent = 'Download Geometries';
+            if (report.artifacts && report.artifacts.geometry) geomBtn.href = report.artifacts.geometry.url;
+        }
+        var reportBtn = document.getElementById('btn-download-report');
+        if (reportBtn) {
+            reportBtn.textContent = 'Download Full Report';
+            if (report.artifacts && report.artifacts.report) reportBtn.href = report.artifacts.report.url;
         }
 
         updateGlobalStatusBadge(report.status);

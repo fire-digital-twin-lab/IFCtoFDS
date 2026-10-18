@@ -121,6 +121,7 @@ class ManifestRecord(BaseModel):
 class MappingManifest(BaseModel):
     simulation_domain: dict[str, Any] | None = None
     geometry_package_sha256: str = ""
+    bundle_sha256: str = ""
     mapping_acceptance: str = "INCONCLUSIVE"
     simulation_acceptance: str = "INCONCLUSIVE"
     output_complete: bool = False

@@ -17,8 +17,10 @@
         this._selectedKeys = {}; // entityKey -> true
         this._selectedItems = []; // Array of descriptors
         this._entityIndex = {}; // entityKey -> descriptor
-        this._byStepId = {}; // stepId (str) -> descriptor
-        this._byGlobalId = {}; // globalId (str) -> descriptor
+        this._byScopedStepId = {}; // sourceId:stepId -> descriptor
+        this._byScopedGlobalId = {}; // sourceId:globalId -> descriptor
+        this._byStepId = {}; // stepId (str) -> Array of descriptors
+        this._byGlobalId = {}; // globalId (str) -> Array of descriptors
         this._aliasMap = {}; // aliasKey -> canonicalKey
         this._listeners = [];
     }
@@ -38,11 +40,19 @@
             var desc = normalizeEntityDescriptor(item);
             if (!desc || !desc.entityKey) continue;
             this._entityIndex[desc.entityKey] = desc;
+
+            var src = String(desc.sourceId || defaultSourceId || 'ifc');
             if (desc.stepId !== null && desc.stepId !== undefined) {
-                this._byStepId[String(desc.stepId)] = desc;
+                var sKey = String(desc.stepId);
+                this._byScopedStepId[src + ':' + sKey] = desc;
+                if (!this._byStepId[sKey]) this._byStepId[sKey] = [];
+                this._byStepId[sKey].push(desc);
             }
             if (desc.globalId) {
-                this._byGlobalId[String(desc.globalId)] = desc;
+                var gKey = String(desc.globalId);
+                this._byScopedGlobalId[src + ':' + gKey] = desc;
+                if (!this._byGlobalId[gKey]) this._byGlobalId[gKey] = [];
+                this._byGlobalId[gKey].push(desc);
             }
         }
         if (events && WORKBENCH_EVENTS) {
@@ -59,12 +69,35 @@
             var rec = records[i];
             if (!rec) continue;
             var canonicalKey = rec.entity_key;
-            var stepId = rec.step_id !== undefined ? String(rec.step_id) : null;
+            var recSrc = rec.source_id ? String(rec.source_id) : null;
+            var stepId = rec.step_id !== undefined && rec.step_id !== null ? String(rec.step_id) : null;
             var globalId = rec.global_id ? String(rec.global_id) : null;
 
             var desc = this._entityIndex[canonicalKey] ||
-                (stepId && this._byStepId[stepId]) ||
-                (globalId && this._byGlobalId[globalId]);
+                (this._aliasMap[canonicalKey] && this._entityIndex[this._aliasMap[canonicalKey]]) ||
+                (recSrc && stepId && this._byScopedStepId[recSrc + ':' + stepId]) ||
+                (recSrc && globalId && this._byScopedGlobalId[recSrc + ':' + globalId]);
+
+            if (!desc && stepId && this._byStepId[stepId]) {
+                if (this._byStepId[stepId].length === 1) {
+                    desc = this._byStepId[stepId][0];
+                } else {
+                    var matchS = this._byStepId[stepId].find(function (d) {
+                        return d.sourceId && String(d.sourceId) === recSrc;
+                    });
+                    if (matchS) desc = matchS;
+                }
+            }
+            if (!desc && globalId && this._byGlobalId[globalId]) {
+                if (this._byGlobalId[globalId].length === 1) {
+                    desc = this._byGlobalId[globalId][0];
+                } else {
+                    var matchG = this._byGlobalId[globalId].find(function (d) {
+                        return d.sourceId && String(d.sourceId) === recSrc;
+                    });
+                    if (matchG) desc = matchG;
+                }
+            }
 
             if (desc) {
                 desc.canonicalKey = canonicalKey;
@@ -115,8 +148,19 @@
                 });
                 if (newDesc && newDesc.entityKey) {
                     this._entityIndex[newDesc.entityKey] = newDesc;
-                    if (newDesc.stepId) this._byStepId[String(newDesc.stepId)] = newDesc;
-                    if (newDesc.globalId) this._byGlobalId[String(newDesc.globalId)] = newDesc;
+                    var nSrc = String(newDesc.sourceId || recSrc || 'ifc');
+                    if (newDesc.stepId !== null && newDesc.stepId !== undefined) {
+                        var nStep = String(newDesc.stepId);
+                        this._byScopedStepId[nSrc + ':' + nStep] = newDesc;
+                        if (!this._byStepId[nStep]) this._byStepId[nStep] = [];
+                        this._byStepId[nStep].push(newDesc);
+                    }
+                    if (newDesc.globalId) {
+                        var nGlob = String(newDesc.globalId);
+                        this._byScopedGlobalId[nSrc + ':' + nGlob] = newDesc;
+                        if (!this._byGlobalId[nGlob]) this._byGlobalId[nGlob] = [];
+                        this._byGlobalId[nGlob].push(newDesc);
+                    }
                 }
             }
         }
@@ -130,6 +174,8 @@
 
     SelectionStore.prototype.clearIndex = function () {
         this._entityIndex = {};
+        this._byScopedStepId = {};
+        this._byScopedGlobalId = {};
         this._byStepId = {};
         this._byGlobalId = {};
         this._aliasMap = {};
@@ -146,15 +192,27 @@
         if (colonIdx !== -1) {
             var src = k.substring(0, colonIdx);
             var idPart = k.substring(colonIdx + 1);
-            if (this._byGlobalId[idPart] && (!this._byGlobalId[idPart].sourceId || String(this._byGlobalId[idPart].sourceId) === src)) {
-                return this._byGlobalId[idPart];
+            var qualified = src + ':' + idPart;
+            if (this._byScopedStepId[qualified]) return this._byScopedStepId[qualified];
+            if (this._byScopedGlobalId[qualified]) return this._byScopedGlobalId[qualified];
+            if (this._byGlobalId[idPart]) {
+                var matchG = this._byGlobalId[idPart].find(function (d) {
+                    return !d.sourceId || String(d.sourceId) === src;
+                });
+                if (matchG) return matchG;
             }
-            if (this._byStepId[idPart] && (!this._byStepId[idPart].sourceId || String(this._byStepId[idPart].sourceId) === src)) {
-                return this._byStepId[idPart];
+            if (this._byStepId[idPart]) {
+                var matchS = this._byStepId[idPart].find(function (d) {
+                    return !d.sourceId || String(d.sourceId) === src;
+                });
+                if (matchS) return matchS;
             }
         } else {
-            if (this._byStepId[k]) return this._byStepId[k];
-            if (this._byGlobalId[k]) return this._byGlobalId[k];
+            var defaultKey = 'ifc:' + k;
+            if (this._byScopedStepId[defaultKey]) return this._byScopedStepId[defaultKey];
+            if (this._byScopedGlobalId[defaultKey]) return this._byScopedGlobalId[defaultKey];
+            if (this._byStepId[k] && this._byStepId[k].length) return this._byStepId[k][0];
+            if (this._byGlobalId[k] && this._byGlobalId[k].length) return this._byGlobalId[k][0];
         }
         return null;
     };

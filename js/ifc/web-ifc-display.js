@@ -6,7 +6,6 @@
     // boolean subtractions so walls come out with their window/door openings cut.
 
     var LOCAL_WEB_IFC = './js/vendor/web-ifc/';
-    var WEB_IFC_CDN = 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/';
 
     // -------- worker path ----------------------------------------------------
 
@@ -69,16 +68,14 @@
     function ensureMainThreadApi() {
         if (mainApiPromise) return mainApiPromise;
         mainApiPromise = (async function () {
-            // Use local vendored web-ifc when available, falling back to CDN.
-            var importer = new Function('url', 'return import(url)');
-            var WebIFC;
+            // Strict offline local import compliant with CSP (no new Function or eval)
             var basePath = LOCAL_WEB_IFC;
+            var WebIFC;
             try {
-                WebIFC = await importer(LOCAL_WEB_IFC + 'web-ifc-api.js');
+                WebIFC = await import(LOCAL_WEB_IFC + 'web-ifc-api.js');
             } catch (localErr) {
-                console.warn('Local web-ifc vendor not available, trying CDN fallback:', localErr);
-                basePath = WEB_IFC_CDN;
-                WebIFC = await importer(WEB_IFC_CDN + 'web-ifc-api.js');
+                console.error('[web-ifc-display] Strict offline error: local vendored web-ifc failed to load from ' + LOCAL_WEB_IFC, localErr);
+                throw new Error('Strict offline failure: local vendored web-ifc assets not available in ' + LOCAL_WEB_IFC + '. Verify local assets are present in js/vendor/web-ifc/. Offline mode does not allow CDN fallback: ' + localErr.message);
             }
             var api = new WebIFC.IfcAPI();
             api.SetWasmPath(basePath);

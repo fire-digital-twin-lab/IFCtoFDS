@@ -141,6 +141,56 @@ test('selectByEntityKeys uses source-qualified keys and avoids cross-file STEP I
     assert.equal(selected[0], nodeA);
     assert.notEqual(selected[0], nodeB);
 });
+test('selectByEntityKeys uses source-qualified keys and avoids cross-file duplicate GlobalId collision', () => {
+    const viewer = Object.create(context.IfcFds.viewer.SceneViewer.prototype);
+    let selected = [];
+    viewer.setSelectedObjects = objs => { selected = objs; };
+
+    const nodeA = {userData: {type: 'wall', sourceId: 'sourceA', stepId: 105, globalId: 'GUID_COMMON', raw: {source_id: 'sourceA', step_id: 105, global_id: 'GUID_COMMON'}}};
+    const nodeB = {userData: {type: 'duct', sourceId: 'sourceB', stepId: 205, globalId: 'GUID_COMMON', raw: {source_id: 'sourceB', step_id: 205, global_id: 'GUID_COMMON'}}};
+
+    viewer.fdsGroup = {traverse: fn => { fn(nodeA); fn(nodeB); }};
+    viewer.ifcGroup = null;
+
+    viewer.selectByEntityKeys(['sourceA:GUID_COMMON']);
+    assert.equal(selected.length, 1);
+    assert.equal(selected[0], nodeA);
+    assert.notEqual(selected[0], nodeB);
+});
+test('SelectionStore isolates identical STEP ID across federated models in hydration and lookup', () => {
+    const store = new wb.state.SelectionStore();
+    const wall = {entityKey: 'arch:105', sourceId: 'arch', globalId: 'GUID_W105', stepId: 105, name: 'Arch Wall #105'};
+    const duct = {entityKey: 'mep:105', sourceId: 'mep', globalId: 'GUID_D105', stepId: 105, name: 'MEP Duct #105'};
+    store.indexElements([wall, duct], 'default');
+
+    assert.equal(store.getAllDescriptors().length, 2);
+    assert.equal(store.getDescriptor('arch:105').name, 'Arch Wall #105');
+    assert.equal(store.getDescriptor('mep:105').name, 'MEP Duct #105');
+
+    // Hydrate manifest only for arch:105
+    const records = [{
+        entity_key: 'sha-arch:105',
+        source_id: 'arch',
+        global_id: 'GUID_W105',
+        step_id: 105,
+        ifc_type: 'IfcWall',
+        simulation_role: 'PASSIVE_OBSTACLE',
+        mapping_strategy: 'OBST',
+        review_status: 'APPROVED'
+    }];
+    const report = {
+        element_statuses: {'sha-arch:105': 'MATCHED'}
+    };
+    store.hydrateManifest(records, report);
+
+    const archDesc = store.getDescriptor('arch:105');
+    const mepDesc = store.getDescriptor('mep:105');
+    assert.equal(archDesc.reviewStatus, 'APPROVED');
+    assert.equal(archDesc.verificationStatus, 'MATCHED');
+    // Ensure mep:105 was NOT mutated by arch manifest hydration!
+    assert.notEqual(mepDesc.reviewStatus, 'APPROVED');
+    assert.notEqual(mepDesc.verificationStatus, 'MATCHED');
+});
 let failures = 0;
 for (const [name, fn] of tests) {
     try { fn(); console.log('PASS ' + name); }

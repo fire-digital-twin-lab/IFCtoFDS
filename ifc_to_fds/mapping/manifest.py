@@ -85,20 +85,46 @@ def build_manifest(model, fds_text="", configuration=None, report=None):
         for pid in e.fds_primitive_ids:
             reverse.setdefault(pid, []).append(e.entity_key)
 
+    import os
+    import json
+
     fds_sha256 = (
         hashlib.sha256(fds_text.encode("utf-8")).hexdigest() if fds_text else ""
     )
     domain = (
         model.simulation_domain.model_dump() if model.simulation_domain else None
     )
+    sources = []
+    for s in model.sources or [model.source]:
+        s_dict = s.model_dump(mode="json")
+        if "file_path" in s_dict:
+            s_dict["file_path"] = os.path.basename(s_dict["file_path"]) or s_dict.get("filename", "")
+        sources.append(s_dict)
+
+    geom_pkg_sha = (configuration or {}).get("geometry_package_sha256", "")
+    bundle_payload = json.dumps(
+        {
+            "source_sha256": model.source.file_hash_sha256,
+            "fds_sha256": fds_sha256,
+            "geometry_package_sha256": geom_pkg_sha,
+            "total_elements": len(records),
+            "total_primitives": sum(len(r.fds_primitive_ids) for r in records),
+            "configuration": configuration or {},
+        },
+        sort_keys=True,
+    )
+    bundle_sha256 = (
+        (configuration or {}).get("bundle_sha256")
+        or hashlib.sha256(bundle_payload.encode("utf-8")).hexdigest()
+    )
+
     manifest = MappingManifest(
         simulation_domain=domain,
-        geometry_package_sha256=(configuration or {}).get(
-            "geometry_package_sha256", ""
-        ),
+        geometry_package_sha256=geom_pkg_sha,
+        bundle_sha256=bundle_sha256,
         source_filename=model.source.filename,
         source_sha256=model.source.file_hash_sha256,
-        sources=[s.model_dump(mode="json") for s in model.sources or [model.source]],
+        sources=sources,
         total_elements_accounted=len(records),
         total_primitives_emitted=sum(len(r.fds_primitive_ids) for r in records),
         records=records,
