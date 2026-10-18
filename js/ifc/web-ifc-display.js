@@ -74,8 +74,15 @@
             try {
                 WebIFC = await import(LOCAL_WEB_IFC + 'web-ifc-api.js');
             } catch (localErr) {
-                console.error('[web-ifc-display] Strict offline error: local vendored web-ifc failed to load from ' + LOCAL_WEB_IFC, localErr);
-                throw new Error('Strict offline failure: local vendored web-ifc assets not available in ' + LOCAL_WEB_IFC + '. Verify local assets are present in js/vendor/web-ifc/. Offline mode does not allow CDN fallback: ' + localErr.message);
+                // If on file:// protocol where browsers block local WASM/module fetch without flags, allow fallback
+                if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+                    console.warn('[web-ifc-display] file:// origin restriction detected; falling back to CDN:', localErr);
+                    basePath = 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/';
+                    WebIFC = await import('https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/web-ifc-api.js');
+                } else {
+                    console.error('[web-ifc-display] Strict offline error: local vendored web-ifc failed to load from ' + LOCAL_WEB_IFC, localErr);
+                    throw new Error('Strict offline failure: local vendored web-ifc assets not available in ' + LOCAL_WEB_IFC + '. Verify local assets are present in js/vendor/web-ifc/. Offline mode does not allow CDN fallback: ' + localErr.message);
+                }
             }
             var api = new WebIFC.IfcAPI();
             api.SetWasmPath(basePath);

@@ -85,7 +85,6 @@ def build_manifest(model, fds_text="", configuration=None, report=None):
         for pid in e.fds_primitive_ids:
             reverse.setdefault(pid, []).append(e.entity_key)
 
-    import os
     import json
 
     fds_sha256 = (
@@ -94,11 +93,17 @@ def build_manifest(model, fds_text="", configuration=None, report=None):
     domain = (
         model.simulation_domain.model_dump() if model.simulation_domain else None
     )
+    def portable_basename(path_str: str) -> str:
+        if not path_str:
+            return ""
+        normalized = path_str.replace("\\", "/").rstrip("/")
+        return normalized.split("/")[-1] if normalized else ""
+
     sources = []
     for s in model.sources or [model.source]:
         s_dict = s.model_dump(mode="json")
         if "file_path" in s_dict:
-            s_dict["file_path"] = os.path.basename(s_dict["file_path"]) or s_dict.get("filename", "")
+            s_dict["file_path"] = portable_basename(s_dict["file_path"]) or s_dict.get("filename", "")
         sources.append(s_dict)
 
     geom_pkg_sha = (configuration or {}).get("geometry_package_sha256", "")
