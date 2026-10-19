@@ -26,6 +26,8 @@ FIELDS = (
     "review_status",
     "boundary_treatment",
     "decision",
+    "mapping_strategy",
+    "fds_primitive_ids",
 )
 
 
@@ -76,3 +78,25 @@ def validate_reference(values):
             k not in inventory or v != inventory[k] for k, v in values[name].items()
         ):
             raise ValueError(f"Reference projection conflicts: {name}")
+
+    # Bidirectional reverse coverage verification: ensure required elements are not omitted
+    mep_graph = values.get("mep-reference.json", {})
+    systems_by_id = {s["system_id"]: s.get("category", "") for s in mep_graph.get("systems", [])}
+    for k, v in inventory.items():
+        if v.get("mapping_strategy") in ("EXCLUDED_SCOPE", "EXCLUDED_APPROVED"):
+            if k not in values.get("exclusions.json", {}):
+                raise ValueError(f"Reference projection coverage incomplete: exclusions.json missing {k}")
+        if v.get("boundary_treatment") == "PENDING_VALIDATION" or v.get("scope_decision") == "BOUNDARY_RETAINED":
+            if k not in values.get("boundary-elements.json", {}):
+                raise ValueError(f"Reference projection coverage incomplete: boundary-elements.json missing {k}")
+        sys_ids = v.get("system_ids", [])
+        categories = {systems_by_id[sid] for sid in sys_ids if sid in systems_by_id}
+        if any(c in ("VENTILATION", "SMOKE_EXTRACT") for c in categories):
+            if k not in values.get("hvac-reference.json", {}):
+                raise ValueError(f"Reference projection coverage incomplete: hvac-reference.json missing {k}")
+        if "FIRE_SUPPRESSION" in categories:
+            if k not in values.get("fire-protection-reference.json", {}):
+                raise ValueError(f"Reference projection coverage incomplete: fire-protection-reference.json missing {k}")
+        if v.get("openings"):
+            if k not in values.get("openings-reference.json", {}):
+                raise ValueError(f"Reference projection coverage incomplete: openings-reference.json missing {k}")

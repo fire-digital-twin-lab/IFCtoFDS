@@ -24,6 +24,13 @@ class BodyLimitMiddleware:
                 scope, receive, send
             )
         consumed = 0
+        response_started = False
+
+        async def wrapped_send(message):
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
 
         async def bounded_receive():
             nonlocal consumed
@@ -33,4 +40,13 @@ class BodyLimitMiddleware:
                 raise HTTPException(413, "Request exceeds upload limit")
             return message
 
-        return await self.app(scope, bounded_receive, send)
+        try:
+            return await self.app(scope, bounded_receive, wrapped_send)
+        except HTTPException as exc:
+            if not response_started:
+                response = JSONResponse(
+                    {"detail": exc.detail},
+                    status_code=exc.status_code,
+                )
+                return await response(scope, receive, send)
+            raise

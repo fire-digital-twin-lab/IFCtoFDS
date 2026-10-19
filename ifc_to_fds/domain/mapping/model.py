@@ -1,6 +1,7 @@
 """Mapping domain models including MappingDecision and MappingPlan abstractions."""
 
 import csv
+import hashlib
 import io
 import json
 from enum import Enum
@@ -137,6 +138,64 @@ class MappingManifest(BaseModel):
     fds_sha256: str = ""
     configuration: dict[str, Any] = Field(default_factory=dict)
     acceptance_status: str = "INCONCLUSIVE"
+
+    def compute_bundle_sha256(self) -> str:
+        sources_payload = [
+            dict(
+                source_id=s.get("source_id"),
+                file_hash_sha256=s.get("file_hash_sha256", s.get("source_id")),
+            )
+            for s in sorted(self.sources, key=lambda x: str(x.get("source_id", "")))
+        ] if self.sources else [dict(source_id=self.source_sha256, file_hash_sha256=self.source_sha256)]
+        sources_digest = hashlib.sha256(
+            json.dumps(sources_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+
+        records_payload = [
+            dict(
+                entity_key=r.entity_key,
+                source_id=r.source_id,
+                global_id=r.global_id,
+                step_id=r.step_id,
+                ifc_type=r.ifc_type,
+                mapping_strategy=r.mapping_strategy,
+                scope_decision=r.scope_decision,
+                review_status=r.review_status,
+                simulation_role=r.simulation_role,
+                fds_primitive_ids=sorted(r.fds_primitive_ids),
+            )
+            for r in sorted(self.records, key=lambda x: (x.source_id, x.step_id, x.entity_key))
+        ]
+        records_digest = hashlib.sha256(
+            json.dumps(records_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+
+        reverse_payload = {
+            k: sorted(v) for k, v in sorted(self.primitive_to_ifc.items())
+        }
+        reverse_digest = hashlib.sha256(
+            json.dumps(reverse_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+
+        bundle_payload = json.dumps(
+            {
+                "source_sha256": self.source_sha256,
+                "sources_digest": sources_digest,
+                "fds_sha256": self.fds_sha256,
+                "geometry_package_sha256": self.geometry_package_sha256,
+                "total_elements": self.total_elements_accounted,
+                "total_primitives": self.total_primitives_emitted,
+                "records_digest": records_digest,
+                "primitive_to_ifc_digest": reverse_digest,
+                "configuration": self.configuration or {},
+            },
+            sort_keys=True,
+        )
+        return hashlib.sha256(bundle_payload.encode("utf-8")).hexdigest()
+
+    def reseal(self) -> str:
+        self.bundle_sha256 = self.compute_bundle_sha256()
+        return self.bundle_sha256
 
     def to_json(self, indent=2):
         return self.model_dump_json(indent=indent)

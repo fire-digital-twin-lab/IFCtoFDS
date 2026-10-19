@@ -53,6 +53,7 @@ class AuditConfig(BaseModel):
     solver_evidence_directory: str | None = None
     boundary_fixture_certificate: str | None = None
     solver_timeout_s: float = Field(default=120.0, gt=0, allow_inf_nan=False)
+    max_leak_volume_m3: float = Field(default=1e-4, ge=0, allow_inf_nan=False)
 
 
 class Finding(BaseModel):

@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 from .pipeline import convert, audit, save_artifacts
@@ -40,7 +41,7 @@ def main(argv=None):
     p.add_argument("--include-review", action="store_true", default=None)
     p.add_argument("--common-coordinates", action="store_true")
     p.add_argument("--solver")
-    p.add_argument("--profile", choices=["mapping", "research-basement", "simulation"])
+    p.add_argument("--profile", choices=["mapping", "research-basement", "simulation", "geometry-fidelity"])
     p.add_argument("--reference-case")
     p.add_argument("--decisions", help="Explicit entity decisions JSON")
     p.add_argument("--intentional-deltas", help="Approved delta JSON")
@@ -50,7 +51,7 @@ def main(argv=None):
     p.add_argument("--fds", required=True)
     p.add_argument("--manifest", required=True)
     p.add_argument("--geometry-package")
-    p.add_argument("--profile", choices=["mapping", "research-basement", "simulation"])
+    p.add_argument("--profile", choices=["mapping", "research-basement", "simulation", "geometry-fidelity"])
     p.add_argument("--reference-case")
     p.add_argument("--intentional-deltas")
     p.add_argument("--config")
@@ -80,10 +81,17 @@ def main(argv=None):
     p = commands.add_parser("serve")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--api-key", help="API key required for /api/* requests")
+    p.add_argument("--allowed-hosts", help="Comma-separated list of allowed Host header values")
     args = parser.parse_args(argv)
     try:
         if args.command == "serve":
             import uvicorn
+
+            if args.api_key:
+                os.environ["IFCFDS_API_KEY"] = args.api_key
+            if args.allowed_hosts:
+                os.environ["IFCFDS_ALLOWED_HOSTS"] = args.allowed_hosts
 
             uvicorn.run("ifc_to_fds.server:app", host=args.host, port=args.port)
             return 0
@@ -169,20 +177,22 @@ def main(argv=None):
             manifest = MappingManifest.model_validate_json(
                 Path(args.manifest).read_text(encoding="utf-8")
             )
-            geometry_path = (
-                Path(args.geometry_package)
-                if args.geometry_package
-                else Path(args.fds)
-                .with_suffix("")
-                .with_name(Path(args.fds).stem + "_geometry.json")
-            )
-            package = (
-                __import__(
-                    "ifc_to_fds.geometry.storage", fromlist=["read_package"]
-                ).read_package(geometry_path)
-                if geometry_path.is_file()
-                else None
-            )
+            from ifc_to_fds.geometry.storage import read_package, restore_package
+
+            geom_arg = Path(args.geometry_package) if args.geometry_package else None
+            default_json = Path(args.fds).with_suffix("").with_name(Path(args.fds).stem + "_geometry.json")
+            default_zip = Path(args.fds).with_suffix("").with_name(Path(args.fds).stem + "_geometry.zip")
+
+            package = None
+            if geom_arg and geom_arg.suffix == ".zip" and geom_arg.is_file():
+                unpacked_json = geom_arg.with_suffix("").with_name(geom_arg.stem + "_unpacked.json")
+                package = restore_package(geom_arg, unpacked_json)
+            elif geom_arg and geom_arg.is_file():
+                package = read_package(geom_arg)
+            elif default_json.is_file():
+                package = read_package(default_json)
+            elif default_zip.is_file():
+                package = restore_package(default_zip, default_json)
             if not args.config:
                 config = {**manifest.configuration, **config}
             _, final, report = audit(

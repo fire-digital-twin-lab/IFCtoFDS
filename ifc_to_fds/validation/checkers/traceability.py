@@ -2,6 +2,7 @@
 
 import hashlib
 from typing import Any, List
+from ifc_to_fds.core.canonical import MappingStrategy, ScopeDecision
 from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
 from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, Severity, ValidationContext
 
@@ -81,6 +82,31 @@ class TraceabilityChecker:
                         element_id=key,
                     )
                 )
+
+        emitted_keys = {
+            p.source.get("entity_key")
+            for p in parsed.primitives
+            if p.source.get("entity_key")
+        }
+        for e in model.elements:
+            key = e.entity_key
+            if (
+                e.scope_decision in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+                and e.role == "PHYSICAL"
+                and e.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
+            ):
+                if key not in emitted_keys:
+                    status = GateStatus.FAIL
+                    findings.append(
+                        Finding(
+                            id=f"FND-{len(findings) + 1:04}",
+                            severity=Severity.P0,
+                            category="traceability",
+                            title=f"Missing required FDS solid: {e.global_id}",
+                            detail=f"Missing required FDS solid: {e.global_id}",
+                            element_id=key,
+                        )
+                    )
 
         if manifest:
             records = manifest.records

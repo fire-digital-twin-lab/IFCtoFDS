@@ -13,6 +13,7 @@ from .canonical import (
     PortReference,
     SourceMetadata,
     TriangleMesh,
+    get_execution_provenance,
 )
 from .inventory import extract_inventory
 from .units import get_length_unit_scale
@@ -32,4 +33,5 @@ __all__ = [
     "TriangleMesh",
     "extract_inventory",
     "get_length_unit_scale",
+    "get_execution_provenance",
 ]

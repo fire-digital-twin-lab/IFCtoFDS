@@ -62,8 +62,8 @@
             var conns = mepGraph.connections || [];
             for (var i = 0; i < conns.length; i++) {
                 var c = conns[i];
-                var from = c.from_entity || c.from || (c.source_key);
-                var to = c.to_entity || c.to || (c.target_key);
+                var from = c.from_entity || c.from || c.source_key || c.source_element_id || c.source_id;
+                var to = c.to_entity || c.to || c.target_key || c.target_element_id || c.target_id;
                 if (from && to) {
                     if (!adj[from]) adj[from] = [];
                     if (!adj[to]) adj[to] = [];

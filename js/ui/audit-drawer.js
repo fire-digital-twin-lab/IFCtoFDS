@@ -142,25 +142,45 @@
             }
         }
 
+        function bindArtifactLink(id, artifact, defaultName) {
+            var btn = document.getElementById(id);
+            if (!btn) return;
+            if (artifact && artifact.url) {
+                btn.href = artifact.url;
+                btn.download = artifact.filename || defaultName || '';
+                btn.classList.remove('disabled');
+                btn.style.pointerEvents = '';
+                btn.style.opacity = '';
+                btn.removeAttribute('aria-disabled');
+            } else {
+                btn.removeAttribute('href');
+                btn.removeAttribute('download');
+                btn.classList.add('disabled');
+                btn.style.pointerEvents = 'none';
+                btn.style.opacity = '0.5';
+                btn.setAttribute('aria-disabled', 'true');
+            }
+        }
+
         var fdsBtn = document.getElementById('btn-download-fds');
         if (fdsBtn) {
             fdsBtn.textContent = 'Download FDS';
-            if (report.artifacts && report.artifacts.fds) fdsBtn.href = report.artifacts.fds.url;
+            bindArtifactLink('btn-download-fds', report.artifacts && report.artifacts.fds, 'model.fds');
         }
         var manifestBtn = document.getElementById('btn-download-manifest');
         if (manifestBtn) {
             manifestBtn.textContent = 'Download Manifest';
-            if (report.artifacts && report.artifacts.manifest) manifestBtn.href = report.artifacts.manifest.url;
+            bindArtifactLink('btn-download-manifest', report.artifacts && report.artifacts.manifest, 'model_manifest.json');
         }
         var geomBtn = document.getElementById('btn-download-geom-pkg');
         if (geomBtn) {
             geomBtn.textContent = 'Download Geometries';
-            if (report.artifacts && report.artifacts.geometry) geomBtn.href = report.artifacts.geometry.url;
+            bindArtifactLink('btn-download-geom-pkg', report.artifacts && report.artifacts.geometry, 'model_geometry.zip');
         }
         var reportBtn = document.getElementById('btn-download-report');
         if (reportBtn) {
             reportBtn.textContent = 'Download Full Report';
-            if (report.artifacts && report.artifacts.report) reportBtn.href = report.artifacts.report.url;
+            bindArtifactLink('btn-download-report', report.artifacts && report.artifacts.report, 'model_acceptance_report.json');
         }
 
         updateGlobalStatusBadge(report.status);
@@ -168,26 +188,21 @@
 
     function exposeFailedCheckpoints(jobId) {
         if (!jobId) return;
-        var fdsBtn = document.getElementById('btn-download-fds');
-        if (fdsBtn) {
-            fdsBtn.href = '/api/jobs/' + jobId + '/checkpoints/fds';
-            fdsBtn.textContent = 'Download Checkpoint FDS (UNACCEPTED)';
+        function setCheckpoint(id, path, text, filename) {
+            var btn = document.getElementById(id);
+            if (!btn) return;
+            btn.href = path;
+            btn.download = filename;
+            btn.textContent = text;
+            btn.classList.remove('disabled');
+            btn.style.pointerEvents = '';
+            btn.style.opacity = '';
+            btn.removeAttribute('aria-disabled');
         }
-        var manifestBtn = document.getElementById('btn-download-manifest');
-        if (manifestBtn) {
-            manifestBtn.href = '/api/jobs/' + jobId + '/checkpoints/manifest';
-            manifestBtn.textContent = 'Download Checkpoint Manifest (UNACCEPTED)';
-        }
-        var geomBtn = document.getElementById('btn-download-geom-pkg');
-        if (geomBtn) {
-            geomBtn.href = '/api/jobs/' + jobId + '/checkpoints/geometry';
-            geomBtn.textContent = 'Download Checkpoint Geometries (AUDIT INCOMPLETE)';
-        }
-        var reportBtn = document.getElementById('btn-download-report');
-        if (reportBtn) {
-            reportBtn.href = '/api/jobs/' + jobId + '/checkpoints/report';
-            reportBtn.textContent = 'Download Checkpoint Report (UNACCEPTED)';
-        }
+        setCheckpoint('btn-download-fds', '/api/jobs/' + jobId + '/checkpoints/fds', 'Download Checkpoint FDS (UNACCEPTED)', 'model_checkpoint.fds');
+        setCheckpoint('btn-download-manifest', '/api/jobs/' + jobId + '/checkpoints/manifest', 'Download Checkpoint Manifest (UNACCEPTED)', 'model_checkpoint_manifest.json');
+        setCheckpoint('btn-download-geom-pkg', '/api/jobs/' + jobId + '/checkpoints/geometry', 'Download Checkpoint Geometries (AUDIT INCOMPLETE)', 'model_checkpoint_geometry.zip');
+        setCheckpoint('btn-download-report', '/api/jobs/' + jobId + '/checkpoints/report', 'Download Checkpoint Report (UNACCEPTED)', 'model_checkpoint_report.json');
         var panelArtifacts = document.getElementById('panel-artifacts');
         if (panelArtifacts) {
             panelArtifacts.style.display = 'grid';

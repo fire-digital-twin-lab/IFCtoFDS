@@ -144,6 +144,7 @@ def run_independent_validation(
             ]
             if len(candidates) == 1:
                 key = candidates[0].entity_key
+                p.source["entity_key"] = key
                 unknown(
                     "traceability", f"Legacy source metadata lacks file hash: {p.id}"
                 )

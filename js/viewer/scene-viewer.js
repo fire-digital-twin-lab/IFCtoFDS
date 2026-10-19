@@ -512,10 +512,10 @@
             box.makeEmpty().expandByObject(node);
             if (box.isEmpty()) { setVisibilityChannel(node, 'section', true); return; }
             // Three world -> IFC native: Three Y is IFC Z (height), Three Z is IFC Y.
-            var inside = box.min.x >= range.xmin && box.max.x <= range.xmax
-                && box.min.y >= range.zmin && box.max.y <= range.zmax
-                && box.min.z >= range.ymin && box.max.z <= range.ymax;
-            setVisibilityChannel(node, 'section', inside);
+            var intersects = box.max.x >= range.xmin && box.min.x <= range.xmax
+                && box.max.y >= range.zmin && box.min.y <= range.zmax
+                && box.max.z >= range.ymin && box.min.z <= range.ymax;
+            setVisibilityChannel(node, 'section', intersects);
         });
     };
 
@@ -1756,8 +1756,10 @@
     };
 
     function clearGroup(group) {
+        if (!group) return;
         while (group.children.length) {
-            var child = group.children.pop();
+            var child = group.children[group.children.length - 1];
+            group.remove(child);
             child.traverse(function (node) {
                 if (node.geometry) node.geometry.dispose();
                 if (node.material) {
@@ -1848,8 +1850,11 @@
 
     function categoryForIfcType(type) {
         if (!type) return 'other';
-        if (type === 'IFCDOOR' || type === 'IFCWINDOW') return 'fills';
-        if (/^IFC(WALL|SLAB|ROOF|COLUMN|BEAM|STAIR|MEMBER|RAILING|CURTAINWALL|PLATE|COVERING|FOOTING|PILE)/.test(type)) return 'structure';
+        var u = String(type).toUpperCase();
+        if (u === 'IFCDOOR' || u === 'IFCWINDOW') return 'fills';
+        if (/^IFC(WALL|SLAB|ROOF|COLUMN|BEAM|STAIR|MEMBER|RAILING|CURTAINWALL|PLATE|COVERING|FOOTING|PILE)/.test(u)) return 'structure';
+        if (/^IFC(FLOW|DUCT|PIPE|AIRTERMINAL|FAN|VALVE|DISTRIBUTION|PUMP|BOILER|CHILLER|DAMPER)/.test(u)) return 'mep';
+        if (u.indexOf('SPACE') >= 0) return 'space';
         return 'other';
     }
 
@@ -2068,4 +2073,6 @@
     }
 
     ns.viewer.SceneViewer = SceneViewer;
+    ns.viewer.categoryForIfcType = categoryForIfcType;
+    ns.viewer.clearGroup = clearGroup;
 })(window.IfcFds);

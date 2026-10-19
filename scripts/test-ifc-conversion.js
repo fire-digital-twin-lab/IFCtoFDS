@@ -75,7 +75,10 @@ for (const fileName of examples) {
     const model = ifcAdapter.parse(ifcText, fileName);
     const exportOptions = { cellSize: meshCellSize, voxelSize, openingThickening };
     const convertible = exporter.getExportableElements(model, exportOptions);
-    const sourceTriangles = convertible.reduce((sum, element) => sum + element.mesh.faces.length, 0);
+    const sourceTriangles = convertible.reduce((sum, element) => {
+        const targetMesh = element.geomExportMesh || element.displayMesh || element.mesh;
+        return sum + (targetMesh && targetMesh.faces ? targetMesh.faces.length : 0);
+    }, 0);
 
     const obstText = exporter.exportFromIfcScene(model, { ...exportOptions, mode: 'obst' });
     const hybridText = exporter.exportFromIfcScene(model, { ...exportOptions, mode: 'hybrid' });

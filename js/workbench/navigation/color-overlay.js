@@ -90,7 +90,18 @@
                     return;
                 }
 
-                var desc = normalizeEntityDescriptor(node.userData);
+                var desc = null;
+                var selectionStore = (root.IfcFds && root.IfcFds.workbench && root.IfcFds.workbench.state && root.IfcFds.workbench.state.selectionStore);
+                if (selectionStore) {
+                    var uData = node.userData;
+                    var key = uData.entityKey || uData.entity_key ||
+                              (uData.ifcSource && (uData.ifcSource.entityKey || uData.ifcSource.stepId || uData.ifcSource.globalId)) ||
+                              uData.id || uData.stepId || uData.globalId;
+                    if (key) desc = selectionStore.getDescriptor(key);
+                }
+                if (!desc) {
+                    desc = normalizeEntityDescriptor(node.userData);
+                }
                 var targetHex = self._getColorForDescriptor(desc, self.currentMode);
                 if (targetHex !== null) {
                     node.material.color.setHex(targetHex);
@@ -140,16 +151,16 @@
         }
 
         if (mode === 'ifc-type') {
-            var cat = desc.category || 'other';
-            if (COLOR_PALETTES.ifcType[cat]) return COLOR_PALETTES.ifcType[cat];
+            var cat = desc.category;
+            if (cat && cat !== 'other' && COLOR_PALETTES.ifcType[cat]) return COLOR_PALETTES.ifcType[cat];
             var type = (desc.ifcType || '').toUpperCase();
-            if (type.indexOf('WALL') >= 0 || type.indexOf('SLAB') >= 0 || type.indexOf('COLUMN') >= 0 || type.indexOf('BEAM') >= 0) {
+            if (type.indexOf('WALL') >= 0 || type.indexOf('SLAB') >= 0 || type.indexOf('COLUMN') >= 0 || type.indexOf('BEAM') >= 0 || type.indexOf('ROOF') >= 0 || type.indexOf('STAIR') >= 0) {
                 return COLOR_PALETTES.ifcType.structure;
             }
             if (type.indexOf('DOOR') >= 0 || type.indexOf('WINDOW') >= 0) {
                 return COLOR_PALETTES.ifcType.fills;
             }
-            if (type.indexOf('FLOW') >= 0 || type.indexOf('DUCT') >= 0 || type.indexOf('PIPE') >= 0 || type.indexOf('FAN') >= 0) {
+            if (type.indexOf('FLOW') >= 0 || type.indexOf('DUCT') >= 0 || type.indexOf('PIPE') >= 0 || type.indexOf('FAN') >= 0 || type.indexOf('TERMINAL') >= 0 || type.indexOf('VALVE') >= 0) {
                 return COLOR_PALETTES.ifcType.mep;
             }
             if (type.indexOf('SPACE') >= 0) return COLOR_PALETTES.ifcType.space;

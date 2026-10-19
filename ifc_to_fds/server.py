@@ -2,6 +2,7 @@
 
 import asyncio
 from contextlib import asynccontextmanager
+import hmac
 import json
 import os
 from pathlib import Path
@@ -38,19 +39,48 @@ app.add_middleware(BodyLimitMiddleware, maximum=MAX_TOTAL + 1024**2)
 
 
 @app.middleware("http")
-async def origin_guard(request: Request, call_next):
+async def security_guard(request: Request, call_next):
+    # 1. Host header validation
+    allowed_hosts_str = os.getenv("IFCFDS_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],testserver")
+    if allowed_hosts_str != "*":
+        allowed_hosts = {h.strip().lower() for h in allowed_hosts_str.split(",") if h.strip()}
+        raw_host = request.headers.get("host", "").split(":")[0].strip().lower()
+        if raw_host and raw_host not in allowed_hosts:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=400, content={"detail": f"Invalid Host header: {raw_host}"})
+
+    # 2. API Key authentication for /api/* (excluding /api/health)
+    api_key = os.getenv("IFCFDS_API_KEY")
+    if api_key and request.url.path.startswith("/api/") and request.url.path != "/api/health":
+        provided_key = request.headers.get("x-api-key")
+        if not provided_key:
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.lower().startswith("bearer "):
+                provided_key = auth_header[7:].strip()
+        if not provided_key or not hmac.compare_digest(provided_key, api_key):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid or missing API key"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    # 3. Origin guard for state-modifying requests
     origin = request.headers.get("origin")
+    allowed_origins_str = os.getenv("IFCFDS_ALLOWED_ORIGINS", "")
+    allowed_origins = {o.strip().rstrip("/") for o in allowed_origins_str.split(",") if o.strip()}
     if (
         request.method not in ("GET", "HEAD", "OPTIONS")
         and origin
-        and origin != str(request.base_url).rstrip("/")
+        and origin.rstrip("/") != str(request.base_url).rstrip("/")
+        and origin.rstrip("/") not in allowed_origins
     ):
         from fastapi.responses import JSONResponse
-
         return JSONResponse(
             status_code=403,
             content={"detail": "Use the workbench served by this local backend"},
         )
+
     return await call_next(request)
 
 
@@ -67,7 +97,7 @@ def health():
 
 
 def configuration_value(
-    text, cell_size=None, storey=None, all_geom=None, include_review=None
+    text, cell_size=None, storey=None, all_geom=None, include_review=None, profile=None
 ):
     try:
         config = json.loads(text or "{}")
@@ -77,6 +107,7 @@ def configuration_value(
             ("cell_size", cell_size),
             ("all_geom", all_geom),
             ("include_review", include_review),
+            ("profile", profile),
         ):
             if value is not None:
                 config[key] = value
@@ -164,8 +195,8 @@ async def store_uploads(uploads):
             json.dumps(original_names), encoding="utf-8"
         )
         return directory, paths
-    except Exception:
-        shutil.rmtree(directory)
+    except (Exception, asyncio.CancelledError):
+        shutil.rmtree(directory, ignore_errors=True)
         raise
     finally:
         for upload in uploads:
@@ -177,11 +208,13 @@ async def inventory(
     file: Optional[UploadFile] = File(None),
     files: Optional[list[UploadFile]] = File(None),
 ):
+    if not manager.can_accept():
+        raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
     directory, paths = await store_uploads(files or ([file] if file else []))
     try:
         job = manager.submit(paths, {}, directory, mode="inventory")
     except OverflowError as exc:
-        shutil.rmtree(directory)
+        shutil.rmtree(directory, ignore_errors=True)
         raise HTTPException(429, str(exc))
     return await wait_for_job(job["id"])
 
@@ -203,21 +236,25 @@ async def wait_for_job(jid):
 @app.post("/api/jobs", status_code=202)
 async def submit(files: list[UploadFile] = File(...), configuration: str = Form("{}")):
     config = configuration_value(configuration)
+    if not manager.can_accept():
+        raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
     directory, paths = await store_uploads(files)
     try:
         return manager.submit(paths, config, directory)
     except OverflowError as exc:
-        shutil.rmtree(directory)
+        shutil.rmtree(directory, ignore_errors=True)
         raise HTTPException(429, str(exc))
 
 
 @app.post("/api/preview-jobs", status_code=202)
 async def submit_preview(file: UploadFile = File(...)):
+    if not manager.can_accept():
+        raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
     directory, paths = await store_uploads([file])
     try:
         return manager.submit(paths, {}, directory, mode="preview")
     except OverflowError as exc:
-        shutil.rmtree(directory)
+        shutil.rmtree(directory, ignore_errors=True)
         raise HTTPException(429, str(exc))
 
 
@@ -232,7 +269,7 @@ def status(jid: str):
 @app.delete("/api/jobs/{jid}")
 def cancel(jid: str):
     try:
-        return manager.cancel(jid)
+        return manager.delete_job(jid)
     except KeyError:
         raise HTTPException(404, "Unknown job")
 
@@ -240,6 +277,7 @@ def cancel(jid: str):
 @app.get("/api/jobs/{jid}/result")
 def result(jid: str):
     try:
+        manager.touch(jid)
         return manager.result(jid)
     except KeyError:
         raise HTTPException(404, "Unknown job")
@@ -253,6 +291,7 @@ def diagnostics(jid: str):
         job = manager.jobs.get(jid)
         if not job:
             raise HTTPException(404, "Unknown job")
+        manager.touch(jid)
         path = Path(job["directory"]) / "diagnostics.json"
         if not path.is_file():
             raise HTTPException(404, "No diagnostic produced")
@@ -271,6 +310,7 @@ def artifact(jid: str, artifact: str):
         job = manager.jobs[jid]
         if job["state"] != "COMPLETED":
             raise HTTPException(409, "Job is not complete")
+        manager.touch(jid)
         path = Path(job["directory"]) / ARTIFACTS[artifact]
         if not path.exists():
             raise HTTPException(404, "Artifact not produced by this job")
@@ -285,6 +325,7 @@ def checkpoint_artifact(jid: str, artifact: str):
         if jid not in manager.jobs:
             raise HTTPException(404, "Unknown job")
         job = manager.jobs[jid]
+        manager.touch(jid)
         path = Path(job["directory"]) / ARTIFACTS[artifact]
         if not path.is_file():
             raise HTTPException(404, "Checkpoint artifact not available")
@@ -299,6 +340,7 @@ def checkpoint_artifact(jid: str, artifact: str):
 def geometry_batch(jid: str, payloads: list[str] = Query(...)):
     if not 1 <= len(payloads) <= 16:
         raise HTTPException(422, "Request between 1 and 16 geometry payloads")
+    manager.touch(jid)
     # Reuse the job-local, completed-artifact whitelist for every member.
     paths = [Path(geometry_payload(jid, key).path) for key in payloads]
     length = sum(path.stat().st_size for path in paths)
@@ -330,6 +372,7 @@ def geometry_payload(jid: str, payload: str):
             raise HTTPException(404, "Unknown job")
         if job["state"] != "COMPLETED":
             raise HTTPException(409, "Job is not complete")
+        manager.touch(jid)
         index_path = Path(job["directory"]) / "model_geometry.json"
         if not index_path.is_file():
             raise HTTPException(404, "Geometry index not available for this job")
@@ -357,16 +400,24 @@ async def legacy_convert(
     storey: Optional[str] = Form(None),
     all_geom: Optional[bool] = Form(None),
     include_review: Optional[bool] = Form(None),
+    profile: Optional[str] = Form(None),
     configuration: str = Form("{}"),
 ):
+    if not manager.can_accept():
+        raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
     config = configuration_value(
-        configuration, cell_size, storey, all_geom, include_review
+        configuration,
+        cell_size=cell_size,
+        storey=storey,
+        all_geom=all_geom,
+        include_review=include_review,
+        profile=profile,
     )
     directory, paths = await store_uploads([file])
     try:
         job = manager.submit(paths, config, directory)
     except OverflowError as exc:
-        shutil.rmtree(directory)
+        shutil.rmtree(directory, ignore_errors=True)
         raise HTTPException(429, str(exc))
     return await wait_for_job(job["id"])
 

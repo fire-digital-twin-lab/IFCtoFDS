@@ -14,6 +14,7 @@ from ifc_to_fds.validation.checkers.structural import StructuralCompletenessChec
 from ifc_to_fds.validation.checkers.air_path import AirPathTopologyChecker
 from ifc_to_fds.validation.checkers.openings import OpeningsChecker
 from ifc_to_fds.validation.checkers.mep import MepChecker
+from ifc_to_fds.validation.checkers.representation import RepresentationChecker
 from ifc_to_fds.validation.checkers.boundary import BoundaryChecker
 from ifc_to_fds.validation.checkers.solver import SolverChecker
 
@@ -37,6 +38,7 @@ class ValidationRunner:
             AirPathTopologyChecker(),
             OpeningsChecker(),
             MepChecker(),
+            RepresentationChecker(),
             BoundaryChecker(),
             SolverChecker(),
         ]
@@ -46,6 +48,17 @@ class ValidationRunner:
     ) -> ValidationContext:
         config = config or AuditConfig()
         parsed_fds = parse_fds(fds_text) if fds_text else None
+        if parsed_fds and model and getattr(model, "elements", None):
+            for p in parsed_fds.primitives:
+                if not p.source.get("entity_key") and p.source.get("legacy"):
+                    candidates = [
+                        e
+                        for e in model.elements
+                        if e.global_id == p.source.get("global_id")
+                        and e.step_id == p.source.get("step_id")
+                    ]
+                    if len(candidates) == 1:
+                        p.source["entity_key"] = candidates[0].entity_key
         return ValidationContext(
             model=model,
             fds_text=fds_text,

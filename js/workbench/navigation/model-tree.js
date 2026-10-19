@@ -252,7 +252,10 @@
                 key = d.simulationRole || 'REFERENCE_GEOMETRY';
             } else if (groupBy === 'validation') {
                 var raw = d.raw || {};
-                key = raw.review_status || raw.verification_status || 'NOT_RUN';
+                key = d.verificationStatus || raw.verification_status || d.verification_status || 'NOT_RUN';
+            } else if (groupBy === 'review') {
+                var raw = d.raw || {};
+                key = d.reviewStatus || raw.review_status || d.review_status || 'NOT_REQUIRED';
             }
             if (!groups[key]) groups[key] = [];
             groups[key].push(d);

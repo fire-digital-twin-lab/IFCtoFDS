@@ -221,3 +221,45 @@ def archive_package(path, target):
         for key in sorted(linked):
             payload = payload_dir(path) / (key + ".bin")
             archive.write(payload, "index.payloads/" + payload.name)
+
+
+def restore_package(zip_path, target_json_path):
+    """Safely extracts a geometry package archive (.zip) and verifies all payload digests.
+
+    Includes strict Zip-slip protection preventing directory traversal.
+    """
+    from .package import verify_package
+
+    zip_path = Path(zip_path)
+    target_json = Path(target_json_path).resolve()
+    target_payloads = payload_dir(target_json)
+    target_json.parent.mkdir(parents=True, exist_ok=True)
+    target_payloads.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        for member in archive.infolist():
+            # Zip-slip prevention: sanitize and reject path traversal attempts
+            norm_name = Path(member.filename).as_posix()
+            if norm_name.startswith("/") or ".." in norm_name.split("/") or ":" in norm_name:
+                raise ValueError(f"Security: Malicious path traversal detected in archive: {member.filename}")
+            if member.is_dir():
+                continue
+
+            if norm_name == "index.json":
+                content = archive.read(member)
+                target_json.write_bytes(content)
+            elif norm_name.startswith("index.payloads/"):
+                payload_name = Path(norm_name).name
+                expected_sha = payload_name.removesuffix(".bin")
+                content = archive.read(member)
+                actual_sha = hashlib.sha256(content).hexdigest()
+                if actual_sha != expected_sha:
+                    raise ValueError(f"Corrupted payload in archive: {payload_name} (hash mismatch)")
+                (target_payloads / payload_name).write_bytes(content)
+            else:
+                raise ValueError(f"Unexpected file in geometry archive: {member.filename}")
+
+    package = read_package(target_json)
+    verify_package(package)
+    return package
+

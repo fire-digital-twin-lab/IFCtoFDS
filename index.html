@@ -371,6 +371,7 @@
                             <option value="system">Group: By MEP System</option>
                             <option value="role">Group: By Mapping Role</option>
                             <option value="validation">Group: By Validation State</option>
+                            <option value="review">Group: By Review Status</option>
                         </select>
                     </div>
                     <div style="position:relative">
@@ -598,25 +599,25 @@
                         <span class="artifact-card-badge" style="background:var(--accent-subtle);color:var(--accent-hover)">Simulation Model</span>
                         <span class="artifact-card-title">model.fds</span>
                         <p style="font-size:10px;color:var(--text-muted)">Verified geometry and obstacle definitions for FDS.</p>
-                        <a id="btn-download-fds" class="btn" style="height:26px;font-size:11px" href="#" download>Download FDS</a>
+                        <a id="btn-download-fds" class="btn disabled" style="height:26px;font-size:11px;pointer-events:none;opacity:0.5" aria-disabled="true">Download FDS</a>
                     </div>
                     <div class="artifact-card">
                         <span class="artifact-card-badge" style="background:var(--status-pass-bg);color:var(--status-pass-text)">Audit Manifest</span>
                         <span class="artifact-card-title">model_manifest.json</span>
                         <p style="font-size:10px;color:var(--text-muted)">Complete entity-by-entity provenance and mapping records.</p>
-                        <a id="btn-download-manifest" class="btn" style="height:26px;font-size:11px" href="#" download>Download Manifest</a>
+                        <a id="btn-download-manifest" class="btn disabled" style="height:26px;font-size:11px;pointer-events:none;opacity:0.5" aria-disabled="true">Download Manifest</a>
                     </div>
                     <div class="artifact-card">
                         <span class="artifact-card-badge" style="background:var(--status-reference-bg);color:var(--status-reference-text)">Evidence Archive</span>
                         <span class="artifact-card-title">model_geometry.zip</span>
                         <p style="font-size:10px;color:var(--text-muted)">Lossless binary meshes for all converted and reference elements.</p>
-                        <a id="btn-download-geom-pkg" class="btn" style="height:26px;font-size:11px" href="#" download>Download Geometries</a>
+                        <a id="btn-download-geom-pkg" class="btn disabled" style="height:26px;font-size:11px;pointer-events:none;opacity:0.5" aria-disabled="true">Download Geometries</a>
                     </div>
                     <div class="artifact-card">
                         <span class="artifact-card-badge" style="background:var(--status-warning-bg);color:var(--status-warning-text)">Acceptance Report</span>
                         <span class="artifact-card-title">model_acceptance_report.json</span>
                         <p style="font-size:10px;color:var(--text-muted)">Authoritative gate evaluations, complete findings list, and coverage metrics.</p>
-                        <a id="btn-download-report" class="btn" style="height:26px;font-size:11px" href="#" download>Download Full Report</a>
+                        <a id="btn-download-report" class="btn disabled" style="height:26px;font-size:11px;pointer-events:none;opacity:0.5" aria-disabled="true">Download Full Report</a>
                     </div>
                 </div>
             </div>

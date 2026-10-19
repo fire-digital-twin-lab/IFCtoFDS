@@ -113,10 +113,47 @@ class AirPathTopologyChecker:
                         candidate = target_mesh(e)
                         if candidate and valid_solid(candidate):
                             m = candidate
-                    except Exception:
-                        m = None
-                if m is None and getattr(e, "mesh", None) and valid_solid(e.mesh):
-                    m = e.mesh
+                        else:
+                            return CheckerOutcome(
+                                gate_name=self.name,
+                                result=GateResult(
+                                    status=GateStatus.INCONCLUSIVE,
+                                    reason=f"BOUNDARY_CLIPPING_FAILED: target_mesh for element {e.entity_key} did not yield a valid solid.",
+                                ),
+                                findings=[
+                                    Finding(
+                                        id="FND-AIR-BOUNDARY-FAIL",
+                                        severity=Severity.P1,
+                                        category=self.name,
+                                        title=f"Boundary clipping failed for enclosure element: {e.entity_key}",
+                                        detail=f"Element {e.entity_key} ({e.global_id}) has boundary_policy={e.boundary_policy} but target_mesh did not produce a valid solid.",
+                                        element_id=e.entity_key,
+                                    )
+                                ],
+                                metrics={"air_path": {"boundary_clipping_failed": e.entity_key}},
+                            )
+                    except Exception as exc:
+                        return CheckerOutcome(
+                            gate_name=self.name,
+                            result=GateResult(
+                                status=GateStatus.INCONCLUSIVE,
+                                reason=f"BOUNDARY_CLIPPING_FAILED: target_mesh exception for element {e.entity_key}: {exc}",
+                            ),
+                            findings=[
+                                Finding(
+                                    id="FND-AIR-BOUNDARY-EXC",
+                                    severity=Severity.P1,
+                                    category=self.name,
+                                    title=f"Boundary clipping exception for enclosure element: {e.entity_key}",
+                                    detail=f"Element {e.entity_key} ({e.global_id}) boundary clipping raised exception: {exc}",
+                                    element_id=e.entity_key,
+                                )
+                            ],
+                            metrics={"air_path": {"boundary_clipping_error": str(exc)}},
+                        )
+                else:
+                    if getattr(e, "mesh", None) and valid_solid(e.mesh):
+                        m = e.mesh
                 if m:
                     ref_trimeshes.append(as_trimesh(m))
             if not ref_trimeshes:
@@ -166,8 +203,25 @@ class AirPathTopologyChecker:
                             ],
                             metrics={"air_path": {"unprovenanced_count": len(unprovenanced_solids)}},
                         )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    return CheckerOutcome(
+                        gate_name=self.name,
+                        result=GateResult(
+                            status=GateStatus.INCONCLUSIVE,
+                            reason=f"UNPROVENANCED_CHECK_FAILED: CSG intersection exception checking obstacle {getattr(p, 'id', 'OBST')}: {exc}",
+                        ),
+                        findings=[
+                            Finding(
+                                id="FND-AIR-UNPROVENANCED-EXC",
+                                severity=Severity.P1,
+                                category=self.name,
+                                title=f"CSG exception checking unprovenanced obstacle: {getattr(p, 'id', 'OBST')}",
+                                detail=f"CSG intersection boolean raised an exception against reference envelope: {exc}",
+                                element_id=enclosure_elements[0].entity_key,
+                            )
+                        ],
+                        metrics={"air_path": {"error": f"UNPROVENANCED_CHECK_FAILED: {exc}"}},
+                    )
 
             # Domain bounding box: constrain symmetrically to explicit simulation domain when defined
             sim_domain = getattr(context.model, "simulation_domain", None)
@@ -289,13 +343,15 @@ class AirPathTopologyChecker:
             surface_tol = getattr(context.config, "surface_tolerance_m", 0.001) if context.config else 0.001
             v_ref = float(s_ref.volume)
             leak_ratio = v_leak / max(v_ref, 1e-12)
+            configured_leak_vol = getattr(context.config, "max_leak_volume_m3", 1e-4) if context.config else 1e-4
+            leak_vol_tol = max(float(configured_leak_vol), surface_tol ** 3)
             leak_tol = max(1e-4, (surface_tol ** 3) / max(v_ref, 1e-12))
 
             findings: List[Finding] = []
             status = GateStatus.PASS
             reasons = []
 
-            if leak_ratio > leak_tol:
+            if v_leak > leak_vol_tol or leak_ratio > leak_tol:
                 if has_missing_opening_mesh:
                     return CheckerOutcome(
                         gate_name=self.name,

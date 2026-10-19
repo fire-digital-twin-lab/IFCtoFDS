@@ -52,10 +52,17 @@
         setFallback: function (file) {
             if (fallback !== file) { inventoryGeneration++; get('storeys').replaceChildren(); }
             fallback = file;
+            var convertBtn = document.getElementById('convert-verified');
+            if (convertBtn && file) convertBtn.disabled = false;
         },
         usePreviewInventory: function (inventory, file) {
             var chosen = selectedFiles();
-            if (chosen.length === 1 && chosen[0] === file) { inventoryGeneration++; applyInventory(inventory); }
+            if (chosen.length === 1 && chosen[0] === file) {
+                inventoryGeneration++;
+                applyInventory(inventory);
+                var convertBtn = document.getElementById('convert-verified');
+                if (convertBtn) convertBtn.disabled = false;
+            }
         },
         cancel: function () {
             stopped = true; generation++;

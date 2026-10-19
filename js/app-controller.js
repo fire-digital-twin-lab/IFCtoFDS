@@ -506,6 +506,18 @@
             downloadText(state.generatedFdsName, state.generatedFdsText);
         });
 
+        var fdsDrawerBtn = document.getElementById('btn-download-fds');
+        if (fdsDrawerBtn) {
+            fdsDrawerBtn.addEventListener('click', function (e) {
+                if (!fdsDrawerBtn.getAttribute('href')) {
+                    e.preventDefault();
+                    if (state.generatedFdsText && state.generatedFdsName) {
+                        downloadText(state.generatedFdsName, state.generatedFdsText);
+                    }
+                }
+            });
+        }
+
         if (els.saveManifest) {
             els.saveManifest.addEventListener('click', function () {
                 if (state.lastArtifactLinks) {
@@ -895,6 +907,15 @@
         updateMetrics(model);
         renderDiagnostics();
         showSelection(null);
+        if (ns.workbench && ns.workbench.navigation) {
+            if (ns.workbench.navigation.colorOverlay) {
+                var currentMode = ns.workbench.navigation.colorOverlay.currentMode || 'mapping';
+                ns.workbench.navigation.colorOverlay.applyColorMode(currentMode);
+            }
+            if (ns.workbench.navigation.modelTree) {
+                ns.workbench.navigation.modelTree.render();
+            }
+        }
     }
 
     function clearFdsModel() {
@@ -1193,6 +1214,13 @@
                     state.generatedFdsText = result.text;
                     state.generatedFdsName = fileName;
                     els.saveFds.disabled = false;
+                    var fdsDrawerBtn = document.getElementById('btn-download-fds');
+                    if (fdsDrawerBtn && (!state.lastArtifactLinks || !state.lastArtifactLinks.fds)) {
+                        fdsDrawerBtn.classList.remove('disabled');
+                        fdsDrawerBtn.style.pointerEvents = '';
+                        fdsDrawerBtn.style.opacity = '';
+                        fdsDrawerBtn.removeAttribute('aria-disabled');
+                    }
                     loadFdsText(result.text, fileName, result.model);
                     hideLoading();
                     // The reveal animation clears any partial clip box from before this
@@ -1267,6 +1295,15 @@
         if (els.saveFds) els.saveFds.disabled = true;
         if (els.openAudit) els.openAudit.disabled = true;
         if (els.saveManifest) els.saveManifest.disabled = true;
+        var fdsDrawerBtn = document.getElementById('btn-download-fds');
+        if (fdsDrawerBtn && (!state.lastArtifactLinks || !state.lastArtifactLinks.fds)) {
+            fdsDrawerBtn.removeAttribute('href');
+            fdsDrawerBtn.removeAttribute('download');
+            fdsDrawerBtn.classList.add('disabled');
+            fdsDrawerBtn.style.pointerEvents = 'none';
+            fdsDrawerBtn.style.opacity = '0.5';
+            fdsDrawerBtn.setAttribute('aria-disabled', 'true');
+        }
     }
 
     function exportVerified() {

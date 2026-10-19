@@ -6,6 +6,7 @@ from .domain import DomainChecker
 from .geometry import GeometryChecker
 from .mep import MepChecker
 from .openings import OpeningsChecker
+from .representation import RepresentationChecker
 from .scope import ScopeChecker
 from .solver import SolverChecker
 from .structural import StructuralCompletenessChecker
@@ -22,6 +23,7 @@ __all__ = [
     "AirPathTopologyChecker",
     "OpeningsChecker",
     "MepChecker",
+    "RepresentationChecker",
     "BoundaryChecker",
     "SolverChecker",
 ]

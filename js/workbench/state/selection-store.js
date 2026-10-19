@@ -39,6 +39,28 @@
             item.entityKey = createEntityKey(item);
             var desc = normalizeEntityDescriptor(item);
             if (!desc || !desc.entityKey) continue;
+
+            var existing = this.getDescriptor(desc.entityKey) || this._entityIndex[desc.entityKey];
+            if (existing) {
+                // Preserve authoritative IFC/manifest metadata; merge FDS primitive into existing descriptor
+                if (!existing.fdsPrimitives) existing.fdsPrimitives = [];
+                existing.fdsPrimitives.push(desc);
+                var pid = desc.fdsPrimitiveId || item.id;
+                if (pid) {
+                    if (!existing.fdsPrimitiveIds) existing.fdsPrimitiveIds = [];
+                    if (existing.fdsPrimitiveIds.indexOf(pid) === -1) {
+                        existing.fdsPrimitiveIds.push(pid);
+                    }
+                }
+                existing.bounds = existing.bounds || desc.bounds;
+                if (!existing.mesh && desc.mesh) existing.mesh = desc.mesh;
+                if (desc.entityKey !== existing.entityKey) {
+                    this._aliasMap[desc.entityKey] = existing.entityKey;
+                    this._aliasMap[existing.entityKey] = desc.entityKey;
+                }
+                continue;
+            }
+
             this._entityIndex[desc.entityKey] = desc;
 
             var src = String(desc.sourceId || defaultSourceId || 'ifc');
@@ -79,23 +101,33 @@
                 (recSrc && globalId && this._byScopedGlobalId[recSrc + ':' + globalId]);
 
             if (!desc && stepId && this._byStepId[stepId]) {
-                if (this._byStepId[stepId].length === 1) {
-                    desc = this._byStepId[stepId][0];
-                } else {
-                    var matchS = this._byStepId[stepId].find(function (d) {
-                        return d.sourceId && String(d.sourceId) === recSrc;
-                    });
-                    if (matchS) desc = matchS;
+                var candidatesS = this._byStepId[stepId];
+                var matchS = candidatesS.find(function (d) {
+                    return recSrc && d.sourceId && (String(d.sourceId) === recSrc || (d.raw && String(d.raw.source_id) === recSrc));
+                });
+                if (matchS) {
+                    desc = matchS;
+                } else if (candidatesS.length === 1) {
+                    var distinctSourcesS = Object.keys(this._byScopedStepId).map(function (k) { return k.split(':')[0]; });
+                    var uniqueSourcesS = distinctSourcesS.filter(function (v, idx, arr) { return arr.indexOf(v) === idx; });
+                    if (uniqueSourcesS.length <= 1 || !recSrc || candidatesS[0].sourceId === recSrc) {
+                        desc = candidatesS[0];
+                    }
                 }
             }
             if (!desc && globalId && this._byGlobalId[globalId]) {
-                if (this._byGlobalId[globalId].length === 1) {
-                    desc = this._byGlobalId[globalId][0];
-                } else {
-                    var matchG = this._byGlobalId[globalId].find(function (d) {
-                        return d.sourceId && String(d.sourceId) === recSrc;
-                    });
-                    if (matchG) desc = matchG;
+                var candidatesG = this._byGlobalId[globalId];
+                var matchG = candidatesG.find(function (d) {
+                    return recSrc && d.sourceId && (String(d.sourceId) === recSrc || (d.raw && String(d.raw.source_id) === recSrc));
+                });
+                if (matchG) {
+                    desc = matchG;
+                } else if (candidatesG.length === 1) {
+                    var distinctSourcesG = Object.keys(this._byScopedGlobalId).map(function (k) { return k.split(':')[0]; });
+                    var uniqueSourcesG = distinctSourcesG.filter(function (v, idx, arr) { return arr.indexOf(v) === idx; });
+                    if (uniqueSourcesG.length <= 1 || !recSrc || candidatesG[0].sourceId === recSrc) {
+                        desc = candidatesG[0];
+                    }
                 }
             }
 
@@ -245,7 +277,11 @@
     SelectionStore.prototype.isSelected = function (keyOrItem) {
         if (!keyOrItem) return false;
         var key = typeof keyOrItem === 'string' ? keyOrItem : createEntityKey(keyOrItem);
-        return !!this._selectedKeys[key];
+        if (this._selectedKeys[key]) return true;
+        var desc = this.getDescriptor(key);
+        if (desc && desc.entityKey && this._selectedKeys[desc.entityKey]) return true;
+        if (this._aliasMap[key] && this._selectedKeys[this._aliasMap[key]]) return true;
+        return false;
     };
 
     SelectionStore.prototype.setSelection = function (itemsOrKeys, source) {
@@ -259,9 +295,9 @@
             if (!entry) continue;
             var desc = null;
             if (typeof entry === 'string') {
-                desc = this._entityIndex[entry] || { entityKey: entry, name: entry, ifcType: 'UNKNOWN' };
+                desc = this.getDescriptor(entry) || this._entityIndex[entry] || { entityKey: entry, name: entry, ifcType: 'UNKNOWN' };
             } else {
-                desc = normalizeEntityDescriptor(entry);
+                desc = (entry.entityKey && this.getDescriptor(entry.entityKey)) || normalizeEntityDescriptor(entry);
                 if (desc && desc.entityKey && !this._entityIndex[desc.entityKey]) {
                     this._entityIndex[desc.entityKey] = desc;
                 }
@@ -283,9 +319,9 @@
             if (!entry) continue;
             var desc = null;
             if (typeof entry === 'string') {
-                desc = this._entityIndex[entry] || { entityKey: entry, name: entry, ifcType: 'UNKNOWN' };
+                desc = this.getDescriptor(entry) || this._entityIndex[entry] || { entityKey: entry, name: entry, ifcType: 'UNKNOWN' };
             } else {
-                desc = normalizeEntityDescriptor(entry);
+                desc = (entry.entityKey && this.getDescriptor(entry.entityKey)) || normalizeEntityDescriptor(entry);
             }
             if (desc && desc.entityKey && !this._selectedKeys[desc.entityKey]) {
                 this._selectedKeys[desc.entityKey] = true;

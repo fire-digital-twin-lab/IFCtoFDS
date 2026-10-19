@@ -1,6 +1,7 @@
 """Golden reference parity evaluation gate."""
 
 import copy
+from pathlib import Path
 from typing import Any, Dict, Optional
 from ifc_to_fds.core.compare import normalize
 from ifc_to_fds.diagnostics import operation
@@ -68,11 +69,18 @@ def golden_gate(
     except (ValueError, TypeError, KeyError) as exc:
         fail("", "reference_integrity", "valid reference", str(exc))
         return
-    evidence: Dict[str, Any] = {"reference_sha256": checksum, "reference_case": str(case)}
-    gate.evidence = evidence
     approved = approval.get("status") == "APPROVED" and all(
         approval.get(k) for k in ("reviewer", "rationale", "evidence")
     )
+    evidence: Dict[str, Any] = {
+        "reference_sha256": checksum,
+        "reference_case": Path(case).name,
+        "data_integrity_verified": True,
+        "human_approval_verified": bool(approved),
+        "approval_status": approval.get("status", "DRAFT"),
+        "reviewer": approval.get("reviewer"),
+    }
+    gate.evidence = evidence
     if not approved:
         unknown("Reference is DRAFT or lacks human approval evidence")
         return

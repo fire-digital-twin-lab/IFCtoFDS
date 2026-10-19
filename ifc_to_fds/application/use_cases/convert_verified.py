@@ -54,25 +54,36 @@ class ConvertVerifiedUseCase:
         manifest.geometry_package_sha256 = geometry_package["sha256"]
         configuration["mep_graph"] = model.mep_graph.model_dump(mode="json")
         manifest.configuration = configuration
+        manifest.reseal()
         manifest_path = workspace / "model_manifest.json"
         manifest_path.write_text(manifest.model_dump_json(), encoding="utf-8")
         # Durable checkpoint before the independent audit. These are explicitly
         # unaccepted artifacts, useful even when a large audit is interrupted.
-        for name, value in (
-            (
-                "inventory",
-                model.model_dump(
-                    mode="json",
-                    exclude={
-                        "elements": {
-                            "__all__": {
-                                "mesh": True,
-                                "openings": {"__all__": {"mesh": True}},
-                            }
+        def sanitize_portable_paths(obj):
+            if isinstance(obj, dict):
+                return {
+                    k: (Path(v).name if k == "file_path" and isinstance(v, str) else sanitize_portable_paths(v))
+                    for k, v in obj.items()
+                }
+            elif isinstance(obj, list):
+                return [sanitize_portable_paths(x) for x in obj]
+            return obj
+
+        clean_checkpoint_inventory = sanitize_portable_paths(
+            model.model_dump(
+                mode="json",
+                exclude={
+                    "elements": {
+                        "__all__": {
+                            "mesh": True,
+                            "openings": {"__all__": {"mesh": True}},
                         }
-                    },
-                ),
-            ),
+                    }
+                },
+            )
+        )
+        for name, value in (
+            ("inventory", clean_checkpoint_inventory),
             ("mep_graph", configuration["mep_graph"]),
             ("configuration", configuration),
         ):
@@ -84,7 +95,9 @@ class ConvertVerifiedUseCase:
                 {
                     "stage": "VALIDATION",
                     "status": "NOT_RUN",
+                    "checkpoint_status": "DRAFT_NOT_SEALED",
                     "output_complete": False,
+                    "bundle_sha256": manifest.bundle_sha256,
                     "reason": "Artifacts saved; independent audit has not completed",
                 }
             ),
@@ -116,17 +129,22 @@ class ConvertVerifiedUseCase:
                 {
                     "stage": "VALIDATION",
                     "status": report.status.value,
+                    "checkpoint_status": "DRAFT_NOT_SEALED" if report.status.value != "MAPPING_VERIFIED" else "VERIFIED_SEALED",
                     "output_complete": manifest.output_complete,
+                    "bundle_sha256": manifest.bundle_sha256,
                     "timings": timings,
                 }
             ),
             encoding="utf-8",
         )
+        from ifc_to_fds.core import get_execution_provenance
+
         audited.exported_bounds = exported_bounds
         audited.timings = timings
         report.metrics["exported_bounds"] = (
             exported_bounds.model_dump() if exported_bounds else None
         )
+        report.metrics["execution_provenance"] = get_execution_provenance()
         return dict(
             status=report.status.value,
             mapping_status=report.mapping_status.value,
@@ -140,16 +158,18 @@ class ConvertVerifiedUseCase:
             manifest=manifest.model_dump(mode="json"),
             report=report.model_dump(mode="json"),
             markdown_report=report.to_markdown(),
-            inventory=audited.model_dump(
-                mode="json",
-                exclude={
-                    "elements": {
-                        "__all__": {
-                            "mesh": True,
-                            "openings": {"__all__": {"mesh": True}},
+            inventory=sanitize_portable_paths(
+                audited.model_dump(
+                    mode="json",
+                    exclude={
+                        "elements": {
+                            "__all__": {
+                                "mesh": True,
+                                "openings": {"__all__": {"mesh": True}},
+                            }
                         }
-                    }
-                },
+                    },
+                )
             ),
             mep_graph=audited.mep_graph.model_dump(mode="json"),
             configuration=configuration,
