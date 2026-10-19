@@ -31,6 +31,9 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
         "intentional_deltas",
         "geometry_package_sha256",
         "boundary_policy",
+        "rebase_vector",
+        "rebase_origin",
+        "auto_rebase_origin",
     }
     if unknown:
         raise ValueError(f"Unknown configuration fields: {sorted(unknown)}")

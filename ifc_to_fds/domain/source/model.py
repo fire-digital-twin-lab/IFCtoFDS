@@ -21,6 +21,7 @@ class SourceMetadata(BaseModel):
             0.0, 0.0, 0.0, 1.0,
         ]
     )
+    rebase_vector: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
 
 
 class SourceIdentity(BaseModel):

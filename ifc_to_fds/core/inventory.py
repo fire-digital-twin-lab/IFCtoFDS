@@ -183,20 +183,37 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
         )
         openings_by_host.setdefault(host_id, []).append(ref)
 
+    def _has_3d_body_representation(prod):
+        rep = getattr(prod, "Representation", None)
+        if not rep:
+            return False
+        if prod.is_a() in (
+            "IfcGrid",
+            "IfcGridAxis",
+            "IfcPositioningElement",
+            "IfcReferencingElement",
+        ):
+            return False
+        return True
+
     # Ingest 100% of IfcProduct entities
-    all_products = ifc_file.by_type("IfcProduct")
+    all_products: List[Any] = list(ifc_file.by_type("IfcProduct"))
     for prod in all_products:
+        prod_any: Any = prod
         guid = prod.GlobalId
         step_id = prod.id()
         ifc_type = prod.is_a()
         name = prod.Name or f"{ifc_type}_{step_id}"
         tag = getattr(prod, "Tag", None)
         storey = find_containing_storey(prod)
-        psets = ifcopenshell.util.element.get_psets(prod)
-        container = ifcopenshell.util.element.get_container(prod)
-        parent = ifcopenshell.util.element.get_aggregate(prod)
-        if container is None and parent is not None:
-            container = ifcopenshell.util.element.get_container(parent)
+        psets = ifcopenshell.util.element.get_psets(prod_any)
+        container = ifcopenshell.util.element.get_container(prod_any)
+        if container is None:
+            for ancestor in ancestry(prod):
+                parent_container = ifcopenshell.util.element.get_container(ancestor)
+                if parent_container:
+                    container = parent_container
+                    break
         if prod.is_a("IfcOpeningElement"):
             voids = getattr(prod, "VoidsElements", ())
             if voids:
@@ -207,15 +224,19 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
             storey = container.Name or container.GlobalId
         openings = openings_by_host.get(step_id, [])
 
-        has_geom = bool(getattr(prod, "Representation", None))
+        parts = ifcopenshell.util.element.get_parts(prod_any) if not prod.is_a("IfcOpeningElement") else []
+        is_assembly_without_geom = len(parts) > 0 and getattr(prod, "Representation", None) is None
 
+        has_geom = _has_3d_body_representation(prod)
+
+        t_prod = ifcopenshell.util.element.get_type(prod_any)
         elem = CanonicalElement(
             placement=extract_placement(prod, source_meta.unit_scale_to_meters),
             building_id=building_and_path(container)[0] if container else None,
             spatial_ancestry=building_and_path(container)[1] if container else [],
             type_class=(
-                ifcopenshell.util.element.get_type(prod).is_a()
-                if ifcopenshell.util.element.get_type(prod)
+                t_prod.is_a()
+                if t_prod is not None
                 else None
             ),
             source_id=file_hash,
@@ -228,17 +249,23 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
             else "PORT"
             if prod.is_a("IfcDistributionPort")
             else "SPATIAL"
-            if prod.is_a()
-            in (
-                "IfcSite",
-                "IfcBuilding",
-                "IfcBuildingStorey",
-                "IfcSpace",
-                "IfcAnnotation",
-                "IfcVirtualElement",
+            if (
+                is_assembly_without_geom
+                or prod.is_a() in (
+                    "IfcSite",
+                    "IfcBuilding",
+                    "IfcBuildingStorey",
+                    "IfcSpace",
+                    "IfcAnnotation",
+                    "IfcVirtualElement",
+                    "IfcGrid",
+                    "IfcGridAxis",
+                    "IfcPositioningElement",
+                    "IfcReferencingElement",
+                )
             )
             else "PHYSICAL",
-            predefined_type=ifcopenshell.util.element.get_predefined_type(prod),
+            predefined_type=ifcopenshell.util.element.get_predefined_type(prod_any),
             global_id=guid,
             step_id=step_id,
             ifc_type=ifc_type,

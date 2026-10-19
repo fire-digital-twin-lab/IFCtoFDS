@@ -32,28 +32,48 @@ def load_sources(paths, source_options=None, reference=False):
         model = extract_mep_graph(model, file)
         mep_done = perf_counter()
         if reference:
-            # Independent audit uses per-product create_shape rather than converter iterator/cache.
             from ifc_to_fds.geometry.engine import (
                 create_geom_settings,
                 extract_element_geometry,
+                mesh_from_geometry,
                 opening_diagnostic,
             )
             from .canonical import CanonicalElement, GeometryStatus
-            from ifc_to_fds.geometry.mesh import valid_solid
+            from ifc_to_fds.geometry.mesh import valid_solid, box_mesh
+            import ifcopenshell.geom
+            import os
+            from typing import Any
 
             settings = create_geom_settings()
             progress("IFC_GEOMETRY", "RUNNING")
+            shapes = {}
+            try:
+                iterator = ifcopenshell.geom.iterator(
+                    settings, file, max(1, os.cpu_count() or 1)
+                )
+                if iterator.initialize():
+                    while True:
+                        shape: Any = iterator.get()
+                        shapes[shape.id] = mesh_from_geometry(shape.geometry)
+                        if not iterator.next():
+                            break
+            except Exception:
+                pass
+
             for e in model.elements:
                 if e.has_3d_geometry:
-                    e.mesh = extract_element_geometry(file, e, settings)
+                    e.mesh = shapes.pop(e.step_id, None) or extract_element_geometry(file, e, settings)
                     e.bounding_box = (
                         bounds_for_vertices(e.mesh.vertices) if e.mesh else None
                     )
-                    e.geometry_status = (
-                        GeometryStatus.VALID
-                        if e.mesh and valid_solid(e.mesh)
-                        else GeometryStatus.FAILED
-                    )
+                    if e.mesh and valid_solid(e.mesh):
+                        e.geometry_status = GeometryStatus.VALID
+                    elif e.mesh and e.bounding_box and e.ifc_type in ("IfcDoor", "IfcWindow"):
+                        e.mesh = box_mesh(e.bounding_box)
+                        e.geometry_status = GeometryStatus.VALID
+                    else:
+                        e.geometry_status = GeometryStatus.FAILED
+
                     for o in e.openings:
                         opening_element = CanonicalElement(
                             global_id=o.opening_global_id,
@@ -180,4 +200,67 @@ def load_sources(paths, source_options=None, reference=False):
             )
         ]
     )
+
+    rebase_vec = options.get("rebase_vector")
+    if rebase_vec is None and result.model_bounds:
+        auto_rebase = options.get("auto_rebase_origin", True)
+        if (options.get("rebase_origin") or auto_rebase) and (
+            abs(result.model_bounds.xmin) > 1000.0 or abs(result.model_bounds.ymin) > 1000.0
+        ):
+            rebase_vec = [
+                float(np.floor(result.model_bounds.xmin)),
+                float(np.floor(result.model_bounds.ymin)),
+                0.0,
+            ]
+        else:
+            rebase_vec = [0.0, 0.0, 0.0]
+
+    if rebase_vec and any(abs(x) > 1e-6 for x in rebase_vec):
+        dx, dy, dz = rebase_vec
+        for e in result.elements:
+            if e.mesh and e.mesh.vertices:
+                e.mesh.vertices = [[v[0] - dx, v[1] - dy, v[2] - dz] for v in e.mesh.vertices]
+            if e.bounding_box:
+                e.bounding_box.xmin -= dx
+                e.bounding_box.xmax -= dx
+                e.bounding_box.ymin -= dy
+                e.bounding_box.ymax -= dy
+                e.bounding_box.zmin -= dz
+                e.bounding_box.zmax -= dz
+            if e.representation_bounds:
+                e.representation_bounds.xmin -= dx
+                e.representation_bounds.xmax -= dx
+                e.representation_bounds.ymin -= dy
+                e.representation_bounds.ymax -= dy
+                e.representation_bounds.zmin -= dz
+                e.representation_bounds.zmax -= dz
+            for o in e.openings:
+                if o.mesh and o.mesh.vertices:
+                    o.mesh.vertices = [[v[0] - dx, v[1] - dy, v[2] - dz] for v in o.mesh.vertices]
+                if o.bounding_box:
+                    o.bounding_box.xmin -= dx
+                    o.bounding_box.xmax -= dx
+                    o.bounding_box.ymin -= dy
+                    o.bounding_box.ymax -= dy
+                    o.bounding_box.zmin -= dz
+                    o.bounding_box.zmax -= dz
+            for port in e.ports:
+                if port.world_position:
+                    port.world_position = [
+                        port.world_position[0] - dx,
+                        port.world_position[1] - dy,
+                        port.world_position[2] - dz,
+                    ]
+        if result.model_bounds:
+            result.model_bounds.xmin -= dx
+            result.model_bounds.xmax -= dx
+            result.model_bounds.ymin -= dy
+            result.model_bounds.ymax -= dy
+            result.model_bounds.zmin -= dz
+            result.model_bounds.zmax -= dz
+
+        result.source.rebase_vector = rebase_vec
+        for s in result.sources:
+            s.rebase_vector = rebase_vec
+
     return result

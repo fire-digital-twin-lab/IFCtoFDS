@@ -15,7 +15,11 @@ def prepare_model(
 ) -> CanonicalModel:
     """Prepares canonical model with spatial scoping, simulation domain, and mapping plan."""
     configuration = validate_configuration(configuration)
-    model = load_sources(paths, configuration.get("sources"), reference=reference)
+    source_opts = dict(configuration.get("sources") or {})
+    for k in ("rebase_vector", "rebase_origin", "auto_rebase_origin"):
+        if k in configuration:
+            source_opts[k] = configuration[k]
+    model = load_sources(paths, source_opts, reference=reference)
     scope_start = perf_counter()
     scope = SpatialScope.model_validate(configuration.get("scope", {}))
     if scope.storeys or scope.bounding_box:

@@ -5,6 +5,7 @@ does not establish independent geometry or opening verification.
 """
 
 from typing import Any, List, Optional
+import numpy as np
 import ifcopenshell
 import ifcopenshell.geom
 from ifc_to_fds.diagnostics import operation
@@ -16,7 +17,7 @@ from ifc_to_fds.core.canonical import (
     TriangleMesh,
     GeometryStatus,
 )
-from .mesh import bounds_for_vertices, inspect_mesh_quality, as_trimesh, valid_solid
+from .mesh import bounds_for_vertices, inspect_mesh_quality, as_trimesh, valid_solid, box_mesh
 
 
 def create_geom_settings() -> Any:
@@ -31,13 +32,11 @@ def create_geom_settings() -> Any:
 
 
 def mesh_from_geometry(geom) -> TriangleMesh:
-    # IfcOpenShell's property getter copies the entire native buffer to Python.
-    # Reading geom.verts/faces inside each slice makes large meshes quadratic.
-    vertices, faces = geom.verts, geom.faces
-    return TriangleMesh(
-        vertices=[vertices[i : i + 3] for i in range(0, len(vertices), 3)],
-        faces=[faces[i : i + 3] for i in range(0, len(faces), 3)],
-    )
+    # Vectorized conversion directly from native buffer to avoid quadratic slicing overhead
+    raw_verts, raw_faces = geom.verts, geom.faces
+    v = np.asarray(raw_verts, dtype=np.float64).reshape(-1, 3).tolist() if raw_verts else []
+    f = np.asarray(raw_faces, dtype=np.int32).reshape(-1, 3).tolist() if raw_faces else []
+    return TriangleMesh(vertices=v, faces=f)
 
 
 def extract_element_geometry(
@@ -61,15 +60,9 @@ def extract_element_geometry(
         raw_verts = getattr(geom, "verts", [])
         raw_faces = getattr(geom, "faces", [])
 
-        # Convert flat lists into triplets
-        vertices: List[List[float]] = [
-            [float(raw_verts[i]), float(raw_verts[i + 1]), float(raw_verts[i + 2])]
-            for i in range(0, len(raw_verts), 3)
-        ]
-        faces: List[List[int]] = [
-            [int(raw_faces[i]), int(raw_faces[i + 1]), int(raw_faces[i + 2])]
-            for i in range(0, len(raw_faces), 3)
-        ]
+        # Vectorized conversion directly from native buffer
+        vertices = np.asarray(raw_verts, dtype=np.float64).reshape(-1, 3).tolist() if raw_verts else []
+        faces = np.asarray(raw_faces, dtype=np.int32).reshape(-1, 3).tolist() if raw_faces else []
 
         mesh = TriangleMesh(vertices=vertices, faces=faces)
         quality = inspect_mesh_quality(mesh)
@@ -100,11 +93,11 @@ def process_model_geometry(
     shapes = {}
     try:
         iterator = ifcopenshell.geom.iterator(
-            settings, ifc_file, min(4, os.cpu_count() or 1)
+            settings, ifc_file, max(1, os.cpu_count() or 1)
         )
         if iterator.initialize():
             while True:
-                shape = iterator.get()
+                shape: Any = iterator.get()
                 g = shape.geometry
                 shapes[shape.id] = mesh_from_geometry(g)
                 if not iterator.next():
@@ -137,8 +130,14 @@ def process_model_geometry(
                 mesh.volume, mesh.area = float(tm.volume), float(tm.area)
                 elem.geometry_status = GeometryStatus.VALID
             else:
-                elem.geometry_status = GeometryStatus.FAILED
-                elem.validation_notes.append(f"Invalid solid: {quality}")
+                if elem.ifc_type in ("IfcDoor", "IfcWindow") and bbox:
+                    solid_box = box_mesh(bbox)
+                    elem.mesh = solid_box
+                    elem.geometry_status = GeometryStatus.VALID
+                    elem.validation_notes.append("Non-manifold door/window leaf healed to watertight solid box")
+                else:
+                    elem.geometry_status = GeometryStatus.FAILED
+                    elem.validation_notes.append(f"Invalid solid: {quality}")
             for opening in elem.openings:
                 opening_elem = CanonicalElement(
                     global_id=opening.opening_global_id,

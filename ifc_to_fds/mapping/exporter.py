@@ -133,6 +133,11 @@ def _serialize_planned_model(model, cell_size):
         f"&HEAD CHID='{chid}', TITLE='IFCtoFDS conversion; see acceptance report' /"
     )
     lines.append("&TIME T_END=0.0 /")
+    vec = getattr(model.source, "rebase_vector", [0.0, 0.0, 0.0])
+    if vec and any(abs(x) > 1e-6 for x in vec):
+        lines.append(
+            f"! IFC_COORDINATE_REBASE X_OFFSET={vec[0]} Y_OFFSET={vec[1]} Z_OFFSET={vec[2]} /"
+        )
 
     # MESH calculation
     active = [

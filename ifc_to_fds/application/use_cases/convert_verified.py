@@ -30,6 +30,7 @@ class ConvertVerifiedUseCase:
         configuration = validate_configuration(configuration or {})
         start = perf_counter()
         model = prepare_model(paths, configuration)
+        configuration["rebase_vector"] = model.source.rebase_vector
         prepared = perf_counter()
         cell_size = configuration.get("cell_size", 0.2)
         mapping_plan = build_mapping_plan(model, cell_size=cell_size)
