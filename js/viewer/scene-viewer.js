@@ -511,10 +511,11 @@
             if (noActiveClip) { setVisibilityChannel(node, 'section', true); return; }
             box.makeEmpty().expandByObject(node);
             if (box.isEmpty()) { setVisibilityChannel(node, 'section', true); return; }
+            var eps = 1e-4;
             // Three world -> IFC native: Three Y is IFC Z (height), Three Z is IFC Y.
-            var intersects = box.max.x >= range.xmin && box.min.x <= range.xmax
-                && box.max.y >= range.zmin && box.min.y <= range.zmax
-                && box.max.z >= range.ymin && box.min.z <= range.ymax;
+            var intersects = (box.max.x >= range.xmin - eps) && (box.min.x <= range.xmax + eps)
+                && (box.max.y >= range.zmin - eps) && (box.min.y <= range.zmax + eps)
+                && (box.max.z >= range.ymin - eps) && (box.min.z <= range.ymax + eps);
             setVisibilityChannel(node, 'section', intersects);
         });
     };

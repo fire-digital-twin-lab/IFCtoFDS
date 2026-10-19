@@ -214,6 +214,7 @@ class JobService:
                 self._terminal_diagnostic(job, "AbortError", "Job cancelled by user")
                 self._cleanup(job)
                 self.repository.set(jid, job)
+            self.wake.set()
             return self.snapshot(jid)
 
     def delete_job(self, jid: str) -> Dict[str, Any]:
@@ -228,6 +229,7 @@ class JobService:
             if directory.parent == self.root.resolve():
                 shutil.rmtree(directory, ignore_errors=True)
             self.repository.delete(jid)
+            self.wake.set()
             return {"id": jid, "state": "DELETED"}
 
     def close(self):
@@ -240,7 +242,10 @@ class JobService:
 
     def _loop(self):
         while not self.closed:
+            has_running = False
+            has_queued = False
             with self.lock:
+                self.wake.clear()
                 now = time.time()
                 # 1. Retention sweep for non-durable jobs
                 for jid, job in self.repository.items():
@@ -274,6 +279,7 @@ class JobService:
                     None,
                 )
                 if running:
+                    has_running = True
                     proc = running["process"]
                     # Memory RSS monitoring
                     if proc and proc.pid:
@@ -355,6 +361,7 @@ class JobService:
                         None,
                     )
                     if queued:
+                        has_running = True
                         try:
                             # Capture stderr to error.txt if worker fails during startup
                             err_path = Path(queued["directory"]) / "error.txt"
@@ -384,7 +391,12 @@ class JobService:
                             )
                             self._cleanup(queued)
                             self.repository.set(queued["id"], queued)
-            self.wake.wait(0.1)
+
+                # Check if there are further queued jobs
+                has_queued = any(j.get("state") == "QUEUED" for j in self.repository.all_jobs())
+
+            wait_timeout = 0.1 if (has_running or has_queued) else 5.0
+            self.wake.wait(wait_timeout)
 
 
 # Backward compatibility alias

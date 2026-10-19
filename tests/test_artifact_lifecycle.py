@@ -10,6 +10,7 @@ Covers:
 - F07: CLI support for profile 'geometry-fidelity'.
 """
 
+import copy
 import json
 import zipfile
 from pathlib import Path
@@ -49,6 +50,28 @@ def test_bundle_sha256_records_sensitivity(box_model):
     new_hash = manifest.reseal()
     assert new_hash == hash_after_prims
     assert manifest.bundle_sha256 == new_hash
+
+
+def test_bundle_sha256_expanded_fields_sensitivity(box_model):
+    """NEW-09: Mutating boundary_treatment, simulation_domain, or system_ids changes bundle_sha256."""
+    fds_text, _ = serialize_fds(box_model)
+    manifest = build_manifest(box_model, fds_text)
+    base_hash = manifest.bundle_sha256
+
+    # Mutate boundary_treatment
+    manifest.records[0].boundary_treatment = "PENDING_VALIDATION"
+    hash1 = manifest.compute_bundle_sha256()
+    assert hash1 != base_hash
+
+    # Mutate system_ids
+    manifest.records[0].system_ids = ["sys_test_1"]
+    hash2 = manifest.compute_bundle_sha256()
+    assert hash2 != hash1
+
+    # Mutate simulation_domain
+    manifest.simulation_domain = {"xmin": -10, "xmax": 10, "ymin": -10, "ymax": 10, "zmin": -10, "zmax": 10}
+    hash3 = manifest.compute_bundle_sha256()
+    assert hash3 != hash2
 
 
 def test_bundle_sha256_multi_source_sensitivity(box_model):
@@ -141,6 +164,48 @@ def test_atomic_staging_persistence_failure_cleanup(tiny_ifc, tmp_path, monkeypa
     # Staging directory must be cleaned up
     staging_dirs = list(target_dir.glob(".staging-*"))
     assert not staging_dirs
+
+
+def test_atomic_publication_rollback_on_failure(tiny_ifc, tmp_path, monkeypatch):
+    """NEW-03: On failure during publication loop, pre-existing files are restored intact."""
+    result = convert([tiny_ifc[0]])
+    target_dir = tmp_path / "target"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    output_fds = target_dir / "model.fds"
+
+    repo = LocalFilesystemArtifactRepository()
+    # 1. Initial successful publication
+    repo.save_run_artifacts(result, output_fds)
+    original_fds = output_fds.read_text(encoding="utf-8")
+    original_manifest = (target_dir / "model_manifest.json").read_text(encoding="utf-8")
+
+    # 2. Modify result so it has different FDS text
+    mutated_result = copy.deepcopy(result)
+    mutated_result["fds_text"] = "&HEAD TITLE='NEW_RUN' /\n"
+
+    # 3. Simulate failure during the replace() loop after replacing the first file
+    real_replace = Path.replace
+    call_count = 0
+
+    def failing_replace(self, target):
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 3:
+            raise IOError("Simulated disk error during replacement loop")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", failing_replace)
+
+    with pytest.raises(IOError, match="Simulated disk error during replacement loop"):
+        repo.save_run_artifacts(mutated_result, output_fds)
+
+    # 4. Verify rollback: original files must be restored completely!
+    assert output_fds.read_text(encoding="utf-8") == original_fds
+    assert (target_dir / "model_manifest.json").read_text(encoding="utf-8") == original_manifest
+
+    # 5. Backup directory and staging directory must be cleaned up
+    assert not list(target_dir.glob(".backup-*"))
+    assert not list(target_dir.glob(".staging-*"))
 
 
 def test_checksums_glob_isolation(tiny_ifc, tmp_path):

@@ -81,21 +81,66 @@ class LocalFilesystemArtifactRepository:
             )
             emitted_filenames.append(checksums_name)
 
-            # 6. Atomic publication: commit all files into target_dir
-            staging_payloads = staging_dir / f"{base_stem}_geometry.payloads"
-            if staging_payloads.is_dir():
-                target_payloads = target_dir / f"{base_stem}_geometry.payloads"
+            # 6. Transactional atomic publication with rollback protection
+            backup_dir = target_dir / f".backup-{uuid4().hex}"
+            existing_backed_up: List[str] = []
+            target_payloads = target_dir / f"{base_stem}_geometry.payloads"
+            backup_payloads = backup_dir / f"{base_stem}_geometry.payloads"
+            has_existing_payloads = target_payloads.is_dir()
+            published_files: List[str] = []
+
+            try:
+                # 6a. Backup any pre-existing files to protect against partial overwrite failure
+                for fname in emitted_filenames:
+                    dest_file = target_dir / fname
+                    if dest_file.exists():
+                        backup_dir.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(dest_file, backup_dir / fname)
+                        existing_backed_up.append(fname)
+                if has_existing_payloads:
+                    backup_dir.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(target_payloads, backup_payloads, dirs_exist_ok=True)
+
+                # 6b. Move geometry payloads
+                staging_payloads = staging_dir / f"{base_stem}_geometry.payloads"
+                if staging_payloads.is_dir():
+                    if target_payloads.exists():
+                        shutil.rmtree(target_payloads, ignore_errors=True)
+                    shutil.move(str(staging_payloads), str(target_payloads))
+
+                # 6c. Move all artifact files
+                for fname in emitted_filenames:
+                    src = staging_dir / fname
+                    dst = target_dir / fname
+                    src.replace(dst)
+                    published_files.append(fname)
+
+                # 6d. Commit successful: clean up backup directory
+                if backup_dir.exists():
+                    shutil.rmtree(backup_dir, ignore_errors=True)
+
+                return checksums
+
+            except Exception:
+                # Transaction failed: Rollback changes to avoid corrupted or mixed bundles
+                for fname in published_files:
+                    (target_dir / fname).unlink(missing_ok=True)
                 if target_payloads.exists():
                     shutil.rmtree(target_payloads, ignore_errors=True)
-                shutil.move(str(staging_payloads), str(target_payloads))
 
-            for fname in emitted_filenames:
-                src = staging_dir / fname
-                dst = target_dir / fname
-                # Atomic file replace within same filesystem
-                src.replace(dst)
+                # Restore original files from backup
+                for fname in existing_backed_up:
+                    b_src = backup_dir / fname
+                    b_dst = target_dir / fname
+                    if b_src.exists():
+                        shutil.move(str(b_src), str(b_dst))
+                if has_existing_payloads and backup_payloads.is_dir():
+                    shutil.move(str(backup_payloads), str(target_payloads))
 
-            return checksums
+                raise
+            finally:
+                if backup_dir.exists():
+                    shutil.rmtree(backup_dir, ignore_errors=True)
         finally:
             # Always clean up the temporary staging directory on completion or failure
             if staging_dir.exists():

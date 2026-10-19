@@ -110,7 +110,9 @@
                 } else if (candidatesS.length === 1) {
                     var distinctSourcesS = Object.keys(this._byScopedStepId).map(function (k) { return k.split(':')[0]; });
                     var uniqueSourcesS = distinctSourcesS.filter(function (v, idx, arr) { return arr.indexOf(v) === idx; });
-                    if (uniqueSourcesS.length <= 1 || !recSrc || candidatesS[0].sourceId === recSrc) {
+                    if (uniqueSourcesS.length <= 1) {
+                        desc = candidatesS[0];
+                    } else if (recSrc && (candidatesS[0].sourceId === recSrc || (candidatesS[0].raw && candidatesS[0].raw.source_id === recSrc))) {
                         desc = candidatesS[0];
                     }
                 }
@@ -125,7 +127,9 @@
                 } else if (candidatesG.length === 1) {
                     var distinctSourcesG = Object.keys(this._byScopedGlobalId).map(function (k) { return k.split(':')[0]; });
                     var uniqueSourcesG = distinctSourcesG.filter(function (v, idx, arr) { return arr.indexOf(v) === idx; });
-                    if (uniqueSourcesG.length <= 1 || !recSrc || candidatesG[0].sourceId === recSrc) {
+                    if (uniqueSourcesG.length <= 1) {
+                        desc = candidatesG[0];
+                    } else if (recSrc && (candidatesG[0].sourceId === recSrc || (candidatesG[0].raw && candidatesG[0].raw.source_id === recSrc))) {
                         desc = candidatesG[0];
                     }
                 }

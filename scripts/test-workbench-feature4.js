@@ -180,6 +180,18 @@ test('F03: applyFdsClipVisibility uses bounding box intersection, not strict con
 
     // Because the wall from -6m to 0m intersects the range [-6m, -3m], it must remain VISIBLE
     assert.equal(node._visibilityChannels && node._visibilityChannels.section, true, 'Boundary elements intersecting section plane must remain visible');
+
+    // NEW-07: Test adjacent storey wall (height 0m to 3m) when slicing B2 [-6m, -3m]
+    const adjacentWall = {
+        isMesh: true,
+        _box: {
+            min: { x: 0, y: 0.0, z: 0 },
+            max: { x: 10, y: 3.0, z: 0.3 }
+        }
+    };
+    viewer.fdsGroup.traverse = fn => fn(adjacentWall);
+    applyClip.call(viewer);
+    assert.equal(adjacentWall._visibilityChannels && adjacentWall._visibilityChannels.section, false, 'Adjacent storey elements outside clip range must not pop-in');
 });
 
 // F04: ColorOverlayEngine looks up descriptors from SelectionStore

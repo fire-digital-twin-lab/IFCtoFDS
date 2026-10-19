@@ -81,7 +81,10 @@ def validate_reference(values):
 
     # Bidirectional reverse coverage verification: ensure required elements are not omitted
     mep_graph = values.get("mep-reference.json", {})
-    systems_by_id = {s["system_id"]: s.get("category", "") for s in mep_graph.get("systems", [])}
+    systems_by_id = {
+        s["system_id"]: s.get("system_type", s.get("category", ""))
+        for s in mep_graph.get("systems", [])
+    }
     for k, v in inventory.items():
         if v.get("mapping_strategy") in ("EXCLUDED_SCOPE", "EXCLUDED_APPROVED"):
             if k not in values.get("exclusions.json", {}):

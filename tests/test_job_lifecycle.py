@@ -74,6 +74,64 @@ def test_sqlite_persistence_and_restart_recovery(tmp_path):
         service2.close()
 
 
+def test_sqlite_persistence_retry_and_logging(tmp_path, monkeypatch, caplog):
+    """NEW-05: SQLite locked retries succeed; persistent database errors are logged."""
+    import logging
+    import sqlite3
+
+    repo = JobRepository(root=tmp_path)
+    real_get_conn = repo._get_connection
+    call_count = 0
+
+    class RetryConnection:
+        def __init__(self, real_conn):
+            self.real_conn = real_conn
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return self.real_conn.__exit__(exc_type, exc_val, exc_tb)
+        def execute(self, sql, *args):
+            nonlocal call_count
+            if "INSERT INTO jobs" in sql:
+                call_count += 1
+                if call_count <= 2:
+                    raise sqlite3.OperationalError("database is locked")
+            return self.real_conn.execute(sql, *args)
+
+    monkeypatch.setattr(repo, "_get_connection", lambda: RetryConnection(real_get_conn()))
+    repo.set("job-retry", {
+        "id": "job-retry",
+        "state": "QUEUED",
+        "directory": str(tmp_path / "job-retry"),
+        "created": time.time(),
+    })
+
+    # Should succeed after retrying
+    assert repo.get("job-retry") is not None
+    assert call_count >= 2
+
+    # Test permanent failure logging
+    class FailConnection:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            _ = args
+            return False
+        def execute(self, *args, **kwargs):
+            _ = (args, kwargs)
+            raise sqlite3.DatabaseError("Disk full simulation")
+
+    monkeypatch.setattr(repo, "_get_connection", lambda: FailConnection())
+    with caplog.at_level(logging.ERROR):
+        repo.set("job-fail", {
+            "id": "job-fail",
+            "state": "QUEUED",
+            "directory": str(tmp_path / "job-fail"),
+            "created": time.time(),
+        })
+        assert "Failed to persist job job-fail to SQLite" in caplog.text
+
+
 def test_startup_orphan_directory_cleanup(tmp_path):
     """F02: Orphan directories in root not registered in SQLite are removed on startup."""
     orphan_dir = tmp_path / "job-orphan123"
@@ -139,7 +197,7 @@ def test_durable_research_artifacts_retention(tmp_path):
     assert service.repository.get("job-ephemeral") is None
 
 
-def test_early_admission_rejection_no_disk_waste(monkeypatch, tmp_path):
+def test_early_admission_rejection_no_disk_waste(monkeypatch):
     """F04: When queue is full, HTTP 429 is returned immediately without creating upload directory."""
     client = TestClient(app)
 
@@ -177,12 +235,15 @@ def test_worker_rss_memory_quota_exceeded(tmp_path, monkeypatch):
 
     # Mock psutil memory inspection returning 50 MB (exceeding 10 MB limit)
     class MockPsutilProcess:
-        def __init__(self, pid): pass
+        def __init__(self, pid):
+            _ = pid
         def memory_info(self):
             class Info:
                 rss = 50 * 1024 * 1024  # 50 MB
             return Info()
-        def children(self, recursive=True): return []
+        def children(self, recursive=True):
+            _ = recursive
+            return []
         def kill(self): pass
 
     monkeypatch.setattr("ifc_to_fds.adapters.jobs.service.psutil.Process", MockPsutilProcess)
@@ -262,6 +323,7 @@ def test_download_touch_extends_retention(tmp_path):
 def test_body_limit_streaming_chunked_413():
     """F10: Streaming request exceeding maximum body limit returns clean HTTP 413."""
     async def sample_app(scope, receive, send):
+        _ = scope
         while True:
             msg = await receive()
             if not msg.get("more_body", False):
@@ -292,11 +354,19 @@ def test_api_key_auth_and_host_validation(monkeypatch):
     """F01: API key auth guards /api/* when configured; invalid Host headers return 400."""
     client = TestClient(app)
 
-    # 1. Test Host validation
-    monkeypatch.setenv("IFCFDS_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
+    # 1. Test Host validation including IPv6 with port
+    monkeypatch.setenv("IFCFDS_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],testserver")
     res_bad_host = client.get("/api/health", headers={"Host": "malicious.attacker.com"})
     assert res_bad_host.status_code == 400
     assert "Invalid Host header" in res_bad_host.json()["detail"]
+
+    # IPv6 host header with port must be accepted
+    res_ipv6_port = client.get("/api/health", headers={"Host": "[::1]:8000"})
+    assert res_ipv6_port.status_code == 200
+
+    # IPv6 host header without port must be accepted
+    res_ipv6_raw = client.get("/api/health", headers={"Host": "[::1]"})
+    assert res_ipv6_raw.status_code == 200
 
     # 2. Test API key protection
     monkeypatch.setenv("IFCFDS_API_KEY", "super-secret-key-12345")

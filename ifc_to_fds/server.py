@@ -44,10 +44,16 @@ async def security_guard(request: Request, call_next):
     allowed_hosts_str = os.getenv("IFCFDS_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],testserver")
     if allowed_hosts_str != "*":
         allowed_hosts = {h.strip().lower() for h in allowed_hosts_str.split(",") if h.strip()}
-        raw_host = request.headers.get("host", "").split(":")[0].strip().lower()
-        if raw_host and raw_host not in allowed_hosts:
+        host_header = request.headers.get("host", "").strip()
+        if not host_header:
+            raw_host = ""
+        elif host_header.startswith("[") and "]" in host_header:
+            raw_host = host_header[: host_header.index("]") + 1].lower()
+        else:
+            raw_host = host_header.split(":")[0].strip().lower()
+        if not raw_host or raw_host not in allowed_hosts:
             from fastapi.responses import JSONResponse
-            return JSONResponse(status_code=400, content={"detail": f"Invalid Host header: {raw_host}"})
+            return JSONResponse(status_code=400, content={"detail": f"Invalid Host header: {raw_host or 'missing'}"})
 
     # 2. API Key authentication for /api/* (excluding /api/health)
     api_key = os.getenv("IFCFDS_API_KEY")

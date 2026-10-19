@@ -162,6 +162,13 @@ class MappingManifest(BaseModel):
                 scope_decision=r.scope_decision,
                 review_status=r.review_status,
                 simulation_role=r.simulation_role,
+                operational_status=r.operational_status,
+                fds_representation=r.fds_representation,
+                boundary_treatment=r.boundary_treatment,
+                boundary_policy=r.boundary_policy,
+                representation_bounds=r.representation_bounds,
+                placement=r.placement,
+                system_ids=sorted(r.system_ids),
                 fds_primitive_ids=sorted(r.fds_primitive_ids),
             )
             for r in sorted(self.records, key=lambda x: (x.source_id, x.step_id, x.entity_key))
@@ -183,6 +190,7 @@ class MappingManifest(BaseModel):
                 "sources_digest": sources_digest,
                 "fds_sha256": self.fds_sha256,
                 "geometry_package_sha256": self.geometry_package_sha256,
+                "simulation_domain": self.simulation_domain or {},
                 "total_elements": self.total_elements_accounted,
                 "total_primitives": self.total_primitives_emitted,
                 "records_digest": records_digest,

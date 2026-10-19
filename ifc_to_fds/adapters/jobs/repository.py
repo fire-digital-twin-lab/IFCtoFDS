@@ -1,9 +1,13 @@
 """Job metadata repository backed by SQLite with in-memory caching."""
 
 import json
+import logging
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class JobRepository:
@@ -75,38 +79,47 @@ class JobRepository:
     def _persist_job(self, jid: str, job: Dict[str, Any]) -> None:
         if not self._db_path:
             return
-        try:
-            with self._get_connection() as conn:
-                conn.execute("""
-                    INSERT INTO jobs (id, state, directory, mode, created, started, finished, last_accessed, error, retention_s, durable, peak_rss_bytes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET
-                        state=excluded.state,
-                        directory=excluded.directory,
-                        mode=excluded.mode,
-                        started=excluded.started,
-                        finished=excluded.finished,
-                        last_accessed=excluded.last_accessed,
-                        error=excluded.error,
-                        retention_s=excluded.retention_s,
-                        durable=excluded.durable,
-                        peak_rss_bytes=excluded.peak_rss_bytes;
-                """, (
-                    jid,
-                    job.get("state", "QUEUED"),
-                    str(job.get("directory", "")),
-                    job.get("mode", "convert"),
-                    float(job.get("created", 0.0)),
-                    job.get("started"),
-                    job.get("finished"),
-                    job.get("last_accessed"),
-                    job.get("error"),
-                    job.get("retention_s"),
-                    1 if job.get("durable") else 0,
-                    job.get("peak_rss_bytes"),
-                ))
-        except sqlite3.Error:
-            pass
+        for attempt in range(4):
+            try:
+                with self._get_connection() as conn:
+                    conn.execute("""
+                        INSERT INTO jobs (id, state, directory, mode, created, started, finished, last_accessed, error, retention_s, durable, peak_rss_bytes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET
+                            state=excluded.state,
+                            directory=excluded.directory,
+                            mode=excluded.mode,
+                            started=excluded.started,
+                            finished=excluded.finished,
+                            last_accessed=excluded.last_accessed,
+                            error=excluded.error,
+                            retention_s=excluded.retention_s,
+                            durable=excluded.durable,
+                            peak_rss_bytes=excluded.peak_rss_bytes;
+                    """, (
+                        jid,
+                        job.get("state", "QUEUED"),
+                        str(job.get("directory", "")),
+                        job.get("mode", "convert"),
+                        float(job.get("created", 0.0)),
+                        job.get("started"),
+                        job.get("finished"),
+                        job.get("last_accessed"),
+                        job.get("error"),
+                        job.get("retention_s"),
+                        1 if job.get("durable") else 0,
+                        job.get("peak_rss_bytes"),
+                    ))
+                return
+            except sqlite3.OperationalError as exc:
+                if ("locked" in str(exc).lower() or "busy" in str(exc).lower()) and attempt < 3:
+                    time.sleep(0.05 * (2 ** attempt))
+                    continue
+                logger.error("Failed to persist job %s to SQLite: %s", jid, exc, exc_info=True)
+                return
+            except sqlite3.Error as exc:
+                logger.error("Failed to persist job %s to SQLite: %s", jid, exc, exc_info=True)
+                return
 
     def get(self, jid: str) -> Optional[Dict[str, Any]]:
         return self._jobs.get(jid)
@@ -118,11 +131,20 @@ class JobRepository:
     def delete(self, jid: str) -> None:
         self._jobs.pop(jid, None)
         if self._db_path:
-            try:
-                with self._get_connection() as conn:
-                    conn.execute("DELETE FROM jobs WHERE id = ?", (jid,))
-            except sqlite3.Error:
-                pass
+            for attempt in range(4):
+                try:
+                    with self._get_connection() as conn:
+                        conn.execute("DELETE FROM jobs WHERE id = ?", (jid,))
+                    return
+                except sqlite3.OperationalError as exc:
+                    if ("locked" in str(exc).lower() or "busy" in str(exc).lower()) and attempt < 3:
+                        time.sleep(0.05 * (2 ** attempt))
+                        continue
+                    logger.error("Failed to delete job %s from SQLite: %s", jid, exc, exc_info=True)
+                    return
+                except sqlite3.Error as exc:
+                    logger.error("Failed to delete job %s from SQLite: %s", jid, exc, exc_info=True)
+                    return
 
     def all_jobs(self) -> List[Dict[str, Any]]:
         return list(self._jobs.values())

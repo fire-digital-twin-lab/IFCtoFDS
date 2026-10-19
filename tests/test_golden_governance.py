@@ -117,6 +117,82 @@ def test_reverse_projection_coverage_detects_omission(box_model, tmp_path):
         validate_reference(corrupted_files)
 
 
+def test_reverse_projection_coverage_detects_missing_hvac(box_model, tmp_path):
+    """NEW-02: Missing HVAC element from hvac-reference.json fails reverse coverage check."""
+    from ifc_to_fds.core.canonical import MEPSystem
+    wall = box_model.elements[0]
+    duct = wall.model_copy(deep=True)
+    duct.entity_key = "fixture:duct_1"
+    duct.step_id = 888
+    duct.global_id = "guid-duct-888"
+    duct.ifc_type = "IfcDuctSegment"
+    duct.mep_category = "VENTILATION"
+    duct.system_ids = ["sys_hvac_1"]
+    box_model.elements.append(duct)
+    box_model.mep_graph.systems.append(
+        MEPSystem(system_id="sys_hvac_1", name="Supply Air", system_type="VENTILATION")
+    )
+    plan_mapping(box_model)
+
+    text, _ = serialize_fds(box_model)
+    package = build_package(box_model)
+    manifest = build_manifest(box_model, text)
+    report = AcceptanceReport()
+
+    ref_dir = tmp_path / "ref_bundle_hvac"
+    create_candidate(ref_dir, box_model, manifest, package, report, {}, text)
+
+    repo = FilesystemReferenceRepository()
+    _, _, files = repo.inspect_case(ref_dir)
+
+    assert "fixture:duct_1" in files["hvac-reference.json"]
+
+    # Delete duct from hvac-reference.json
+    corrupted_files = copy.deepcopy(files)
+    del corrupted_files["hvac-reference.json"]["fixture:duct_1"]
+
+    with pytest.raises(ValueError, match="Reference projection coverage incomplete: hvac-reference.json"):
+        validate_reference(corrupted_files)
+
+
+def test_reverse_projection_coverage_detects_missing_fire_protection(box_model, tmp_path):
+    """NEW-02: Missing fire suppression pipe from fire-protection-reference.json fails reverse coverage check."""
+    from ifc_to_fds.core.canonical import MEPSystem
+    wall = box_model.elements[0]
+    pipe = wall.model_copy(deep=True)
+    pipe.entity_key = "fixture:pipe_1"
+    pipe.step_id = 777
+    pipe.global_id = "guid-pipe-777"
+    pipe.ifc_type = "IfcPipeSegment"
+    pipe.mep_category = "FIRE_SUPPRESSION"
+    pipe.system_ids = ["sys_fp_1"]
+    box_model.elements.append(pipe)
+    box_model.mep_graph.systems.append(
+        MEPSystem(system_id="sys_fp_1", name="Sprinkler", system_type="FIRE_SUPPRESSION")
+    )
+    plan_mapping(box_model)
+
+    text, _ = serialize_fds(box_model)
+    package = build_package(box_model)
+    manifest = build_manifest(box_model, text)
+    report = AcceptanceReport()
+
+    ref_dir = tmp_path / "ref_bundle_fp"
+    create_candidate(ref_dir, box_model, manifest, package, report, {}, text)
+
+    repo = FilesystemReferenceRepository()
+    _, _, files = repo.inspect_case(ref_dir)
+
+    assert "fixture:pipe_1" in files["fire-protection-reference.json"]
+
+    # Delete pipe from fire-protection-reference.json
+    corrupted_files = copy.deepcopy(files)
+    del corrupted_files["fire-protection-reference.json"]["fixture:pipe_1"]
+
+    with pytest.raises(ValueError, match="Reference projection coverage incomplete: fire-protection-reference.json"):
+        validate_reference(corrupted_files)
+
+
 def test_registered_cases_detects_tampered_bundle_checksum(tmp_path, monkeypatch):
     """F08: registered_cases verifies bundle checksum and flags tampered bundles as CORRUPTED."""
     case_dir = tmp_path / "test_ref_case"
