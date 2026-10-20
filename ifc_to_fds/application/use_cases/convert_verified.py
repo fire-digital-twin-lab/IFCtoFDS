@@ -125,6 +125,9 @@ class ConvertVerifiedUseCase:
             **report.metrics.get("stage_timings", {}),
             audit_s=perf_counter() - serialized,
         )
+        (workspace / "model_manifest.json").write_text(
+            manifest.model_dump_json(), encoding="utf-8"
+        )
         (workspace / "audit-state.json").write_text(
             json.dumps(
                 {

@@ -11,6 +11,13 @@ from ifc_to_fds.geometry.mesh import (
 )
 
 
+class SelfIntersectionError(ValueError):
+    def __init__(self, evidence, operand):
+        self.evidence = {**evidence, "operand": operand}
+        # Keep the stable finding title; precise witnesses are structured metrics.
+        super().__init__("Self-intersecting solid")
+
+
 def calculate_bbox_iou(b1, b2):
     if not b1 or not b2:
         return 0.0
@@ -85,17 +92,17 @@ def compare_solids(reference, outputs):
     # Independently read, exactly equal oriented triangles describe the same
     # surface. One self-intersection proof covers both; changed outputs must
     # still receive their own proof. No tolerance or bounding-box shortcut.
-    for mesh in [reference] if exact_identity else [reference, *outputs]:
+    for index, mesh in enumerate([reference] if exact_identity else [reference, *outputs]):
         evidence = self_intersection_evidence(mesh)
         if evidence["status"] == "CONFIRMED":
-            raise ValueError("Self-intersecting solid")
+            raise SelfIntersectionError(evidence, "source" if index == 0 else f"output:{index}")
         if evidence["status"] == "UNCERTAIN":
             raise RuntimeError(f"Self-intersection uncertain: {evidence['reason']}")
     b = pieces[0] if len(pieces) == 1 else solid_boolean(pieces, "union")
     if exact_identity:
         # Independently reconstructed coordinates and oriented triangles are equal.
         # This is a full-surface identity proof, not a sampled/bounds shortcut.
-        components = len(a.split(only_watertight=False))
+        components = len(a.split(only_watertight=False, repair=False))
         return dict(
             solid_iou=1.0,
             relative_volume_error=0.0,
@@ -145,8 +152,8 @@ def compare_solids(reference, outputs):
         relative_area_error=abs(float(a.area - b.area)) / float(a.area),
         surface_distance_m=surface,
         surface_proven=bool(correspondence or box_equivalent or partition_equivalent),
-        reference_components=len(a.split(only_watertight=False)),
-        output_components=len(b.split(only_watertight=False)),
+        reference_components=len(a.split(only_watertight=False, repair=False)),
+        output_components=len(b.split(only_watertight=False, repair=False)),
     )
 
 

@@ -20,8 +20,6 @@ class WorkerRunner:
         directory = Path(directory)
         job_id = directory.name
         try:
-            from ifc_to_fds.pipeline import convert, save_artifacts
-
             request = json.loads(
                 (directory / "request.json").read_text(encoding="utf-8")
             )
@@ -43,6 +41,8 @@ class WorkerRunner:
                     sources=[m.source.model_dump() for m in models],
                 )
             else:
+                from ifc_to_fds.pipeline import convert, save_artifacts
+
                 result = convert(
                     request["paths"], request["configuration"], str(directory)
                 )

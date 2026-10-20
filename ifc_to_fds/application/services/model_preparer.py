@@ -20,16 +20,41 @@ def prepare_model(
         if k in configuration:
             source_opts[k] = configuration[k]
     model = load_sources(paths, source_opts, reference=reference)
+    rebase_vec = getattr(model.source, "rebase_vector", None) or [0.0, 0.0, 0.0]
+    has_rebase = any(abs(v) > 1e-6 for v in rebase_vec)
+    dx, dy, dz = rebase_vec if has_rebase else (0.0, 0.0, 0.0)
+
     scope_start = perf_counter()
-    scope = SpatialScope.model_validate(configuration.get("scope", {}))
+    scope_raw = dict(configuration.get("scope", {}) or {})
+    if scope_raw.get("bounding_box") and has_rebase:
+        raw_box = BoundingBox.model_validate(scope_raw["bounding_box"])
+        if abs(raw_box.xmin) > 1000.0 or abs(raw_box.ymin) > 1000.0:
+            scope_raw["bounding_box"] = BoundingBox(
+                xmin=raw_box.xmin - dx,
+                xmax=raw_box.xmax - dx,
+                ymin=raw_box.ymin - dy,
+                ymax=raw_box.ymax - dy,
+                zmin=raw_box.zmin - dz,
+                zmax=raw_box.zmax - dz,
+            ).model_dump()
+
+    scope = SpatialScope.model_validate(scope_raw)
     if scope.storeys or scope.bounding_box:
         apply_spatial_scope(model, scope)
     else:
         model.requested_scope = scope.model_dump(mode="json")
     if configuration.get("simulation_domain"):
-        model.simulation_domain = BoundingBox.model_validate(
-            configuration["simulation_domain"]
-        )
+        domain_box = BoundingBox.model_validate(configuration["simulation_domain"])
+        if has_rebase and (abs(domain_box.xmin) > 1000.0 or abs(domain_box.ymin) > 1000.0):
+            domain_box = BoundingBox(
+                xmin=domain_box.xmin - dx,
+                xmax=domain_box.xmax - dx,
+                ymin=domain_box.ymin - dy,
+                ymax=domain_box.ymax - dy,
+                zmin=domain_box.zmin - dz,
+                zmax=domain_box.zmax - dz,
+            )
+        model.simulation_domain = domain_box
         model.domain_origin = "EXPLICIT_CONFIGURATION"
     elif not scope.storeys and not scope.bounding_box:
         model.simulation_domain = model.model_bounds

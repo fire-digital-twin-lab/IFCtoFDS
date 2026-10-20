@@ -9,6 +9,68 @@
 
     var activeViewer = null;
 
+    function artifactStatus(message) {
+        var panel = document.getElementById('panel-artifacts');
+        if (!panel) return;
+        var status = document.getElementById('artifact-download-status');
+        if (!status) {
+            status = document.createElement('div');
+            status.id = 'artifact-download-status';
+            status.setAttribute('role', 'status');
+            status.style.gridColumn = '1 / -1';
+            panel.appendChild(status);
+        }
+        status.textContent = message;
+    }
+
+    function downloadArtifact(event) {
+        var link = event.currentTarget;
+        var url = link.getAttribute('href');
+        if (!url || link.getAttribute('aria-disabled') === 'true') {
+            event.preventDefault();
+            return;
+        }
+        // Local blobs (legacy export) use the browser's native download.
+        // API files require the same authentication as job submission.
+        if (url.indexOf('/api/') !== 0) return;
+        event.preventDefault();
+        var filename = link.getAttribute('download') || 'artifact';
+        var headers = root.IfcFds.verified && root.IfcFds.verified.getAuthHeaders
+            ? root.IfcFds.verified.getAuthHeaders() : {};
+        artifactStatus('Downloading ' + filename + '…');
+        fetch(url, {headers: headers}).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.blob();
+        }).then(function (blob) {
+            var objectUrl = URL.createObjectURL(blob);
+            var anchor = document.createElement('a');
+            anchor.href = objectUrl;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 1000);
+            artifactStatus('Downloaded ' + filename);
+        }).catch(function (error) {
+            artifactStatus('Download failed (' + filename + '): ' + error.message);
+        });
+    }
+
+    function clearArtifacts() {
+        ['btn-download-fds', 'btn-download-manifest', 'btn-download-geom-pkg', 'btn-download-report'].forEach(function (id) {
+            var btn = document.getElementById(id);
+            if (!btn) return;
+            btn.removeAttribute('href');
+            btn.removeAttribute('download');
+            btn.classList.add('disabled');
+            btn.style.pointerEvents = 'none';
+            btn.style.opacity = '0.5';
+            btn.setAttribute('aria-disabled', 'true');
+        });
+        var status = document.getElementById('artifact-download-status');
+        if (status) status.textContent = '';
+    }
+
     function renderAuditDrawer(report, viewer) {
         if (viewer) activeViewer = viewer;
         if (!report) return;
@@ -32,10 +94,10 @@
                     var reason = card.querySelector('.gate-card-reason');
                     if (dot) {
                         dot.className = 'status-dot ' + (gate.status === 'PASS' ? 'online' : (gate.status === 'FAIL' ? 'offline' : ''));
-                        if (gate.status === 'FAIL') dot.style.background = 'var(--status-error)';
+                        dot.style.background = gate.status === 'FAIL' ? 'var(--status-error)' : '';
                     }
-                    if (reason && gate.reason) {
-                        reason.textContent = gate.status + ': ' + gate.reason;
+                    if (reason) {
+                        reason.textContent = gate.status + (gate.reason ? ': ' + gate.reason : '');
                     }
                 }
             });
@@ -66,10 +128,17 @@
             if (truncationBanner) {
                 truncationBanner.style.display = 'block';
                 var reportUrl = (report.artifacts && report.artifacts.report && report.artifacts.report.url) || null;
-                var linkHtml = reportUrl
-                    ? '<a href="' + reportUrl + '" download style="color:inherit;text-decoration:underline;font-weight:600">Download full acceptance report</a> for complete list.'
-                    : '<span style="font-weight:600">Download full report from Artifacts tab</span> for complete list.';
-                truncationBanner.innerHTML = 'Showing first ' + findings.length + ' of ' + totalFindings + ' findings. ' + linkHtml;
+                truncationBanner.textContent = 'Showing first ' + findings.length + ' of ' + totalFindings + ' findings. ';
+                if (reportUrl) {
+                    var fullReportLink = document.createElement('a');
+                    fullReportLink.href = reportUrl;
+                    fullReportLink.download = 'model_acceptance_report.json';
+                    fullReportLink.textContent = 'Download full acceptance report';
+                    fullReportLink.addEventListener('click', downloadArtifact);
+                    truncationBanner.appendChild(fullReportLink);
+                } else {
+                    truncationBanner.textContent += 'Download full report from Artifacts tab for complete list.';
+                }
             }
         } else if (truncationBanner) {
             truncationBanner.style.display = 'none';
@@ -164,8 +233,11 @@
 
         var fdsBtn = document.getElementById('btn-download-fds');
         if (fdsBtn) {
-            fdsBtn.textContent = 'Download FDS';
-            bindArtifactLink('btn-download-fds', report.artifacts && report.artifacts.fds, 'model.fds');
+            var accepted = report.status === 'MAPPING_VERIFIED' || report.status === 'SIMULATION_VERIFIED';
+            fdsBtn.textContent = accepted ? 'Download FDS' : 'Download Diagnostic FDS (UNACCEPTED)';
+            var fdsArtifact = report.artifacts && report.artifacts.fds;
+            if (fdsArtifact && !accepted) fdsArtifact = Object.assign({}, fdsArtifact, {filename: 'model_diagnostic_unaccepted.fds'});
+            bindArtifactLink('btn-download-fds', fdsArtifact, 'model.fds');
         }
         var manifestBtn = document.getElementById('btn-download-manifest');
         if (manifestBtn) {
@@ -175,7 +247,7 @@
         var geomBtn = document.getElementById('btn-download-geom-pkg');
         if (geomBtn) {
             geomBtn.textContent = 'Download Geometries';
-            bindArtifactLink('btn-download-geom-pkg', report.artifacts && report.artifacts.geometry, 'model_geometry.zip');
+            bindArtifactLink('btn-download-geom-pkg', report.artifacts && report.artifacts.geometry_archive, 'model_geometry.zip');
         }
         var reportBtn = document.getElementById('btn-download-report');
         if (reportBtn) {
@@ -201,7 +273,7 @@
         }
         setCheckpoint('btn-download-fds', '/api/jobs/' + jobId + '/checkpoints/fds', 'Download Checkpoint FDS (UNACCEPTED)', 'model_checkpoint.fds');
         setCheckpoint('btn-download-manifest', '/api/jobs/' + jobId + '/checkpoints/manifest', 'Download Checkpoint Manifest (UNACCEPTED)', 'model_checkpoint_manifest.json');
-        setCheckpoint('btn-download-geom-pkg', '/api/jobs/' + jobId + '/checkpoints/geometry', 'Download Checkpoint Geometries (AUDIT INCOMPLETE)', 'model_checkpoint_geometry.zip');
+        setCheckpoint('btn-download-geom-pkg', '/api/jobs/' + jobId + '/checkpoints/geometry', 'Download Checkpoint Geometry Index (AUDIT INCOMPLETE)', 'model_checkpoint_geometry.json');
         setCheckpoint('btn-download-report', '/api/jobs/' + jobId + '/checkpoints/report', 'Download Checkpoint Report (UNACCEPTED)', 'model_checkpoint_report.json');
         var panelArtifacts = document.getElementById('panel-artifacts');
         if (panelArtifacts) {
@@ -245,12 +317,17 @@
 
     function init(els, viewer) {
         if (viewer) activeViewer = viewer;
+        ['btn-download-fds', 'btn-download-manifest', 'btn-download-geom-pkg', 'btn-download-report'].forEach(function (id) {
+            var link = document.getElementById(id);
+            if (link) link.addEventListener('click', downloadArtifact);
+        });
         var drawerTabs = document.querySelectorAll('.audit-tab-btn');
         drawerTabs.forEach(function (btn) {
             btn.addEventListener('click', function () {
                 drawerTabs.forEach(function (b) { b.classList.remove('active'); });
                 btn.classList.add('active');
                 var tab = btn.getAttribute('data-tab');
+                if (!tab) tab = btn.id.replace('drawer-tab-', '');
                 var panelGates = document.getElementById('panel-gates');
                 var panelFindings = document.getElementById('panel-findings');
                 var panelArtifacts = document.getElementById('panel-artifacts');
@@ -270,6 +347,7 @@
         init: init,
         renderAuditDrawer: renderAuditDrawer,
         exposeFailedCheckpoints: exposeFailedCheckpoints,
+        clearArtifacts: clearArtifacts,
         toggleAuditDrawer: toggleAuditDrawer,
         updateGlobalStatusBadge: updateGlobalStatusBadge,
         setViewer: function (v) { activeViewer = v; }

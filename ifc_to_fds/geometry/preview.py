@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 import ifcopenshell.geom
+import ifcopenshell.util.shape
+import numpy as np
 
 from ifc_to_fds.core.inventory import extract_inventory
 from ifc_to_fds.mep.mep_graph import extract_mep_graph
@@ -19,6 +21,7 @@ from ifc_to_fds.geometry.mesh import bounds_for_vertices
 from ifc_to_fds.geometry.storage import payload_dir, store_mesh
 from ifc_to_fds.geometry.package import seal
 from ifc_to_fds.diagnostics import progress
+from .preview_cache import read_preview, save_preview
 
 
 def preview_model(paths, directory):
@@ -27,9 +30,19 @@ def preview_model(paths, directory):
             "Preview accepts one source; use Verified Mapping for federation"
         )
     directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
     model, file = extract_inventory(str(paths[0]))
+    cached = read_preview(model, directory)
+    if cached is not None:
+        progress("PREVIEW_CACHE", "COMPLETED")
+        return cached
     extract_mep_graph(model, file)
-    settings = create_geom_settings()
+    # Display tessellation is deliberately separate from authoritative extraction.
+    # A 0.1 mm mesh for every curved MEP product is excessive for an overview.
+    settings = create_geom_settings(linear_deflection=0.005)
+    # Keep iterator geometry local so mapped/repeated products can share the
+    # kernel's cached shapes. Convert placements to world metres before saving.
+    settings.set(settings.USE_WORLD_COORDS, False)
     payloads = payload_dir(directory / "model_geometry.json")
     payloads.mkdir(parents=True, exist_ok=True)
     entries, corners = {}, []
@@ -38,7 +51,9 @@ def preview_model(paths, directory):
         for e in model.elements
         if e.has_3d_geometry and e.role == "PHYSICAL"
     }
-    progress("IFC_GEOMETRY", "RUNNING")
+    total = len(pending)
+    completed = 0
+    progress("IFC_GEOMETRY", "RUNNING", completed=0, total=total)
     for e in model.elements:
         entries[e.entity_key] = dict(
             entity_key=e.entity_key,
@@ -66,6 +81,7 @@ def preview_model(paths, directory):
         )
 
     def save(e, mesh):
+        nonlocal completed
         bounds = bounds_for_vertices(mesh.vertices) if mesh else None
         if bounds:
             corners.extend(
@@ -78,6 +94,9 @@ def preview_model(paths, directory):
                 bounds=bounds.model_dump(), mesh=store_mesh(mesh, payloads)
             )
         entries[e.entity_key]["diagnostic"] = "; ".join(e.validation_notes)
+        completed += 1
+        if completed % 16 == 0 or completed == total:
+            progress("IFC_GEOMETRY", "RUNNING", completed=completed, total=total)
 
     # Consume iterator products immediately. Never build a shapes dictionary or
     # a second full model in Python memory. Host geometry includes IFC voids.
@@ -99,6 +118,10 @@ def preview_model(paths, directory):
                 if e:
                     g = shape.geometry
                     mesh = mesh_from_geometry(g)
+                    matrix = ifcopenshell.util.shape.get_shape_matrix(shape)
+                    vertices = np.asarray(mesh.vertices, dtype=float)
+                    if vertices.size:
+                        mesh.vertices = (vertices @ matrix[:3, :3].T + matrix[:3, 3]).tolist()
                     save(e, mesh)
                     del mesh
                     pending.pop(shape.id)
@@ -108,7 +131,8 @@ def preview_model(paths, directory):
         for e in pending.values():
             e.validation_notes.append(f"Preview iterator fallback: {exc}")
     for e in pending.values():
-        mesh = extract_element_geometry(file, e, settings)
+        # Per-product fallback uses the ordinary authoritative world placement.
+        mesh = extract_element_geometry(file, e, create_geom_settings(linear_deflection=0.005))
         save(e, mesh)
         del mesh
     rendered = sum(bool(e["mesh"]) for e in entries.values())
@@ -130,9 +154,10 @@ def preview_model(paths, directory):
     )
     bounds = bounds_for_vertices(corners)
     progress("IFC_GEOMETRY", "COMPLETED")
-    return dict(
+    result = dict(
         status="PREVIEW_ONLY",
         verification="NOT_RUN",
+        display_linear_deflection_m=0.005,
         total_elements=len(model.elements),
         rendered_elements=rendered,
         failed_elements=failed,
@@ -141,3 +166,5 @@ def preview_model(paths, directory):
         storeys=[s.model_dump(mode="json") for s in model.storey_references],
         artifacts={"geometry": {}, "mep": {}},
     )
+    save_preview(model, directory, result)
+    return result

@@ -2,6 +2,11 @@
     'use strict';
     // Upload the File directly: no whole-file ArrayBuffer, STEP string or legacy parse.
     var active = null;
+    function request(url, options) {
+        options = options || {};
+        options.headers = ns.verified.getAuthHeaders(options.headers);
+        return fetch(url, options);
+    }
     async function response(res) {
         if ((res.headers.get('content-type') || '').indexOf('application/json') < 0) {
             throw new Error('Local IFC backend is unavailable. Start the Python backend and open http://127.0.0.1:8000.');
@@ -15,7 +20,7 @@
         cancel: function () {
             if (!active) return;
             active.controller.abort();
-            if (active.id) fetch('/api/jobs/' + active.id, {method:'DELETE'}).catch(function () {});
+            if (active.id) request('/api/jobs/' + active.id, {method:'DELETE'}).catch(function () {});
             active = null;
         },
         load: async function (file, viewer, onProgress) {
@@ -27,21 +32,22 @@
                 onProgress(0.02, 'Uploading IFC to local geometry worker…');
                 // Keep the submission alive so cancellation can delete a job even
                 // if the user changes files just before its ID is returned.
-                var job = await response(await fetch('/api/preview-jobs', {method:'POST', body:data}));
+                var job = await response(await request('/api/preview-jobs', {method:'POST', body:data}));
                 run.id = job.id;
                 if (signal.aborted) {
-                    await fetch('/api/jobs/' + run.id, {method:'DELETE'});
+                    await request('/api/jobs/' + run.id, {method:'DELETE'});
                     throw abortError();
                 }
                 while (job.state !== 'COMPLETED') {
                     if (signal.aborted) throw abortError();
                     if (['FAILED','CANCELLED','TIMED_OUT'].indexOf(job.state) >= 0) throw new Error(job.error || job.state);
-                    onProgress(0.1, job.progress ? job.progress.stage : job.state);
+                    var p = job.progress || {}, ratio = p.total ? p.completed / p.total : 0;
+                    onProgress(0.1 + 0.55 * ratio, (p.stage || job.state) + (p.total ? ' ' + p.completed + '/' + p.total : ''));
                     await new Promise(function (resolve) { setTimeout(resolve, 500); });
-                    job = await response(await fetch('/api/jobs/' + run.id, {signal:signal}));
+                    job = await response(await request('/api/jobs/' + run.id, {signal:signal}));
                 }
-                var result = await response(await fetch('/api/jobs/' + run.id + '/result', {signal:signal}));
-                var index = await response(await fetch(result.artifacts.geometry.url, {signal:signal}));
+                var result = await response(await request('/api/jobs/' + run.id + '/result', {signal:signal}));
+                var index = await response(await request(result.artifacts.geometry.url, {signal:signal}));
                 var entries = Object.values(index.elements);
                 var model = {filename:file.name, backendPreview:true, bounds:result.bounds, diagnostics:[],
                     inventorySummary:{total_elements:result.total_elements, sources:result.sources, storey_references:result.storeys},
@@ -54,7 +60,7 @@
                     })};
                 viewer.loadIfcModel({elements:[], bounds:result.bounds});
                 await viewer.loadBackendPreview(index, run.id, signal, function (done, total) {
-                    onProgress(0.2 + 0.8 * done / Math.max(1,total), 'Loading geometry ' + done + '/' + total);
+                    onProgress(0.65 + 0.35 * done / Math.max(1,total), 'Loading geometry ' + done + '/' + total);
                 });
                 model.diagnostics.push(new ns.core.Diagnostic('info', 'Backend source preview',
                     result.rendered_elements + ' source shapes loaded; ' + result.failed_elements +
@@ -62,7 +68,7 @@
                 return model;
             } catch (error) {
                 run.controller.abort();
-                if (run.id) fetch('/api/jobs/' + run.id, {method:'DELETE'}).catch(function () {});
+                if (run.id) request('/api/jobs/' + run.id, {method:'DELETE'}).catch(function () {});
                 throw error;
             } finally { if (active === run) active = null; }
         }

@@ -27,6 +27,21 @@
             }
         });
 
+        // Restore the IFC world frame for display only. The saved FDS remains
+        // rebased for the solver; IFC/FDS overlays and clipping share one frame.
+        var offset = fdsData.coordinateRebase || [0, 0, 0];
+        model.coordinateRebase = offset.slice();
+        if (offset.some(function (value) { return value !== 0; })) {
+            ['meshes', 'obsts', 'vents', 'holes'].forEach(function (key) {
+                model[key].forEach(function (item) {
+                    item.xb = item.xb.map(function (value, axis) { return value + offset[Math.floor(axis / 2)]; });
+                });
+            });
+            model.geoms.forEach(function (geom) {
+                geom.vertices = geom.vertices.map(function (vertex) { return vertex.map(function (value, axis) { return value + offset[axis]; }); });
+                if (geom.origin) geom.origin = geom.origin.map(function (value, axis) { return value + offset[axis]; });
+            });
+        }
         model.bounds = computeBounds(model);
 
         if (!model.obsts.length && !model.geoms.length && !model.vents.length) {

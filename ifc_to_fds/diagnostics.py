@@ -41,10 +41,10 @@ def _safe_replace(source: Path, target: Path, max_attempts: int = 5):
             sleep(0.005 * (2**attempt))
 
 
-def progress(stage: str, state: str, elapsed_s: float = 0.0):
+def progress(stage: str, state: str, elapsed_s: float = 0.0, **details):
     directory = _directory.get()
     if directory:
-        value = dict(stage=stage, state=state, elapsed_s=elapsed_s)
+        value = dict(stage=stage, state=state, elapsed_s=elapsed_s, **details)
         # Atomic replacement avoids a polling reader seeing partial JSON.
         temporary = directory / "progress.tmp"
         temporary.write_text(json.dumps(value), encoding="utf-8")

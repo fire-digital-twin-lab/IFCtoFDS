@@ -3,8 +3,30 @@
 import numpy as np
 import trimesh
 from fractions import Fraction
+from contextvars import ContextVar
+from contextlib import contextmanager
+import hashlib
+from copy import deepcopy
 from ifc_to_fds.core.canonical import BoundingBox, TriangleMesh
 from .boolean import solid_boolean
+
+
+_intersection_evidence = ContextVar("intersection_evidence", default=None)
+_intersection_witness = ContextVar("intersection_witness", default=None)
+
+
+@contextmanager
+def mesh_evidence_scope():
+    """Reuse pure proofs only during this audit, keyed by complete mesh bytes.
+
+    IFC extraction still runs independently. No source model, mesh, or result
+    from another audit is retained; edited vertices/faces produce a different key.
+    """
+    token = _intersection_evidence.set({})
+    try:
+        yield
+    finally:
+        _intersection_evidence.reset(token)
 
 
 def as_trimesh(mesh):
@@ -131,8 +153,16 @@ def intersects_box(mesh, bounds):
     return hit.volume > 1e-12
 
 
-def has_self_intersection(mesh):
+def has_self_intersection(mesh, details=None):
     """Compatibility predicate. Numerical/backend uncertainty raises, never FAILs."""
+    if details is None:
+        details = _intersection_witness.get()
+
+    def witness(kind, **values):
+        if details is not None:
+            details.update(kind=kind, **values)
+        return True
+
     tm = as_trimesh(mesh)
     triangles = tm.triangles
     tree = tm.triangles_tree
@@ -261,8 +291,9 @@ def has_self_intersection(mesh):
                 from shapely.geometry import Polygon
 
                 axes = [x for x in range(3) if x != np.argmax(np.abs(normal))]
-                if Polygon(tri[:, axes]).intersection(Polygon(other[:, axes])).area > 0:
-                    return True
+                area = Polygon(tri[:, axes]).intersection(Polygon(other[:, axes])).area
+                if area > 0:
+                    return witness("COPLANAR_FACE_OVERLAP", triangles=[int(i), int(j)], projected_area_m2=float(area))
                 # Exact coplanarity and zero projected area prove no interior
                 # overlap. Segment/triangle ratios are singular on this plane.
                 continue
@@ -270,28 +301,57 @@ def has_self_intersection(mesh):
                 if segment_hit(tri[a], tri[b], other) or segment_hit(
                     other[a], other[b], tri
                 ):
-                    return True
-    components = tm.split(only_watertight=False)
+                    return witness("TRIANGLE_CROSSING", triangles=[int(i), int(j)])
+    # Trimesh's default split repairs holes. Inspection must preserve source
+    # topology and must not depend on an optional repair backend (networkx).
+    components = tm.split(only_watertight=False, repair=False)
     if len(components) > 1:
         for i, component in enumerate(components):
-            for other in components[i + 1 :]:
+            for j, other in enumerate(components[i + 1 :], i + 1):
                 if np.any(component.bounds[1] <= other.bounds[0]) or np.any(
                     other.bounds[1] <= component.bounds[0]
                 ):
                     continue
                 if component.is_volume and other.is_volume:
-                    if solid_boolean([component, other], "intersection").volume > 0:
-                        return True
+                    volume = solid_boolean([component, other], "intersection").volume
+                    if volume > 0:
+                        return witness("COMPONENT_VOLUME_OVERLAP", components=[i, j], volume_m3=float(volume))
     return False
 
 
 def self_intersection_evidence(mesh):
     """Three-way evidence consumed by the independent validator."""
+    cache = _intersection_evidence.get()
+    key = None
+    if cache is not None:
+        try:
+            vertices = np.asarray(mesh.vertices, dtype="<f8")
+            faces = np.asarray(mesh.faces, dtype="<i8")
+            digest = hashlib.sha256()
+            digest.update(str((vertices.shape, faces.shape)).encode("ascii"))
+            digest.update(vertices.tobytes())
+            digest.update(faces.tobytes())
+            key = digest.digest()
+        except (ValueError, TypeError, OverflowError):
+            pass  # Invalid inputs still receive the ordinary three-way result.
+        if key is not None and key in cache:
+            return deepcopy(cache[key])
+    details = {}
+    token = _intersection_witness.set(details)
     try:
         hit = has_self_intersection(mesh)
-        return {
+        result = {
             "status": "CONFIRMED" if hit else "CLEAN",
             "method": "adaptive-exact-plane/triangle-crossing/manifold-components-v1",
         }
+        if details:
+            result["witness"] = details
     except Exception as exc:
-        return {"status": "UNCERTAIN", "reason": str(exc)}
+        result = {"status": "UNCERTAIN", "reason": str(exc)}
+    finally:
+        _intersection_witness.reset(token)
+    if cache is not None and key is not None and result["status"] != "UNCERTAIN":
+        if len(cache) >= 4096:
+            cache.pop(next(iter(cache)))
+        cache[key] = deepcopy(result)
+    return result

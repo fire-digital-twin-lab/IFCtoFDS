@@ -395,6 +395,13 @@
                         <button class="segmented-btn" type="button" data-view-mode="ifc">IFC</button>
                     </div>
 
+                    <button id="undo-view" class="btn btn-icon" type="button" title="Undo view action" aria-label="Undo view action" disabled>
+                        <i data-lucide="undo-2" style="width:15px;height:15px"></i>
+                    </button>
+                    <button id="reset-visibility" class="btn btn-icon" type="button" title="Show all objects" aria-label="Show all objects">
+                        <i data-lucide="eye" style="width:15px;height:15px"></i>
+                    </button>
+
                     <button id="toggle-layers-popover" class="btn btn-icon" type="button" title="Toggle Layer Visibility">
                         <i data-lucide="layers-2" style="width:15px;height:15px"></i>
                     </button>
@@ -497,6 +504,7 @@
                         <div id="ifc-loading-fill" class="ifc-loading-fill is-indeterminate"></div>
                     </div>
                     <div id="ifc-loading-stage" style="font-size:11px;color:var(--text-muted)"></div>
+                    <button id="cancel-task" class="btn" type="button" style="height:26px;pointer-events:auto;margin-top:8px">Cancel task</button>
                 </div>
             </section>
 

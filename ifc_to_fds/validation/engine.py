@@ -20,7 +20,7 @@ from .metrics import (
 from .solver import solver_gates
 from ifc_to_fds.core.compare import normalize
 from ifc_to_fds.core.canonical import MappingStrategy, ScopeDecision
-from ifc_to_fds.geometry.mesh import valid_solid, as_trimesh, bounds_for_vertices
+from ifc_to_fds.geometry.mesh import valid_solid, as_trimesh, bounds_for_vertices, inspect_mesh_quality
 
 
 def parse_serialized_fds_primitives(text):
@@ -434,6 +434,13 @@ def run_independent_validation(
                     f"Unsupported source geometry: entity={key}, STEP={e.step_id}, "
                     f"GlobalId={e.global_id}, IFC type={e.ifc_type}; {e.mapping_rationale}"
                 )
+                quality = inspect_mesh_quality(e.mesh) if e.mesh else {"extraction_failed": True}
+                report.metrics.setdefault("source_geometry_diagnostics", {})[key] = dict(
+                    step_id=e.step_id, global_id=e.global_id, ifc_type=e.ifc_type,
+                    name=e.name, quality=quality, representations=e.source_representations,
+                    remediation="Re-export a closed, consistently oriented solid from the BIM source; no bounding-box repair was applied.",
+                )
+                detail += f"; source mesh quality={quality}"
                 report.element_statuses[key] = "UNSUPPORTED"
                 if e.mesh:
                     finding("geometry", detail, key)
@@ -504,6 +511,8 @@ def run_independent_validation(
                 report.matched_count += 1
                 report.element_statuses[key] = "MATCHED"
         except ValueError as exc:
+            if hasattr(exc, "evidence"):
+                report.metrics.setdefault(key, {})["self_intersection"] = exc.evidence
             finding("geometry", f"{key}: invalid solid comparison: {exc}", key)
             report.element_statuses[key] = "DEVIATED"
         except Exception as exc:
@@ -596,6 +605,14 @@ def run_independent_validation(
         missing=report.missing_count,
         openings=opening_count,
         mep=model.mep_graph.coverage,
+        fds_export=dict(
+            entities=len(primitives),
+            primitives=len(parsed.primitives),
+            obst=sum(p.kind == "OBST" for p in parsed.primitives),
+            geom=sum(p.kind == "GEOM" for p in parsed.primitives),
+            verified_entities=report.matched_count,
+            comparisons_skipped_for_source_errors=stop_solid_checks,
+        ),
     )
     from ifc_to_fds.domain.validation.model import ValidationContext
     from .checkers.structural import StructuralCompletenessChecker

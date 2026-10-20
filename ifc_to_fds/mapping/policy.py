@@ -1,6 +1,6 @@
 """Versioned decisions; no implicit approval of generic/review objects."""
 
-from ifc_to_fds.core.canonical import MappingStrategy, MappingStatus, ScopeDecision
+from ifc_to_fds.core.canonical import MappingStrategy, MappingStatus, ScopeDecision, GeometryStatus
 from ifc_to_fds.geometry.mesh import is_axis_aligned_box, valid_solid
 from ifc_to_fds.diagnostics import operation
 
@@ -229,6 +229,14 @@ def plan_mapping(
             e.mapping_status = MappingStatus.EXCLUDED_APPROVED
         elif e.mapping_strategy == MappingStrategy.SEMANTIC_ONLY:
             e.mapping_status = MappingStatus.SEMANTIC_ONLY
+        elif getattr(e, "geometry_status", None) == GeometryStatus.APPROXIMATED:
+            e.geometry_preservation = "APPROXIMATED"
+            if e.review_status == "APPROVED":
+                e.mapping_status = MappingStatus.DEVIATED
+                e.mapping_rationale += "; non-manifold leaf geometry approximated as bounding box solid barrier (decision approved)"
+            else:
+                e.mapping_status = MappingStatus.REVIEW_REQUIRED
+                e.mapping_rationale += "; non-manifold leaf geometry approximated as bounding box solid barrier; explicit review REQUIRED"
         elif e.role == "PHYSICAL" and (not e.mesh or not valid_solid(e.mesh)):
             e.mapping_status = MappingStatus.UNSUPPORTED
             e.geometry_preservation = (

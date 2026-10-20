@@ -8,7 +8,7 @@ from typing import Any, List, Optional
 import numpy as np
 import ifcopenshell
 import ifcopenshell.geom
-from ifc_to_fds.diagnostics import operation
+from ifc_to_fds.diagnostics import operation, progress
 
 from ifc_to_fds.core.canonical import (
     CanonicalElement,
@@ -17,17 +17,17 @@ from ifc_to_fds.core.canonical import (
     TriangleMesh,
     GeometryStatus,
 )
-from .mesh import bounds_for_vertices, inspect_mesh_quality, as_trimesh, valid_solid, box_mesh
+from .mesh import bounds_for_vertices, inspect_mesh_quality, as_trimesh, valid_solid
 
 
-def create_geom_settings() -> Any:
+def create_geom_settings(linear_deflection: float = 0.0001) -> Any:
     settings: Any = ifcopenshell.geom.settings()
     # Apply standard settings for world coordinate triangulated meshes
     settings.set(settings.USE_WORLD_COORDS, True)
     settings.set(settings.APPLY_DEFAULT_MATERIALS, False)
     settings.set(settings.WELD_VERTICES, True)
     settings.set("convert-back-units", False)
-    settings.set("mesher-linear-deflection", 0.0001)
+    settings.set("mesher-linear-deflection", linear_deflection)
     return settings
 
 
@@ -92,14 +92,18 @@ def process_model_geometry(
 
     shapes = {}
     try:
+        products = [e for e in canonical_model.elements if e.has_3d_geometry]
         iterator = ifcopenshell.geom.iterator(
-            settings, ifc_file, max(1, os.cpu_count() or 1)
-        )
-        if iterator.initialize():
+            settings, ifc_file, min(4, os.cpu_count() or 1),
+            include=[ifc_file.by_id(e.step_id) for e in products],
+        ) if products else None
+        if iterator and iterator.initialize():
             while True:
                 shape: Any = iterator.get()
                 g = shape.geometry
                 shapes[shape.id] = mesh_from_geometry(g)
+                if len(shapes) % 16 == 0:
+                    progress("IFC_GEOMETRY", "RUNNING", completed=len(shapes), total=len(products))
                 if not iterator.next():
                     break
     except Exception as exc:
@@ -123,6 +127,7 @@ def process_model_geometry(
                 all_verts.append([bbox.xmax, bbox.ymax, bbox.zmax])
 
             quality = inspect_mesh_quality(mesh)
+            elem.geometry_diagnostics = dict(quality, vertices=len(mesh.vertices), faces=len(mesh.faces), repair_applied=False)
             mesh.is_closed_manifold = bool(quality["is_closed_manifold"])
             mesh.has_consistent_normals = quality["inconsistent_edges"] == 0
             if valid_solid(mesh):
@@ -130,14 +135,11 @@ def process_model_geometry(
                 mesh.volume, mesh.area = float(tm.volume), float(tm.area)
                 elem.geometry_status = GeometryStatus.VALID
             else:
-                if elem.ifc_type in ("IfcDoor", "IfcWindow") and bbox:
-                    solid_box = box_mesh(bbox)
-                    elem.mesh = solid_box
-                    elem.geometry_status = GeometryStatus.VALID
-                    elem.validation_notes.append("Non-manifold door/window leaf healed to watertight solid box")
-                else:
-                    elem.geometry_status = GeometryStatus.FAILED
-                    elem.validation_notes.append(f"Invalid solid: {quality}")
+                # A leaf's bounding box fills voids and changes the source solid.
+                # Retain the raw mesh for diagnosis; unsupported topology is
+                # explicit in the inventory and must not become an obstacle.
+                elem.geometry_status = GeometryStatus.FAILED
+                elem.validation_notes.append(f"Invalid source solid (no repair applied): {quality}")
             for opening in elem.openings:
                 opening_elem = CanonicalElement(
                     global_id=opening.opening_global_id,
@@ -170,3 +172,70 @@ def opening_diagnostic(mesh, notes):
     if not valid_solid(mesh):
         return f"Invalid opening solid: {inspect_mesh_quality(mesh)}"
     return None
+
+
+@operation("IFC_GEOMETRY")
+def process_reference_geometry(model, ifc_file):
+    """Recompute audit geometry from its reopened source, without converter cache.
+
+    The strict reader never uses converter repairs or bounding-box substitutes.
+    A fresh native iterator avoids constructing a new geometry kernel for every
+    product; missing native outputs still receive individual create_shape calls.
+    """
+    import os
+
+    settings = create_geom_settings()
+    pending = {e.step_id: e for e in model.elements if e.has_3d_geometry}
+    total = len(pending)
+    completed = 0
+
+    def assign(element, mesh):
+        nonlocal completed
+        element.mesh = mesh
+        element.bounding_box = bounds_for_vertices(mesh.vertices) if mesh else None
+        element.geometry_diagnostics = (
+            dict(inspect_mesh_quality(mesh), vertices=len(mesh.vertices), faces=len(mesh.faces), repair_applied=False)
+            if mesh else {"extraction_failed": True, "repair_applied": False}
+        )
+        element.geometry_status = (
+            GeometryStatus.VALID if mesh and valid_solid(mesh) else GeometryStatus.FAILED
+        )
+        for opening in element.openings:
+            source = CanonicalElement(
+                global_id=opening.opening_global_id,
+                step_id=opening.opening_step_id,
+                ifc_type="IfcOpeningElement",
+            )
+            opening.mesh = extract_element_geometry(ifc_file, source, settings)
+            opening.bounding_box = (
+                bounds_for_vertices(opening.mesh.vertices) if opening.mesh else None
+            )
+            opening.extraction_diagnostic = opening_diagnostic(
+                opening.mesh, source.validation_notes
+            )
+        completed += 1
+        if completed % 16 == 0 or completed == total:
+            progress("IFC_GEOMETRY", "RUNNING", completed=completed, total=total)
+
+    try:
+        iterator = (
+            ifcopenshell.geom.iterator(
+                settings, ifc_file, min(4, os.cpu_count() or 1),
+                include=[ifc_file.by_id(step) for step in pending],
+            ) if pending else None
+        )
+        if iterator and iterator.initialize():
+            while True:
+                shape = iterator.get()
+                element = pending.get(shape.id)
+                if element is not None:
+                    assign(element, mesh_from_geometry(shape.geometry))
+                    pending.pop(shape.id)
+                if not iterator.next():
+                    break
+    except Exception as exc:
+        for element in pending.values():
+            element.validation_notes.append(f"Independent iterator fallback: {exc}")
+    for element in pending.values():
+        assign(element, extract_element_geometry(ifc_file, element, settings))
+    return model

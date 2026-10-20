@@ -95,6 +95,25 @@ test('scenario reset clears all project data, commands and invented physics', ()
     }
     assert.equal(scenario.getHvacOperation('fan'), null);
 });
+test('scenario status cannot approve a missing or rejected base mapping', () => {
+    const scenario = new wb.state.ScenarioStore();
+    scenario.setBaseMapping(null);
+    assert.equal(scenario.isSimulationPermitted(), false);
+    scenario.setBaseMapping('verified');
+    assert.equal(scenario.isSimulationPermitted(), true);
+    scenario.setInvalidBaseMapping(null, 'New conversion started');
+    scenario.setStatus('SCENARIO_VALIDATED');
+    assert.equal(scenario.isSimulationPermitted(), false);
+    scenario.setBaseMapping('verified-new');
+    assert.equal(scenario.isSimulationPermitted(), true);
+    scenario.setInvalidBaseMapping('verified-new', 'Conversion restarted');
+    scenario.setBaseMapping('different-bundle');
+    assert.equal(scenario.getStatus(), 'STALE');
+    assert.equal(scenario.isSimulationPermitted(), false);
+    scenario.reset();
+    scenario.setStatus('BASE_MAPPING_VALID');
+    assert.equal(scenario.isSimulationPermitted(), false);
+});
 test('hydrateManifest separates human review_status from machine verification_status without duplicates', () => {
     const store = new wb.state.SelectionStore();
     const elem = {entityKey: 'arch.ifc:101', sourceId: 'arch.ifc', globalId: 'GUID101', stepId: 101, name: 'Wall #101'};

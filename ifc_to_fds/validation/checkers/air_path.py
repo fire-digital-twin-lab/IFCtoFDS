@@ -296,8 +296,8 @@ class AirPathTopologyChecker:
                 )
 
             # Topological connected components of free space
-            c_ref = f_ref.split(only_watertight=False)
-            c_fds = f_fds.split(only_watertight=False)
+            c_ref = f_ref.split(only_watertight=False, repair=False)
+            c_fds = f_fds.split(only_watertight=False, repair=False)
             if len(c_ref) == 0 or len(c_fds) == 0:
                 return CheckerOutcome(
                     gate_name=self.name,

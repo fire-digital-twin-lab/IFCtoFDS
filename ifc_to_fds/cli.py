@@ -88,8 +88,19 @@ def main(argv=None):
         if args.command == "serve":
             import uvicorn
 
-            if args.api_key:
-                os.environ["IFCFDS_API_KEY"] = args.api_key
+            loopback_hosts = {"127.0.0.1", "localhost", "::1", "testserver"}
+            is_public_host = args.host not in loopback_hosts
+            api_key = args.api_key or os.getenv("IFCFDS_API_KEY")
+
+            if is_public_host and not api_key:
+                sys.stderr.write(
+                    f"SECURITY ERROR: Binding to public/external host interface ({args.host}) "
+                    "requires --api-key or IFCFDS_API_KEY environment variable.\n"
+                )
+                return 1
+
+            if api_key:
+                os.environ["IFCFDS_API_KEY"] = api_key
             if args.allowed_hosts:
                 os.environ["IFCFDS_ALLOWED_HOSTS"] = args.allowed_hosts
 
@@ -195,7 +206,7 @@ def main(argv=None):
                 package = restore_package(default_zip, default_json)
             if not args.config:
                 config = {**manifest.configuration, **config}
-            _, final, report = audit(
+            _, _, report = audit(
                 args.input_ifc,
                 Path(args.fds).read_bytes().decode("utf-8"),
                 manifest,
@@ -225,12 +236,19 @@ def main(argv=None):
             config.setdefault("sources", {})["common_coordinates"] = True
         if args.solver:
             config.setdefault("audit", {})["solver_executable"] = args.solver
-        result = convert(args.input_ifc, config)
         output = (
             args.output
             or str(Path(args.input_ifc[0]).with_suffix("")) + "_converted.fds"
         )
-        save_artifacts(result, output)
+        # Build checkpoints beside the chosen destination, in an isolated work
+        # directory. A conversion must not overwrite an unrelated model.fds.
+        import tempfile
+
+        target = Path(output).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".ifcfds-work-", dir=target.parent) as work:
+            result = convert(args.input_ifc, config, output_directory=work)
+            save_artifacts(result, target)
         print(f"{result['status']}: {output}")
         return exit_status(result["status"])
     except (ValueError, OSError, RuntimeError) as exc:

@@ -85,6 +85,20 @@
         this._notifyChanged(source || 'reset');
     };
 
+    VisibilityStore.prototype.restoreState = function (state, source) {
+        function keys(values) {
+            var result = {};
+            (values || []).forEach(function (key) { result[key] = true; });
+            return result;
+        }
+        this._hiddenKeys = keys(state.hiddenKeys);
+        this._isolatedKeys = state.isolatedKeys ? keys(state.isolatedKeys) : null;
+        this._ghostKeys = keys(state.ghostKeys);
+        this._storeyVisibility = Object.assign({}, state.storeyVisibility);
+        this._systemVisibility = Object.assign({}, state.systemVisibility);
+        this._notifyChanged(source || 'restore');
+    };
+
     VisibilityStore.prototype.setStoreyVisibility = function (storey, isVisible, source) {
         if (!storey) return;
         this._storeyVisibility[storey] = !!isVisible;

@@ -14,7 +14,7 @@ var adapter = new self.IfcFds.fds.FdsGeometryAdapter();
 
 self.onmessage = function (event) {
     var request = event.data || {};
-    if (request.type !== 'export') return;
+    if (request.type !== 'export' && request.type !== 'parse-fds') return;
 
     try {
         var options = request.options || {};
@@ -26,13 +26,13 @@ self.onmessage = function (event) {
                 stage: stage || ''
             });
         };
-        var text = self.IfcFds.core.atStage('serialization', function () { return exporter.exportFromIfcScene(request.ifcModel, options); });
+        var text = request.type === 'parse-fds' ? request.text : self.IfcFds.core.atStage('serialization', function () { return exporter.exportFromIfcScene(request.ifcModel, options); });
         var parsed = self.IfcFds.core.atStage('fds_parse', function () { return parser.parse(text); });
         var model = self.IfcFds.core.atStage('scene_model', function () { return adapter.toSceneModel(parsed); });
         self.postMessage({
             type: 'complete',
             requestId: request.requestId,
-            text: text,
+            text: request.type === 'parse-fds' ? undefined : text,
             model: model
         });
     } catch (error) {

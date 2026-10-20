@@ -11,15 +11,55 @@
         this.name = 'FocusSelectedCommand';
         this.viewer = viewer;
         this.selectionStore = selectionStore || root.IfcFds.workbench.state.selectionStore;
+        this.active = false;
     }
 
     FocusSelectedCommand.prototype.execute = function () {
         if (!this.viewer) return false;
         if (typeof this.viewer.focusSelection === 'function') {
+            if (this.viewer.setNavigationMode) this.viewer.setNavigationMode('orbit');
+            this._previous = {
+                position: this.viewer.camera.position.clone(),
+                target: this.viewer.controls.target.clone(),
+                near: this.viewer.camera.near,
+                far: this.viewer.camera.far
+            };
             this.viewer.focusSelection();
+            this.active = true;
             return true;
         }
         return false;
+    };
+
+    FocusSelectedCommand.prototype.undo = function () {
+        if (!this._previous) return false;
+        var v = this.viewer, s = this._previous;
+        v.camera.position.copy(s.position);
+        v.controls.target.copy(s.target);
+        v.camera.near = s.near;
+        v.camera.far = s.far;
+        v.camera.updateProjectionMatrix();
+        v.controls.update();
+        this.active = false;
+        return true;
+    };
+
+    function RestoreFocusCommand(focusCommand) {
+        this.name = 'RestoreFocusCommand';
+        this.focusCommand = focusCommand;
+    }
+    RestoreFocusCommand.prototype.execute = function () {
+        var v = this.focusCommand.viewer;
+        this._focused = {position:v.camera.position.clone(), target:v.controls.target.clone(), near:v.camera.near, far:v.camera.far};
+        return this.focusCommand.undo();
+    };
+    RestoreFocusCommand.prototype.undo = function () {
+        var v = this.focusCommand.viewer, s = this._focused;
+        v.camera.position.copy(s.position); v.controls.target.copy(s.target);
+        v.camera.near = s.near; v.camera.far = s.far;
+        v.camera.updateProjectionMatrix(); v.controls.update();
+        this.focusCommand.active = true;
+        return true;
     };
 
     function SetViewDirectionCommand(viewer, direction) {
@@ -52,6 +92,7 @@
     };
 
     root.IfcFds.workbench.commands.FocusSelectedCommand = FocusSelectedCommand;
+    root.IfcFds.workbench.commands.RestoreFocusCommand = RestoreFocusCommand;
     root.IfcFds.workbench.commands.SetViewDirectionCommand = SetViewDirectionCommand;
     root.IfcFds.workbench.commands.ResetCameraCommand = ResetCameraCommand;
 

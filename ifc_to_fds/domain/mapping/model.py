@@ -151,6 +151,17 @@ class MappingManifest(BaseModel):
             json.dumps(sources_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
 
+        def _canon_box(box: Any) -> Any:
+            if not box:
+                return None
+            b = box if isinstance(box, dict) else box.model_dump()
+            return {k: round(float(b[k]), 6) for k in sorted(b)}
+
+        def _canon_item(item: Any) -> Any:
+            if isinstance(item, dict):
+                return json.dumps(item, sort_keys=True)
+            return str(item)
+
         records_payload = [
             dict(
                 entity_key=r.entity_key,
@@ -158,18 +169,34 @@ class MappingManifest(BaseModel):
                 global_id=r.global_id,
                 step_id=r.step_id,
                 ifc_type=r.ifc_type,
-                mapping_strategy=r.mapping_strategy,
-                scope_decision=r.scope_decision,
-                review_status=r.review_status,
+                name=r.name,
+                storey=r.storey,
+                building_id=r.building_id,
+                type_class=r.type_class,
+                systems=sorted(r.systems),
+                system_ids=sorted(r.system_ids),
+                ports=sorted([_canon_item(p) for p in r.ports]),
+                openings=sorted([_canon_item(o) for o in r.openings]),
+                classification_evidence=sorted(r.classification_evidence),
+                source_presence=r.source_presence,
+                geometry_preservation=r.geometry_preservation,
                 simulation_role=r.simulation_role,
                 operational_status=r.operational_status,
                 fds_representation=r.fds_representation,
+                review_status=r.review_status,
                 boundary_treatment=r.boundary_treatment,
                 boundary_policy=r.boundary_policy,
-                representation_bounds=r.representation_bounds,
+                boundary_evidence=r.boundary_evidence,
+                representation_bounds=_canon_box(r.representation_bounds),
+                source_bounds=_canon_box(r.source_bounds),
                 placement=r.placement,
-                system_ids=sorted(r.system_ids),
+                decision=r.decision,
+                scope_decision=r.scope_decision,
+                scope_rationale=r.scope_rationale,
+                mapping_strategy=r.mapping_strategy,
+                mapping_status=r.mapping_status,
                 fds_primitive_ids=sorted(r.fds_primitive_ids),
+                rationale=r.rationale,
             )
             for r in sorted(self.records, key=lambda x: (x.source_id, x.step_id, x.entity_key))
         ]

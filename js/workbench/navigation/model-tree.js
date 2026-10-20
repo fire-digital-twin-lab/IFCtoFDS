@@ -144,7 +144,8 @@
             isolateBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 var keys = items.map(function (it) { return it.entityKey; });
-                visibilityStore.isolateKeys(keys, 'tree');
+                var commands = root.IfcFds.workbench.commands;
+                commands.commandBus.execute(new commands.IsolateCommand(keys, visibilityStore));
             });
             actionWrap.appendChild(isolateBtn);
 

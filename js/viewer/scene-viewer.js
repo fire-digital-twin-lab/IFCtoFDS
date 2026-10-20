@@ -160,6 +160,11 @@
     };
 
     SceneViewer.prototype.loadFdsModel = function (model) {
+        this.fdsCoordinateRebase = model.coordinateRebase || [0, 0, 0];
+        if (this.verifiedReferenceGroup && this.verifiedReferenceGroup.position) {
+            var offset = this.fdsCoordinateRebase;
+            this.verifiedReferenceGroup.position.copy(toThree(offset[0], offset[1], offset[2]));
+        }
         this.setNavigationMode('orbit');
         this.setSelectedObjects([]);
         clearGroup(this.meshGroup);
@@ -289,7 +294,7 @@
                 var endpoint = group.length === 1 && expectedBytes > 16 * 1024 * 1024
                     ? '/geometry/' + group[0].mesh.payload
                     : '/geometry-batch?' + group.map(function (e) { return 'payloads=' + e.mesh.payload; }).join('&');
-                var res = await fetch('/api/jobs/' + jobId + endpoint, {signal:signal});
+                var res = await fetch('/api/jobs/' + jobId + endpoint, {signal:signal, headers: ns.verified.getAuthHeaders()});
                 if (!res.ok) throw new Error('Geometry batch unavailable');
                 var buffer = await res.arrayBuffer();
                 if (buffer.byteLength !== expectedBytes) throw new Error('Geometry batch length mismatch');
@@ -1619,6 +1624,9 @@
             var span = Math.max(size.x, size.y, size.z, 0.5);
             this.controls.target.copy(center);
             this.camera.position.set(center.x + span * 1.5, center.y + span * 1.2, center.z + span * 1.5);
+            this.camera.near = Math.max(span / 1000, 0.001);
+            this.camera.far = Math.max(span * 1000, 100);
+            this.camera.updateProjectionMatrix();
             this.controls.update();
         }
     };

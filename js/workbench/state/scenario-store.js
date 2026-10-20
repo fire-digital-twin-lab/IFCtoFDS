@@ -14,6 +14,7 @@
 
     function ScenarioStore() {
         this._mappingBundleSha = null;
+        this._baseMappingVerified = false;
         this._status = 'DRAFT'; // DRAFT, BASE_MAPPING_VALID, CONFIGURING, SCENARIO_VALIDATED, STALE
         this._fireSources = [];
         this._openingStates = {}; // entityKey -> { state: 'CLOSED'|'OPEN', eventTime: number|null }
@@ -23,13 +24,32 @@
     }
 
     ScenarioStore.prototype.setBaseMapping = function (sha) {
+        if (!sha) {
+            this.setInvalidBaseMapping(null, 'Missing verified mapping hash');
+            return;
+        }
         if (this._mappingBundleSha && this._mappingBundleSha !== sha) {
             this._status = 'STALE';
-        } else if (!this._mappingBundleSha) {
+        } else if (!this._mappingBundleSha || this._status === 'INVALID_BASE_MAPPING') {
             this._status = 'BASE_MAPPING_VALID';
         }
         this._mappingBundleSha = sha || null;
+        this._baseMappingVerified = true;
+        this._invalidationReason = null;
         this._notifyChanged('baseMapping');
+    };
+
+    ScenarioStore.prototype.setInvalidBaseMapping = function (sha, mappingStatus, reason) {
+        this._mappingBundleSha = sha || null;
+        this._baseMappingVerified = false;
+        this._status = 'INVALID_BASE_MAPPING';
+        this._invalidationReason = reason || mappingStatus || 'Mapping unverified or rejected';
+        this._notifyChanged('baseMapping');
+    };
+
+    ScenarioStore.prototype.isSimulationPermitted = function () {
+        return !!this._mappingBundleSha && this._baseMappingVerified &&
+            (this._status === 'BASE_MAPPING_VALID' || this._status === 'SCENARIO_VALIDATED');
     };
 
     ScenarioStore.prototype.getStatus = function () {
@@ -38,6 +58,8 @@
 
     ScenarioStore.prototype.reset = function () {
         this._mappingBundleSha = null;
+        this._baseMappingVerified = false;
+        this._invalidationReason = null;
         this._status = 'DRAFT';
         this._fireSources = [];
         this._openingStates = {};
@@ -47,6 +69,10 @@
     };
 
     ScenarioStore.prototype.setStatus = function (status) {
+        if ((status === 'BASE_MAPPING_VALID' || status === 'SCENARIO_VALIDATED') && !this._baseMappingVerified) {
+            this.setInvalidBaseMapping(this._mappingBundleSha, 'Mapping has not been independently verified');
+            return;
+        }
         this._status = status;
         this._notifyChanged('status');
     };

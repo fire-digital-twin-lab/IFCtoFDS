@@ -62,6 +62,11 @@
             var elementMode = strategyForElement(mode, element, options);
             var elementId = allocateId(element.name, index + 1);
             if (elementMode === 'geom') {
+                // FDS writes CHID_GEOM_ID.bingeom on initialization. Windows
+                // filenames cannot contain the colons common in Revit names.
+                if (/[<>:"/\\|?*\x00-\x1f]/.test(elementId)) {
+                    elementId = allocateId('GEOM_' + (index + 1) + '_' + elementId.replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 35), index + 1);
+                }
                 var geomBlock = formatGeom(element, index + 1, elementId);
                 if (!isExcludedItemId(elementId, excludedItemIds)) {
                     lines.push(geomBlock);
@@ -360,16 +365,28 @@
         if (element.exportGeometryComplete === false) throw new Error('Incomplete opening processing: ' + element.name);
         var targetMesh = element.geomExportMesh || element.displayMesh || element.mesh;
         targetMesh.vertices.forEach(function (v) {
-            verts.push(formatNumber(v[0]), formatNumber(v[1]), formatNumber(v[2]));
+            if (v.length !== 3 || !v.every(Number.isFinite)) throw new Error('Non-finite GEOM vertex: ' + element.name);
+            // GEOM vertices must retain binary64 coordinates. Six decimal rounding
+            // collapses short edges produced by opening booleans in georeferenced IFC.
+            verts.push(String(Number(v[0])), String(Number(v[1])), String(Number(v[2])));
         });
         targetMesh.faces.forEach(function (face) {
+            if (face.length !== 3 || !face.every(function (i) { return Number.isInteger(i) && i >= 0 && i < targetMesh.vertices.length; })) {
+                throw new Error('Invalid GEOM triangle index: ' + element.name);
+            }
+            var a = targetMesh.vertices[face[0]], b = targetMesh.vertices[face[1]], c = targetMesh.vertices[face[2]];
+            var normal = cross(subtractVector(b, a), subtractVector(c, a));
+            // Boolean clipping may leave triangles with exactly zero area.
+            // They cover no surface and PyroSim rejects these GEOM records.
+            if (normal[0] === 0 && normal[1] === 0 && normal[2] === 0) return;
             faces.push(face[0] + 1, face[1] + 1, face[2] + 1, 1);
         });
+        if (!faces.length) throw new Error('GEOM has no non-degenerate triangles: ' + element.name);
 
         return [
             formatIfcSourceComment(element, 'GEOM', id),
             "&GEOM ID='" + escapeFdsString(id) + "', SURF_ID='" + surfaceForElement(element) + "',",
-            wrapArray('      VERTS=', verts, 9),
+            wrapArray('      VERTS=', verts, 9) + ',',
             wrapArray('      FACES=', faces, 16),
             ' /'
         ].join('\n');

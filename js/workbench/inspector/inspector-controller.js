@@ -24,6 +24,8 @@
         this.currentDescriptor = null;
         this.els = {};
         this._unsubscribe = null;
+        this._focusCommand = null;
+        this._isolateCommand = null;
     }
 
     InspectorController.prototype.init = function (domElements, viewer) {
@@ -62,6 +64,8 @@
         this._unsubscribe = selectionStore.subscribe(function (payload) {
             self.onSelectionChanged(payload);
         });
+        visibilityStore.subscribe(function () { self.refresh(); });
+        commandBus.subscribe(function () { self.refresh(); });
     };
 
     InspectorController.prototype.setViewer = function (viewer) {
@@ -119,8 +123,16 @@
         var actionCallbacks = {
             onFocus: function (desc) {
                 if (self.viewer) {
+                    if (self._focusCommand && self._focusCommand.active && self._focusKey === desc.entityKey) {
+                        commandBus.execute(new root.IfcFds.workbench.commands.RestoreFocusCommand(self._focusCommand));
+                        self.refresh();
+                        return;
+                    }
                     var cmd = new FocusSelectedCommand(self.viewer, selectionStore);
                     commandBus.execute(cmd);
+                    self._focusCommand = cmd;
+                    self._focusKey = desc.entityKey;
+                    self.refresh();
                 }
             },
             onHide: function (desc) {
@@ -131,7 +143,14 @@
             },
             onIsolate: function (desc) {
                 if (desc && desc.entityKey) {
+                    var current = visibilityStore.getState().isolatedKeys;
+                    if (self._isolateCommand && current && current.length === 1 && current[0] === desc.entityKey) {
+                        commandBus.execute(new root.IfcFds.workbench.commands.RestoreVisibilityCommand(self._isolateCommand._prevState, visibilityStore));
+                        self._isolateCommand = null;
+                        return;
+                    }
                     var cmd = new IsolateCommand([desc.entityKey], visibilityStore);
+                    self._isolateCommand = cmd;
                     commandBus.execute(cmd);
                 }
             },
@@ -142,7 +161,12 @@
             }
         };
 
-        this.view.render(this.currentDescriptor, this.activeTab, actionCallbacks);
+        var state = visibilityStore.getState(), key = this.currentDescriptor && this.currentDescriptor.entityKey;
+        this.view.render(this.currentDescriptor, this.activeTab, actionCallbacks, {
+            focused: !!(this._focusCommand && this._focusCommand.active && this._focusKey === key),
+            hidden: state.hiddenKeys.indexOf(key) >= 0,
+            isolated: !!(state.isolatedKeys && state.isolatedKeys.length === 1 && state.isolatedKeys[0] === key)
+        });
     };
 
     // Backward-compatible method

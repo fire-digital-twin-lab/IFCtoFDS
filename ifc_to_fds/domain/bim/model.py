@@ -24,6 +24,7 @@ class GeometryStatus(str, Enum):
     VALID = "VALID"
     FAILED = "FAILED"
     NO_REPRESENTATION = "NO_REPRESENTATION"
+    APPROXIMATED = "APPROXIMATED"
 
 
 class TriangleMesh(BaseModel):
@@ -107,6 +108,8 @@ class CanonicalElement(BaseModel):
     bounding_box: Optional[BoundingBox] = None
     mesh: Optional[TriangleMesh] = None
     has_3d_geometry: bool = False
+    source_representations: List[Dict[str, Any]] = Field(default_factory=list)
+    geometry_diagnostics: Dict[str, Any] = Field(default_factory=dict)
 
     # Relationships
     host_global_id: Optional[str] = None

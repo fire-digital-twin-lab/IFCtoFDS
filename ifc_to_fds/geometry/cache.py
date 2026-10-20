@@ -21,7 +21,7 @@ def cached_geometry(model, file):
         source=model.source.file_hash_sha256,
         engine=ifcopenshell.version,
         schema=SCHEMA_VERSION,
-        extraction_revision="opening-provenance-binary64-3",
+        extraction_revision="raw-source-no-bbox-repair-4",
         world=True,
         metres=True,
         weld=True,
@@ -50,6 +50,7 @@ def cached_geometry(model, file):
             )
             e.bounding_box = bounds_for_vertices(e.mesh.vertices) if e.mesh else None
             e.validation_notes = old.validation_notes
+            e.geometry_diagnostics = old.geometry_diagnostics
             openings = {o.opening_step_id: o for o in old.openings}
             for opening in e.openings:
                 old_opening = openings[opening.opening_step_id]

@@ -6,7 +6,6 @@ from .inventory import extract_inventory
 from .canonical import MEPGraph
 from ifc_to_fds.geometry.mesh import bounds_for_vertices
 from ifc_to_fds.mep.mep_graph import extract_mep_graph
-from ifc_to_fds.diagnostics import progress
 
 
 def load_sources(paths, source_options=None, reference=False):
@@ -32,66 +31,11 @@ def load_sources(paths, source_options=None, reference=False):
         model = extract_mep_graph(model, file)
         mep_done = perf_counter()
         if reference:
-            from ifc_to_fds.geometry.engine import (
-                create_geom_settings,
-                extract_element_geometry,
-                mesh_from_geometry,
-                opening_diagnostic,
-            )
-            from .canonical import CanonicalElement, GeometryStatus
-            from ifc_to_fds.geometry.mesh import valid_solid, box_mesh
-            import ifcopenshell.geom
-            import os
-            from typing import Any
+            from ifc_to_fds.geometry.engine import process_reference_geometry
 
-            settings = create_geom_settings()
-            progress("IFC_GEOMETRY", "RUNNING")
-            shapes = {}
-            try:
-                iterator = ifcopenshell.geom.iterator(
-                    settings, file, max(1, os.cpu_count() or 1)
-                )
-                if iterator.initialize():
-                    while True:
-                        shape: Any = iterator.get()
-                        shapes[shape.id] = mesh_from_geometry(shape.geometry)
-                        if not iterator.next():
-                            break
-            except Exception:
-                pass
-
-            for e in model.elements:
-                if e.has_3d_geometry:
-                    e.mesh = shapes.pop(e.step_id, None) or extract_element_geometry(file, e, settings)
-                    e.bounding_box = (
-                        bounds_for_vertices(e.mesh.vertices) if e.mesh else None
-                    )
-                    if e.mesh and valid_solid(e.mesh):
-                        e.geometry_status = GeometryStatus.VALID
-                    elif e.mesh and e.bounding_box and e.ifc_type in ("IfcDoor", "IfcWindow"):
-                        e.mesh = box_mesh(e.bounding_box)
-                        e.geometry_status = GeometryStatus.VALID
-                    else:
-                        e.geometry_status = GeometryStatus.FAILED
-
-                    for o in e.openings:
-                        opening_element = CanonicalElement(
-                            global_id=o.opening_global_id,
-                            step_id=o.opening_step_id,
-                            ifc_type="IfcOpeningElement",
-                        )
-                        o.mesh = extract_element_geometry(
-                            file,
-                            opening_element,
-                            settings,
-                        )
-                        o.bounding_box = (
-                            bounds_for_vertices(o.mesh.vertices) if o.mesh else None
-                        )
-                        o.extraction_diagnostic = opening_diagnostic(
-                            o.mesh, opening_element.validation_notes
-                        )
-            progress("IFC_GEOMETRY", "COMPLETED", perf_counter() - mep_done)
+            # Source was reopened above; no converter model, repairs, or geometry
+            # cache is passed into this independent reader.
+            process_reference_geometry(model, file)
         else:
             from ifc_to_fds.geometry.cache import cached_geometry
 

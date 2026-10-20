@@ -14,6 +14,7 @@ from ifc_to_fds.domain.validation import (
 )
 from ifc_to_fds.domain.validation import Finding, Severity
 from ifc_to_fds.geometry.package import audit_package
+from ifc_to_fds.geometry.mesh import mesh_evidence_scope
 from ifc_to_fds.mapping.manifest import build_manifest
 from ifc_to_fds.validation.engine import run_independent_validation
 from ifc_to_fds.validation.golden import golden_gate
@@ -27,6 +28,7 @@ __all__ = ["prepare_model", "AuditConversionUseCase"]
 class AuditConversionUseCase:
     """Independent audit use case."""
 
+    @mesh_evidence_scope()
     def execute(
         self,
         paths: list[str],

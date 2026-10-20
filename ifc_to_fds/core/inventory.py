@@ -59,6 +59,31 @@ def find_containing_storey(element: Any) -> Optional[str]:
     return None
 
 
+def source_representations(product):
+    """Small, non-tessellating representation provenance for source remediation."""
+    def describe(rep, seen):
+        result = dict(step_id=rep.id(), identifier=rep.RepresentationIdentifier,
+                      representation_type=rep.RepresentationType)
+        items = tuple(rep.Items or ())
+        result["item_types"] = sorted({item.is_a() for item in items})
+        result["item_count"] = len(items)
+        result["item_step_ids"] = [item.id() for item in items[:32]]
+        mappings = []
+        for item in items:
+            if not item.is_a("IfcMappedItem"):
+                continue
+            source = item.MappingSource
+            nested = source.MappedRepresentation
+            if nested.id() not in seen and len(seen) < 16:
+                mappings.append(dict(map_step_id=source.id(),
+                    representation=describe(nested, seen | {nested.id()})))
+        if mappings:
+            result["mapped_sources"] = mappings
+        return result
+    representation = getattr(product, "Representation", None)
+    return [describe(rep, {rep.id()}) for rep in representation.Representations] if representation else []
+
+
 @operation("IFC_PARSE")
 def open_ifc(file_path):
     return ifcopenshell.open(file_path)
@@ -274,6 +299,7 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
             storey=storey,
             property_sets=psets,
             has_3d_geometry=has_geom,
+            source_representations=source_representations(prod),
             openings=openings,
             mapping_status=MappingStatus.INCONCLUSIVE
             if has_geom

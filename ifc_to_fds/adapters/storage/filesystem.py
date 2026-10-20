@@ -88,6 +88,8 @@ class LocalFilesystemArtifactRepository:
             backup_payloads = backup_dir / f"{base_stem}_geometry.payloads"
             has_existing_payloads = target_payloads.is_dir()
             published_files: List[str] = []
+            payloads_changed = False
+            retain_backup = False
 
             try:
                 # 6a. Backup any pre-existing files to protect against partial overwrite failure
@@ -104,8 +106,9 @@ class LocalFilesystemArtifactRepository:
                 # 6b. Move geometry payloads
                 staging_payloads = staging_dir / f"{base_stem}_geometry.payloads"
                 if staging_payloads.is_dir():
+                    payloads_changed = True
                     if target_payloads.exists():
-                        shutil.rmtree(target_payloads, ignore_errors=True)
+                        shutil.rmtree(target_payloads)
                     shutil.move(str(staging_payloads), str(target_payloads))
 
                 # 6c. Move all artifact files
@@ -121,25 +124,30 @@ class LocalFilesystemArtifactRepository:
 
                 return checksums
 
-            except Exception:
+            except Exception as publication_error:
                 # Transaction failed: Rollback changes to avoid corrupted or mixed bundles
-                for fname in published_files:
-                    (target_dir / fname).unlink(missing_ok=True)
-                if target_payloads.exists():
-                    shutil.rmtree(target_payloads, ignore_errors=True)
-
-                # Restore original files from backup
-                for fname in existing_backed_up:
-                    b_src = backup_dir / fname
-                    b_dst = target_dir / fname
-                    if b_src.exists():
-                        shutil.move(str(b_src), str(b_dst))
-                if has_existing_payloads and backup_payloads.is_dir():
-                    shutil.move(str(backup_payloads), str(target_payloads))
-
+                # A failed backup has not changed the destination. Restore only
+                # things actually published, never delete untouched payloads.
+                try:
+                    for fname in published_files:
+                        if fname in existing_backed_up:
+                            shutil.copy2(backup_dir / fname, target_dir / fname)
+                        else:
+                            (target_dir / fname).unlink(missing_ok=True)
+                    if payloads_changed:
+                        if target_payloads.exists():
+                            shutil.rmtree(target_payloads)
+                        if has_existing_payloads:
+                            shutil.copytree(backup_payloads, target_payloads)
+                except Exception as rollback_error:
+                    retain_backup = True
+                    raise RuntimeError(
+                        f"Artifact publication failed ({publication_error}); rollback failed "
+                        f"({rollback_error}). Original backup retained at {backup_dir}"
+                    ) from publication_error
                 raise
             finally:
-                if backup_dir.exists():
+                if not retain_backup and backup_dir.exists():
                     shutil.rmtree(backup_dir, ignore_errors=True)
         finally:
             # Always clean up the temporary staging directory on completion or failure

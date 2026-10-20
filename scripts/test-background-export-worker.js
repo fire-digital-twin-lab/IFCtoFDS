@@ -114,6 +114,15 @@ console.log({
 });
 console.log('Background and direct-file export worker tests passed.');
 
+for (const [workerCtx, getResponse] of [[ctx, () => response], [inlineCtx, () => inlineResponse]]) {
+    workerCtx.onmessage({data:{type:'parse-fds',requestId:90,text:"&MESH IJK=1,1,1, XB=0,1,0,1,0,1 /\n&OBST ID='wall', XB=0,1,0,1,0,1 /"}});
+    const imported = getResponse();
+    if (imported.type !== 'complete' || imported.requestId !== 90 || imported.model.obsts.length !== 1 || imported.text !== undefined) {
+        throw new Error('FDS import worker returned an incomplete model');
+    }
+}
+console.log('Verified FDS display is parsed in the background worker and inline bundle.');
+
 // Errors preserve stage/stack/identity without embedding the conversion payload.
 for (const [workerCtx, getResponse] of [[ctx, () => response], [inlineCtx, () => inlineResponse]]) {
     vm.runInContext("IfcFds.fds.FdsNamelistParser.prototype.parse = function () { throw new RangeError('parser fixture failure'); };", workerCtx);

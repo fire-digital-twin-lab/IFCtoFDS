@@ -217,6 +217,10 @@ def audit_package(model, package, report, config):
                     unknown(e.entity_key, f"{label} surface proof incomplete")
                     preserved = False
             except ValueError as exc:
+                if hasattr(exc, "evidence"):
+                    report.metrics.setdefault(e.entity_key, {})[f"preserved:{label}"] = {
+                        "self_intersection": exc.evidence
+                    }
                 fail(e.entity_key, f"Invalid saved {label}: {exc}")
                 preserved = False
             except Exception as exc:

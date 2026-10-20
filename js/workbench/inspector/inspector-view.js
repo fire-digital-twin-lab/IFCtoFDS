@@ -78,11 +78,12 @@
         this.containerId = containerId || 'inspect-structured-view';
     }
 
-    InspectorView.prototype.render = function (descriptor, activeTab, actionCallbacks) {
+    InspectorView.prototype.render = function (descriptor, activeTab, actionCallbacks, actionState) {
         var view = document.getElementById(this.containerId);
         if (!view) return;
         view.innerHTML = '';
         actionCallbacks = actionCallbacks || {};
+        actionState = actionState || {};
 
         if (!descriptor) {
             var emptyNotice = document.createElement('p');
@@ -98,17 +99,18 @@
         var actionsBar = document.createElement('div');
         actionsBar.style.display = 'flex';
         actionsBar.style.gap = '6px';
+        actionsBar.style.flexWrap = 'wrap';
         actionsBar.style.padding = '6px 0 10px 0';
         actionsBar.style.borderBottom = '1px solid var(--border-subtle)';
         actionsBar.style.marginBottom = '8px';
 
-        actionsBar.appendChild(createActionButton('scan', 'Focus', function () {
+        actionsBar.appendChild(createActionButton('scan', actionState.focused ? 'Back' : 'Focus', function () {
             if (actionCallbacks.onFocus) actionCallbacks.onFocus(descriptor);
         }));
-        actionsBar.appendChild(createActionButton('eye-off', 'Hide', function () {
+        actionsBar.appendChild(createActionButton('eye-off', actionState.hidden ? 'Show' : 'Hide', function () {
             if (actionCallbacks.onHide) actionCallbacks.onHide(descriptor);
         }));
-        actionsBar.appendChild(createActionButton('filter', 'Isolate', function () {
+        actionsBar.appendChild(createActionButton('filter', actionState.isolated ? 'Unisolate' : 'Isolate', function () {
             if (actionCallbacks.onIsolate) actionCallbacks.onIsolate(descriptor);
         }));
 

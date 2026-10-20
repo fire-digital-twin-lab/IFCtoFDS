@@ -11,6 +11,13 @@ STRUCTURAL_TYPES = {
     "IFCCOLUMN",
     "IFCBEAM",
     "IFCROOF",
+    "IFCFOOTING",
+    "IFCPILE",
+    "IFCRAMP",
+    "IFCRAMPFLIGHT",
+    "IFCSTAIRFLIGHT",
+    "IFCMEMBER",
+    "IFCPLATE",
 }
 
 

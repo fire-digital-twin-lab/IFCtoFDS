@@ -267,6 +267,27 @@
     }
 
     function bindEvents() {
+        var viewBus = ns.workbench.commands.commandBus;
+        var undoView = document.getElementById('undo-view');
+        var resetVisibility = document.getElementById('reset-visibility');
+        if (undoView) {
+            undoView.addEventListener('click', function () { viewBus.undo(); });
+            viewBus.subscribe(function () { undoView.disabled = !viewBus.canUndo(); });
+        }
+        if (resetVisibility) resetVisibility.addEventListener('click', function () {
+            viewBus.execute(new ns.workbench.commands.ResetVisibilityCommand());
+        });
+        var cancelTask = document.getElementById('cancel-task');
+        function cancelUiTask() {
+            state.ifcLoadRequestId = (state.ifcLoadRequestId || 0) + 1;
+            ns.ifc.backendPreview.cancel();
+            cancelPendingExport();
+            hideLoading();
+            document.getElementById('verified-progress').textContent = 'Cancelled';
+        }
+        if (cancelTask) cancelTask.addEventListener('click', cancelUiTask);
+        var verifiedCancel = document.getElementById('verified-cancel');
+        if (verifiedCancel) verifiedCancel.addEventListener('click', cancelUiTask);
         els.toggleTheme.addEventListener('click', function () {
             var theme = currentTheme === 'dark' ? 'light' : 'dark';
             applyTheme(theme);
@@ -320,6 +341,8 @@
         els.ifcFile.addEventListener('change', function (event) {
             var file = event.target.files[0];
             if (!file) return;
+            var loadGeneration = state.ifcLoadRequestId = (state.ifcLoadRequestId || 0) + 1;
+            function currentLoad() { return state.currentIfcFile === file && state.ifcLoadRequestId === loadGeneration; }
             ns.ifc.backendPreview.cancel();
             state.currentIfcFile = file;
             ns.verified.setFallback(file);
@@ -330,6 +353,8 @@
             state.excludedStepIds = {};
             state.excludedItemIds = {};
             state.undoStack = [];
+            viewBus.clear();
+            ns.workbench.state.visibilityStore.resetVisibility('source-change');
             state.fullModel = null;
             state.ifcSourceText = null;
             state.ifcFileName = file.name;
@@ -349,10 +374,12 @@
             // decode their entire STEP content or send them to the legacy parser.
             var WEB_IFC_MAX_BYTES = 8 * 1024 * 1024;
             if (file.size > WEB_IFC_MAX_BYTES) {
-                ns.ifc.backendPreview.load(file, viewer, setLoadingProgress).then(function (model) {
-                    if (state.currentIfcFile === file) finishIfcLoad(model, null, null);
+                ns.ifc.backendPreview.load(file, viewer, function (fraction, message) {
+                    if (currentLoad()) setLoadingProgress(fraction, message);
+                }).then(function (model) {
+                    if (currentLoad()) finishIfcLoad(model, null, null);
                 }).catch(function (error) {
-                    if (state.currentIfcFile === file && error.name !== 'AbortError') failIfcLoad(file.name, error);
+                    if (currentLoad() && error.name !== 'AbortError') failIfcLoad(file.name, error);
                 });
                 return;
             }
@@ -360,7 +387,7 @@
             var oversizeNotice = null;
 
             file.arrayBuffer().then(function (buffer) {
-                if (state.currentIfcFile !== file) return;
+                if (!currentLoad()) return;
                 setLoadingProgress(0.1, 'Indexing entities…');
                 var text = new TextDecoder().decode(new Uint8Array(buffer));
                 state.ifcSourceText = text;
@@ -373,7 +400,7 @@
                     })
                     : Promise.resolve(null);
                 return displayPromise.then(function (displayMeshes) {
-                    if (state.currentIfcFile !== file) return;
+                    if (!currentLoad()) return;
                     if (displayMeshes && displayMeshes.length) {
                         finishIfcLoad(meta, displayMeshes, oversizeNotice);
                         return;
@@ -383,13 +410,13 @@
                     return ifcAdapter.parseAsync(text, file.name, function (fraction) {
                         setLoadingProgress(fraction, 'Parsing legacy mesh…');
                     }).then(function (fullModel) {
-                        if (state.currentIfcFile !== file) return;
+                        if (!currentLoad()) return;
                         state.fullModel = fullModel;
                         finishIfcLoad(fullModel, null, oversizeNotice);
                     });
                 });
             }).catch(function (error) {
-                if (state.currentIfcFile !== file) return;
+                if (!currentLoad()) return;
                 failIfcLoad(file.name, error);
             });
         });
@@ -472,6 +499,7 @@
             var typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
             if (key === 'z' && (event.ctrlKey || event.metaKey) && !event.shiftKey) {
                 if (typing) return;
+                if (viewBus.canUndo()) { event.preventDefault(); viewBus.undo(); return; }
                 if (els.undoLast && !els.undoLast.disabled) {
                     event.preventDefault();
                     undoLastChange();
@@ -506,27 +534,27 @@
             downloadText(state.generatedFdsName, state.generatedFdsText);
         });
 
-        var fdsDrawerBtn = document.getElementById('btn-download-fds');
-        if (fdsDrawerBtn) {
-            fdsDrawerBtn.addEventListener('click', function (e) {
-                if (!fdsDrawerBtn.getAttribute('href')) {
-                    e.preventDefault();
-                    if (state.generatedFdsText && state.generatedFdsName) {
-                        downloadText(state.generatedFdsName, state.generatedFdsText);
-                    }
-                }
-            });
-        }
-
         if (els.saveManifest) {
-            els.saveManifest.addEventListener('click', function () {
-                if (state.lastArtifactLinks) {
-                    var link = document.createElement('a'); link.href = state.lastArtifactLinks.manifest.url;
-                    link.download = ''; link.click(); return;
+            els.saveManifest.addEventListener('click', function (e) {
+                e.preventDefault();
+                if (state.lastManifest) {
+                    var base = ((state.lastManifest || {}).source_filename || state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
+                    downloadText(base + '_manifest.json', JSON.stringify(state.lastManifest, null, 2));
+                    return;
                 }
-                if (!state.lastManifest) return;
-                var base = ((state.lastManifest || {}).source_filename || state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
-                downloadText(base + '_manifest.json', JSON.stringify(state.lastManifest, null, 2));
+                if (state.lastArtifactLinks && state.lastArtifactLinks.manifest && state.lastArtifactLinks.manifest.url) {
+                    var authH = (ns.verified && typeof ns.verified.getAuthHeaders === 'function') ? ns.verified.getAuthHeaders() : {};
+                    fetch(state.lastArtifactLinks.manifest.url, { headers: authH })
+                        .then(function (r) { return r.ok ? r.json() : null; })
+                        .then(function (data) {
+                            if (data) {
+                                state.lastManifest = data;
+                                var base = (data.source_filename || state.ifcFileName || 'ifc_model').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
+                                downloadText(base + '_manifest.json', JSON.stringify(data, null, 2));
+                            }
+                        })
+                        .catch(function (err) { console.error('Download Manifest failed:', err); });
+                }
             });
         }
 
@@ -1137,11 +1165,13 @@
         if (state.exportBusy) return;
         if (!state.ifcModel || !state.ifcModel.elements || !state.ifcModel.elements.length) return;
         var generation = state.exportRequestId;
+        setExportBusy(true, action || 'convert');
         ensureFullModel().then(function (fullModel) {
             if (generation !== state.exportRequestId) return;
             runExportWithModel(fullModel, action);
         }).catch(function (err) {
             if (generation !== state.exportRequestId) return;
+            hideLoading(); setExportBusy(false);
             addExportDiagnostic(err, {stage: 'ifc_parse'});
         });
     }
@@ -1271,10 +1301,37 @@
     }
 
     function cleanupExportWorker() {
+        if (state.fdsParseReject) {
+            var reject = state.fdsParseReject;
+            state.fdsParseReject = null;
+            var error = new Error('FDS display cancelled'); error.name = 'AbortError';
+            reject(error);
+        }
         if (state.exportWorker) state.exportWorker.terminate();
         if (state.exportWorkerUrl) URL.revokeObjectURL(state.exportWorkerUrl);
         state.exportWorker = null;
         state.exportWorkerUrl = null;
+    }
+
+    function parseFdsInWorker(text, requestId) {
+        return new Promise(function (resolve, reject) {
+            var handle = ns.workers.createExportWorker();
+            state.exportWorker = handle.worker; state.exportWorkerUrl = handle.url;
+            state.fdsParseReject = reject;
+            function finish(error, model) {
+                state.fdsParseReject = null;
+                cleanupExportWorker();
+                if (error) reject(error); else resolve(model);
+            }
+            handle.worker.addEventListener('message', function (event) {
+                if (requestId !== state.exportRequestId) return;
+                var result = event.data || {};
+                if (result.type === 'complete') finish(null, result.model);
+                else if (result.type === 'error') finish(new Error(result.message || 'FDS display parsing failed'));
+            });
+            handle.worker.addEventListener('error', function (event) { finish(new Error(event.message || 'FDS display worker failed')); });
+            handle.worker.postMessage({type:'parse-fds', requestId:requestId, text:text});
+        });
     }
 
     function cancelPendingExport() {
@@ -1292,6 +1349,12 @@
         state.lastArtifactLinks = null;
         state.lastAuditReport = null;
         state.lastManifest = null;
+        if (ns.ui && ns.ui.auditDrawer && ns.ui.auditDrawer.clearArtifacts) ns.ui.auditDrawer.clearArtifacts();
+        var scenario = ns.workbench && ns.workbench.state && ns.workbench.state.scenarioStore;
+        if (scenario && scenario.setInvalidBaseMapping) {
+            var previousBase = scenario.getScenarioSpec ? scenario.getScenarioSpec().mappingBundleSha : null;
+            scenario.setInvalidBaseMapping(previousBase, 'Conversion result cleared');
+        }
         if (els.saveFds) els.saveFds.disabled = true;
         if (els.openAudit) els.openAudit.disabled = true;
         if (els.saveManifest) els.saveManifest.disabled = true;
@@ -1312,11 +1375,18 @@
             addExportDiagnostic('IFC source not in memory — please reopen the file.');
             return;
         }
+        clearGeneratedFds();
+        // The single background worker should convert immediately instead of
+        // waiting for a now-unneeded source preview to finish first.
+        ns.ifc.backendPreview.cancel();
+        state.ifcLoadRequestId = (state.ifcLoadRequestId || 0) + 1;
 
         var fileLabel = (state.ifcFileName || (state.ifcModel && state.ifcModel.fileName) || 'IFC model');
         showLoading('Verified Conversion: ' + fileLabel, 'Processing with IfcOpenShell & OpenCASCADE...');
         setExportBusy(true, 'convert-verified');
         var generation = ++state.exportRequestId;
+        var cancelButton = document.getElementById('verified-cancel');
+        if (cancelButton) cancelButton.disabled = false;
 
         var blob = state.currentIfcFile || new File([state.ifcSourceText || ''], state.ifcFileName || 'model.ifc');
         var forceGeom = !!(els.verifiedForceGeom && els.verifiedForceGeom.checked);
@@ -1324,14 +1394,18 @@
         ns.verified.run(blob, {
             cell_size: cellSize,
             all_geom: forceGeom,
+        }, function (message, detail, activeJobId) {
+            if (generation !== state.exportRequestId) return;
+            state.verifiedJobId = activeJobId;
+            if (els.ifcLoadingStage) els.ifcLoadingStage.textContent = message;
         })
         .then(async function (data) {
             if (generation !== state.exportRequestId) return;
             state.verifiedJobId = data && data.job_id;
-            hideLoading(); setExportBusy(false);
+            setLoadingProgress(0.85, 'Loading conversion artifacts.');
             if (!data || !data.artifacts) throw new Error('Missing conversion artifacts');
             state.lastArtifactLinks = data.artifacts;
-            var summary = Object.assign({}, data, {configuration: {}, matched_count: (data.coverage || {}).matched || 0});
+            var summary = Object.assign({}, data, {configuration: {}, matched_count: (data.coverage || {}).geometry || 0});
             state.lastAuditReport = summary;
             state.lastManifest = null;
             if (els.openAudit) els.openAudit.disabled = false;
@@ -1339,10 +1413,10 @@
             if (viewer.bindVerifiedArtifacts) viewer.bindVerifiedArtifacts(data.artifacts);
 
             var manifestPromise = (data.artifacts.manifest && data.artifacts.manifest.url)
-                ? fetch(data.artifacts.manifest.url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+                ? fetch(data.artifacts.manifest.url, {headers: ns.verified.getAuthHeaders()}).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
                 : Promise.resolve(null);
             var reportPromise = (data.artifacts.report && data.artifacts.report.url)
-                ? fetch(data.artifacts.report.url).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+                ? fetch(data.artifacts.report.url, {headers: ns.verified.getAuthHeaders()}).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
                 : Promise.resolve(null);
 
             var extraArtifacts = await Promise.all([manifestPromise, reportPromise]);
@@ -1361,7 +1435,8 @@
             }
 
             renderAuditReport(fullReport); openAudit();
-            var response = await fetch(data.artifacts.fds.url);
+            var authH = (ns.verified && typeof ns.verified.getAuthHeaders === 'function') ? ns.verified.getAuthHeaders() : {};
+            var response = await fetch(data.artifacts.fds.url, { headers: authH });
             if (!response.ok) throw new Error('FDS artifact unavailable');
             var text = await response.text();
             if (generation !== state.exportRequestId) return;
@@ -1369,26 +1444,35 @@
             var fileName = base + (data.status === 'MAPPING_VERIFIED' ? '_mapping_verified.fds' : '_diagnostic_unaccepted.fds');
             state.generatedFdsText = text; state.generatedFdsName = fileName;
             if (els.saveFds) els.saveFds.disabled = false;
-            loadFdsText(text, fileName);
+            setLoadingProgress(0.95, 'Preparing FDS display.');
+            var displayModel = await parseFdsInWorker(text, generation);
+            if (generation !== state.exportRequestId) return;
+            loadFdsText(text, fileName, displayModel);
             if (ns.workbench && ns.workbench.state && ns.workbench.state.scenarioStore) {
                 var mSha = (manifestData && (manifestData.bundle_sha256 || manifestData.fds_sha256 || manifestData.source_sha256)) ||
                            (data.artifacts && data.artifacts.manifest && data.artifacts.manifest.sha256) ||
                            (data.artifacts && data.artifacts.fds && data.artifacts.fds.sha256);
                 if (mSha) {
-                    ns.workbench.state.scenarioStore.setBaseMapping(mSha);
+                    var isVerified = (data.status === 'MAPPING_VERIFIED' || data.mapping_status === 'MAPPING_VERIFIED');
+                    if (isVerified) {
+                        ns.workbench.state.scenarioStore.setBaseMapping(mSha);
+                    } else if (typeof ns.workbench.state.scenarioStore.setInvalidBaseMapping === 'function') {
+                        ns.workbench.state.scenarioStore.setInvalidBaseMapping(mSha, data.status || data.mapping_status);
+                    }
                 }
             }
             setupClippingForBounds(boundsForClipping());
         })
         .catch(function (err) {
             if (generation !== state.exportRequestId || err.name === 'AbortError') return;
+            state.verifiedJobId = err.jobId || state.verifiedJobId;
             hideLoading();
             setExportBusy(false);
             addExportDiagnostic(err, {stage: 'verified_conversion', jobId: state.verifiedJobId});
             updateGlobalStatusBadge('FAILED');
             if (state.verifiedJobId) exposeFailedCheckpoints(state.verifiedJobId);
         }).finally(function () {
-            if (generation === state.exportRequestId) { hideLoading(); setExportBusy(false); }
+            if (generation === state.exportRequestId) { cleanupExportWorker(); hideLoading(); setExportBusy(false); }
         });
     }
 
@@ -1417,6 +1501,11 @@
         var domain = (report.configuration || {}).simulation_domain;
         if (domain) line('p', 'Fixed domain (m): X ' + domain.xmin + ' to ' + domain.xmax + '; Y ' + domain.ymin + ' to ' + domain.ymax + '; Z ' + domain.zmin + ' to ' + domain.zmax);
         if (report.total_elements_checked !== undefined) line('p', 'Matched solids: ' + report.matched_count + ' / accounted entities: ' + report.total_elements_checked);
+        var exported = (report.coverage || {}).fds_export;
+        if (exported) {
+            line('p', 'FDS written: ' + exported.entities + ' entities / ' + exported.primitives + ' primitives (' + exported.obst + ' OBST, ' + exported.geom + ' GEOM). Independently verified: ' + exported.verified_entities + '.');
+            if (exported.comparisons_skipped_for_source_errors) line('p', 'Source topology errors stopped the remaining solid comparisons. The FDS download is available as an unaccepted diagnostic artifact.');
+        }
         var scope = (report.configuration || {}).scope || {};
         var storeys = (((report.coverage || {}).scope || {}).selected_storeys || []);
         if (!Array.isArray(storeys)) storeys = [String(storeys) + ' selected (see configuration artifact)'];

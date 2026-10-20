@@ -2,7 +2,9 @@
     function FdsNamelistParser() {}
 
     FdsNamelistParser.prototype.parse = function (text) {
+        text = String(text || '');
         var records = extractRecords(String(text || ''));
+        var rebase = text.match(/^!\s*IFC_COORDINATE_REBASE\s+X_OFFSET=(\S+)\s+Y_OFFSET=(\S+)\s+Z_OFFSET=(\S+)/m);
         var data = {
             head: {},
             meshes: [],
@@ -14,6 +16,8 @@
             rawRecords: records,
             diagnostics: []
         };
+        data.coordinateRebase = rebase ? rebase.slice(1, 4).map(Number) : [0, 0, 0];
+        if (!data.coordinateRebase.every(Number.isFinite)) throw new Error('Invalid IFC coordinate rebase metadata');
 
         var pendingIfcSource = null;
         records.forEach(function (record, index) {

@@ -6,6 +6,20 @@
     function files() { return Array.prototype.slice.call(get('sources').files || []); }
     function selectedFiles() { return files().length ? files() : (fallback ? [fallback] : []); }
     function progress(text) { get('progress').textContent = text; }
+    function getAuthHeaders(extraHeaders) {
+        var headers = Object.assign({}, extraHeaders || {});
+        var key = (typeof window !== 'undefined' && window.IFCFDS_API_KEY) || '';
+        try { key = (window.localStorage && window.localStorage.getItem('ifcfds_api_key')) || key; } catch (_) { /* Storage may be disabled. */ }
+        if (key) {
+            headers['x-api-key'] = key;
+        }
+        return headers;
+    }
+    function authFetch(url, options) {
+        options = options || {};
+        options.headers = getAuthHeaders(options.headers);
+        return fetch(url, options);
+    }
     function response(res) {
         return res.json().then(function (data) {
             if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
@@ -17,7 +31,7 @@
         var data = new FormData();
         selectedFiles().forEach(function (file) { data.append('files', file); });
         progress('Reading inventory…');
-        return fetch('/api/inventory', {method: 'POST', body: data}).then(response).then(function (inventory) {
+        return authFetch('/api/inventory', {method: 'POST', body: data}).then(response).then(function (inventory) {
             if (token === inventoryGeneration) applyInventory(inventory);
         }).catch(function (err) { if (token === inventoryGeneration) progress(err.message); });
     }
@@ -48,6 +62,7 @@
         });
     }
     ns.verified = {
+        getAuthHeaders: getAuthHeaders,
         hasFiles: function () { return selectedFiles().length > 0; },
         setFallback: function (file) {
             if (fallback !== file) { inventoryGeneration++; get('storeys').replaceChildren(); }
@@ -67,10 +82,10 @@
         cancel: function () {
             stopped = true; generation++;
             var active = jobId; jobId = null; get('cancel').disabled = true;
-            return active ? fetch('/api/jobs/' + active, {method: 'DELETE'}).then(response) : Promise.resolve();
+            return active ? authFetch('/api/jobs/' + active, {method: 'DELETE'}).then(response) : Promise.resolve();
         },
         init: function () {
-            fetch('/api/reference-cases').then(response).then(function (data) {
+            authFetch('/api/reference-cases').then(response).then(function (data) {
                 data.cases.forEach(function (entry) {
                     var id = entry.id;
                     var option = document.createElement('option'); option.value = id; option.textContent = entry.name + ' (' + entry.approval_status + ')';
@@ -88,7 +103,7 @@
                 ns.verified.cancel().then(function () { progress('Cancelled'); }).catch(function (err) { progress(err.message); });
             });
         },
-        run: async function (file, configuration) {
+        run: async function (file, configuration, onProgress) {
             fallback = file; stopped = false; jobId = null;
             var runGeneration = ++generation, localJobId = null;
             if (location.protocol === 'file:') return Promise.reject(new Error('Open http://127.0.0.1:8000 for Verified Conversion'));
@@ -126,10 +141,14 @@
             progress('Uploading…');
             function poll() {
                 if (stopped || runGeneration !== generation) return Promise.reject(cancelled());
-                return fetch('/api/jobs/' + localJobId).then(response).then(function (job) {
+                return authFetch('/api/jobs/' + localJobId).then(response).then(function (job) {
                     if (runGeneration !== generation) throw cancelled();
-                    progress(job.state + (job.progress ? ' — ' + job.progress.stage : ''));
-                    if (job.state === 'COMPLETED') return fetch('/api/jobs/' + localJobId + '/result').then(response);
+                    var statusText = job.state + (job.progress ? ' - ' + job.progress.stage : '');
+                    if (job.progress && job.progress.total) statusText += ' ' + job.progress.completed + '/' + job.progress.total;
+                    if (job.started) statusText += ' (' + Math.max(0, Math.floor(Date.now()/1000 - job.started)) + ' s)';
+                    progress(statusText);
+                    if (onProgress) onProgress(statusText, job.progress || {}, localJobId);
+                    if (job.state === 'COMPLETED') return authFetch('/api/jobs/' + localJobId + '/result').then(response);
                     if (['FAILED','TIMED_OUT','CANCELLED'].indexOf(job.state) !== -1) {
                         var error = new Error(job.error || job.state);
                         error.stage = job.progress ? job.progress.stage : 'VALIDATION';
@@ -143,9 +162,9 @@
                     return new Promise(function (resolve) { setTimeout(resolve, 700); }).then(poll);
                 });
             }
-            return fetch('/api/jobs', {method:'POST',body:data}).then(response).then(function (job) {
+            return authFetch('/api/jobs', {method:'POST',body:data}).then(response).then(function (job) {
                 localJobId = job.id;
-                if (stopped || runGeneration !== generation) return fetch('/api/jobs/' + localJobId, {method:'DELETE'}).then(function () { throw cancelled(); });
+                if (stopped || runGeneration !== generation) return authFetch('/api/jobs/' + localJobId, {method:'DELETE'}).then(function () { throw cancelled(); });
                 jobId = localJobId;
                 return poll();
             }).then(function (result) {
