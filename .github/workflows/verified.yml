@@ -21,10 +21,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install -e ".[test]"
-      - run: python -m pip check
-      - run: python -m pytest -q -m "not solver and not browser"
-      - run: python -m ifc_to_fds --help
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - run: uv sync --locked --no-dev --extra test
+      - run: uv run --locked --extra test python -m pytest -q -m "not solver and not browser"
+      - run: uv run --locked --extra test python -m ifc_to_fds --help
   javascript:
     runs-on: ubuntu-latest
     steps:
@@ -56,10 +56,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -e ".[test]" playwright==1.58.0
-      - run: python -m playwright install --with-deps chromium
-      - run: python -m pytest -q -m browser --junitxml=scripts/out/browser-conversion/workbench.xml
-      - run: python scripts/test-conversion-browser.py
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - run: uv sync --locked --no-dev --extra test --extra browser
+      - run: uv run --locked --extra test --extra browser python -m playwright install --with-deps chromium
+      - run: uv run --locked --extra test --extra browser python -m pytest -q -m browser --junitxml=scripts/out/browser-conversion/workbench.xml
+      - run: uv run --locked --extra test --extra browser python scripts/test-conversion-browser.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -73,13 +74,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -e ".[test]"
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - run: uv sync --locked --no-dev --extra test
       - run: python scripts/install-fds.py
       - name: Real pinned FDS and boundary fixtures
         shell: pwsh
         run: |
           $env:IFCFDS_SOLVER = (Resolve-Path '.deps/fds-6.11.1/firemodels/FDS6/bin/fds_openmp.exe').Path
-          python -m pytest -q -m solver
+          uv run --locked --extra test python -m pytest -q -m solver
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -97,7 +99,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -e ".[test]"
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - run: uv sync --locked --no-dev --extra test
       - name: Verify external reference (missing data must not pass)
         shell: pwsh
-        run: python scripts/run-external-reference.py --case "$env:IFCFDS_RESEARCH_CASE" --source-map "$env:IFCFDS_RESEARCH_SOURCE_MAP" --config "$env:IFCFDS_RESEARCH_CONFIG" --output .local-reference-cases/research-run
+        run: uv run --locked --extra test python scripts/run-external-reference.py --case "$env:IFCFDS_RESEARCH_CASE" --source-map "$env:IFCFDS_RESEARCH_SOURCE_MAP" --config "$env:IFCFDS_RESEARCH_CONFIG" --output .local-reference-cases/research-run
