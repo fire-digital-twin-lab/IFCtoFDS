@@ -7,7 +7,7 @@ const ctx = vm.createContext({console, setTimeout});
 ctx.window = ctx;
 ctx.IfcFds = {verified: {}, core: {atStage: (_stage, callback) => callback()}};
 function load(name) { vm.runInContext(fs.readFileSync(path.join(root, 'src', name), 'utf8'), ctx, {filename: name}); }
-for (const name of ['shared/diagnostics.js', 'state/session-state.js', 'components/tabs.js', 'features/conversion/quick-workflow.js']) load(name);
+for (const name of ['shared/diagnostics.js', 'shared/lifecycle.js', 'state/session-state.js', 'components/tabs.js', 'features/conversion/quick-workflow.js', 'features/sources/source-events.js']) load(name);
 
 function element() {
     const listeners = new Set();
@@ -49,5 +49,25 @@ tabs.destroy(); assert.equal(buttons[0].listenerCount(), 0);
     assert.ok(calls.includes('setLoadingProgress'), 'Progress remains wired after extraction');
     quick.cancelPendingExport();
     assert.ok(calls.includes('setExportBusy'), 'Cancellation releases the active conversion action');
+    let sourceChange, finishRead, indexed = 0;
+    const sourceState = ctx.IfcFds.state.createSessionState();
+    ctx.IfcFds.ifc = {backendPreview: {cancel() {}}, IfcMeta: {buildModel() {indexed++;}}};
+    ctx.IfcFds.verified.setFallback = () => {};
+    ctx.IfcFds.workbench = {state: {visibilityStore: {resetVisibility() {}}}};
+    const fileControl = {addEventListener(_type, handler) {sourceChange = handler;}, removeEventListener() {}};
+    const sourceDependencies = new Proxy({state: sourceState,
+        getElements: () => ({ifcFile: fileControl, ifcSourceName: {}, resetCamera: element()}),
+        getViewer: () => ({}), viewBus: {clear() {}}}, {
+        get(target, key) {return key in target ? target[key] : () => {};}
+    });
+    const sources = ctx.IfcFds.features.sources.createSourceEvents(sourceDependencies);
+    sources.bind();
+    sourceChange({target: {files: [{size: 8, name: 'late.ifc',
+        arrayBuffer: () => new Promise(resolve => {finishRead = resolve;})}]}});
+    sources.destroy();
+    finishRead(new ArrayBuffer(8));
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(indexed, 0, 'A file read finishing after destroy must not restart parsing');
     console.log('Module state isolation, idempotent tabs, stale parse protection and cancellation wiring passed.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

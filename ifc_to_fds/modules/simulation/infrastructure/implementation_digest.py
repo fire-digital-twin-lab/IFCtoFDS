@@ -14,6 +14,7 @@ def adapter_digest():
             "ifc_to_fds.modules.fds.application.serializer",
             "ifc_to_fds.modules.verification.application.effective_obstructions",
             "ifc_to_fds.modules.verification.application.effective_multimesh",
+            "ifc_to_fds.modules.verification.application.effective_topology",
             "ifc_to_fds.modules.geometry.algorithms.mesh",
             "ifc_to_fds.modules.geometry.algorithms.exact_predicates",
             "ifc_to_fds.modules.geometry.algorithms.metrics",

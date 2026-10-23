@@ -1,6 +1,9 @@
 """Prove the GEOM surfaces actually emitted by FDS, separately from cut cells."""
 
 import hashlib
+from collections import Counter
+
+import numpy as np
 
 from ifc_to_fds.domain.validation import GateResult, GateStatus
 from ifc_to_fds.modules.fds.api import parse_fds
@@ -47,12 +50,8 @@ def verify_solver_surfaces(fds_text, binaries, config, binary_reader):
         try:
             mesh, surfaces = binary_reader(data)
             requested_surfaces = record.values["FACES"][3::4]
-            if surfaces != requested_surfaces:
-                return result(
-                    GateStatus.FAIL,
-                    f"Solver per-face surface assignments differ: {record.id}",
-                )
-            measured = compare_solids(record.mesh(), [mesh])
+            reference = record.mesh()
+            measured = compare_solids(reference, [mesh])
             evidence["files"][filename]["comparison"] = measured
             if not metrics_pass(measured, config):
                 return result(
@@ -63,6 +62,45 @@ def verify_solver_surfaces(fds_text, binaries, config, binary_reader):
                     GateStatus.INCONCLUSIVE,
                     f"Solver GEOM full surface not proved: {record.id}",
                 )
+            if len(surfaces) != len(mesh.faces):
+                raise ValueError("Solver face/surface counts differ")
+            # Bind each surface to its oriented geometric triangle. Comparing
+            # an index list separately from the whole solid admits reassignment
+            # when two triangles exchange positions in the face table.
+            def triangles(solid, assignments, with_surfaces=True):
+                counts = Counter()
+                for face, surface in zip(solid.faces, assignments):
+                    points = tuple(tuple(solid.vertices[i]) for i in face)
+                    oriented = min(points[n:] + points[:n] for n in range(3))
+                    counts[(surface, oriented) if with_surfaces else oriented] += 1
+                return counts
+
+            bound_equal = triangles(reference, requested_surfaces) == triangles(
+                mesh, surfaces
+            )
+            same_indices = np.array_equal(reference.faces, mesh.faces)
+            same_vertex_shape = np.shape(reference.vertices) == np.shape(mesh.vertices)
+            if bound_equal:
+                proof = "ORIENTED_TRIANGLE_SURFACE_MULTISET"
+            elif same_indices and same_vertex_shape and surfaces == requested_surfaces:
+                # Full-solid comparison above bounds the displacement of these
+                # corresponding vertices using the approved audit tolerance.
+                proof = "CORRESPONDING_TRIANGLES_WITH_APPROVED_TOLERANCE"
+            elif len(set(requested_surfaces + surfaces)) == 1:
+                proof = "SINGLE_SURFACE_FULL_SOLID"
+            elif triangles(reference, requested_surfaces, False) == triangles(
+                mesh, surfaces, False
+            ):
+                return result(
+                    GateStatus.FAIL,
+                    f"Solver per-face surface assignments differ: {record.id}",
+                )
+            else:
+                return result(
+                    GateStatus.INCONCLUSIVE,
+                    f"Solver triangle-surface correspondence not proved: {record.id}",
+                )
+            evidence["files"][filename]["surface_assignment_proof"] = proof
         except ValueError as exc:
             return result(GateStatus.FAIL, f"Invalid solver BINGEOM {record.id}: {exc}")
         except RuntimeError as exc:

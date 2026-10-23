@@ -118,6 +118,9 @@
 
     }
 
-    return {bind: bind, destroy: function () { life.destroy(); }};
+    return {bind: bind, destroy: function () {
+        state.ifcLoadRequestId = (state.ifcLoadRequestId || 0) + 1;
+        life.destroy();
+    }};
     };
 })(window.IfcFds);

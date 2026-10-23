@@ -10,6 +10,14 @@
 
     // -------- worker path ----------------------------------------------------
 
+    function abortError() {
+        var error = new Error('Display disposed');
+        error.name = 'AbortError';
+        return error;
+    }
+
+    function createRuntime() {
+    var disposed = false;
     var worker = null;
     var workerFailed = false;
     var nextId = 1;
@@ -25,7 +33,9 @@
             workerFailed = true;
             return null;
         }
+        var activeWorker = worker;
         worker.onmessage = function (event) {
+            if (disposed || worker !== activeWorker) return;
             var msg = event.data || {};
             var cb = pending[msg.id];
             if (!cb) return;
@@ -34,6 +44,7 @@
             else cb.reject(new Error(msg.message || 'web-ifc worker error'));
         };
         worker.onerror = function (event) {
+            if (disposed || worker !== activeWorker) return;
             console.warn('web-ifc worker fatal error, falling back to main thread:', event.message || event);
             workerFailed = true;
             try { worker.terminate(); } catch (_) { /* ignore */ }
@@ -47,6 +58,7 @@
     }
 
     function loadViaWorker(arrayBuffer) {
+        if (disposed) return Promise.reject(abortError());
         var w = ensureWorker();
         if (!w) return Promise.reject(new Error('worker unavailable'));
         return new Promise(function (resolve, reject) {
@@ -62,9 +74,54 @@
         });
     }
 
+    return {
+        load: loadViaWorker,
+        isDisposed: function () { return disposed; },
+        dispose: function () {
+            if (disposed) return;
+            disposed = true;
+            if (worker) worker.terminate();
+            worker = null;
+            Object.keys(pending).forEach(function (key) {
+                pending[key].reject(abortError());
+                delete pending[key];
+            });
+        }
+    };
+    }
+
     // -------- main-thread fallback path --------------------------------------
 
     var mainApiPromise = null;
+
+    function initializeApi(api, basePath) {
+        api.SetWasmPath(basePath, true);
+        if (new URL(basePath).protocol !== 'file:') return api.Init(undefined, true);
+        // The vendored browser kernel cannot fetch local file URLs directly.
+        // File-mode browsers that permit local reads can use XHR plus a Blob;
+        // the kernel then reads the same local WASM through a fetchable URL.
+        return new Promise(function (resolve, reject) {
+            var request = new XMLHttpRequest();
+            request.open('GET', new URL('web-ifc.wasm', basePath).href, true);
+            request.responseType = 'arraybuffer';
+            request.timeout = 15000;
+            request.onload = function () {
+                if ((request.status !== 0 && (request.status < 200 || request.status >= 300)) ||
+                    !request.response || !request.response.byteLength) {
+                    reject(new Error('Local display WASM could not be read'));
+                    return;
+                }
+                var wasmUrl = URL.createObjectURL(new Blob([request.response], {type: 'application/wasm'}));
+                Promise.resolve().then(function () {
+                    return api.Init(function (name) {
+                        return name === 'web-ifc.wasm' ? wasmUrl : new URL(name, basePath).href;
+                    }, true);
+                }).then(resolve, reject).finally(function () { URL.revokeObjectURL(wasmUrl); });
+            };
+            request.onerror = request.ontimeout = function () { reject(new Error('Local display WASM access unavailable')); };
+            request.send();
+        });
+    }
 
     function ensureMainThreadApi() {
         if (mainApiPromise) return mainApiPromise;
@@ -86,8 +143,7 @@
                 }
             }
             var api = new WebIFC.IfcAPI();
-            api.SetWasmPath(basePath);
-            await api.Init();
+            await initializeApi(api, basePath);
             return api;
         })().catch(function (err) {
             console.warn('web-ifc main-thread engine unavailable:', err);
@@ -97,8 +153,9 @@
         return mainApiPromise;
     }
 
-    function loadViaMainThread(arrayBuffer) {
+    function loadViaMainThread(arrayBuffer, isDisposed) {
         return ensureMainThreadApi().then(function (api) {
+            if (isDisposed()) throw abortError();
             if (!api) return null;
             var bytes = new Uint8Array(arrayBuffer);
             var modelID = api.OpenModel(bytes);
@@ -162,29 +219,25 @@
 
     // -------- public API ------------------------------------------------------
 
-    function WebIfcDisplay() {}
+    function WebIfcDisplay() { this.runtime = createRuntime(); }
 
     WebIfcDisplay.prototype.dispose = function () {
-        if (worker) worker.terminate();
-        worker = null;
-        workerFailed = false;
-        Object.keys(pending).forEach(function (key) {
-            var error = new Error('Display disposed');
-            error.name = 'AbortError';
-            pending[key].reject(error);
-            delete pending[key];
-        });
+        this.runtime.dispose();
     };
 
     WebIfcDisplay.prototype.load = function (arrayBuffer) {
-        return loadViaWorker(arrayBuffer)
+        var runtime = this.runtime;
+        return runtime.load(arrayBuffer)
             .catch(function (workerErr) {
-                if (!workerFailed) {
-                    console.warn('web-ifc worker run failed, retrying on main thread:', workerErr);
-                }
-                return loadViaMainThread(arrayBuffer);
+                if (workerErr.name === 'AbortError' || runtime.isDisposed()) throw abortError();
+                return loadViaMainThread(arrayBuffer, runtime.isDisposed);
+            })
+            .then(function (meshes) {
+                if (runtime.isDisposed()) throw abortError();
+                return meshes;
             })
             .catch(function (err) {
+                if (err.name === 'AbortError') throw err;
                 console.warn('web-ifc display load failed:', err);
                 return null;
             });

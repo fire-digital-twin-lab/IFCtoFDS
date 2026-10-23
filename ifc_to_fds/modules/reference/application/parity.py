@@ -14,6 +14,7 @@ from ifc_to_fds.modules.reference.infrastructure.bundle_io import inspect_case
 from ifc_to_fds.modules.reference.application.projections import serialized_geometry, source_signature
 from ifc_to_fds.modules.geometry.api import compare_solids, passage_metrics
 from ifc_to_fds.modules.reference.application.integrity import FIELDS, snapshot
+from ifc_to_fds.modules.reference.application.approval import has_review_evidence, is_approved_reference
 
 
 @operation("GOLDEN")
@@ -64,15 +65,13 @@ def golden_gate(
         return
     try:
         checksum, approval, values = (case_reader or inspect_case)(case)
-    except FileNotFoundError:
+    except OSError:
         unknown("Reference files unavailable")
         return
     except (ValueError, TypeError, KeyError) as exc:
         fail("", "reference_integrity", "valid reference", str(exc))
         return
-    approved = approval.get("status") == "APPROVED" and all(
-        approval.get(k) for k in ("reviewer", "rationale", "evidence")
-    )
+    approved = is_approved_reference(approval)
     evidence: Dict[str, Any] = {
         "reference_sha256": checksum,
         "reference_case": Path(case).name,
@@ -99,18 +98,23 @@ def golden_gate(
             not isinstance(delta, dict)
             or delta.get("reference_digest") != checksum
             or delta.get("status") != "APPROVED"
+            or not isinstance(delta.get("changes", []), list)
+            or any(not isinstance(change, dict) for change in delta.get("changes", []))
         ):
             fail("", "delta", "approved delta for this baseline", delta)
             return
         for change in delta.get("changes", []):
             key, field = change.get("entity_key"), change.get("field")
             if (
-                key not in expected
+                not isinstance(key, str)
+                or not isinstance(field, str)
+                or key not in expected
                 or field not in (*FIELDS, "geometry", "fds_geometry")
-                or not all(change.get(k) for k in ("rationale", "reviewer", "evidence"))
+                or not {"before", "after"}.issubset(change)
+                or not has_review_evidence(change)
             ):
                 fail(
-                    key or "",
+                    key if isinstance(key, str) else "",
                     "delta",
                     "explicit supported entity/field approval",
                     change,
@@ -407,7 +411,10 @@ def golden_gate(
             unknown(f"Required actual-output evidence incomplete: {name}")
     for alias in values["alias-decisions.json"]:
         key, target = alias.get("entity_key"), alias.get("geometry_entity_key")
-        if not all(alias.get(k) for k in ("reviewer", "rationale", "evidence")):
+        if not isinstance(key, str) or not isinstance(target, str):
+            fail("", "alias_geometry", "string entity identities", alias)
+            continue
+        if not has_review_evidence(alias):
             unknown(f"Alias approval evidence missing: {key}")
             continue
         try:

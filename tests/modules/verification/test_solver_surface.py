@@ -66,3 +66,31 @@ def test_missing_extra_or_renamed_solver_binary_is_rejected():
         {"acceptance_cube.bingeom": data, "extra.bingeom": data},
     ):
         assert gate(text, files).status == "FAIL"
+
+
+@pytest.mark.parametrize("permutation", ["unchanged", "faces_only", "faces_and_surfaces", "vertices"])
+def test_multiple_surfaces_are_bound_to_the_corresponding_triangles(permutation):
+    from ifc_to_fds.modules.fds.api import parse_fds
+
+    text, raw = native()
+    text = text.replace("&GEOM", "&SURF ID='other' /\n&GEOM")
+    text = text.replace("SURF_ID='solid'", "SURF_ID='solid','other'")
+    # Change the second face to SURF 2, in both serialized and solver data.
+    text = text.replace("1,4,3,1", "1,4,3,2")
+    assert not parse_fds(text).errors
+    data = bytearray(raw)
+    struct.pack_into("<i", data, 24, 2)  # N_SURFS in native header
+    struct.pack_into("<i", data, 396, 2)  # Second per-face SURF index
+    if permutation in ("faces_only", "faces_and_surfaces"):
+        data[240:264] = data[252:264] + data[240:252]
+        if permutation == "faces_and_surfaces":
+            data[392:400] = data[396:400] + data[392:396]
+    elif permutation == "vertices":
+        # Reindex the first two vertices while preserving all geometric faces.
+        data[40:88] = data[64:88] + data[40:64]
+        for offset in range(240, 384, 4):
+            vertex = struct.unpack_from("<i", data, offset)[0]
+            if vertex in (1, 2):
+                struct.pack_into("<i", data, offset, 3 - vertex)
+    result = gate(text, {"acceptance_cube.bingeom": bytes(data)})
+    assert result.status == ("FAIL" if permutation == "faces_only" else "PASS"), result.reason

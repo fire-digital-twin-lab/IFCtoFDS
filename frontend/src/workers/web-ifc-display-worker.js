@@ -10,7 +10,7 @@ async function ensureInit() {
     if (initPromise) return initPromise;
     initPromise = (async () => {
         let WebIFC;
-        let basePath = '../../vendor/web-ifc/';
+        let basePath = new URL('../../vendor/web-ifc/', self.location.href).href;
         try {
             WebIFC = await import('../../vendor/web-ifc/web-ifc-api.js');
         } catch (localErr) {
@@ -18,8 +18,10 @@ async function ensureInit() {
             throw new Error('Strict offline failure: local vendored web-ifc assets not available in ../vendor/web-ifc/. Offline mode does not allow CDN fallback: ' + localErr.message);
         }
         api = new WebIFC.IfcAPI();
-        api.SetWasmPath(basePath);
-        await api.Init();
+        api.SetWasmPath(basePath, true);
+        // Only the single-thread WASM is vendored; HTTP isolation must not
+        // select an absent web-ifc-mt.wasm or pthread worker dependency.
+        await api.Init(undefined, true);
         return api;
     })();
     return initPromise;

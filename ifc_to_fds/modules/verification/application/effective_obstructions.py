@@ -1,8 +1,8 @@
 """FDS 6.11.1 SMV obstruction indices for supported uniform OBST meshes.
 
 Format reference: firemodels/fds FDS-6.11.1 Source/dump.f90, SMV OBST
-section. Physical bounds come from TRNX/Y/Z at the solver's integer indices,
-not the original unsnapped coordinates in the first OBST table.
+section. Physical bounds come from the solver's integer indices on a uniform
+grid validated against TRNX/Y/Z, not the unsnapped first OBST display table.
 """
 
 import hashlib
@@ -10,8 +10,10 @@ import numpy as np
 from ifc_to_fds.domain.validation import GateResult, GateStatus
 from ifc_to_fds.modules.fds.api import parse_fds
 
+SMV_GRID_TOLERANCE = 1e-7
 
-def effective_obstructions(fds_text, smv_text):
+
+def effective_obstructions(fds_text, smv_text, *, check_air_paths=True):
     parsed = parse_fds(fds_text)
     if parsed.errors or parsed.unsupported:
         return GateResult(
@@ -40,6 +42,11 @@ def effective_obstructions(fds_text, smv_text):
     evidence = {
         "smv_sha256": hashlib.sha256(smv_text.encode()).hexdigest(),
         "smv_text": smv_text,
+        "solver_grid": {
+            "coordinate_tolerance_m": SMV_GRID_TOLERANCE,
+            "maximum_print_error_m": [],
+            "effective_coordinates": "UNIFORM_INPUT_DOMAIN_WITH_SOLVER_CELL_INDICES",
+        },
     }
     try:
         grids = []
@@ -63,7 +70,18 @@ def effective_obstructions(fds_text, smv_text):
                 or np.any(np.diff(grid) <= 0)
             ):
                 raise ValueError("Invalid SMV coordinates")
-            grids.append(grid)
+            domain = meshes[0].values["XB"]
+            uniform = np.linspace(domain[2 * axis], domain[2 * axis + 1], n)
+            if not np.allclose(grid, uniform, atol=SMV_GRID_TOLERANCE, rtol=0):
+                raise ValueError("Nonuniform/unmatched solver grid is unsupported")
+            evidence["solver_grid"]["maximum_print_error_m"].append(
+                float(np.max(np.abs(np.asarray(grid) - uniform)))
+            )
+            # SMV prints rounded coordinates. Once this uniform grid is proved,
+            # its integer indices and exact input domain determine the physical
+            # planes, including both boundaries. Do not create slivers or clip
+            # source OBST coordinates using a print-format tolerance.
+            grids.append(uniform.tolist())
         starts = [i for i, line in enumerate(lines) if line.strip() == "OBST"]
         if len(starts) != 1:
             raise ValueError("Missing or multiple SMV OBST tables")
@@ -101,18 +119,6 @@ def effective_obstructions(fds_text, smv_text):
         )
     for pid, bounds in actual.items():
         for axis in range(3):
-            domain = meshes[0].values["XB"]
-            if not np.allclose(
-                grids[axis],
-                np.linspace(domain[2 * axis], domain[2 * axis + 1], len(grids[axis])),
-                atol=1e-7,
-                rtol=0,
-            ):
-                return GateResult(
-                    status=GateStatus.INCONCLUSIVE,
-                    reason="Nonuniform/unmatched solver grid is unsupported",
-                    evidence=evidence,
-                )
             low, high = bounds[2 * axis : 2 * axis + 2]
             if high <= low:
                 return GateResult(
@@ -169,8 +175,21 @@ def effective_obstructions(fds_text, smv_text):
                         reason=f"Passage closed by FDS grid: {left}, {right}",
                         evidence=evidence,
                     )
+    if check_air_paths:
+        from ifc_to_fds.modules.verification.application.effective_topology import verify_air_paths
+
+        topology = verify_air_paths(expected, actual, meshes[0].values["XB"])
+        evidence["air_connectivity"] = topology.evidence
+        if topology.status != GateStatus.PASS:
+            return GateResult(
+                status=topology.status, reason=topology.reason, evidence=evidence
+            )
     return GateResult(
         status=GateStatus.PASS,
-        reason="Single-mesh OBST identities, grid displacement, solid thickness and pairwise clearances verified from solver SMV indices",
+        reason=(
+            "Single-mesh OBST identities, grid displacement, thickness and pairwise clearances verified from solver SMV indices; "
+            + ("boundary clearances and air connectivity verified" if check_air_paths
+               else "air connectivity deferred to global mesh union")
+        ),
         evidence=evidence,
     )

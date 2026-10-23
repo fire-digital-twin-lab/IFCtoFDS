@@ -2,3 +2,10 @@
 /tests/baseline/fixtures/*.ifc text eol=lf
 /tests/browser/*.ifc text eol=lf
 /examples/*.ifc text eol=lf
+# Facade checksums hash exact bytes; use one Python representation on all hosts.
+*.py text eol=lf
+/docs/architecture/compatibility-imports.json text eol=lf
+# Native solver evidence is captured output, including mixed line endings.
+/tests/fixtures/solver/**/*.smv -text whitespace=cr-at-eol
+/tests/fixtures/solver/**/*.fds -text
+/tests/fixtures/solver/**/*.bingeom -text

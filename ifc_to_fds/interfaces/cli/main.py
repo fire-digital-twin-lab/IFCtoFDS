@@ -107,16 +107,14 @@ def main(argv=None):
             uvicorn.run("ifc_to_fds.server:app", host=args.host, port=args.port)
             return 0
         if args.command == "reference-check":
-            from ifc_to_fds.modules.reference.api import inspect_case
+            from ifc_to_fds.modules.reference.api import inspect_case, is_approved_reference
 
             checksum, approval, _ = inspect_case(args.directory)
-            print(json.dumps(dict(bundle_sha256=checksum, approval=approval), indent=2))
-            return (
-                0
-                if approval.get("status") == "APPROVED"
-                and all(approval.get(k) for k in ("reviewer", "rationale", "evidence"))
-                else 2
-            )
+            approved = is_approved_reference(approval)
+            print(json.dumps(dict(bundle_sha256=checksum, approval=approval,
+                                  data_integrity_verified=True,
+                                  human_approval_verified=approved), indent=2))
+            return 0 if approved else 2
         if args.command == "reference-resolve":
             from ifc_to_fds.modules.reference.api import resolve_sources
 

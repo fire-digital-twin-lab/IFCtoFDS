@@ -19,6 +19,7 @@ from ifc_to_fds.modules.verification.api import (
     solver_gates,
     validate_editor_evidence,
     summarize_handoff,
+    verification_capabilities,
 )
 
 
@@ -63,7 +64,8 @@ def main(argv=None):
         help="Exit 2 until mapping, editor handoff and effective geometry are verified",
     )
     parser.add_argument(
-        "--audit-config", type=Path, help="Approved AuditConfig JSON tolerances"
+        "--audit-config", type=Path,
+        help="Approved AuditConfig JSON fields overriding the manifest audit settings",
     )
     args = parser.parse_args(argv)
     if any((args.ifc, args.manifest, args.geometry_package)) and not all(
@@ -126,14 +128,25 @@ def main(argv=None):
         if args.pyrosim_executable and args.pyrosim_executable.is_file()
         else shutil.which("pyrosim") or shutil.which("pyrosim.exe")
     )
-    config = (
-        AuditConfig.model_validate_json(args.audit_config.read_text(encoding="utf-8"))
-        if args.audit_config
-        else AuditConfig()
+    manifest = (
+        MappingManifest.model_validate_json(args.manifest.read_text(encoding="utf-8"))
+        if args.manifest else None
     )
+    # Resolve approval once. A partial explicit file overrides only its named
+    # fields; it must not reset the manifest's other approved tolerances.
+    approved = copy.deepcopy(manifest.configuration.get("audit", {}) if manifest else {})
+    if args.audit_config:
+        approved.update(json.loads(args.audit_config.read_text(encoding="utf-8")))
+    config = AuditConfig.model_validate(approved)
     report = {
         "source": args.source.name,
         "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+        "capabilities": verification_capabilities(),
+        "audit_configuration": {
+            "resolved": config.model_dump(mode="json"),
+            "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest() if args.manifest else None,
+            "override_sha256": hashlib.sha256(args.audit_config.read_bytes()).hexdigest() if args.audit_config else None,
+        },
         "effective_geometry": {
             "status": "NOT_RUN",
             "reason": "Solver effective geometry not checked",
@@ -181,19 +194,13 @@ def main(argv=None):
         from ifc_to_fds.pipeline import audit
         from ifc_to_fds.modules.geometry.api import read_package, restore_package
 
-        manifest = MappingManifest.model_validate_json(
-            args.manifest.read_text(encoding="utf-8")
-        )
         package = (
             restore_package(args.geometry_package, args.output / "audit_geometry.json")
             if args.geometry_package.suffix.lower() == ".zip"
             else read_package(args.geometry_package)
         )
         configuration = copy.deepcopy(manifest.configuration)
-        configuration["audit"] = {
-            **configuration.get("audit", {}),
-            **(config.model_dump() if args.audit_config else {}),
-        }
+        configuration["audit"] = config.model_dump()
         if args.solver:
             configuration["audit"].update(
                 solver_executable=args.solver,
@@ -315,6 +322,17 @@ def main(argv=None):
     (args.output / "acceptance.json").write_text(
         json.dumps(report, indent=2), encoding="utf-8"
     )
+    template = args.output / "import-evidence.template.json"
+    if not template.exists():
+        document = {
+            "pyrosim_version": "", "reviewer": "", "imported_at": "",
+            "import_result": "PENDING", "warnings_review": "",
+            "source_sha256": report["source_sha256"], "exported_sha256": "",
+            "project": {"file": "model.psm", "sha256": ""},
+            "diagnostics": {"file": "import-diagnostics.txt", "sha256": ""},
+        }
+        with template.open("x", encoding="utf-8") as stream:
+            json.dump(document, stream, indent=2)
     (args.output / "README.md").write_text(
         "# Nghiệm thu nhập FDS vào PyroSim\n\n"
         "acceptance.json ghi trạng thái theo bằng chứng hiện có. Chuẩn bị gói này chưa chạy PyroSim.\n\n"
@@ -323,12 +341,13 @@ def main(argv=None):
         "3. Lưu toàn bộ thông báo nhập, gồm cảnh báo về record không hỗ trợ hoặc bị bỏ.\n"
         "4. Kiểm tra solid, khoảng rỗng ống gió, lỗ mở, đơn vị và tọa độ; lưu dự án .psm.\n"
         "   Với GEOM, bật hỗ trợ FDS GEOM và giữ biểu diễn immersed khi xuất lại; kiểm tra cài đặt theo phiên bản PyroSim.\n"
-        "5. Xuất FDS ra file mới; chạy lại lệnh với --roundtrip và --audit-config đã được phê duyệt.\n"
+        "5. Xuất FDS ra file mới; chạy lại lệnh với --roundtrip. Dung sai lấy từ manifest; chỉ dùng --audit-config để ghi đè các trường đã được phê duyệt.\n"
         "6. Nếu ID thay đổi, cung cấp --aliases; alias vẫn phải được chứng minh tương đương hình học.\n"
         "7. Giữ FDS gốc, thông báo nhập, PSM, FDS xuất lại và acceptance.json cùng nhau.\n\n"
         "8. File *_cold.fds (nếu có) chỉ đổi T_END để kiểm tra solver tiến thời gian; không đổi hình học/miền và không thêm cháy hay vận hành MEP.\n"
         "9. Chạy solver đi kèm PyroSim trên file xuất lại và lưu log; đối chiếu phiên bản với solver đã kiểm tra.\n"
         "10. Người review ghi import-evidence.json: pyrosim_version, reviewer, imported_at (ISO có múi giờ), import_result=IMPORTED, warnings_review; source_sha256/exported_sha256; project/diagnostics mỗi mục có file và sha256. Chạy lại với --import-evidence và --roundtrip. Đây là chứng nhận thủ công, không phải GUI tự động.\n\n"
+        "Có thể sao chép import-evidence.template.json thành import-evidence.json để điền sau khi nhập thật. Template giữ PENDING và không phải bằng chứng đã nghiệm thu.\n\n"
         "--ifc + --manifest + --geometry-package chạy lại audit nguồn độc lập. --solver chạy thêm setup và cold-flow; --require-ready trả mã 2 khi còn thiếu bằng chứng.\n\n"
         "handoff kiểm tra bàn giao qua editor; verification yêu cầu thêm hình học hiệu dụng của cả bản gốc và bản xuất lại. GEOM cut-cells chưa được chứng minh thì verification không thể PASS, kể cả khi handoff đã PASS.\n\n"
         "PASS đối chiếu hình học tĩnh chưa chứng minh đã chạy GUI hoặc đúng vật lý mô phỏng.\n\n"

@@ -40,6 +40,8 @@ class FilesystemReferenceRepository:
     def inspect_case(self, directory: Path | str) -> Tuple[str, Dict[str, Any], Dict[str, Any]]:
         path = Path(directory)
         approval = json.loads((path / "approval.json").read_text(encoding="utf-8"))
+        if not isinstance(approval, dict):
+            raise ValueError("Invalid reference approval document")
         files = {f: json.loads((path / f).read_text(encoding="utf-8")) for f in FILES}
         checksum = digest(files)
         if approval.get("bundle_sha256") != checksum:

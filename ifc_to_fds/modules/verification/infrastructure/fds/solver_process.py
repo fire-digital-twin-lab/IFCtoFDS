@@ -49,7 +49,7 @@ def solver_gates(fds_text, config):
     path = Path(executable).resolve()
     evidence = dict(
         required_version=config.solver_version,
-        adapter_version="static-openings-and-geom-surfaces-0.5.2",
+        adapter_version="static-air-topology-and-bound-surfaces-0.5.4",
         platform=platform.platform(),
         configuration_sha256=hashlib.sha256(
             config.model_dump_json().encode()
@@ -76,6 +76,7 @@ def solver_gates(fds_text, config):
             environment={
                 "OMP_NUM_THREADS": "1",
                 "mpi_runtime_directory": str(path.parent / "mpi"),
+                **{name: os.environ[name] for name in ("I_MPI_FABRICS", "I_MPI_OFI_PROVIDER") if name in os.environ},
             },
         )
         runtime = {

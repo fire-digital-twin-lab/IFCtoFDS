@@ -3,6 +3,7 @@
 from ifc_to_fds.modules._exports import resolve
 
 _EXPORTS = {"registered_cases": ("ifc_to_fds.modules.reference.infrastructure.registry", "registered_cases"), "research_context": ("ifc_to_fds.modules.reference.infrastructure.registry", "research_context"), 'FILES': ('ifc_to_fds.modules.reference.infrastructure.filesystem_repository', 'FILES'),
+ 'is_approved_reference': ('ifc_to_fds.modules.reference.application.approval', 'is_approved_reference'),
  'FilesystemReferenceRepository': ('ifc_to_fds.modules.reference.infrastructure.filesystem_repository',
                                    'FilesystemReferenceRepository'),
  'bundle_digest': ('ifc_to_fds.modules.reference.infrastructure.bundle_io', 'bundle_digest'),

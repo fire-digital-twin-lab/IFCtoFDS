@@ -103,7 +103,9 @@ def effective_multimesh(parsed, smv_text, single_mesh_checker):
                 + ",".join(map(str, clipped))
                 + " /\n"
             )
-        gate = single_mesh_checker(subset + "&TAIL /\n", "GRID " + block)
+        # Interfaces are not exterior boundaries. Compare topology globally only
+        # after reassembling all fragments on the rectangular mesh union.
+        gate = single_mesh_checker(subset + "&TAIL /\n", "GRID " + block, check_air_paths=False)
         evidence["meshes"].append({"id": label, **gate.model_dump(mode="json")})
         if gate.status != GateStatus.PASS:
             return GateResult(
@@ -153,8 +155,14 @@ def effective_multimesh(parsed, smv_text, single_mesh_checker):
                         reason=f"Passage closed across mesh interface: {left}, {right}",
                         evidence=evidence,
                     )
+    from ifc_to_fds.modules.verification.application.effective_topology import verify_air_paths
+
+    topology = verify_air_paths(expected, merged, bounds)
+    evidence["air_connectivity"] = topology.evidence
+    if topology.status != GateStatus.PASS:
+        return GateResult(status=topology.status, reason=topology.reason, evidence=evidence)
     return GateResult(
         status=GateStatus.PASS,
-        reason="Adjacent uniform meshes: per-mesh OBST indices and cross-interface clearances verified",
+        reason="Adjacent uniform meshes: OBST indices, cross-interface/boundary clearances and global air connectivity verified",
         evidence=evidence,
     )

@@ -1,5 +1,7 @@
 # Hoàn thiện kiểm chứng ánh xạ và bàn giao PyroSim
 
+> Đính chính sau review commit `5d715a7`: kết quả cục bộ trong tài liệu này không chứng minh CI đạt. CI Ubuntu được review có 485 test đạt và hai lỗi checksum. Bốn phát hiện về khe biên, dung sai, tam giác–SURF và checksum cùng kết quả sửa được ghi tại [báo cáo 18](18-sua-loi-review-verification.md). Nghiệm thu toàn module vẫn chưa hoàn tất.
+
 Ngày cập nhật: 23/10/2026. Nhánh `chore/research-acceptance-hardening`, HEAD nền `f0c6d9c02342312266f2cfb8f9102833640061c3`. Các thay đổi nằm trong working tree, chưa commit/push. Tài liệu này tiếp nối [báo cáo 16](16-ket-qua-sua-hinh-hoc-va-kiem-chung.md).
 
 ## 1. Phạm vi và điều kiện kết thúc

@@ -119,3 +119,59 @@ def test_authored_mep_geometry_runs_beyond_setup(tmp_path):
     assert effective.status == "INCONCLUSIVE"
     assert gate.evidence["solver_surface_geometry"]["status"] == "PASS"
     assert result["report"]["simulation_status"] == "INCONCLUSIVE"
+
+
+@pytest.mark.solver
+@pytest.mark.parametrize("axis,side", [(a, s) for a in range(3) for s in (0, 1)])
+def test_real_solver_closing_a_subcell_boundary_gap_is_rejected(axis, side, tmp_path):
+    from tests.modules.verification.test_effective_topology import case
+
+    executable = os.environ.get("IFCFDS_SOLVER") or shutil.which("fds")
+    assert executable, "Pinned solver required"
+    source = [0.4, 0.6, 0.4, 0.6, 0.4, 0.6]
+    source[2 * axis:2 * axis + 2] = [0.04, 0.6] if side == 0 else [0.4, 0.96]
+    text, _ = case({"wall": source}, {"wall": source})
+    solver, effective = solver_gates(text, AuditConfig(solver_executable=executable, solver_evidence_directory=str(tmp_path)))
+    assert solver.status == "PASS", solver.reason
+    assert effective.status == "FAIL", effective.model_dump_json()
+    assert "boundary" in effective.reason.lower()
+
+
+@pytest.mark.solver
+def test_real_solver_multi_surface_geom_proves_triangle_assignments(tmp_path):
+    text = solver_cases()["geom"].replace("&GEOM", "&SURF ID='other' /\n&GEOM")
+    text = text.replace("SURF_ID='solid'", "SURF_ID='solid','other'").replace("1,4,3,1", "1,4,3,2")
+    executable = os.environ.get("IFCFDS_SOLVER") or shutil.which("fds")
+    assert executable, "Pinned solver required"
+    solver, effective = solver_gates(text, AuditConfig(solver_executable=executable, solver_evidence_directory=str(tmp_path)))
+    assert solver.status == "PASS", solver.reason
+    assert solver.evidence["solver_surface_geometry"]["status"] == "PASS"
+    assert effective.status == "INCONCLUSIVE"
+
+
+@pytest.mark.solver
+@pytest.mark.parametrize("scenario", ["covered_face", "boundary_low", "boundary_high", "gap_low", "gap_high"])
+def test_real_solver_boundary_union_and_print_precision(scenario, tmp_path):
+    from tests.modules.verification.test_effective_topology import case
+
+    executable = os.environ.get("IFCFDS_SOLVER") or shutil.which("fds")
+    assert executable, "Pinned solver required"
+    if scenario == "covered_face":
+        # The boundary corridor is already solid, while the protruding part
+        # keeps both source identities observable in native SMV evidence.
+        boxes = {"outer": [0, 0.2, 0, 1, 0, 1], "protruding": [0.04, 0.5, 0.4, 0.6, 0.4, 0.6]}
+        text, _ = case(boxes, boxes)
+    else:
+        side = int(scenario.endswith("high"))
+        offset = 0.12345002 if side == 0 else 0.12344998
+        domain = [offset, offset + 1] * 3
+        box = [offset + 0.4, offset + 0.6] * 3
+        box[side] = offset + ((0.96 if side else 0.04) if scenario.startswith("gap") else side)
+        text, _ = case({"wall": box}, {"wall": box}, domain)
+    solver, effective = solver_gates(
+        text, AuditConfig(solver_executable=executable, solver_evidence_directory=str(tmp_path))
+    )
+    assert solver.status == "PASS", solver.reason
+    assert effective.status == ("FAIL" if scenario.startswith("gap") else "PASS"), effective.reason
+    if scenario.startswith("gap"):
+        assert "boundary" in effective.reason.lower()

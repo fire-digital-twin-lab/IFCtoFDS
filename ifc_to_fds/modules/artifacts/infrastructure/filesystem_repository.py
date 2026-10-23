@@ -1,13 +1,74 @@
 """Local filesystem implementation of ArtifactRepositoryPort."""
 
 import json
+import os
 import shutil
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Union
 from uuid import uuid4
 
 from ifc_to_fds.domain.mapping import MappingManifest
-from ifc_to_fds.modules.geometry.api import archive_package, copy_package, file_hash
+from ifc_to_fds.modules.geometry.api import archive_package, copy_package, file_hash, read_package, verify_package, DiskPackage, payload_dir
+
+JSON_ARTIFACTS = (
+    ("_manifest.json", "manifest"),
+    ("_acceptance_report.json", "report"),
+    ("_inventory.json", "inventory"),
+    ("_mep_graph.json", "mep_graph"),
+    ("_configuration.json", "configuration"),
+    ("_timings.json", "timings"),
+    ("_parity.json", "parity_report"),
+)
+
+
+def _target(output):
+    path = Path(output).resolve()
+    if path.suffix.lower() != ".fds":
+        raise ValueError("Artifact output must have a .fds extension")
+    return path
+
+
+def _artifact_filenames(target):
+    return [target.name, *(target.stem + suffix for suffix, _ in JSON_ARTIFACTS),
+            *(target.stem + suffix for suffix in (
+                "_manifest.csv", "_acceptance_report.md", "_geometry.json", "_geometry.zip"))]
+
+
+def _verify_staged_geometry(path):
+    package = read_package(path)
+    verify_package(package)
+    if isinstance(package, DiskPackage):
+        linked = {
+            ref["payload"] + ".bin"
+            for entry in package.index["elements"].values()
+            for ref in [entry.get("mesh"), *entry.get("openings", {}).values()]
+            if ref is not None
+        }
+        # Reused workspaces can retain old content-addressed blobs. They are
+        # not part of this run, and must not enter a published geometry folder.
+        for payload in payload_dir(path).iterdir():
+            if payload.name not in linked:
+                if not payload.is_file() or payload.is_symlink():
+                    raise ValueError("Unexpected geometry payload entry")
+                payload.unlink()
+
+
+@contextmanager
+def _publication_lock(target):
+    # Exclusive creation works across threads and processes. A process crash
+    # leaves a lock for explicit recovery; never guess that a writer is stale.
+    lock = target.parent / f".publish-{target.stem}.lock"
+    try:
+        stream = lock.open("x", encoding="utf-8")
+    except FileExistsError:
+        raise FileExistsError(f"Artifact publication or verification in progress: {target.name}") from None
+    try:
+        with stream:
+            json.dump({"pid": os.getpid(), "target": target.name}, stream)
+        yield
+    finally:
+        lock.unlink(missing_ok=True)
 
 
 class LocalFilesystemArtifactRepository:
@@ -16,12 +77,17 @@ class LocalFilesystemArtifactRepository:
     def save_run_artifacts(
         self, result: Dict[str, Any], output: Union[str, Path]
     ) -> Dict[str, str]:
-        target_path = Path(output).resolve()
+        target_path = _target(output)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with _publication_lock(target_path):
+            return self._save_run_artifacts(result, target_path)
+
+    def _save_run_artifacts(self, result, target_path):
         target_dir = target_path.parent
         target_dir.mkdir(parents=True, exist_ok=True)
         base_stem = target_path.stem
 
-        # Use an isolated staging directory in the same filesystem for atomic publication
+        # Keep staging on the same filesystem for atomic individual replacements.
         staging_dir = target_dir / f".staging-{uuid4().hex}"
         staging_dir.mkdir(parents=True, exist_ok=True)
 
@@ -32,19 +98,11 @@ class LocalFilesystemArtifactRepository:
             staging_fds.write_bytes(result["fds_text"].encode("utf-8"))
 
             # 2. Staging write: Standard JSON artifacts
-            for suffix, key in (
-                ("_manifest.json", "manifest"),
-                ("_acceptance_report.json", "report"),
-                ("_inventory.json", "inventory"),
-                ("_mep_graph.json", "mep_graph"),
-                ("_configuration.json", "configuration"),
-                ("_timings.json", "timings"),
-                ("_parity.json", "parity_report"),
-            ):
+            for suffix, key in JSON_ARTIFACTS:
                 fname = f"{base_stem}{suffix}"
                 emitted_filenames.append(fname)
                 (staging_dir / fname).write_text(
-                    json.dumps(result[key], ensure_ascii=False, indent=2), encoding="utf-8"
+                    json.dumps(result[key], ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8"
                 )
 
             # 3. Staging write: Manifest CSV and Markdown report
@@ -65,6 +123,9 @@ class LocalFilesystemArtifactRepository:
             emitted_filenames.append(geom_json_name)
             staging_geom_json = staging_dir / geom_json_name
             copy_package(result["geometry_package"], staging_geom_json)
+            # Reopen staged bytes: the caller's cached package may predate a
+            # changed index or damaged payload. Fail before altering the target.
+            _verify_staged_geometry(staging_geom_json)
 
             geom_zip_name = f"{base_stem}_geometry.zip"
             emitted_filenames.append(geom_zip_name)
@@ -81,7 +142,7 @@ class LocalFilesystemArtifactRepository:
             )
             emitted_filenames.append(checksums_name)
 
-            # 6. Transactional atomic publication with rollback protection
+            # 6. Serialized publication with rollback protection (not crash-atomic).
             backup_dir = target_dir / f".backup-{uuid4().hex}"
             existing_backed_up: List[str] = []
             target_payloads = target_dir / f"{base_stem}_geometry.payloads"
@@ -105,11 +166,12 @@ class LocalFilesystemArtifactRepository:
 
                 # 6b. Move geometry payloads
                 staging_payloads = staging_dir / f"{base_stem}_geometry.payloads"
-                if staging_payloads.is_dir():
+                if staging_payloads.is_dir() or has_existing_payloads:
                     payloads_changed = True
                     if target_payloads.exists():
                         shutil.rmtree(target_payloads)
-                    shutil.move(str(staging_payloads), str(target_payloads))
+                    if staging_payloads.is_dir():
+                        shutil.move(str(staging_payloads), str(target_payloads))
 
                 # 6c. Move all artifact files
                 for fname in emitted_filenames:
@@ -156,3 +218,26 @@ class LocalFilesystemArtifactRepository:
 
     def read_artifact(self, path: Union[str, Path]) -> bytes:
         return Path(path).read_bytes()
+
+
+def verify_run_artifacts(output):
+    """Verify saved bytes and geometry payloads; never grant mapping acceptance."""
+    target = _target(output)
+    with _publication_lock(target):
+        try:
+            checksums = json.loads(target.with_name(target.stem + "_checksums.json").read_text(encoding="utf-8"))
+            # Use the fixed output contract, never arbitrary paths supplied by
+            # a checksum document. Extra unrelated files are outside this scope.
+            if not isinstance(checksums, dict) or set(checksums) != set(_artifact_filenames(target)):
+                raise ValueError("Artifact checksum inventory differs from the output contract")
+            for name, expected in checksums.items():
+                if (not isinstance(expected, str) or len(expected) != 64
+                        or any(c not in "0123456789abcdef" for c in expected)):
+                    raise ValueError(f"Invalid artifact checksum: {name}")
+                if file_hash(target.parent / name) != expected:
+                    raise ValueError(f"Artifact checksum mismatch: {name}")
+            verify_package(read_package(target.with_name(target.stem + "_geometry.json")))
+        except (OSError, TypeError, KeyError) as exc:
+            raise ValueError(f"Invalid artifact bundle: {exc}") from exc
+    return {"status": "PASS", "scope": "ARTIFACT_BYTES_AND_GEOMETRY_PAYLOAD_INTEGRITY",
+            "files": checksums}

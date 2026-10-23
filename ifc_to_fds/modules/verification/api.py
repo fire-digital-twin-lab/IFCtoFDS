@@ -3,6 +3,7 @@
 from ifc_to_fds.modules._exports import resolve
 
 _EXPORTS = {'IndependentValidationEngine': ('ifc_to_fds.modules.verification.infrastructure.engine_adapter', 'IndependentValidationEngine'),
+ 'verification_capabilities': ('ifc_to_fds.modules.verification.application.capabilities', 'verification_capabilities'),
  'summarize_handoff': ('ifc_to_fds.modules.verification.application.handoff', 'summarize_handoff'),
  'prepare_geometry_run': ('ifc_to_fds.modules.verification.application.geometry_run', 'prepare_geometry_run'),
  'validate_editor_evidence': ('ifc_to_fds.modules.verification.application.editor_evidence', 'validate_editor_evidence'),
