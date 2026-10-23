@@ -6,9 +6,13 @@ const assert = require('assert');
 const cp = require('child_process');
 const baseline = process.argv.includes('--baseline');
 const ctx = {window: {IfcFds: {ifc: {}}}};
+if (!baseline) {
+    const manifest = JSON.parse(fs.readFileSync('frontend/engine-scripts.json', 'utf8'));
+    for (const file of manifest.ifc.slice(0, -1)) vm.runInNewContext(fs.readFileSync('frontend/' + file, 'utf8'), ctx);
+}
 let source = baseline
     ? cp.execFileSync('git', ['show', '36db24e:js/ifc/ifc-adapter.js'], {encoding: 'utf8', maxBuffer: 2e6})
-    : fs.readFileSync('js/ifc/ifc-adapter.js', 'utf8');
+    : fs.readFileSync('frontend/src/engines/legacy/ifc/ifc-adapter.js', 'utf8');
 source = source.replace('    ns.ifc.IfcAdapter = IfcAdapter;', '    ns.ifc.testOpening = holeForOpeningExtrusion;\n    ns.ifc.IfcAdapter = IfcAdapter;');
 vm.runInNewContext(source, ctx, {filename: 'ifc-adapter.js'});
 const host = {base: [[0,0,0],[4,0,0],[4,4,0],[0,4,0]], offset: [0,0,1]};

@@ -3,14 +3,17 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const dependencyFiles = [
-    'js/core/namespace.js',
-    'js/core/diagnostics.js',
-    'js/fds/fds-exporter.js',
-    'js/fds/namelist-parser.js',
-    'js/fds/fds-geometry-adapter.js'
+    'frontend/src/shared/namespace.js',
+    'frontend/src/shared/diagnostics.js',
+    'frontend/src/engines/legacy/fds/representation-policy.js',
+    'frontend/src/engines/legacy/fds/voxelizer.js',
+    'frontend/src/engines/legacy/fds/serialization.js',
+    'frontend/src/engines/legacy/fds/fds-exporter.js',
+    'frontend/src/engines/legacy/fds/namelist-parser.js',
+    'frontend/src/engines/legacy/fds/fds-geometry-adapter.js'
 ];
-const workerPath = path.join(root, 'js/workers/fds-export-worker.js');
-const outputPath = path.join(root, 'js/workers/fds-export-worker-inline.js');
+const workerPath = path.join(root, 'frontend/src/workers/fds-export-worker.js');
+const outputPath = path.join(root, 'frontend/generated/fds-export-worker-inline.js');
 const workerText = fs.readFileSync(workerPath, 'utf8');
 const workerBodyIndex = workerText.indexOf('var exporter =');
 

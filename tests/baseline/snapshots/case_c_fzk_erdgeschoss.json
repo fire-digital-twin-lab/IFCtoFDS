@@ -4239,169 +4239,169 @@
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:17040",
-      "title": "Invalid saved opening:17106: Self-intersecting solid"
+      "title": "Invalid source opening:17106: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:17468",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:18698",
-      "title": "Invalid saved opening:18768: Self-intersecting solid"
+      "title": "Invalid source opening:18768: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:18698",
-      "title": "Invalid saved opening:18836: Self-intersecting solid"
+      "title": "Invalid source opening:18836: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19199",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19504",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
-      "title": "Invalid saved opening:22039: Self-intersecting solid"
+      "title": "Invalid source opening:22039: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
-      "title": "Invalid saved opening:22107: Self-intersecting solid"
+      "title": "Invalid source opening:22107: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
-      "title": "Invalid saved opening:22174: Self-intersecting solid"
+      "title": "Invalid source opening:22174: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23024",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23944",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27013",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27421",
-      "title": "Invalid saved opening:27487: Self-intersecting solid"
+      "title": "Invalid source opening:27487: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27421",
-      "title": "Invalid saved opening:27555: Self-intersecting solid"
+      "title": "Invalid source opening:27555: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27421",
-      "title": "Invalid saved opening:27622: Self-intersecting solid"
+      "title": "Invalid source opening:27622: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27833",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:28113",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31079",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31470",
-      "title": "Invalid saved opening:31539: Self-intersecting solid"
+      "title": "Invalid source opening:31539: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31470",
-      "title": "Invalid saved opening:31607: Self-intersecting solid"
+      "title": "Invalid source opening:31607: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31818",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32098",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32407",
-      "title": "Invalid saved opening:32483: Self-intersecting solid"
+      "title": "Invalid source opening:32483: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32407",
-      "title": "Invalid saved opening:32551: Self-intersecting solid"
+      "title": "Invalid source opening:32551: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32407",
-      "title": "Invalid saved opening:32618: Self-intersecting solid"
+      "title": "Invalid source opening:32618: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32829",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33109",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "geometry_preservation",
       "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33389",
-      "title": "Invalid saved solid: Self-intersecting solid"
+      "title": "Invalid source solid: Self-intersecting solid"
     },
     {
       "category": "openings",

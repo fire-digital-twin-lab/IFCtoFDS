@@ -1,45 +1,21 @@
-# 06 — Migration Plan: Strangler Fig Pattern
+# 06 - Trạng thái triển khai
 
-## 1. Principle
-Refactoring is strictly behavior-preserving. No logic loss, no algorithm changes, and no syntax rewrites occur simultaneously.
+Khảo sát đầu ở tài liệu 11, đợt refactor đầu ở 12; kế hoạch đợt tiếp theo ở 13 và kết quả P00–P10 ở [14](14-ket-qua-to-chuc-ma.md).
 
-## 2. Strangler Fig Progression
-```text
-Phase R0: Baseline Blocker Fix & Behavior Freeze
-  │  Fix manifest CSV TypeError, add E2E tests, snapshot 6 baseline cases.
-  ▼
-Phase R1: Architecture Skeleton & Dependency Rules
-  │  Create package structure, bootstrap container, AST architecture contract tests.
-  ▼
-Phase R2: Move Domain Models & Compatibility Re-exports
-  │  Move canonical models, value objects, and enums into domain/; keep re-exports.
-  ▼
-Phase R3: Introduce MappingPlan
-  │  Decouple mapping policy decisions from FDS string serialization.
-  ▼
-Phase R4: Split Pipeline into Application Use Cases
-  │  ConvertVerified, AuditConversion, InspectIfc; pipeline.py becomes facade.
-  ▼
-Phase R5: Split Validation into Gate Checkers
-  │  One gate = one checker. AcceptanceEvaluator produces immutable report.
-  ▼
-Phase R6: Split Golden / Reference Subsystem
-  │  Extract candidate creation, parity evaluation, and reference repository.
-  ▼
-Phase R7: Extract Artifact & Evidence Storage
-  │  ArtifactRepository decouples large logs and binary meshes from JSON reports.
-  ▼
-Phase R8: Split Job System
-  │  JobService, WorkerRunner, and JobRepository.
-  ▼
-Phase R9: Isolate Verified Web vs Legacy Quick Path — `[IMPLEMENTED]`
-  │  Documentation and namespaces distinguishing authoritative core from legacy JS.
-  ▼
-Phase R9.5: Architectural Integrity Remediation — `[IMPLEMENTED]`
-  │  Fix AST parser for absolute/relative imports, enforce NOT_RUN evaluator fail-safe,
-  │  unify GateChecker contract, decouple MappingPlan & primitive IDs, close subprocess handles,
-  │  strengthen behavior parity with SHA-256 hashes & normalized FDS extents.
-  ▼
-Phase R10: Formal Ports Migration & Test Reorganization — `[TARGET]`
-     Full ports replacement of transitional internal packages; compatibility facades pruned.
-```
+| Phase | Kết quả triển khai |
+| --- | --- |
+| P00 | Chụp working tree trước thay đổi; baseline; tái hiện và sửa vòng import ở worker mới |
+| P01 | Ownership ADR, dependency policy và facade registry; positive/negative import tests |
+| P02 | Artifacts/workspace sở hữu I/O, checkpoint payload qua contract |
+| P03 | BIM tách native IFC/MEP I/O và so graph thuần |
+| P04 | Geometry tách algorithms/native/cache/payload/package orchestration |
+| P05 | Simulation policies, FDS serializer/parser và implementation digest đúng owner |
+| P06 | Verification/Reference tách application và adapters; giữ engine active và audit độc lập |
+| P07 | Jobs inject store/process/retention/clock; supervision tick kiểm tra được không cần SQLite |
+| P08 | Workflows/ports/CLI/routes/adapters và shared helpers về đúng trách nhiệm |
+| P09 | Frontend bootstrap/shell/features/API clients; dọn listener, worker và viewer khi destroy |
+| P10 | Tests chia theo owner; README từng module; CI/lifecycle/browser checks và packaging |
+
+[Migration manifest](module-layout-migration.json) ghi 51 implementation moves cùng source/target hashes và bằng chứng; [test layout](test-layout.json) ghi đường dẫn test trước/sau. Model Pydantic vẫn có một định nghĩa; chưa chuyển engine sang runner/checkers hoặc bỏ import tương thích.
+
+HTTP, Chromium và FDS thật đã chạy được ở đợt này. Nghiệm thu dữ liệu nghiên cứu riêng còn thiếu IFC/reference thực tế; số đo công khai không thay thế nghiệm thu dự án. Không thay snapshot/thuật toán để che sai lệch. Báo cáo 14 phân biệt PASS, lỗi kế thừa và phần chưa chạy.

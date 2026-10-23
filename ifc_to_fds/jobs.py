@@ -8,7 +8,8 @@ Re-exports from ifc_to_fds.adapters.jobs:
 
 import subprocess
 import sys
-from ifc_to_fds.adapters.jobs import JobManager, JobRepository, JobService, WorkerRunner
+from ifc_to_fds.modules.jobs.api import JobManager, JobRepository, JobService
+from ifc_to_fds.interfaces.worker.runner import WorkerRunner
 
 __all__ = [
     "JobManager",

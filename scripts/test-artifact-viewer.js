@@ -12,15 +12,16 @@ const ref={payload:hash,vertex_count:3,face_count:1,faces_offset:72,byte_length:
 const entries=Object.fromEntries(['a','b','c','d'].map(key=>[key,{entity_key:key,simulation_role:'REFERENCE_GEOMETRY',scope_decision:'IN_SCOPE',mesh:ref}]));
 class Group {constructor(){this.children=[];}add(x){this.children.push(x);}remove(x){this.children=this.children.filter(v=>v!==x);}}
 const ns={viewer:{}};
-const context=vm.createContext({window:{IfcFds:ns},document:{getElementById(id){return id==='verified-show-reference'?toggle:progress;}},
+const context=vm.createContext({window:{IfcFds:ns,IFCFDS_API_KEY:'fixture-key'},document:{getElementById(id){return id==='verified-show-reference'?toggle:progress;}},
  THREE:{Group},AbortController,crypto:webcrypto,DataView,Uint8Array,Array,Object,Promise,
- fetch:async(url,{signal})=>{
+ fetch:async(url,{signal,headers})=>{
+  assert.equal(headers['x-api-key'],'fixture-key','Geometry downloads must use the shared authenticated client');
   requests++; if(url.endsWith('/artifacts/geometry'))return {ok:true,json:async()=>({elements:entries})};
   active++;peak=Math.max(peak,active);
   await new Promise((resolve,reject)=>{const t=setTimeout(resolve,hold?100:5);signal.addEventListener('abort',()=>{clearTimeout(t);reject(Object.assign(new Error('aborted'),{name:'AbortError'}));},{once:true});}).finally(()=>active--);
   return {ok:!fail,arrayBuffer:async()=>payload};
  }});
-vm.runInContext(fs.readFileSync('js/viewer/scene-viewer.js','utf8'),context);
+require('./test-support/load-viewer')(context);
 const viewer={ifcGroup:new Group(),makeIfcElement(record){return {record,userData:{},traverse(fn){fn({geometry:{dispose(){disposed++;}}});}};}};
 const bind=()=>ns.viewer.SceneViewer.prototype.bindVerifiedArtifacts.call(viewer,{geometry:{url:'/api/jobs/1/artifacts/geometry'}});
 (async()=>{

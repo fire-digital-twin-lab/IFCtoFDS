@@ -7,6 +7,8 @@ ifc-render-check.png
 
 # Python build and test artifacts
 *.egg-info/
+/build/
+/dist/
 __pycache__/
 *.pyc
 .pytest_cache/

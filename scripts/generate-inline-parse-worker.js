@@ -3,13 +3,19 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const dependencyFiles = [
-    'js/vendor/earcut.min.js',
-    'js/core/namespace.js',
-    'js/core/diagnostics.js',
-    'js/ifc/ifc-adapter.js'
+    'frontend/vendor/earcut.min.js',
+    'frontend/src/shared/namespace.js',
+    'frontend/src/shared/diagnostics.js',
+    'frontend/src/engines/legacy/ifc/step-parser.js',
+    'frontend/src/engines/legacy/ifc/openings.js',
+    'frontend/src/engines/legacy/ifc/representations.js',
+    'frontend/src/engines/legacy/ifc/clipping.js',
+    'frontend/src/engines/legacy/ifc/triangulation.js',
+    'frontend/src/engines/legacy/ifc/mesh-transforms.js',
+    'frontend/src/engines/legacy/ifc/ifc-adapter.js'
 ];
-const workerPath = path.join(root, 'js/workers/ifc-parse-shard-worker.js');
-const outputPath = path.join(root, 'js/workers/ifc-parse-shard-worker-inline.js');
+const workerPath = path.join(root, 'frontend/src/workers/ifc-parse-shard-worker.js');
+const outputPath = path.join(root, 'frontend/generated/ifc-parse-shard-worker-inline.js');
 const workerText = fs.readFileSync(workerPath, 'utf8');
 const workerBodyIndex = workerText.indexOf('var IfcAdapter =');
 

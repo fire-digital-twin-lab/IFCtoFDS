@@ -1,0 +1,9 @@
+/* Responsive adjustments */
+@media (max-width: 1280px) {
+    .workspace-container {
+        grid-template-columns: 320px minmax(0, 1fr) auto;
+    }
+    .inspector-panel {
+        width: 300px;
+    }
+}

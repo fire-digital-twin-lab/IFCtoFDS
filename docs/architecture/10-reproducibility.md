@@ -1,35 +1,13 @@
-# 10 — Reproducibility and Execution Environment
+# 10 — Tái lập và baseline
 
-## 1. Research Reproducibility Guarantee
-Scientific research using BIM-to-FDS conversion requires absolute provenance and deterministic reproducibility. Different versions of underlying geometric kernels (e.g. OpenCASCADE, Trimesh, Manifold3D) or Python runtime environments may produce minute topological variations.
+Commit nền của lần refactor: `f0c6d9c02342312266f2cfb8f9102833640061c3`. Fixture/snapshot trong tests/baseline được giữ nguyên; test đối chiếu kiểm tra hash nguồn và dữ liệu semantic. Không tự ghi lại snapshot khi có lỗi.
 
-## 2. ExecutionEnvironment Value Object
-Every conversion and audit run records an `ExecutionEnvironment` object inside run metadata and acceptance evidence:
+Các trường thời gian hoặc đường dẫn chỉ được normalize khi đã xác định không thuộc hợp đồng. Quyết định mapping, FDS, primitive identity, openings, graph MEP, gate status và bằng chứng không được bỏ qua để làm parity đạt.
 
-```json
-{
-  "tool_version": "0.5.0",
-  "git_sha": "d68d38e30b23dee012ba9c2541b7bb4238f2ddae",
-  "schema_version": "0.5.0",
-  "python_version": "3.12.10",
-  "platform": "Windows-11-10.0.26200-SP0",
-  "dependencies": {
-    "ifcopenshell": "0.8.0",
-    "trimesh": "4.6.4",
-    "manifold3d": "3.0.1",
-    "numpy": "2.1.2",
-    "scipy": "1.14.1"
-  },
-  "fds_solver_version": null,
-  "tolerances": {
-    "surface_tolerance_m": 0.005,
-    "relative_volume_tolerance": 0.05,
-    "min_solid_iou": 0.95
-  },
-  "source_digests": {
-    "model.ifc": "sha256:..."
-  }
-}
-```
+Provenance hiện được ghi trong `report.metrics.execution_provenance`: phiên bản Python, platform/system/machine và một số dependency. Source hash và schema nằm trong các model/manifest. Sự tồn tại của model ExecutionEnvironment không có nghĩa mọi trường của model đã được điền vào mọi run.
 
-This ensures that any future audit can compare both the software environment and the mathematical tolerances under which a result was accepted.
+Engine JavaScript được so trực tiếp với source của commit nền trên ba IFC công khai: inventory JSON và FDS hybrid/GEOM phải giống chính xác. Worker thường/inline cùng một nguồn mã; generator chuẩn hóa newline để LF/CRLF cho cùng bundle.
+
+CSS manifest ghi hash của chuỗi khai báo trước khi tách; ghép các tệp theo đúng thứ tự phải giữ nguyên hash. Kiểm tra wheel ngoài checkout để phát hiện tài nguyên chỉ tồn tại trong source tree.
+
+Ghi riêng phiên bản thư viện, cấu hình cache, số luồng và điều kiện môi trường khi đo hiệu năng hoặc chạy solver. Không tuyên bố nhanh hơn chỉ từ việc chia thư mục.

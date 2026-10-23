@@ -1,17 +1,17 @@
 """Independent validation gate checkers."""
 
-from .air_path import AirPathTopologyChecker
-from .boundary import BoundaryChecker
-from .domain import DomainChecker
-from .geometry import GeometryChecker
-from .mep import MepChecker
-from .openings import OpeningsChecker
-from .representation import RepresentationChecker
-from .scope import ScopeChecker
-from .solver import SolverChecker
-from .structural import StructuralCompletenessChecker
-from .syntax import FdsSyntaxChecker
-from .traceability import TraceabilityChecker
+from ifc_to_fds.modules.verification.application.checkers.air_path import AirPathTopologyChecker
+from ifc_to_fds.modules.verification.application.checkers.boundary import BoundaryChecker
+from ifc_to_fds.modules.verification.application.checkers.domain import DomainChecker
+from ifc_to_fds.modules.verification.application.checkers.geometry import GeometryChecker
+from ifc_to_fds.modules.verification.application.checkers.mep import MepChecker
+from ifc_to_fds.modules.verification.application.checkers.openings import OpeningsChecker
+from ifc_to_fds.modules.verification.application.checkers.representation import RepresentationChecker
+from ifc_to_fds.modules.verification.application.checkers.scope import ScopeChecker
+from ifc_to_fds.modules.verification.application.checkers.solver import SolverChecker
+from ifc_to_fds.modules.verification.application.checkers.structural import StructuralCompletenessChecker
+from ifc_to_fds.modules.verification.application.checkers.syntax import FdsSyntaxChecker
+from ifc_to_fds.modules.verification.application.checkers.traceability import TraceabilityChecker
 
 __all__ = [
     "FdsSyntaxChecker",

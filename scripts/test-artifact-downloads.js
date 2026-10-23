@@ -18,7 +18,9 @@ let httpStatus=200;
 const ctx=vm.createContext({console, setTimeout: f=>f(), URL:{createObjectURL:blob=>{downloads.push(blob);return 'blob:test';},revokeObjectURL(){}},fetch:async(url,opts)=>{requests.push({url,opts});return {ok:httpStatus===200,status:httpStatus,blob:async()=>({url})};},document:{getElementById:id=>elements[id] || null,querySelectorAll:()=>[],createElement:tag=>new Element(tag),body:new Element('body')}});
 ctx.window=ctx;
 ctx.IfcFds={verified:{getAuthHeaders:()=>({'x-api-key':'test-key'})}};
-vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../js/ui/audit-drawer.js'),'utf8'),ctx);
+vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../frontend/src/api/http-client.js'),'utf8'),ctx);
+for (const name of ['shared/lifecycle.js','api/artifacts-api.js']) vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../frontend/src',name),'utf8'),ctx);
+vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../frontend/src/features/audit/audit-drawer.js'),'utf8'),ctx);
 const drawer=ctx.IfcFds.ui.auditDrawer;
 const tick=()=>new Promise(setImmediate);
 (async()=>{

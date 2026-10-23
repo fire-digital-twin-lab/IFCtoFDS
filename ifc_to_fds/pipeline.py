@@ -16,7 +16,7 @@ from ifc_to_fds.application.use_cases import (
     prepare_model,
 )
 from ifc_to_fds.core.canonical import CanonicalModel
-from ifc_to_fds.mapping.manifest import MappingManifest
+from ifc_to_fds.modules.fds.api import MappingManifest
 from ifc_to_fds.validation.acceptance import AcceptanceReport
 
 __all__ = [
@@ -45,7 +45,9 @@ def audit(
     geometry_package: Optional[Dict[str, Any]] = None,
 ) -> Tuple[CanonicalModel, MappingManifest, AcceptanceReport]:
     """Independent audit of serialized FDS against source IFC (Compatibility Facade)."""
-    return AuditConversionUseCase().execute(
+    from ifc_to_fds.bootstrap.container import create_container
+
+    return create_container().get_audit_conversion_use_case().execute(
         paths=paths,
         fds_text=fds_text,
         manifest=manifest,
@@ -60,7 +62,9 @@ def convert(
     output_directory: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
     """Converts IFC models to FDS with verification (Compatibility Facade)."""
-    return ConvertVerifiedUseCase().execute(
+    from ifc_to_fds.bootstrap.container import create_container
+
+    return create_container().get_convert_verified_use_case().execute(
         paths=paths,
         configuration=configuration,
         output_directory=output_directory,

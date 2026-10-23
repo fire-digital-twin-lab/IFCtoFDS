@@ -1,47 +1,16 @@
-# 02 — Target Architecture: Modular Monolith + Hexagonal Architecture
+# 02 — Quyết định kiến trúc
 
-**Status: `[TARGET]`** — Architectural destination of the progressive Strangler Fig migration.
+Một ứng dụng, một bản phân phối; module có API/contracts và kiểm thử riêng. Phát triển riêng nghĩa là thay đổi qua hợp đồng ổn định, chưa phải phát hành từng module thành dịch vụ.
 
-## 1. Architectural Philosophy
-The target architecture adopts:
-- **Modular Monolith**: One deployable codebase without unnecessary network boundaries, microservices, or distributed queue dependencies.
-- **Hexagonal Architecture (Ports & Adapters)**: Pure domain core at the center, surrounded by application use cases, which declare ports implemented by infrastructure adapters.
-- **Domain-Oriented Modules**: Bounded contexts for Source, BIM/Canonical, Scope, MEP, Mapping, Validation, and Reference.
+| Bounded context | Quyền sở hữu |
+| --- | --- |
+| BIM | Nguồn, identity, units, placement, inventory, quan hệ MEP |
+| Simulation | Scope, simulation domain, vai trò, biểu diễn, MappingPlan |
+| Verification | Findings, evidence, gates và kết luận độc lập |
+| Reference | Candidate, approval, integrity, intentional deltas, parity |
 
-## 2. Layered Organization
-```text
-                         ┌─────────────────────────┐
-                         │       Interfaces        │
-                         │ CLI / REST API / Worker │
-                         └────────────┬────────────┘
-                                      │ calls
-                                      ▼
-                         ┌─────────────────────────┐
-                         │       Application       │
-                         │ Use Cases / DTO / Ports │
-                         └────────────┬────────────┘
-                                      │ uses
-                                      ▼
-┌────────────────────────────────────────────────────────────────┐
-│                         DOMAIN CORE                            │
-│ Source Model │ Canonical BIM │ Scope/Domain │ Mapping          │
-│ Geometry Ref │ MEP Network   │ Provenance   │ Validation Gate  │
-│ Golden Ref   │ Acceptance    │ Boundary Policy                 │
-│                                                                │
-│         ZERO dependencies on FastAPI / IfcOpenShell / FDS      │
-└───────────┬──────────────────┬────────────────────┬────────────┘
-            ▲                  ▲                    ▲
-            │ implements       │ implements         │ implements
-    ┌───────┴──────┐   ┌───────┴──────┐     ┌───────┴──────┐
-    │ IFC Adapter  │   │ FDS Adapter  │     │ Storage      │
-    │ IfcOpenShell │   │ Serializer   │     │ Artifacts    │
-    │ Geometry     │   │ Parser       │     │ Reference DB │
-    └──────────────┘   │ Solver       │     └──────────────┘
-                       └──────────────┘
-```
+Geometry, FDS, Artifacts và Jobs là module kỹ thuật; không bắt mỗi module có aggregate/repository/domain event. HVAC/PCCC thuộc BIM trong phạm vi ánh xạ hiện tại, chưa có context mô phỏng vận hành riêng.
 
-## 3. Benefits
-1. **Maintainability**: Independent gate checkers, decoupled serializers, clear module responsibilities.
-2. **Interchangeability**: The geometry engine or solver can be substituted without touching mapping rules.
-3. **Reproducibility**: Environment execution metadata captured alongside immutable artifacts.
-4. **Testability**: Domain logic can be unit-tested without FDS binaries or live IFC files.
+SOLID được thực hiện bằng tách điều phối khỏi lưu trữ/serialization/kiểm chứng, inject dependency và giữ port nhỏ đúng lời gọi. Adapter thay thế phải giữ semantics lỗi, hủy, lifecycle và kết quả. Hàm thuần vẫn có thể là hàm; không thêm abstraction chỉ để tăng số tầng.
+
+Giữ Pydantic, schema, thuật toán, rounding, ID allocator và acceptance. Frontend giữ IIFE và file://, chưa đổi framework/bundler. CanonicalModel không phải transaction aggregate cho cả công trình. Các model hiện vẫn mutable; kiểm tra/copy/finalize bảo vệ từng bước sử dụng.

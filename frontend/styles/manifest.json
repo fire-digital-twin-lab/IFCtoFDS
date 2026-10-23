@@ -1,0 +1,16 @@
+{
+  "files": [
+    "tokens.css",
+    "base.css",
+    "layout.css",
+    "components/topbar.css",
+    "components/forms.css",
+    "features/workspace.css",
+    "features/viewport.css",
+    "features/inspector.css",
+    "features/audit.css",
+    "components/overlays.css",
+    "responsive.css"
+  ],
+  "original_sha256": "27aca349311b6a2e3ad90a9bf7ebf93d1ba4b2a818ff130c14e66bec5d51ba43"
+}

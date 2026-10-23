@@ -1,0 +1,11 @@
+/* =====================================================================
+   App Shell Grid Layout
+   ===================================================================== */
+.app-shell {
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 48px minmax(0, 1fr) auto auto;
+    overflow: hidden;
+    background: var(--bg-base);
+}
+

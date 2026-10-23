@@ -32,8 +32,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --check js/app-controller.js
-      - run: node --check js/verified-workflow.js
+      - run: node --check frontend/src/app/app-controller.js
+      - run: node --check frontend/src/app/bootstrap.js
+      - run: node --check frontend/src/features/conversion/verified-workflow.js
+      - run: node scripts/test-frontend-lifecycle.js
+      - run: node scripts/test-modular-frontend.js
       - run: node scripts/test-worker-bundle-parity.js
       - run: node scripts/test-golden-workflow.js
       - run: node scripts/test-artifact-viewer.js
@@ -45,14 +48,18 @@ jobs:
       - run: node scripts/test-ui-recovery.js
       - run: node scripts/test-artifact-downloads.js
       - run: node scripts/test-legacy-geom-compatibility.js
+      - run: node scripts/test-workbench-feature4.js
       - run: node scripts/generate-inline-parse-worker.js
       - run: node scripts/generate-inline-export-worker.js
-      - run: git diff --exit-code -- js/workers/*-inline.js
+      - run: git diff --exit-code -- frontend/generated/*-inline.js
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -61,11 +68,14 @@ jobs:
       - run: uv run --locked --extra test --extra browser python -m playwright install --with-deps chromium
       - run: uv run --locked --extra test --extra browser python -m pytest -q -m browser --junitxml=scripts/out/browser-conversion/workbench.xml
       - run: uv run --locked --extra test --extra browser python scripts/test-conversion-browser.py
+      - run: node scripts/test-layout-browser.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: browser-evidence
-          path: scripts/out/browser-conversion/
+          path: |
+            scripts/out/browser-conversion/
+            scripts/out/layout-browser/
   solver:
     runs-on: windows-latest
     timeout-minutes: 15

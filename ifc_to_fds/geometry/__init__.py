@@ -1,11 +1,11 @@
 """Geometry kernel and mesh inspection module."""
 
-from .engine import (
+from ifc_to_fds.modules.geometry.infrastructure.ifcopenshell.extraction import (
     create_geom_settings,
     extract_element_geometry,
     process_model_geometry,
 )
-from .mesh import bounds_for_vertices, inspect_mesh_quality
+from ifc_to_fds.modules.geometry.algorithms.mesh import bounds_for_vertices, inspect_mesh_quality
 
 __all__ = [
     "bounds_for_vertices",

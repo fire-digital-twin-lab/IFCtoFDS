@@ -1,0 +1,88 @@
+"""ValidationRunner orchestrates execution of independent gate checkers."""
+
+from typing import Any, List, Optional
+from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome, GateChecker
+from ifc_to_fds.domain.validation.evaluator import AcceptanceEvaluator
+from ifc_to_fds.domain.validation.model import AcceptanceReport, AuditConfig, GateStatus, ValidationContext
+from ifc_to_fds.modules.fds.api import parse_fds
+from ifc_to_fds.modules.verification.application.checkers.syntax import FdsSyntaxChecker
+from ifc_to_fds.modules.verification.application.checkers.domain import DomainChecker
+from ifc_to_fds.modules.verification.application.checkers.traceability import TraceabilityChecker
+from ifc_to_fds.modules.verification.application.checkers.scope import ScopeChecker
+from ifc_to_fds.modules.verification.application.checkers.geometry import GeometryChecker
+from ifc_to_fds.modules.verification.application.checkers.structural import StructuralCompletenessChecker
+from ifc_to_fds.modules.verification.application.checkers.air_path import AirPathTopologyChecker
+from ifc_to_fds.modules.verification.application.checkers.openings import OpeningsChecker
+from ifc_to_fds.modules.verification.application.checkers.mep import MepChecker
+from ifc_to_fds.modules.verification.application.checkers.representation import RepresentationChecker
+from ifc_to_fds.modules.verification.application.checkers.boundary import BoundaryChecker
+from ifc_to_fds.modules.verification.application.checkers.solver import SolverChecker
+
+
+class ValidationRunner:
+    """Orchestrates independent gate checkers against a validation context."""
+
+    def __init__(self, checkers: Optional[List[GateChecker]] = None):
+        self.checkers = checkers or self._default_checkers()
+        self.evaluator = AcceptanceEvaluator()
+
+    @staticmethod
+    def _default_checkers() -> List[GateChecker]:
+        return [
+            FdsSyntaxChecker(),
+            DomainChecker(),
+            TraceabilityChecker(),
+            ScopeChecker(),
+            GeometryChecker(),
+            StructuralCompletenessChecker(),
+            AirPathTopologyChecker(),
+            OpeningsChecker(),
+            MepChecker(),
+            RepresentationChecker(),
+            BoundaryChecker(),
+            SolverChecker(),
+        ]
+
+    def create_context(
+        self, model: Any, fds_text: str, manifest: Any = None, config: Optional[AuditConfig] = None
+    ) -> ValidationContext:
+        config = config or AuditConfig()
+        parsed_fds = parse_fds(fds_text) if fds_text else None
+        if parsed_fds and model and getattr(model, "elements", None):
+            for p in parsed_fds.primitives:
+                if not p.source.get("entity_key") and p.source.get("legacy"):
+                    candidates = [
+                        e
+                        for e in model.elements
+                        if e.global_id == p.source.get("global_id")
+                        and e.step_id == p.source.get("step_id")
+                    ]
+                    if len(candidates) == 1:
+                        p.source["entity_key"] = candidates[0].entity_key
+        return ValidationContext(
+            model=model,
+            fds_text=fds_text,
+            manifest=manifest,
+            config=config,
+            parsed_fds=parsed_fds,
+        )
+
+    def validate(
+        self,
+        model: Any,
+        fds_text: str,
+        manifest: Any = None,
+        config: Optional[AuditConfig] = None,
+    ) -> AcceptanceReport:
+        context = self.create_context(model, fds_text, manifest, config)
+        outcomes: List[CheckerOutcome] = []
+        syntax_passed = True
+        for checker in self.checkers:
+            if isinstance(checker, SolverChecker):
+                outcome = checker.check(context, syntax_passed=syntax_passed)
+            else:
+                outcome = checker.check(context)
+                if checker.name == "syntax" and outcome.result.status != GateStatus.PASS:
+                    syntax_passed = False
+            outcomes.append(outcome)
+        return self.evaluator.evaluate(context, outcomes)

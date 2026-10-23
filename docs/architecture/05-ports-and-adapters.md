@@ -1,36 +1,26 @@
-# 05 — Ports and Adapters Specification
+# 05 - Ports và adapters
 
-## 1. Application Ports
+Đường dẫn tương đối với `ifc_to_fds/`; tên port giữ contract đã công bố.
 
-### 1.1 `ArtifactRepositoryPort` — `[IMPLEMENTED]`
-Defined in `ifc_to_fds/application/ports/storage.py` and implemented by `ifc_to_fds/adapters/storage/filesystem.py`:
-```python
-@runtime_checkable
-class ArtifactRepositoryPort(Protocol):
-    def save_run_artifacts(self, result: Dict[str, Any], output: Union[str, Path]) -> Dict[str, str]: ...
-    def read_artifact(self, path: Union[str, Path]) -> bytes: ...
-```
+| Port / seam | Implementation mặc định |
+| --- | --- |
+| IfcReaderPort / InventoryReaderPort | `modules/bim/infrastructure/ifc/reader.py:IfcOpenShellReader` |
+| ModelPreparationPort | `application/workflows/prepare_model.py:ModelPreparer` |
+| FdsExporterPort | `modules/fds/infrastructure/exporter.py:FdsExporter` |
+| ValidationEnginePort | `modules/verification/infrastructure/engine_adapter.py:IndependentValidationEngine` |
+| ConversionWorkspacePort | `modules/artifacts/infrastructure/conversion_workspace.py:LocalConversionWorkspaces` |
+| ArtifactRepositoryPort | `modules/artifacts/infrastructure/filesystem_repository.py:LocalFilesystemArtifactRepository` |
+| ReferenceRepositoryPort | `modules/reference/infrastructure/filesystem_repository.py:FilesystemReferenceRepository` |
+| JobStore | `modules/jobs/infrastructure/sqlite_repository.py` |
+| WorkerProcesses | `modules/jobs/infrastructure/worker_process.py` |
+| JobRetention | `modules/jobs/infrastructure/retention.py` |
+| Solver runner callable | `modules/verification/infrastructure/fds/solver_process.py` |
+| Reference reader callable | Reference public API `inspect_case` |
 
-### 1.2 `ReferenceRepositoryPort` & Adapter — `[IMPLEMENTED]`
-Implemented by `ifc_to_fds/adapters/reference/filesystem.py`:
-```python
-class FilesystemReferenceRepository:
-    def bundle_digest(self, directory: Path | str) -> str: ...
-    def inspect_case(self, directory: Path | str) -> Tuple[str, Dict[str, Any], Dict[str, Any]]: ...
-    def resolve_sources(self, case: Path | str, mapping: Dict[str, str]) -> List[Path]: ...
-    def save_candidate_bundle(self, directory: Path | str, values: Dict[str, Any]) -> None: ...
-```
+Container inject reader/exporter/workspace/engine/reference reader vào workflows. Validation adapter inject solver; factory Jobs nối store/process/retention/clock. Constructor/function cũ giữ default qua bốn compatibility bridge trong policy. Khi đã cung cấp dependencies giả, Jobs không tạo SQLite/process thật.
 
-### 1.3 `JobService` & `JobRepository` — `[IMPLEMENTED]`
-Implemented in `ifc_to_fds/adapters/jobs/`:
-- `JobRepository`: Thread-safe job state tracking.
-- `WorkerRunner`: Subprocess use-case execution runner with stderr capture.
-- `JobService`: Queue bounds, lifecycle management, and retention cleanup.
+FdsExporterPort nhận `model`, `cell_size=None`, `mapping_plan=None`, trả tuple FDS/manifest. Policy được xử lý trước serializer. InspectIfcUseCase nhận model preparer, không import helper qua module audit.
 
-### 1.4 Target Geometry and Serialization Ports — `[TARGET]`
-Target ports planned for Phase R10 to replace transitional utility modules:
-- `IfcReaderPort`: Wraps `core.federation.load_sources` and `core.inventory`.
-- `GeometryEnginePort`: Wraps `geometry.engine.process_model_geometry`.
-- `FdsSerializerPort`: Formalizes `mapping.exporter.serialize_fds`.
-- `FdsParserPort`: Formalizes `validation.parser.parse_fds`.
-- `FdsSolverPort`: Formalizes `validation.solver.solver_gates`.
+Workspace nhận `CheckpointPayload` thay vì import helper application. Workspace sở hữu thư mục tạm hoặc thư mục caller cung cấp, ghi checkpoint NOT_RUN và đọc lại artifact cho audit. Owner temporary geometry package được giữ tới khi kết quả hết sử dụng. Geometry package service dùng protocol payload store; checksum/seal thuần nằm trong algorithms.
+
+HTTP factory nhận JobManager thay được và quản lý shutdown. Frontend viewer nhận geometry client; features nhận jobs/artifacts clients cùng state/callback cần dùng. Không tạo abstraction cho mọi phép tính mesh thuần.

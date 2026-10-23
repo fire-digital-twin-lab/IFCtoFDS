@@ -1,5 +1,5 @@
 """Reference storage adapters."""
 
-from .filesystem import FILES, FilesystemReferenceRepository
+from ifc_to_fds.modules.reference.api import FILES, FilesystemReferenceRepository
 
 __all__ = ["FILES", "FilesystemReferenceRepository"]

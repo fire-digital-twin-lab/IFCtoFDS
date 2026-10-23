@@ -1,0 +1,13 @@
+{
+  "version": "6.11.1",
+  "source": "Real pinned FDS runs on tests.support.solver_cases authored synthetic inputs",
+  "files": {
+    "hole.smv": "38e3cfd248eee280e2db785e2520b59aa9ebf0f681a7c000f74eda533741c748",
+    "hole.fds": "f2b2e15081803a5ad0c20c7344cac7750f736f98b414bff6e4aee4af96697bfa",
+    "vent.smv": "7ab98840e2ed01d5f3201da70a205f952547bb26a7bd360ad59a6f0a3d1ce5f9",
+    "vent.fds": "0d2a87861fcea653679b389310eddb57872ba76e110e3eccdc0f6e762843a7bd",
+    "geom.smv": "f8ba3bcb14500c1b3f50884849bb025593e58d6da4786d8f2e60893d6e9976ed",
+    "geom.fds": "14908cfe07ea174cd01f861b51beba6eaa0da02d7ae2d21438f2046a4f6e4031",
+    "acceptance_cube.bingeom": "62cce81658a31054f0a5515baf8b970c65a49fcac05411e08547706619758c34"
+  }
+}

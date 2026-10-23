@@ -1,0 +1,835 @@
+{
+  "schema_version": 1,
+  "status": "IMPLEMENTED_AND_TESTED_WITH_ACCEPTANCE_LIMITS",
+  "review_date": "2026-10-22",
+  "baseline_commit": "f0c6d9c02342312266f2cfb8f9102833640061c3",
+  "baseline_state": "working tree after first modular refactor; source hashes pin reviewed files",
+  "purpose": "Executed file placement and role extraction map. Source hashes preserve the reviewed pre-move state; target hashes describe current implementations. Project-data and performance acceptance limits are recorded in report 14.",
+  "moves": [
+    {
+      "source": "ifc_to_fds/modules/bim/inventory.py",
+      "target": "ifc_to_fds/modules/bim/infrastructure/ifc/inventory.py",
+      "phase": "P03",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "ff0ef41eb221bf6de89c783ca1272f9106785e7e8d8de34e680dfc4b4909681a",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "aa996d43cfe7bac79c24c6fcdb4aa49cde938b176fd0f715e1d8aa1d63517d01",
+      "evidence": [
+        ".cache/layout-p03/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/bim/placement.py",
+      "target": "ifc_to_fds/modules/bim/infrastructure/ifc/placement.py",
+      "phase": "P03",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "11116ef947ca0a664e500d249701612665168743d272b408b17aa612241d9e8d",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "11116ef947ca0a664e500d249701612665168743d272b408b17aa612241d9e8d",
+      "evidence": [
+        ".cache/layout-p03/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/bim/units.py",
+      "target": "ifc_to_fds/modules/bim/infrastructure/ifc/units.py",
+      "phase": "P03",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "1e3ef94dcd68a0e0982cfffd2389b747047d15b395d7988a0a67e00329f0d76a",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "1e3ef94dcd68a0e0982cfffd2389b747047d15b395d7988a0a67e00329f0d76a",
+      "evidence": [
+        ".cache/layout-p03/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/bim/federation.py",
+      "target": "ifc_to_fds/modules/bim/infrastructure/ifc/source_loader.py",
+      "phase": "P03",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "e4460d2b781bbf5be1f90d31c0d2aa3f6ac91c7643430e3ccd9a956917905833",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "6192510368ce5fc3348a6343acfefe43473ba52a6595fc412527b6609afcb1c9",
+      "evidence": [
+        ".cache/layout-p03/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/bim/preview.py",
+      "target": "ifc_to_fds/modules/bim/infrastructure/ifc/preview.py",
+      "phase": "P03",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "cdfda4420054eb57e3b5d84f933b531c2a12954d83ea0463f5d9131717c32762",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "036001deb5dfa56c6c445f8202cc67afcbcd0bbca084422b377996e4754b82a9",
+      "evidence": [
+        ".cache/layout-p03/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/bim/mep/classifier.py",
+      "target": "ifc_to_fds/modules/bim/infrastructure/ifc/mep/classifier.py",
+      "phase": "P03",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "bb8f2906999f3f0432a88ee9ad3dd8ec289736ca0fc040bd8b97ed7391281ccc",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "bb8f2906999f3f0432a88ee9ad3dd8ec289736ca0fc040bd8b97ed7391281ccc",
+      "evidence": [
+        ".cache/layout-p03/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/bim/mep/mep_graph.py",
+      "target": "ifc_to_fds/modules/bim/infrastructure/ifc/mep/graph_reader.py",
+      "phase": "P03",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "1a1882466b30863715a3714836ca099e10077c63046a8ac7ba2f928fbfa63417",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "5230b64937805b4e4ff05a4d623a90e55f476f988f167cd7024fa7b4a4993b56",
+      "evidence": [
+        ".cache/layout-p03/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/bim/mep/compare.py",
+      "target": "ifc_to_fds/modules/bim/domain/mep_comparison.py",
+      "phase": "P03",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "53abfe48c184ab08bb7b5bfe18da84d01a50433f9c0d02ffd1195195ca27adac",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "7f70b0c20c613ec009048809caf6f42a9e6f6d8057bd7af49ff3715497bed999",
+      "evidence": [
+        ".cache/layout-p03/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/geometry/mesh.py",
+      "target": "ifc_to_fds/modules/geometry/algorithms/mesh.py",
+      "phase": "P04",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "0ba0fc8fe2ce59260b56a58857eab2b5f76b53f4a7b5531cd88b468d05fe3385",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "e4933b6bb02faeab457e345de025804f83e33d1c99ee9f7c8db1f3ec1a83cf60",
+      "evidence": [
+        ".cache/layout-p04/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/geometry/boolean.py",
+      "target": "ifc_to_fds/modules/geometry/algorithms/boolean.py",
+      "phase": "P04",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "cecb5276983e71c0b0fe3715873c51970005e4e16ec79db12abba11ccdbf576e",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "cecb5276983e71c0b0fe3715873c51970005e4e16ec79db12abba11ccdbf576e",
+      "evidence": [
+        ".cache/layout-p04/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/geometry/metrics.py",
+      "target": "ifc_to_fds/modules/geometry/algorithms/metrics.py",
+      "phase": "P04",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "6763255812c060ba0e2e0d77d1c60547ef35f00f083b1ad4c7d3f489ec255db4",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "ac06571c47693411f6673aaede307ffccd315551a8422a177eaeaffaf06165b2",
+      "evidence": [
+        ".cache/layout-p04/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/geometry/engine.py",
+      "target": "ifc_to_fds/modules/geometry/infrastructure/ifcopenshell/extraction.py",
+      "phase": "P04",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "bca1ef4c84231792fcc6a35c1574a9a19132d2b891476ad7d7f7544f86fe0469",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "7e63b7f19bb4cd89b93367209d443e53f6238347b8615e1eaea82f6f744beb3d",
+      "evidence": [
+        ".cache/layout-p04/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/geometry/cache.py",
+      "target": "ifc_to_fds/modules/geometry/infrastructure/cache.py",
+      "phase": "P04",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "b1b7c7402e0a897ce842e8868aecd8ceb8ce71fcddee230ac5bd0edb8a6ccb7b",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "809bf95df32693ddc89aeaf1aa3b4e252e560b7fd50980d73c15ea99a479ad7f",
+      "evidence": [
+        ".cache/layout-p04/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/geometry/preview_cache.py",
+      "target": "ifc_to_fds/modules/geometry/infrastructure/preview_cache.py",
+      "phase": "P04",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "14d6afc65395095950073620a69dc89d496f940bad696ea410a20a50574e9072",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "cdf7a9827c5ddb529551fb3ef30c01c718b277d1119b485851949ef7eb15c5b8",
+      "evidence": [
+        ".cache/layout-p04/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/geometry/storage.py",
+      "target": "ifc_to_fds/modules/geometry/infrastructure/payload_store.py",
+      "phase": "P04",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "b7900209cc06154976cc70a90c6e55f214c3dfecee03a480ceb181b6775d50be",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "928dced8e6172bf76fb82732cb65310016cc3c333b2bd7b0705d47c5c16437a0",
+      "evidence": [
+        ".cache/layout-p04/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/geometry/package.py",
+      "target": "ifc_to_fds/modules/geometry/application/package_service.py",
+      "phase": "P04",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "b55467f1faae0ed13b5d6e3ce966f3f0261311fe97e89ddd651482d1c1a63a0e",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "d7aae5a4b989045b177c72b6d8f7f58cae0b6c31efbf46a51c0cf02101b18aa5",
+      "evidence": [
+        ".cache/layout-p04/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/simulation/policy.py",
+      "target": "ifc_to_fds/modules/simulation/application/mapping_policy.py",
+      "phase": "P05",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "e1fcd7c67455d3f6b3959d42b84f516d036ed3503b97aaabca13dbb22b5a7667",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "89272f51ec0a268a82fc65df94841bb8faa3de08e727d5cacd382d9fdb5b105d",
+      "evidence": [
+        ".cache/layout-p05/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/simulation/scope.py",
+      "target": "ifc_to_fds/modules/simulation/application/spatial_scope.py",
+      "phase": "P05",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "99283b0f9a93a2a9d2e5d896bc7f68b417b07ab100ad05622888d9238cbee9a5",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "a638dfdc360627a1bd72ec57a5f36fc4f71f31a18833bfbc9f0cbff4211b4fcb",
+      "evidence": [
+        ".cache/layout-p05/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/simulation/boundary.py",
+      "target": "ifc_to_fds/modules/simulation/application/boundary_policy.py",
+      "phase": "P05",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "0273fc27a254fe81b2f81cf2ee08568dfc63e27848a5ccd573e233f6ebb804b9",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "8300d0e5895c65b14dd28e44f529e6b9ef00edc79bec214716047ba95d6b2371",
+      "evidence": [
+        ".cache/layout-p05/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/simulation/plan_validation.py",
+      "target": "ifc_to_fds/modules/simulation/application/plan_validation.py",
+      "phase": "P05",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "a454c954115cd326851081a8a4db73f9727fc151384a83800678c5b9d9410a61",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "456147af5d31d26a08255b767e7502ff08f123601ced26b11354ab297294aa78",
+      "evidence": [
+        ".cache/layout-p05/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/simulation/boundary_fixtures_data.py",
+      "target": "ifc_to_fds/modules/simulation/domain/boundary_cases.py",
+      "phase": "P05",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "fd10c8cc612ed7cd6761346ac5f5995e368f44b4419cd51377fe8992db2a997f",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "fd10c8cc612ed7cd6761346ac5f5995e368f44b4419cd51377fe8992db2a997f",
+      "evidence": [
+        ".cache/layout-p05/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/fds/serializer.py",
+      "target": "ifc_to_fds/modules/fds/application/serializer.py",
+      "phase": "P05",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "ec500454b7c7e86f0395981b984acbd38e7b84b5d84f1fffead43091d943a4a9",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "791070cc06bf0d58b082d6211c1775e3528c4ec869d0875a4fa0233b9a7eee09",
+      "evidence": [
+        ".cache/layout-p05/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/fds/manifest.py",
+      "target": "ifc_to_fds/modules/fds/application/manifest_builder.py",
+      "phase": "P05",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "1292bc3a580c5afcebe17635e4dd58c0dc181ecad5235133340203500aa4354d",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "3eac878cdb3da9a76bdff7330f3b0713d3046c6f40798f0e8f7bbafb5937c5c2",
+      "evidence": [
+        ".cache/layout-p05/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/fds/parser.py",
+      "target": "ifc_to_fds/modules/fds/parsing/namelist.py",
+      "phase": "P05",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "61b55ed43cad4c414a9e0701d31da9372132e9145b64a8ec76e613f86a978f6d",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "0e87b49938a27ffa229560681412b3a00ad6d03a3b415050a25fe2b9546b3050",
+      "evidence": [
+        ".cache/layout-p05/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/engine.py",
+      "target": "ifc_to_fds/modules/verification/application/engine.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "eeafe3e1ab25daf12818fbc5bb78e6ac5992a2bef4cb964669ccb7681b4c505e",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "d3408c3636adcbf45d4189e27c0d7e649bb1d0552c335d7165503033100e3d32",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/runner.py",
+      "target": "ifc_to_fds/modules/verification/application/runner.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "8be828ab26386a0c915229b62066b0cc7784fb6f5569bf73731cdd743f13863f",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "51c782d90d6a4f7a2f26aa75ad61bb9d0c6b7266d12f1435171d12d061d9e9b1",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/effective.py",
+      "target": "ifc_to_fds/modules/verification/application/effective_obstructions.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "4f0735edbf68241ef7892580402e6293805ec1c0f85ed2f6b29e9bbee2260fc9",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "b7a82c756826bb225fc1edf8a59e6cc332f48121d7e517fde698be4da0dd6475",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/boundary_policy.py",
+      "target": "ifc_to_fds/modules/verification/application/boundary_acceptance.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "c1cc6d4d8ce4039b1d40d73c2b8896980c4b1cfecba9bd5cff06ebf5bc9a6461",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "e8dafe0cedc8c531a6f586cf34f20b30acea68419757844a8e0d2533d42c33a1",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/boundary_fixtures.py",
+      "target": "ifc_to_fds/modules/verification/application/boundary_certification.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "b0c90f399311b6e20e1d47cba6b61d15194b7a079ee15ceec9d3ec8f684ea252",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "41a0362c7fdebefe0878576f230490922188f2d217fedfe716eb7c2986c2d0fd",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/solver.py",
+      "target": "ifc_to_fds/modules/verification/infrastructure/fds/solver_process.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "aac9172dc15066c49c9a6909882b863bccff76d749a00776de2bd4ca3d20c1d0",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "3d216fe6e738ac67b537e6070443a55eefc5c0f83ac9ffaae00ed565524454b3",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/air_path.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/air_path.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "eeeb62549bc9672610ee33f1cac94277d8030a4b0c50f0a77e3c3fa5bf6cfcd6",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "eeeb62549bc9672610ee33f1cac94277d8030a4b0c50f0a77e3c3fa5bf6cfcd6",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/boundary.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/boundary.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "887aca1b528be4e9d9d89ebd7325ab0f1c34d2c0d0496165984e085f7cfa84dc",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "887aca1b528be4e9d9d89ebd7325ab0f1c34d2c0d0496165984e085f7cfa84dc",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/domain.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/domain.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "86be0ab15871477646dfc6c432dbaf9bebff78c297fcb2a054deb0786462cb4d",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "86be0ab15871477646dfc6c432dbaf9bebff78c297fcb2a054deb0786462cb4d",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/geometry.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/geometry.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "a93e1051da5171cc6583dda18a66f5759036b6bfa039d1085e44a3e12b863a81",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "a93e1051da5171cc6583dda18a66f5759036b6bfa039d1085e44a3e12b863a81",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/mep.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/mep.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "4d9e1d2d07249ee7ced28efc19b1151b97ef3e4289f256acb64c66974f9e97d6",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "31a9e6dc01bd6caf820063f1bcc410cfde5922518cb93a4a59770772cbab3b99",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/openings.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/openings.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "1b381bb77e0632ed71d45d1ffb91d63b6ae7e41081ddda8caab39106708f808a",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "1b381bb77e0632ed71d45d1ffb91d63b6ae7e41081ddda8caab39106708f808a",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/representation.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/representation.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "a77249b11f861ab07863455de0aea2f8e5cf3bf30fad793466e0da4eb58b678b",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "a77249b11f861ab07863455de0aea2f8e5cf3bf30fad793466e0da4eb58b678b",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/scope.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/scope.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "049a815cb39bbf5d9ab3b9cb582a781788aa963cee88e46f554a1f51473b5ee7",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "049a815cb39bbf5d9ab3b9cb582a781788aa963cee88e46f554a1f51473b5ee7",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/solver.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/solver.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "038a1f691dfdcdb5a817788f1fd068611bdae6df3ccb24a14916d7d012533d22",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "ad178cd83083ac85992c7fb4ac4fb3282ef55ca5c1f18dc082ffce4b1d9ea265",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/structural.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/structural.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "a6cf3aec7c9eb64df9dbe61114dce2a989917328bccaa97874df9960e01df3ca",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "a6cf3aec7c9eb64df9dbe61114dce2a989917328bccaa97874df9960e01df3ca",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/syntax.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/syntax.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "56a4986b50fadef224f9b8a356bd51f8d717072dae17e03085f19bea6aef645b",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "56a4986b50fadef224f9b8a356bd51f8d717072dae17e03085f19bea6aef645b",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/verification/checkers/traceability.py",
+      "target": "ifc_to_fds/modules/verification/application/checkers/traceability.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "854513e6406267c604b2b7fa2fccf793ccbca585f3740593cc4ac5b8c9053472",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "0f746da2cbbe83725f6b25bef66ce2deeba6c17358c87a23ceaf93438c280f0c",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/reference/gate.py",
+      "target": "ifc_to_fds/modules/reference/application/parity.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "a77612cbb8bfcdfe697ccda08f1e8105509708848878ddf9431b2404723ca79e",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "7febe31b0aaaab9368c30ce702863b72692b0d707bea9b89e9c892ab6a596ff0",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/reference/bundle_io.py",
+      "target": "ifc_to_fds/modules/reference/infrastructure/bundle_io.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "bad78fe0a5f3a95fc97839d4cc0fda19de68ba2d1c6f121053374cca3816e9d4",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "aca833f108ccd0b1761f8e8e33b965b1ade379aef9a1120603b95d907669fd19",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/reference/repository.py",
+      "target": "ifc_to_fds/modules/reference/infrastructure/filesystem_repository.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "98451bf4aaecdb0375211cb23d9d742811eef8d700de894c2590a7a2aeec8b1c",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "6a0e9b1a77d23856f4d75eb86eab7d0a0e647be95c24f0f471e79937db2b7dd9",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/reference/normalizer.py",
+      "target": "ifc_to_fds/modules/reference/application/projections.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "07de77059f8eeed81fdb2ffc04f60ca1c0ee453caafe33ee8576a514ca76df9c",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "8be241a16dbf8b743ada16e529f51a5be6d09d948a7e692457f8c0bcaef4bf5e",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/reference/integrity.py",
+      "target": "ifc_to_fds/modules/reference/application/integrity.py",
+      "phase": "P06",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "49a15faeb8def69832ee611066ed7a522cf37a4008e71ab7fe6c52b3bec8b1cb",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "b929d160e82272783bdc4ab0a41750261f211f9661446b3647dec94f989a7601",
+      "evidence": [
+        ".cache/layout-p06/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/artifacts/repository.py",
+      "target": "ifc_to_fds/modules/artifacts/infrastructure/filesystem_repository.py",
+      "phase": "P02",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "9fa862c9b03802e43a06ea626a478fccbdb0811d41ff2fd8680a00e02287625d",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "9fa862c9b03802e43a06ea626a478fccbdb0811d41ff2fd8680a00e02287625d",
+      "evidence": [
+        ".cache/layout-p02/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/artifacts/workspace.py",
+      "target": "ifc_to_fds/modules/artifacts/infrastructure/conversion_workspace.py",
+      "phase": "P02",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "57875bff4c2670ff2e4c3962520c74f5c83437d550f753ea435dc70a62d75178",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "975a8794a2e2ce0131a3c961e44a61965c0d728ffd6677338bde5b5796ab3430",
+      "evidence": [
+        ".cache/layout-p02/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/jobs/repository.py",
+      "target": "ifc_to_fds/modules/jobs/infrastructure/sqlite_repository.py",
+      "phase": "P07",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "387541497d838f6e712547a63eb8c181ce89bac6905c5db675ec07ef41176c42",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "efdd566c1f985d331c7bab79c0a5544fe9e5eb425a3eeecb48e568fd55f3448f",
+      "evidence": [
+        ".cache/layout-p07/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    },
+    {
+      "source": "ifc_to_fds/modules/jobs/service.py",
+      "target": "ifc_to_fds/modules/jobs/application/service.py",
+      "phase": "P07",
+      "status": "MOVED_AND_TESTED",
+      "operation": "MOVE_AND_REWIRE",
+      "source_sha256": "1e80f7c98f42f5301f2bdc29e59c9775a5d553de9a997ff6f54cf8972d56b06a",
+      "preserve_public_api": true,
+      "preserve_legacy_module_identity": true,
+      "target_sha256": "5812ce24287dc2d63bb04024b3012aaa2af36e7bb097149051e78fc9db7a9324",
+      "evidence": [
+        ".cache/layout-p07/tests.xml",
+        ".cache/layout-final2.xml",
+        ".cache/layout-final-contract.xml"
+      ]
+    }
+  ],
+  "held_stable": [
+    "ifc_to_fds/domain/",
+    "frontend/src/engines/legacy/",
+    "frontend/vendor/",
+    "tests/baseline/fixtures/",
+    "tests/baseline/snapshots/"
+  ],
+  "implementation_date": "2026-10-22",
+  "report": "docs/architecture/14-ket-qua-to-chuc-ma.md"
+}

@@ -240,16 +240,17 @@ The browser and Python pipelines serve different purposes. Python is organised a
 <summary>Repository structure</summary>
 
 ```text
-index.html                 Browser workbench
-js/                        IFC preview, FDS export, workers and viewer
+index.html                 Compatibility browser launcher
+frontend/                  App, features, API clients, viewer, workers and vendor
 ifc_to_fds/
   domain/                  Domain models and validation contracts
-  application/             Use cases, configuration and ports
-  adapters/                Geometry, storage and external integrations
-  interfaces/              Service and worker interfaces
-  core/, geometry/         Inventory, placement and mesh processing
-  mapping/, mep/           Representation policies and MEP extraction
-  validation/              Independent checks and acceptance
+  modules/                 BIM, Simulation, Geometry, FDS, Verification,
+                           Reference, Artifacts and Jobs with public APIs
+  application/             Cross-context workflows, DTOs and ports
+  bootstrap/               Dependency composition
+  interfaces/              HTTP routes, CLI and worker entry points
+  runtime/                 Shared diagnostics, normalization and provenance
+  adapters/, core/, ...    Compatible legacy imports
 docs/                      Guides and architecture decisions
 tests/                     Python regression tests
 scripts/                   JavaScript, browser, solver and research tooling
@@ -557,6 +558,12 @@ IFCtoFDS upstream do **Prof Rino Lovreglio, Massey University** phát triển, v
 Khi nghiên cứu sử dụng fork này, cần ghi thêm [repository của fork](https://github.com/fire-digital-twin-lab/IFCtoFDS), commit, cấu hình và các artifact kiểm chứng liên quan.
 
 Dự án được phân phối theo **GNU AGPL-3.0-or-later**, như khai báo trong metadata của gói. Xem [LICENSE](LICENSE). Phụ thuộc bên thứ ba và mô hình mẫu giữ giấy phép cùng thông báo tương ứng.
+
+## Kiến trúc và phát triển
+
+Backend dùng Modular Monolith với các context BIM, Simulation, Verification và Reference; ports/adapters nối tại bootstrap. Frontend tổ chức riêng theo component, feature, state, API và viewer; mở `index.html` ở root vẫn dẫn vào ứng dụng.
+
+Xem [bản đồ kiến trúc](docs/architecture/README.md), [hướng dẫn frontend](frontend/README.md) và [báo cáo triển khai P00–P10, kiểm tra và giới hạn nghiệm thu](docs/architecture/14-ket-qua-to-chuc-ma.md). Các import cũ tiếp tục được hỗ trợ qua facade tương thích.
 
 <a id="project-team"></a>
 

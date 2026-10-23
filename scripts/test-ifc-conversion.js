@@ -14,14 +14,23 @@ const ctx = { window: {}, console, FileReader: function () {} };
 ctx.window = ctx;
 
 [
-    'js/vendor/earcut.min.js',
-    'js/core/namespace.js',
-    'js/core/diagnostics.js',
-    'js/ifc/ifc-adapter.js',
-    'js/fds/fds-exporter.js',
-    'js/fds/namelist-parser.js',
-    'js/fds/fds-geometry-adapter.js',
-    'js/compare/checks.js'
+    'frontend/vendor/earcut.min.js',
+    'frontend/src/shared/namespace.js',
+    'frontend/src/shared/diagnostics.js',
+    'frontend/src/engines/legacy/ifc/step-parser.js',
+    'frontend/src/engines/legacy/ifc/openings.js',
+    'frontend/src/engines/legacy/ifc/representations.js',
+    'frontend/src/engines/legacy/ifc/clipping.js',
+    'frontend/src/engines/legacy/ifc/triangulation.js',
+    'frontend/src/engines/legacy/ifc/mesh-transforms.js',
+    'frontend/src/engines/legacy/ifc/ifc-adapter.js',
+    'frontend/src/engines/legacy/fds/representation-policy.js',
+    'frontend/src/engines/legacy/fds/voxelizer.js',
+    'frontend/src/engines/legacy/fds/serialization.js',
+    'frontend/src/engines/legacy/fds/fds-exporter.js',
+    'frontend/src/engines/legacy/fds/namelist-parser.js',
+    'frontend/src/engines/legacy/fds/fds-geometry-adapter.js',
+    'frontend/src/engines/legacy/compare/checks.js'
 ].forEach((file) => {
     vm.runInNewContext(
         fs.readFileSync(path.join(root, file), 'utf8'),

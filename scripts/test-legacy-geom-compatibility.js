@@ -2,7 +2,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const context = vm.createContext({console}); context.window=context;
-for (const file of ['js/core/namespace.js','js/core/diagnostics.js','js/fds/fds-exporter.js','js/fds/namelist-parser.js','js/fds/fds-geometry-adapter.js'])
+for (const file of ['frontend/src/shared/namespace.js','frontend/src/shared/diagnostics.js','frontend/src/engines/legacy/fds/representation-policy.js',
+    'frontend/src/engines/legacy/fds/voxelizer.js',
+    'frontend/src/engines/legacy/fds/serialization.js',
+    'frontend/src/engines/legacy/fds/fds-exporter.js','frontend/src/engines/legacy/fds/namelist-parser.js','frontend/src/engines/legacy/fds/fds-geometry-adapter.js'])
     vm.runInContext(fs.readFileSync(file,'utf8'),context,{filename:file});
 const exporter=new context.IfcFds.fds.FdsExporter();
 const vertices=[[593000,1198000,0],[593001,1198000,0],[593000,1198001,0],[593000,1198000,0.0000001]];

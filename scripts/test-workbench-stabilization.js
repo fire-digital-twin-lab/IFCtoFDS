@@ -5,13 +5,13 @@ const vm = require('node:vm');
 const path = require('node:path');
 const context = vm.createContext({console});
 for (const file of [
-    'events/workbench-events.js', 'state/selection-store.js', 'state/visibility-store.js',
-    'state/scenario-store.js', 'state/workbench-store.js', 'navigation/color-overlay.js'
-]) vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/workbench', file), 'utf8'), context);
+    'shared/lifecycle.js','events/workbench-events.js', 'state/selection-store.js', 'state/visibility-store.js',
+    'state/scenario-store.js', 'state/workbench-store.js', 'viewer/color-overlay.js'
+]) vm.runInContext(fs.readFileSync(path.join(__dirname, '../frontend/src', file), 'utf8'), context);
 const wb = context.IfcFds.workbench;
 context.window = context;
 context.IfcFds.viewer = {};
-vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/viewer/scene-viewer.js'), 'utf8'), context);
+require('./test-support/load-viewer')(context);
 const tests = [];
 function test(name, fn) { tests.push([name, fn]); }
 test('edge-display preserves opening outlines and composes with hidden entities', () => {

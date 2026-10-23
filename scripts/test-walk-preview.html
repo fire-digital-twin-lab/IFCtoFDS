@@ -50,8 +50,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
-    <script src="../js/core/namespace.js"></script>
-    <script src="../js/viewer/scene-viewer.js"></script>
+    <script src="../frontend/src/shared/namespace.js"></script>
+    <script src="../frontend/src/viewer/geometry-helpers.js"></script>
+    <script src="../frontend/src/viewer/camera-controller.js"></script>
+    <script src="../frontend/src/viewer/walk-controller.js"></script>
+    <script src="../frontend/src/viewer/clipping-controller.js"></script>
+    <script src="../frontend/src/viewer/mesh-factory.js"></script>
+    <script src="../frontend/src/viewer/geometry-loader.js"></script>
+    <script src="../frontend/src/viewer/selection-controller.js"></script>
+    <script src="../frontend/src/viewer/appearance-controller.js"></script>
+    <script src="../frontend/src/viewer/scene-viewer.js"></script>
     <script>
         var viewer = new window.IfcFds.viewer.SceneViewer(document.getElementById('viewer'));
         viewer.loadFdsModel({

@@ -40,20 +40,20 @@ context.globalThis = context;
 
 // Load workbench modules
 for (const file of [
-    'events/workbench-events.js',
+    'shared/lifecycle.js','events/workbench-events.js',
     'state/selection-store.js',
     'state/visibility-store.js',
     'state/scenario-store.js',
     'state/workbench-store.js',
-    'navigation/color-overlay.js',
-    'navigation/model-tree.js',
+    'viewer/color-overlay.js',
+    'features/model-tree/model-tree.js',
     'selection/selection-query.js'
 ]) {
-    vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/workbench', file), 'utf8'), context);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../frontend/src', file), 'utf8'), context);
 }
 
 context.IfcFds.viewer = {};
-vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/viewer/scene-viewer.js'), 'utf8'), context);
+require('./test-support/load-viewer')(context);
 
 const wb = context.IfcFds.workbench;
 const tests = [];

@@ -14,8 +14,10 @@ const context=vm.createContext({window:{IfcFds:ns},document:doc,location:{protoc
         if(url.endsWith('/result'))return output;
         return {state:'COMPLETED'};
     }})});
-vm.runInContext(fs.readFileSync('js/verified-workflow.js','utf8'),context);
-vm.runInContext(fs.readFileSync('js/viewer/scene-viewer.js','utf8'),context);
+vm.runInContext(fs.readFileSync('frontend/src/api/http-client.js','utf8'),context);
+for (const name of ['shared/lifecycle.js','api/jobs-api.js','api/artifacts-api.js']) vm.runInContext(fs.readFileSync('frontend/src/'+name,'utf8'),context);
+vm.runInContext(fs.readFileSync('frontend/src/features/conversion/verified-workflow.js','utf8'),context);
+require('./test-support/load-viewer')(context);
 (async()=>{
     doc.getElementById('verified-profile').value='research-basement';
     doc.getElementById('verified-reference-case').value='basement';

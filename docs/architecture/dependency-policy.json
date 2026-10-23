@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "allowed_module_dependencies": {
+    "geometry": [],
+    "bim": [
+      "geometry"
+    ],
+    "simulation": [
+      "geometry"
+    ],
+    "fds": [
+      "geometry",
+      "simulation"
+    ],
+    "verification": [
+      "fds",
+      "geometry",
+      "simulation",
+      "bim"
+    ],
+    "reference": [
+      "fds",
+      "geometry"
+    ],
+    "artifacts": [
+      "geometry"
+    ],
+    "jobs": []
+  },
+  "public_surfaces": [
+    "api",
+    "contracts"
+  ],
+  "module_factories": [
+    "ifc_to_fds.modules.jobs.factory"
+  ],
+  "legacy_roots": [
+    "core",
+    "geometry",
+    "mapping",
+    "mep",
+    "validation"
+  ],
+  "layer_exceptions": [
+    {
+      "source": "ifc_to_fds.modules.jobs.application.service",
+      "target": "ifc_to_fds.modules.jobs.factory",
+      "reason": "Historical JobService() construction only; production bootstrap injects all dependencies."
+    },
+    {
+      "source": "ifc_to_fds.modules.verification.application.engine",
+      "target": "ifc_to_fds.modules.verification.infrastructure.fds.solver_process",
+      "reason": "Historical function API fallback; production adapter injects solver_runner."
+    },
+    {
+      "source": "ifc_to_fds.modules.reference.application.parity",
+      "target": "ifc_to_fds.modules.reference.infrastructure.bundle_io",
+      "reason": "Historical golden_gate function fallback; workflow injects case_reader."
+    },
+    {
+      "source": "ifc_to_fds.modules.simulation.application.boundary_policy",
+      "target": "ifc_to_fds.modules.simulation.infrastructure.implementation_digest",
+      "reason": "Compatibility re-export of adapter_digest; mapping rules do not call the digest adapter."
+    }
+  ]
+}

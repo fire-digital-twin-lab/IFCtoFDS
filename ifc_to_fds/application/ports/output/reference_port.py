@@ -1,20 +1,5 @@
-"""Abstract output port for reference repository storage."""
+"""Compatibility alias for ifc_to_fds.application.ports.reference."""
 
-from pathlib import Path
-from typing import Any, Dict, Protocol, Tuple, Union, runtime_checkable
-
-
-@runtime_checkable
-class ReferenceRepositoryPort(Protocol):
-    """Port for reading, verifying, and hashing golden reference bundles."""
-
-    def bundle_digest(self, directory: Union[str, Path]) -> str:
-        ...
-
-    def inspect_case(
-        self, directory: Union[str, Path]
-    ) -> Tuple[str, Dict[str, Any], Dict[str, Any]]:
-        ...
-
-    def resolve_sources(self, case: Union[str, Path], mapping: Any) -> Any:
-        ...
+from importlib import import_module as _import_module
+import sys as _sys
+_sys.modules[__name__] = _import_module("ifc_to_fds.application.ports.reference")

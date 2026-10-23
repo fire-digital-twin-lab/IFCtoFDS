@@ -1,0 +1,192 @@
+{
+  "moves": [
+    {
+      "source": "tests/test_api_server.py",
+      "target": "tests/interfaces/http/test_api_server.py"
+    },
+    {
+      "source": "tests/test_architectural_improvements.py",
+      "target": "tests/architecture/test_architectural_improvements.py"
+    },
+    {
+      "source": "tests/test_architecture_contracts.py",
+      "target": "tests/architecture/test_architecture_contracts.py"
+    },
+    {
+      "source": "tests/test_artifact_lifecycle.py",
+      "target": "tests/modules/artifacts/test_artifact_lifecycle.py"
+    },
+    {
+      "source": "tests/test_artifact_storage.py",
+      "target": "tests/modules/artifacts/test_artifact_storage.py"
+    },
+    {
+      "source": "tests/test_audit_remediation.py",
+      "target": "tests/workflows/test_audit_remediation.py"
+    },
+    {
+      "source": "tests/test_backend_preview.py",
+      "target": "tests/browser/test_backend_preview.py"
+    },
+    {
+      "source": "tests/test_boundary_policy.py",
+      "target": "tests/modules/simulation/test_boundary_policy.py"
+    },
+    {
+      "source": "tests/test_cold_module_imports.py",
+      "target": "tests/compatibility/test_cold_module_imports.py"
+    },
+    {
+      "source": "tests/test_dependency_policy.py",
+      "target": "tests/architecture/test_dependency_policy.py"
+    },
+    {
+      "source": "tests/test_effective.py",
+      "target": "tests/workflows/test_effective.py"
+    },
+    {
+      "source": "tests/test_feature1_acceptance.py",
+      "target": "tests/workflows/test_feature1_acceptance.py"
+    },
+    {
+      "source": "tests/test_federation.py",
+      "target": "tests/modules/bim/test_federation.py"
+    },
+    {
+      "source": "tests/test_geometry_acceleration.py",
+      "target": "tests/modules/geometry/test_geometry_acceleration.py"
+    },
+    {
+      "source": "tests/test_geometry_booleans.py",
+      "target": "tests/modules/geometry/test_geometry_booleans.py"
+    },
+    {
+      "source": "tests/test_geometry_export_investigation.py",
+      "target": "tests/modules/geometry/test_geometry_export_investigation.py"
+    },
+    {
+      "source": "tests/test_golden_governance.py",
+      "target": "tests/modules/reference/test_golden_governance.py"
+    },
+    {
+      "source": "tests/test_golden_mapping.py",
+      "target": "tests/modules/reference/test_golden_mapping.py"
+    },
+    {
+      "source": "tests/test_http_components.py",
+      "target": "tests/interfaces/http/test_http_components.py"
+    },
+    {
+      "source": "tests/test_intersection_evidence.py",
+      "target": "tests/workflows/test_intersection_evidence.py"
+    },
+    {
+      "source": "tests/test_inventory.py",
+      "target": "tests/modules/bim/test_inventory.py"
+    },
+    {
+      "source": "tests/test_job_lifecycle.py",
+      "target": "tests/modules/jobs/test_job_lifecycle.py"
+    },
+    {
+      "source": "tests/test_job_ports.py",
+      "target": "tests/modules/jobs/test_job_ports.py"
+    },
+    {
+      "source": "tests/test_jobs.py",
+      "target": "tests/workflows/test_jobs.py"
+    },
+    {
+      "source": "tests/test_mapping_correction.py",
+      "target": "tests/workflows/test_mapping_correction.py"
+    },
+    {
+      "source": "tests/test_mapping_fidelity.py",
+      "target": "tests/modules/simulation/test_mapping_fidelity.py"
+    },
+    {
+      "source": "tests/test_mep_evidence.py",
+      "target": "tests/workflows/test_mep_evidence.py"
+    },
+    {
+      "source": "tests/test_mep_graph.py",
+      "target": "tests/workflows/test_mep_graph.py"
+    },
+    {
+      "source": "tests/test_mep_mutations.py",
+      "target": "tests/modules/bim/test_mep_mutations.py"
+    },
+    {
+      "source": "tests/test_module_boundaries.py",
+      "target": "tests/architecture/test_module_boundaries.py"
+    },
+    {
+      "source": "tests/test_opening_diagnostics.py",
+      "target": "tests/modules/geometry/test_opening_diagnostics.py"
+    },
+    {
+      "source": "tests/test_opening_mutations.py",
+      "target": "tests/modules/verification/test_opening_mutations.py"
+    },
+    {
+      "source": "tests/test_openings.py",
+      "target": "tests/modules/verification/test_openings.py"
+    },
+    {
+      "source": "tests/test_placement_provenance.py",
+      "target": "tests/workflows/test_placement_provenance.py"
+    },
+    {
+      "source": "tests/test_post_refactor.py",
+      "target": "tests/workflows/test_post_refactor.py"
+    },
+    {
+      "source": "tests/test_solver.py",
+      "target": "tests/modules/verification/test_solver.py"
+    },
+    {
+      "source": "tests/test_source_geometry_cache.py",
+      "target": "tests/modules/geometry/test_source_geometry_cache.py"
+    },
+    {
+      "source": "tests/test_spatial_scope.py",
+      "target": "tests/workflows/test_spatial_scope.py"
+    },
+    {
+      "source": "tests/test_stage_diagnostics.py",
+      "target": "tests/workflows/test_stage_diagnostics.py"
+    },
+    {
+      "source": "tests/test_traceability_mutations.py",
+      "target": "tests/modules/verification/test_traceability_mutations.py"
+    },
+    {
+      "source": "tests/test_ui_recovery_and_performance.py",
+      "target": "tests/workflows/test_ui_recovery_and_performance.py"
+    },
+    {
+      "source": "tests/test_units.py",
+      "target": "tests/modules/bim/test_units.py"
+    },
+    {
+      "source": "tests/test_validation_engine.py",
+      "target": "tests/modules/verification/test_validation_engine.py"
+    },
+    {
+      "source": "tests/test_validation_engine_parity.py",
+      "target": "tests/modules/verification/test_validation_engine_parity.py"
+    },
+    {
+      "source": "tests/test_workbench_interaction_core.py",
+      "target": "tests/workflows/test_workbench_interaction_core.py"
+    },
+    {
+      "source": "tests/test_workbench_navigation.py",
+      "target": "tests/workflows/test_workbench_navigation.py"
+    },
+    {
+      "source": "tests/test_workbench_real_ifc.py",
+      "target": "tests/browser/test_workbench_real_ifc.py"
+    }
+  ]
+}

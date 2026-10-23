@@ -1,26 +1,24 @@
-# 01 — Current Architecture Map (As-Is)
+# 01 - Kiến trúc đang chạy
 
-## 1. Overview
-The IFCtoFDS codebase historically evolved with two parallel pipelines:
-1. **JavaScript Web Engine (`js/`)**: A client-side browser pipeline using web-ifc and direct FDS text export workers.
-2. **Python Verified Framework (`ifc_to_fds/`)**: A research-grade pipeline using IfcOpenShell, manifold CSG, 3-tier independent validation, and golden reference parity.
+Cập nhật 22/10/2026 sau kế hoạch P00–P10. Backend phát hành trong một package, frontend đóng kèm bản phân phối. Đường dẫn dưới đây tương đối với `ifc_to_fds/`.
 
-## 2. Technical Organization (As-Is)
-```text
-ifc_to_fds/
-├── core/         # Canonical schema, inventory extraction, federation, placement, units
-├── geometry/     # IfcOpenShell OCC engine, mesh utilities, package storage
-├── mapping/      # Policy planner, boundary handler, FDS text exporter, manifest
-├── mep/          # MEP classifier, port graph extraction
-├── validation/   # Acceptance report, validation engine, parser, metrics, golden reference, solver
-├── pipeline.py   # Monolithic orchestration (convert, audit, prepare, save_artifacts)
-├── jobs.py       # Job manager, subprocess worker, queue, lifecycle
-└── server.py     # FastAPI endpoints
-```
+| Module | Implementation chính |
+| --- | --- |
+| BIM | `modules/bim/infrastructure/ifc/`: inventory, placement, units, source_loader, preview, reader và MEP; so graph thuần trong `domain/mep_comparison.py` |
+| Simulation | `modules/simulation/application/`: mapping_policy, spatial_scope, boundary_policy, plan_validation; boundary cases trong domain; implementation digest trong infrastructure |
+| Geometry | `modules/geometry/algorithms/`: mesh, boolean, metrics, sealing; native extraction/cache/payload trong infrastructure; package_service trong application |
+| FDS | `modules/fds/application/`: serializer, manifest_builder; `parsing/namelist.py` độc lập exporter; infrastructure chứa exporter adapter |
+| Verification | `modules/verification/application/`: engine, runner/checkers, saved_evidence, boundary acceptance/certification; infrastructure chứa solver process và engine adapter |
+| Reference | `modules/reference/application/`: parity, projections, integrity; infrastructure chứa bundle_io, registry, filesystem_repository |
+| Artifacts | `modules/artifacts/infrastructure/`: filesystem_repository, conversion_workspace; contracts định nghĩa checkpoint payload |
+| Jobs | `modules/jobs/application/service.py`: queue/supervision; infrastructure chứa SQLite, worker process, retention; factory nối dependencies |
 
-## 3. Identified Architectural Bottlenecks
-- `pipeline.py` mixes IFC ingestion, spatial scope, mapping planning, FDS serialization, validation orchestration, and filesystem artifact persistence in a single module.
-- `validation/engine.py` (`run_independent_validation`) handles syntax, traceability, geometry, openings, MEP, and solver verification in one massive procedure.
-- `AcceptanceReport` acts both as mutable scratch state during verification and final immutable audit artifact.
-- Direct tight coupling between mapping policy and FDS syntax serialization without an explicit `MappingPlan` intermediate contract.
-- Circular dependencies mitigated by function-local imports across geometry, validation, and mapping.
+Caller ngoài module dùng `api.py`/`contracts.py`. Mỗi module có README mô tả owner và public surface. Domain model Pydantic vẫn có một định nghĩa trong `domain/`; ownership theo stage được ghi trong [ADR 0001](decisions/0001-module-ownership.md), chưa phải các model context độc lập.
+
+`application/workflows/` điều phối convert/audit/save/prepare xuyên context; ports nằm trực tiếp trong `application/ports/`. `bootstrap/` ghép adapters qua public API. HTTP nằm trong `interfaces/http/`, chia routes health/jobs/previews/artifacts/reference; CLI và worker ở `interfaces/cli/`, `interfaces/worker/`.
+
+Các import cũ là facade một bước tới implementation cuối, giữ cùng module object khi cần cache/monkeypatch. Registry ghi đường dẫn/hash/đích cụ thể. `results.py` giữ wrappers để duy trì override semantics của caller cũ.
+
+Luồng Verified chuẩn bị model, lập MappingPlan, serialize, lưu checkpoint, giải phóng mesh converter rồi mở lại IFC và đầu ra đã lưu để audit độc lập. Engine active là `modules/verification/application/engine.py`; chưa đổi sang runner/checkers.
+
+Frontend dùng IIFE. `frontend/src/app/bootstrap.js` ghép state, viewer và feature dependencies; launcher, shell, workbench bindings tách riêng. Feature trả teardown handle; API clients sở hữu transport, viewer sở hữu tài nguyên 3D. Root HTML vẫn là launcher tương thích. [Báo cáo 14](14-ket-qua-to-chuc-ma.md) ghi kiểm tra và giới hạn nghiệm thu.

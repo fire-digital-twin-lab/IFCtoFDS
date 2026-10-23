@@ -67,7 +67,7 @@ def main():
                 raise RuntimeError("Local test server did not start")
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(
-                **({"channel": "msedge"} if os.name == "nt" else {}),
+                **({"executable_path": os.environ["IFCFDS_BROWSER_EXECUTABLE"]} if os.environ.get("IFCFDS_BROWSER_EXECUTABLE") else ({"channel": "msedge"} if os.name == "nt" else {})),
                 headless=True,
                 args=["--enable-webgl", "--use-angle=swiftshader", "--allow-file-access-from-files", "--disable-web-security"],
             )
@@ -86,7 +86,7 @@ def main():
                     page.set_default_timeout(60000)
                     if not preview:
                         page.route(
-                            "**/js/ifc/web-ifc-display.js",
+                            "**/src/features/preview/web-ifc-display.js",
                             lambda route: route.fulfill(body=""),
                         )
                     url = (

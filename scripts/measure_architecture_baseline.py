@@ -5,24 +5,25 @@ from pathlib import Path
 import hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_PATH = ROOT / "tests/baseline/snapshots/baseline_metrics.json"
+OUTPUT_PATH = ROOT / "scripts/out/architecture/metrics.json"
 
 JS_TARGETS = [
-    "js/app-controller.js",
-    "js/viewer/scene-viewer.js",
-    "js/ifc/ifc-adapter.js",
-    "js/fds/fds-exporter.js",
-    "css/app.css",
-    "index.html",
+    "frontend/src/app/app-controller.js",
+    "frontend/src/app/bootstrap.js",
+    "frontend/src/viewer/scene-viewer.js",
+    "frontend/src/engines/legacy/ifc/ifc-adapter.js",
+    "frontend/src/engines/legacy/fds/fds-exporter.js",
+    "frontend/styles/app.css",
+    "frontend/index.html",
 ]
 
 PY_TARGETS = [
-    "ifc_to_fds/validation/engine.py",
-    "ifc_to_fds/validation/golden.py",
+    "ifc_to_fds/modules/verification/application/engine.py",
+    "ifc_to_fds/modules/reference/application/parity.py",
     "ifc_to_fds/domain/bim/model.py",
     "ifc_to_fds/domain/validation/model.py",
-    "ifc_to_fds/application/use_cases/audit_conversion.py",
-    "ifc_to_fds/server.py",
+    "ifc_to_fds/application/workflows/audit_conversion.py",
+    "ifc_to_fds/interfaces/http/routes/__init__.py",
 ]
 
 FIXTURE_TARGETS = [

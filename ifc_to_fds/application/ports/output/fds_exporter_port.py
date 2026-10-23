@@ -1,19 +1,5 @@
-"""Abstract output port for FDS serialization."""
+"""Compatibility alias for ifc_to_fds.application.ports.fds_exporter."""
 
-from typing import Any, Protocol, Tuple, runtime_checkable
-
-
-@runtime_checkable
-class FdsExporterPort(Protocol):
-    """Port for serializing canonical models into Fortran FDS namelists."""
-
-    def serialize_fds(
-        self,
-        model: Any,
-        all_geom: bool = False,
-        include_review: bool = False,
-        decisions: Any = None,
-        boundary_policy: Any = None,
-        mapping_plan: Any = None,
-    ) -> Tuple[str, Any]:
-        ...
+from importlib import import_module as _import_module
+import sys as _sys
+_sys.modules[__name__] = _import_module("ifc_to_fds.application.ports.fds_exporter")

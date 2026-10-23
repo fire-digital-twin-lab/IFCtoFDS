@@ -1,9 +1,9 @@
 """FDS mapping, scoping, and serialization module."""
 
-from .exporter import serialize_fds
-from .manifest import MappingManifest, build_manifest
-from .policy import determine_element_strategy
-from .scope import SpatialScope, apply_spatial_scope
+from ifc_to_fds.modules.fds.application.serializer import serialize_fds
+from ifc_to_fds.modules.fds.application.manifest_builder import MappingManifest, build_manifest
+from ifc_to_fds.modules.simulation.application.mapping_policy import determine_element_strategy
+from ifc_to_fds.modules.simulation.application.spatial_scope import SpatialScope, apply_spatial_scope
 
 __all__ = [
     "MappingManifest",

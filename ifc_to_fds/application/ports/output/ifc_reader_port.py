@@ -1,20 +1,5 @@
-"""Abstract output port for IFC source ingestion and inventory extraction."""
+"""Compatibility alias for ifc_to_fds.application.ports.ifc_reader."""
 
-from pathlib import Path
-from typing import Any, Dict, List, Protocol, Union, runtime_checkable
-
-
-@runtime_checkable
-class IfcReaderPort(Protocol):
-    """Port for parsing IFC files into canonical domain structures."""
-
-    def load_sources(
-        self,
-        paths: List[str],
-        configured_sources: Any = None,
-        reference: bool = False,
-    ) -> Any:
-        ...
-
-    def extract_inventory(self, path: Union[str, Path]) -> Dict[str, Any]:
-        ...
+from importlib import import_module as _import_module
+import sys as _sys
+_sys.modules[__name__] = _import_module("ifc_to_fds.application.ports.ifc_reader")

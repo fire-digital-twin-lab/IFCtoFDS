@@ -15,8 +15,14 @@ from .canonical import (
     TriangleMesh,
     get_execution_provenance,
 )
-from .inventory import extract_inventory
-from .units import get_length_unit_scale
+
+def __getattr__(name):
+    # A native ingestion module imports core.canonical itself. Resolving these
+    # compatibility exports eagerly would re-enter that partially loaded module.
+    if name in {"extract_inventory", "get_length_unit_scale"}:
+        from ifc_to_fds.modules.bim import api
+        return getattr(api, name)
+    raise AttributeError(name)
 
 __all__ = [
     "BoundingBox",

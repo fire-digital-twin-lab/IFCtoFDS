@@ -7,7 +7,7 @@ from typing import Any, Dict
 from ifc_to_fds.domain.bim import BoundingBox
 from ifc_to_fds.domain.scope import SpatialScope
 from ifc_to_fds.domain.validation import AuditConfig
-from ifc_to_fds.mapping.policy import validate_decisions
+from ifc_to_fds.modules.simulation.api import validate_decisions
 
 
 def validate_configuration(value: Any) -> Dict[str, Any]:
@@ -55,7 +55,7 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
         raise ValueError("reference_case must be a case directory or registered ID")
     if config.get("simulation_domain") is not None:
         BoundingBox.model_validate(config["simulation_domain"])
-    from ifc_to_fds.mapping.boundary import POLICY, EXACT_POLICY
+    from ifc_to_fds.modules.simulation.api import POLICY, EXACT_POLICY
 
     if config.get("boundary_policy") not in (None, POLICY, EXACT_POLICY):
         raise ValueError("Unsupported boundary policy")

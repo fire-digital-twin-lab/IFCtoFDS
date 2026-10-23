@@ -1,0 +1,197 @@
+{
+  "fixture_kind": "AUTHORED_SYNTHETIC_GEOMETRY",
+  "members": {
+    "3ZjnToH1LDGvuLlafMWBu0": {
+      "ifc_type": "IfcDuctSegment",
+      "system_global_id": "0k5lSV1ML1nA9XWBUkdPMd",
+      "category": "VENTILATION",
+      "ports": [
+        "22SUIow7fEI8YuTjOzbrQO",
+        "2g2fBYWEP1neufTR9TQ412"
+      ],
+      "length_m": 2.0,
+      "analytic_volume_m3": 0.07679999999999998,
+      "axis_start": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_end": [
+        2.0,
+        0.0,
+        1.0
+      ]
+    },
+    "04D4flUPzFYhu8yZaY3k5N": {
+      "ifc_type": "IfcDuctFitting",
+      "system_global_id": "0k5lSV1ML1nA9XWBUkdPMd",
+      "category": "VENTILATION",
+      "ports": [
+        "1mZwNvDM56juOhxkCAUS9p",
+        "3IQzMa1PL4uxQjyBtuQTVO"
+      ],
+      "length_m": 0.5,
+      "analytic_volume_m3": 0.019199999999999995,
+      "axis_start": [
+        2.0,
+        0.0,
+        1.0
+      ],
+      "axis_end": [
+        2.5,
+        0.0,
+        1.0
+      ]
+    },
+    "1nRgS28XLDMvHZimDtNv0F": {
+      "ifc_type": "IfcFan",
+      "system_global_id": "0k5lSV1ML1nA9XWBUkdPMd",
+      "category": "VENTILATION",
+      "ports": [
+        "08WlFoGDbDYuSxE3OiM7bs",
+        "1NoguqOMn1EAFZyoMkHf2C"
+      ],
+      "length_m": 0.4,
+      "analytic_volume_m3": 0.015359999999999997,
+      "axis_start": [
+        2.5,
+        0.0,
+        1.0
+      ],
+      "axis_end": [
+        2.9,
+        0.0,
+        1.0
+      ]
+    },
+    "128$V7nHn0BQSHApqH9z4X": {
+      "ifc_type": "IfcAirTerminal",
+      "system_global_id": "0k5lSV1ML1nA9XWBUkdPMd",
+      "category": "VENTILATION",
+      "ports": [
+        "1tO3PVMhf5aeeHcShuMOX1"
+      ],
+      "length_m": 0.1,
+      "analytic_volume_m3": 0.0038399999999999992,
+      "axis_start": [
+        2.9,
+        0.0,
+        1.0
+      ],
+      "axis_end": [
+        3.0,
+        0.0,
+        1.0
+      ]
+    },
+    "1LRXa2Dq15vvnyJCObEfGo": {
+      "ifc_type": "IfcPipeSegment",
+      "system_global_id": "2TSXSJrh5FKBQfmkpo3HS4",
+      "category": "FIRE_SUPPRESSION",
+      "ports": [
+        "08xRm0hwvARudqGeEBO2ln",
+        "3L7mU72NzAGwVH4GN0P10_"
+      ],
+      "length_m": 2.0,
+      "analytic_volume_m3": null,
+      "axis_start": [
+        0.0,
+        2.0,
+        1.0
+      ],
+      "axis_end": [
+        2.0,
+        2.0,
+        1.0
+      ]
+    },
+    "0qZf3BIzD5rAJAMU3IJcmG": {
+      "ifc_type": "IfcPipeFitting",
+      "system_global_id": "2TSXSJrh5FKBQfmkpo3HS4",
+      "category": "FIRE_SUPPRESSION",
+      "ports": [
+        "27v7D3oYXChvupC5CqydBM",
+        "0h0ly5o8fCiQLvYEDeO394"
+      ],
+      "length_m": 0.5,
+      "analytic_volume_m3": null,
+      "axis_start": [
+        2.0,
+        2.0,
+        1.0
+      ],
+      "axis_end": [
+        2.5,
+        2.0,
+        1.0
+      ]
+    },
+    "1Jh_fjTVT7dvBDxxOI2y52": {
+      "ifc_type": "IfcValve",
+      "system_global_id": "2TSXSJrh5FKBQfmkpo3HS4",
+      "category": "FIRE_SUPPRESSION",
+      "ports": [
+        "1_ZnSgFKf2JRfeQS8foMAJ",
+        "353Mem_DLDTQDle4t4g5P8"
+      ],
+      "length_m": 0.3,
+      "analytic_volume_m3": null,
+      "axis_start": [
+        2.5,
+        2.0,
+        1.0
+      ],
+      "axis_end": [
+        2.8,
+        2.0,
+        1.0
+      ]
+    },
+    "0U5YohK$PAJRz2R9GtU5iY": {
+      "ifc_type": "IfcFireSuppressionTerminal",
+      "system_global_id": "2TSXSJrh5FKBQfmkpo3HS4",
+      "category": "FIRE_SUPPRESSION",
+      "ports": [
+        "3j0JkaRszBcw2Wdb5s4lcw"
+      ],
+      "length_m": 0.15,
+      "analytic_volume_m3": null,
+      "axis_start": [
+        2.8,
+        2.0,
+        1.0
+      ],
+      "axis_end": [
+        2.9499999999999997,
+        2.0,
+        1.0
+      ]
+    }
+  },
+  "connections": [
+    [
+      "2g2fBYWEP1neufTR9TQ412",
+      "1mZwNvDM56juOhxkCAUS9p"
+    ],
+    [
+      "3IQzMa1PL4uxQjyBtuQTVO",
+      "08WlFoGDbDYuSxE3OiM7bs"
+    ],
+    [
+      "1NoguqOMn1EAFZyoMkHf2C",
+      "1tO3PVMhf5aeeHcShuMOX1"
+    ],
+    [
+      "3L7mU72NzAGwVH4GN0P10_",
+      "27v7D3oYXChvupC5CqydBM"
+    ],
+    [
+      "0h0ly5o8fCiQLvYEDeO394",
+      "1_ZnSgFKf2JRfeQS8foMAJ"
+    ],
+    [
+      "353Mem_DLDTQDle4t4g5P8",
+      "3j0JkaRszBcw2Wdb5s4lcw"
+    ]
+  ]
+}

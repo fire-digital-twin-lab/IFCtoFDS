@@ -1,0 +1,6 @@
+&HEAD CHID='acceptance' /
+&TIME T_END=0 /
+&MESH ID='domain', IJK=20,10,10, XB=0,4,0,2,0,2 /
+&OBST ID='wall', XB=1,3,0.2,1.8,0,2 /
+&HOLE ID='opening', XB=0.8,3.2,0.6,1.4,0,1.4 /
+&TAIL /

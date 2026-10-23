@@ -1,0 +1,776 @@
+{
+  "schema_version": 1,
+  "facades": {
+    "ifc_to_fds.cli": {
+      "path": "ifc_to_fds/cli.py",
+      "sha256": "f82a3d706d0f6e50217af1b4f27a9dd3f6a8cd95c9266b290d2756fb092c5019",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.interfaces.cli.main"
+    },
+    "ifc_to_fds.diagnostics": {
+      "path": "ifc_to_fds/diagnostics.py",
+      "sha256": "b09664a032fb92e4a5efe57149f63f237ad947903d9828968108b83d67d23547",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.runtime.diagnostics"
+    },
+    "ifc_to_fds.pipeline": {
+      "path": "ifc_to_fds/pipeline.py",
+      "sha256": "58190ab75d87fc34fe4067da2140244b2ad2b3761c5c3d021a14d029f3182499",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.server": {
+      "path": "ifc_to_fds/server.py",
+      "sha256": "b696b136a3dd94fc7b28e9acc343314e52d031713cd796341a9bb16ad5c19e66",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.interfaces.http.app"
+    },
+    "ifc_to_fds.adapters.validation": {
+      "path": "ifc_to_fds/adapters/validation.py",
+      "sha256": "a8c3346bfebc35692572e7ab318ff60d3d3012c445ac09c945b57ac40d472524",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.infrastructure.engine_adapter"
+    },
+    "ifc_to_fds.core.canonical": {
+      "path": "ifc_to_fds/core/canonical.py",
+      "sha256": "0c447bdb9464dc8fa023f2edf379fcc1da6c8cb6c7e36f674752427149a9e518",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.core.compare": {
+      "path": "ifc_to_fds/core/compare.py",
+      "sha256": "84635035b24c987bfaabb13cb5419ca864b69114ad473438338d65e4844df25a",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.runtime.normalization"
+    },
+    "ifc_to_fds.core.federation": {
+      "path": "ifc_to_fds/core/federation.py",
+      "sha256": "9ac51c756ddc030d17520c56d8debb6fdf831e36cec291912be3f4817f01319f",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.source_loader"
+    },
+    "ifc_to_fds.core.inventory": {
+      "path": "ifc_to_fds/core/inventory.py",
+      "sha256": "83b708eed04095aea4664cf6b40f9e9b5690ad2562eb453fba8bd959728cfa60",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.inventory"
+    },
+    "ifc_to_fds.core.placement": {
+      "path": "ifc_to_fds/core/placement.py",
+      "sha256": "76e9008750010b0cf0287640c4cf3c3f8299830b675eb55dbd6816e12f1a7f03",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.placement"
+    },
+    "ifc_to_fds.core.units": {
+      "path": "ifc_to_fds/core/units.py",
+      "sha256": "a521e2039e7dd24f6580a6761cc7559736a509052ae033dda3c77fc67a3d58d1",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.units"
+    },
+    "ifc_to_fds.core": {
+      "path": "ifc_to_fds/core/__init__.py",
+      "sha256": "d3a85f4b8e98e0ac7a993ca6e7a8e8a096971a79ef7086d02157df5ccf17ee9d",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.geometry.boolean": {
+      "path": "ifc_to_fds/geometry/boolean.py",
+      "sha256": "cd3af3358ed381392161461982e24ffe9180b1e0aa2d3ffba1b4ab00abca3fc9",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.algorithms.boolean"
+    },
+    "ifc_to_fds.geometry.cache": {
+      "path": "ifc_to_fds/geometry/cache.py",
+      "sha256": "f88c7d40b8c2f98b01eaba03536411b09602f30fb8e2d1e93907221bcad3fdf0",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.infrastructure.cache"
+    },
+    "ifc_to_fds.geometry.diagnostics": {
+      "path": "ifc_to_fds/geometry/diagnostics.py",
+      "sha256": "ef83307125741715ea8e674d4f276b95850e5637a41e6a5d748bc950387c5c89",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.diagnostics"
+    },
+    "ifc_to_fds.geometry.engine": {
+      "path": "ifc_to_fds/geometry/engine.py",
+      "sha256": "078b44cfd0537a430ea548770c0e20f4f790e8b96c24408e609e5d4f320f8d60",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.infrastructure.ifcopenshell.extraction"
+    },
+    "ifc_to_fds.geometry.mesh": {
+      "path": "ifc_to_fds/geometry/mesh.py",
+      "sha256": "aad368f8444484958107b16d3ee297f8dd0de88ba99dde3aab391c4f5935d9d1",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.algorithms.mesh"
+    },
+    "ifc_to_fds.geometry.package": {
+      "path": "ifc_to_fds/geometry/package.py",
+      "sha256": "806b5694138b201f1564a7fd2bb032a88ccc301238aba84c030c10700c19deac",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.application.package_service"
+    },
+    "ifc_to_fds.geometry.preview": {
+      "path": "ifc_to_fds/geometry/preview.py",
+      "sha256": "1985627044f68f9493020e0d66dfe4cae1ce5900db98e998e6b01eb10b63b0e4",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.preview"
+    },
+    "ifc_to_fds.geometry.preview_cache": {
+      "path": "ifc_to_fds/geometry/preview_cache.py",
+      "sha256": "a83a8a94fe39f088b93b1b37602b9a49832028b916f5b76280e63979ad383b38",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.infrastructure.preview_cache"
+    },
+    "ifc_to_fds.geometry.storage": {
+      "path": "ifc_to_fds/geometry/storage.py",
+      "sha256": "f85566744eda1723c9ba778e9d2dd478d2e13e4664964208726be252da3111cd",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.infrastructure.payload_store"
+    },
+    "ifc_to_fds.geometry": {
+      "path": "ifc_to_fds/geometry/__init__.py",
+      "sha256": "5cdeffd7d13606190051e1af693106be55281fc424c0cf35d24c20a373f0e501",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.mapping.boundary": {
+      "path": "ifc_to_fds/mapping/boundary.py",
+      "sha256": "25f4f04053e31580f4f3790a3794aa9c19e4edac87d884eace2864cf76d51544",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.mapping.boundary_fixtures_data": {
+      "path": "ifc_to_fds/mapping/boundary_fixtures_data.py",
+      "sha256": "ada4abd7923e9bbb8384970664072208c4206ab4b25243ef17a8f2339b08dd8b",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.simulation.domain.boundary_cases"
+    },
+    "ifc_to_fds.mapping.exporter": {
+      "path": "ifc_to_fds/mapping/exporter.py",
+      "sha256": "434e3117bc1b64c5e540b92390232d91dc2d5f3ecd5635b87278c7d821f06bc4",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.fds.application.serializer"
+    },
+    "ifc_to_fds.mapping.manifest": {
+      "path": "ifc_to_fds/mapping/manifest.py",
+      "sha256": "151591dfdc079a40e438c4ded6f16ac4ddedc02405969e15655717b97ec5cd6a",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.fds.application.manifest_builder"
+    },
+    "ifc_to_fds.mapping.plan_validation": {
+      "path": "ifc_to_fds/mapping/plan_validation.py",
+      "sha256": "c103651989c048e9ebf9aac6dc8b1d62abc1a16e9bd56062952085c75eeae93b",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.simulation.application.plan_validation"
+    },
+    "ifc_to_fds.mapping.policy": {
+      "path": "ifc_to_fds/mapping/policy.py",
+      "sha256": "2ef98e448fc57756a8191608452b67e1e2b5972650a084988d0936036e3c2e5d",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.simulation.application.mapping_policy"
+    },
+    "ifc_to_fds.mapping.scope": {
+      "path": "ifc_to_fds/mapping/scope.py",
+      "sha256": "9a7340b1982a569304cf673ace654ad2231bf3d31e16a6441d0755b9e4f72c66",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.simulation.application.spatial_scope"
+    },
+    "ifc_to_fds.mapping": {
+      "path": "ifc_to_fds/mapping/__init__.py",
+      "sha256": "e1ce105ee8f28432b0adfe3ebdd54ba903f8a688512e478ae571eb3b47b8d9ea",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.mep.classifier": {
+      "path": "ifc_to_fds/mep/classifier.py",
+      "sha256": "9f1a40a38a408c9f996ca92ad496e8150c7cde6a6a8777a40e0fa61cfa30335b",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.mep.classifier"
+    },
+    "ifc_to_fds.mep.compare": {
+      "path": "ifc_to_fds/mep/compare.py",
+      "sha256": "3e429ef36f88969cfaada73b2c449ea2d37eba1dee60fd1f468a05ae1642a2d6",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.domain.mep_comparison"
+    },
+    "ifc_to_fds.mep.mep_graph": {
+      "path": "ifc_to_fds/mep/mep_graph.py",
+      "sha256": "5f604768961bbb3539de39412ae84af0b0553c6bca41423ccd6681daaa746083",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.mep.graph_reader"
+    },
+    "ifc_to_fds.mep": {
+      "path": "ifc_to_fds/mep/__init__.py",
+      "sha256": "a6c3f177f52941042a22b8b04b5ad7e186ddac25fdb11d3210b5d6f37224ac4a",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.validation.acceptance": {
+      "path": "ifc_to_fds/validation/acceptance.py",
+      "sha256": "18a3a1b7f4e4ae02bad1095004f69c86db358e6c35d788b04ca7597caf431d5c",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.validation.boundary_fixtures": {
+      "path": "ifc_to_fds/validation/boundary_fixtures.py",
+      "sha256": "13f890173e3d69d9400e6b86c7fe3a1d7b629e0e724359e99c57920cdd2aea6e",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.boundary_certification"
+    },
+    "ifc_to_fds.validation.effective": {
+      "path": "ifc_to_fds/validation/effective.py",
+      "sha256": "8783e6707c49b9a786f2868cda0f9336ac8dc07772e30aa3b94ba00f1cc9401a",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.effective_obstructions"
+    },
+    "ifc_to_fds.validation.engine": {
+      "path": "ifc_to_fds/validation/engine.py",
+      "sha256": "f4dcc81c4cf10c9c68ca9278d9851f2a3ade49b3849ee1dd22abbe8174993865",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.engine"
+    },
+    "ifc_to_fds.validation.metrics": {
+      "path": "ifc_to_fds/validation/metrics.py",
+      "sha256": "9e084892fb31ffe7bad48a782b0f75cbaebb2320609afbd1f641b8cf0673a133",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.algorithms.metrics"
+    },
+    "ifc_to_fds.validation.parser": {
+      "path": "ifc_to_fds/validation/parser.py",
+      "sha256": "6b549b4b716184bea6c99854c31f2991f7b0d7fe8474894b8a994b92ccc4a824",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.fds.parsing.namelist"
+    },
+    "ifc_to_fds.validation.reference_integrity": {
+      "path": "ifc_to_fds/validation/reference_integrity.py",
+      "sha256": "276c093a669276ed18f6849830dcbbaec0d039d5d16cb23bcc42fd3e041f8606",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.reference.application.integrity"
+    },
+    "ifc_to_fds.validation.runner": {
+      "path": "ifc_to_fds/validation/runner.py",
+      "sha256": "65a921eb1a615c4a968da39605b4f317a8ef691eaebf1cd0db56e18c69ef43d2",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.runner"
+    },
+    "ifc_to_fds.validation.solver": {
+      "path": "ifc_to_fds/validation/solver.py",
+      "sha256": "ffc60cefce2174a9d10bb89ea7f220b94ad17acdc49c1a8e9422797160ec2ae2",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.infrastructure.fds.solver_process"
+    },
+    "ifc_to_fds.validation": {
+      "path": "ifc_to_fds/validation/__init__.py",
+      "sha256": "af955b212259e93b3d77fc56fa433338b0eec308a8028abedbba2eb0495e3a02",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.adapters.fds.exporter": {
+      "path": "ifc_to_fds/adapters/fds/exporter.py",
+      "sha256": "1aff358472c1ef077f77fd3e581102eeae19d00d3b25bea727a09c70156f113f",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.fds.infrastructure.exporter"
+    },
+    "ifc_to_fds.adapters.ifc.diagnostics": {
+      "path": "ifc_to_fds/adapters/ifc/diagnostics.py",
+      "sha256": "1f09e2bb59593595d4c10d81e46a13f1efd9396d17a35c43598ab217e80e5655",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.diagnostics"
+    },
+    "ifc_to_fds.adapters.ifc.reader": {
+      "path": "ifc_to_fds/adapters/ifc/reader.py",
+      "sha256": "7aae82d8ed3f9953c2dd5e699b86b5bdbf6aaef3455d1677f0381f7069847962",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.reader"
+    },
+    "ifc_to_fds.adapters.jobs.repository": {
+      "path": "ifc_to_fds/adapters/jobs/repository.py",
+      "sha256": "099296d6a6ef6adc9901ef41e8364011a48a4a0ad875d2c73cac6678979315a6",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.jobs.infrastructure.sqlite_repository"
+    },
+    "ifc_to_fds.adapters.jobs.runner": {
+      "path": "ifc_to_fds/adapters/jobs/runner.py",
+      "sha256": "a752ed4933f280389004d1fe2a1cd35b41deee36e925b4ce177c7612aa8374fd",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.interfaces.worker.runner"
+    },
+    "ifc_to_fds.adapters.jobs.service": {
+      "path": "ifc_to_fds/adapters/jobs/service.py",
+      "sha256": "c884ee09cba2653288f99c879c84977a6632c1ed7f9f3db6f7c4fe7b7f05ffd9",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.jobs.application.service"
+    },
+    "ifc_to_fds.adapters.jobs": {
+      "path": "ifc_to_fds/adapters/jobs/__init__.py",
+      "sha256": "ece539e59a1b8d17f12f2796b353eb57629a5714496136d57950afe7ada78ade",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.adapters.reference.filesystem": {
+      "path": "ifc_to_fds/adapters/reference/filesystem.py",
+      "sha256": "59a8dfa815a525b6ae1a76c836e7a8e5a30050b93b820aefd7e009a2f94326e7",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.reference.infrastructure.filesystem_repository"
+    },
+    "ifc_to_fds.adapters.reference": {
+      "path": "ifc_to_fds/adapters/reference/__init__.py",
+      "sha256": "b68bc8aadc1fa7142c0834267004d4a4160399043892abf3f7662542e03a7372",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.adapters.storage.filesystem": {
+      "path": "ifc_to_fds/adapters/storage/filesystem.py",
+      "sha256": "8875522372558cfa484431698c341782afc3c1562b647257ed8f1190c8a4822c",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.artifacts.infrastructure.filesystem_repository"
+    },
+    "ifc_to_fds.adapters.storage": {
+      "path": "ifc_to_fds/adapters/storage/__init__.py",
+      "sha256": "a17d1b7f251bd8a75d5d897b408f498199ed3ed59ba8ac7d505a3d4fd773444a",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.application.services.model_preparer": {
+      "path": "ifc_to_fds/application/services/model_preparer.py",
+      "sha256": "2ff7d892e5c675ac57c3391e0ebe0b778b36550f385d9f22e679f03b1eda6077",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.application.workflows.prepare_model"
+    },
+    "ifc_to_fds.application.use_cases.audit_conversion": {
+      "path": "ifc_to_fds/application/use_cases/audit_conversion.py",
+      "sha256": "51f60d6d97d563863f41b6de157f21fd8188e28b21be79cfdd39edecccaae4dc",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.application.workflows.audit_conversion"
+    },
+    "ifc_to_fds.application.use_cases.convert_verified": {
+      "path": "ifc_to_fds/application/use_cases/convert_verified.py",
+      "sha256": "7e7ae72c4820870f1ccce6e8a43d95666fb7c198e9bfccb2e92c02f3f24ee0ed",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.application.workflows.convert_verified"
+    },
+    "ifc_to_fds.application.use_cases.save_artifacts": {
+      "path": "ifc_to_fds/application/use_cases/save_artifacts.py",
+      "sha256": "a8c5ec0a81b63831bac77685ed50d27926d3c3a7e874d64cc2c29f91b72642c8",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.application.workflows.save_artifacts"
+    },
+    "ifc_to_fds.application.use_cases": {
+      "path": "ifc_to_fds/application/use_cases/__init__.py",
+      "sha256": "3c766958c00513c7b844bb424e3db34276687368388d568ab83fe1c849a6513b",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.application.ports.output.fds_exporter_port": {
+      "path": "ifc_to_fds/application/ports/output/fds_exporter_port.py",
+      "sha256": "8927d36692b9652b121e1aa27f872e2ae8ef4d51f429ce83e21ebf779e25c61f",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.application.ports.fds_exporter"
+    },
+    "ifc_to_fds.application.ports.output.ifc_reader_port": {
+      "path": "ifc_to_fds/application/ports/output/ifc_reader_port.py",
+      "sha256": "1e5ab4ae91de8ec52a19bdba0f64ac79f73b6b16b37c2f8213046eddcff488fd",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.application.ports.ifc_reader"
+    },
+    "ifc_to_fds.application.ports.output.reference_port": {
+      "path": "ifc_to_fds/application/ports/output/reference_port.py",
+      "sha256": "0a0df6c05bf60fa7fadd8aac04c257612deb7a9d93885132939f25af7e7bb565",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.application.ports.reference"
+    },
+    "ifc_to_fds.modules.artifacts.repository": {
+      "path": "ifc_to_fds/modules/artifacts/repository.py",
+      "sha256": "b3cfa983b9cfc49ca3e4b363e6d7f9f204d197a57756fc8c05ee4bb3f8fe73fa",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.artifacts.infrastructure.filesystem_repository"
+    },
+    "ifc_to_fds.modules.artifacts.workspace": {
+      "path": "ifc_to_fds/modules/artifacts/workspace.py",
+      "sha256": "b979471c443d6c4eb4477704aeccbacf905c2391d8d01da19ae4a9dfac94085e",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.artifacts.infrastructure.conversion_workspace"
+    },
+    "ifc_to_fds.modules.bim.federation": {
+      "path": "ifc_to_fds/modules/bim/federation.py",
+      "sha256": "f0326797f51993670611ee6c59a5ab4302d97cadf57358a3dd7830b73507556c",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.source_loader"
+    },
+    "ifc_to_fds.modules.bim.inventory": {
+      "path": "ifc_to_fds/modules/bim/inventory.py",
+      "sha256": "5ba1c975a5fb3ec82430eb01fbb6dad38d14f6483a9bce165ab3c4f7e7df73da",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.inventory"
+    },
+    "ifc_to_fds.modules.bim.placement": {
+      "path": "ifc_to_fds/modules/bim/placement.py",
+      "sha256": "ba9e117b5f9d9915ead222e23c8530f460e33cc35516bc1be6bd7a6e519bcd46",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.placement"
+    },
+    "ifc_to_fds.modules.bim.preview": {
+      "path": "ifc_to_fds/modules/bim/preview.py",
+      "sha256": "558b10e9d682ae80e0fbe8be794d737c37b0dd4a26675d7de44f51b2e8d1242a",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.preview"
+    },
+    "ifc_to_fds.modules.bim.units": {
+      "path": "ifc_to_fds/modules/bim/units.py",
+      "sha256": "43e886ad2adcf29297121ec451ac9053ae8294b8d5900dc3c4b64d8a44a1acee",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.units"
+    },
+    "ifc_to_fds.modules.fds.manifest": {
+      "path": "ifc_to_fds/modules/fds/manifest.py",
+      "sha256": "48ed370e808ae935ff461371ed3ff0e40de01ab520d369bd32757ff6de889575",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.fds.application.manifest_builder"
+    },
+    "ifc_to_fds.modules.fds.parser": {
+      "path": "ifc_to_fds/modules/fds/parser.py",
+      "sha256": "d736ffb15a262b3ba382ae13aa5a03b58113c3aabc9cf00e32603d554432be83",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.fds.parsing.namelist"
+    },
+    "ifc_to_fds.modules.fds.serializer": {
+      "path": "ifc_to_fds/modules/fds/serializer.py",
+      "sha256": "c0447b96a8a838f191c224bdac1853be77cedc5712738dd1983858d4d293cbea",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.fds.application.serializer"
+    },
+    "ifc_to_fds.modules.geometry.boolean": {
+      "path": "ifc_to_fds/modules/geometry/boolean.py",
+      "sha256": "087fec8516b2efc69900644cde942a51ee4bc2d51fbb7e57cdd98e78a3842241",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.algorithms.boolean"
+    },
+    "ifc_to_fds.modules.geometry.cache": {
+      "path": "ifc_to_fds/modules/geometry/cache.py",
+      "sha256": "6e7732bacc8b61a50a6f83b3737140c70d3a95ccaf429066700515fd77f3b31d",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.infrastructure.cache"
+    },
+    "ifc_to_fds.modules.geometry.engine": {
+      "path": "ifc_to_fds/modules/geometry/engine.py",
+      "sha256": "3d348db09e88a6034d5ac365e5fc6255c6d0c9a1987a83d01c988a40c721636b",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.infrastructure.ifcopenshell.extraction"
+    },
+    "ifc_to_fds.modules.geometry.mesh": {
+      "path": "ifc_to_fds/modules/geometry/mesh.py",
+      "sha256": "0efc85f55b6ff70fa87c558923aed08506b785ad78dda799da82db8c32e3abfc",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.algorithms.mesh"
+    },
+    "ifc_to_fds.modules.geometry.metrics": {
+      "path": "ifc_to_fds/modules/geometry/metrics.py",
+      "sha256": "8f372ad7f94894d642133759a5d8f2ae6ab7e6eabc348167dd5855e99c33a4d6",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.algorithms.metrics"
+    },
+    "ifc_to_fds.modules.geometry.package": {
+      "path": "ifc_to_fds/modules/geometry/package.py",
+      "sha256": "bcd36db77ab08de52a7b28e51df25ec93a223c0874a68b19feed174b40e1dbdb",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.application.package_service"
+    },
+    "ifc_to_fds.modules.geometry.preview_cache": {
+      "path": "ifc_to_fds/modules/geometry/preview_cache.py",
+      "sha256": "91dbf1f37d0cf6f6870f6751a9e5953f09bf69772ba030750b4008472a5837a3",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.infrastructure.preview_cache"
+    },
+    "ifc_to_fds.modules.geometry.storage": {
+      "path": "ifc_to_fds/modules/geometry/storage.py",
+      "sha256": "efcae2bfdb33a56c53d6aab86046fef92a4248a06564f0a033f557a730d639f7",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.geometry.infrastructure.payload_store"
+    },
+    "ifc_to_fds.modules.jobs.repository": {
+      "path": "ifc_to_fds/modules/jobs/repository.py",
+      "sha256": "16a63165622b7f086369e1a5be921835597c13bdf13e669c026c943db4b1f6de",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.jobs.infrastructure.sqlite_repository"
+    },
+    "ifc_to_fds.modules.jobs.service": {
+      "path": "ifc_to_fds/modules/jobs/service.py",
+      "sha256": "b8d862ff9f1e2c9bca14c265504bdf9e9de8ede39c15ff631bd7f35fc485ffc8",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.jobs.application.service"
+    },
+    "ifc_to_fds.modules.reference.bundle_io": {
+      "path": "ifc_to_fds/modules/reference/bundle_io.py",
+      "sha256": "2b61424c6464e3953d40846941250e3882f43bc120e52b7f3bb9552c5c4bf89a",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.reference.infrastructure.bundle_io"
+    },
+    "ifc_to_fds.modules.reference.gate": {
+      "path": "ifc_to_fds/modules/reference/gate.py",
+      "sha256": "a6d01cea9186441b7913d10687931a62a74226db1675a596e92fe693b737a20d",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.reference.application.parity"
+    },
+    "ifc_to_fds.modules.reference.integrity": {
+      "path": "ifc_to_fds/modules/reference/integrity.py",
+      "sha256": "4ac713a235239dafa6fed7f815e1e998926b4be3e65f0f77a6373e1a1850bd83",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.reference.application.integrity"
+    },
+    "ifc_to_fds.modules.reference.normalizer": {
+      "path": "ifc_to_fds/modules/reference/normalizer.py",
+      "sha256": "42b5a01b7e2ce83676a825eb331f80cca632ee31527a113ff4dff4946e8257f2",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.reference.application.projections"
+    },
+    "ifc_to_fds.modules.reference.repository": {
+      "path": "ifc_to_fds/modules/reference/repository.py",
+      "sha256": "4a59abefe211f41adfc0b7a6a8495eecc02119edc8918769b4434231bf2b48cd",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.reference.infrastructure.filesystem_repository"
+    },
+    "ifc_to_fds.modules.simulation.boundary": {
+      "path": "ifc_to_fds/modules/simulation/boundary.py",
+      "sha256": "6fc29347ccc36269cd6573c7f2206d6cb0451f55f26411d322caf5f404e3728d",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.simulation.application.boundary_policy"
+    },
+    "ifc_to_fds.modules.simulation.boundary_fixtures_data": {
+      "path": "ifc_to_fds/modules/simulation/boundary_fixtures_data.py",
+      "sha256": "2f3cb4aee0efa6657db639cb24c7d2d3c9208270cdd05f4daadb023fba8deff4",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.simulation.domain.boundary_cases"
+    },
+    "ifc_to_fds.modules.simulation.plan_validation": {
+      "path": "ifc_to_fds/modules/simulation/plan_validation.py",
+      "sha256": "026644988ed0261ffcfdd3b47cfa50656ded4c812383f120511251c46474d559",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.simulation.application.plan_validation"
+    },
+    "ifc_to_fds.modules.simulation.policy": {
+      "path": "ifc_to_fds/modules/simulation/policy.py",
+      "sha256": "d2be22afa825a59427362a4f8389a423cc918a778e54d5b84388500df4d64f4f",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.simulation.application.mapping_policy"
+    },
+    "ifc_to_fds.modules.simulation.scope": {
+      "path": "ifc_to_fds/modules/simulation/scope.py",
+      "sha256": "cc36af14dc273b64dccc449ce41e256381031122c379564ddfb329b045baae21",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.simulation.application.spatial_scope"
+    },
+    "ifc_to_fds.modules.verification.boundary_fixtures": {
+      "path": "ifc_to_fds/modules/verification/boundary_fixtures.py",
+      "sha256": "4961d5fed50d053a882d9c663802f5e63d799c3f1d32fdd4011fc84042d787b8",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.boundary_certification"
+    },
+    "ifc_to_fds.modules.verification.boundary_policy": {
+      "path": "ifc_to_fds/modules/verification/boundary_policy.py",
+      "sha256": "5fcad62d9dacf6d2721c9ffa37d14800d1934eb1c591c2aacbf0b79c07d537b6",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.boundary_acceptance"
+    },
+    "ifc_to_fds.modules.verification.effective": {
+      "path": "ifc_to_fds/modules/verification/effective.py",
+      "sha256": "2069275a1b3c9424ebfeb9ef6338a408d31bc04f796410c93c6c9f11ca39a29b",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.effective_obstructions"
+    },
+    "ifc_to_fds.modules.verification.engine": {
+      "path": "ifc_to_fds/modules/verification/engine.py",
+      "sha256": "4b83faa2c3c0f7f29328a151b8be816cb6139135a6cd9cd15e0f2dcbdf7f753a",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.engine"
+    },
+    "ifc_to_fds.modules.verification.runner": {
+      "path": "ifc_to_fds/modules/verification/runner.py",
+      "sha256": "c66788a65bc33352b0764b2231a5927356c98f43fb559bc11caa666eb7914919",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.runner"
+    },
+    "ifc_to_fds.modules.verification.solver": {
+      "path": "ifc_to_fds/modules/verification/solver.py",
+      "sha256": "e7a7cd812d4e3490a27ba4b71b4468211b73246e257fffff94c8aced26c2b931",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.infrastructure.fds.solver_process"
+    },
+    "ifc_to_fds.modules.bim.mep.classifier": {
+      "path": "ifc_to_fds/modules/bim/mep/classifier.py",
+      "sha256": "ce22a4dc1eed1f0ba9fe069cc12403a64ee601afd2cec86639b53398fef019c8",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.mep.classifier"
+    },
+    "ifc_to_fds.modules.bim.mep.compare": {
+      "path": "ifc_to_fds/modules/bim/mep/compare.py",
+      "sha256": "d3059d33d0fcd1177a768b584383cc5254650a64caf81ecf86580b5762f6818a",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.domain.mep_comparison"
+    },
+    "ifc_to_fds.modules.bim.mep.mep_graph": {
+      "path": "ifc_to_fds/modules/bim/mep/mep_graph.py",
+      "sha256": "d85c184f8355438cdc60429c4fa2246e55c453bfb009934dce9c48a7442f00c4",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.bim.infrastructure.ifc.mep.graph_reader"
+    },
+    "ifc_to_fds.modules.verification.checkers.air_path": {
+      "path": "ifc_to_fds/modules/verification/checkers/air_path.py",
+      "sha256": "800d5a16275dd753503112b02db9af517ee03505316e55c4e0b95aa3146bf886",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.air_path"
+    },
+    "ifc_to_fds.modules.verification.checkers.boundary": {
+      "path": "ifc_to_fds/modules/verification/checkers/boundary.py",
+      "sha256": "19f440771d54f1c4e757aab3d622d4f2516cfeb8a090c8c73ba7f2fe5bf4f710",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.boundary"
+    },
+    "ifc_to_fds.modules.verification.checkers.domain": {
+      "path": "ifc_to_fds/modules/verification/checkers/domain.py",
+      "sha256": "dbfd85de7f7b5d0589eca0523ed127a3294f48f88e0f6a0df992cd9d399e23af",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.domain"
+    },
+    "ifc_to_fds.modules.verification.checkers.geometry": {
+      "path": "ifc_to_fds/modules/verification/checkers/geometry.py",
+      "sha256": "db619e73a2457ac24188f1b025279945359a8725070a7c0052bee4de80e327bf",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.geometry"
+    },
+    "ifc_to_fds.modules.verification.checkers.mep": {
+      "path": "ifc_to_fds/modules/verification/checkers/mep.py",
+      "sha256": "9243295a2f53ac4854032af9f68276eb11316cdbefa21cac4aa7f40235a44fd2",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.mep"
+    },
+    "ifc_to_fds.modules.verification.checkers.openings": {
+      "path": "ifc_to_fds/modules/verification/checkers/openings.py",
+      "sha256": "bd61fa2616c314fb6131ec42f51e06883dd68f3a6058946dcbaf26f18bbc261b",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.openings"
+    },
+    "ifc_to_fds.modules.verification.checkers.representation": {
+      "path": "ifc_to_fds/modules/verification/checkers/representation.py",
+      "sha256": "dc6e6cb1976aca086a144dc51a2ee47b3b875628ff4050d2b712c201d5bda90d",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.representation"
+    },
+    "ifc_to_fds.modules.verification.checkers.scope": {
+      "path": "ifc_to_fds/modules/verification/checkers/scope.py",
+      "sha256": "76939e1aa1fecd40252a284cb26b8a05f235cef7db0fcd23ffd8862e8d137b53",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.scope"
+    },
+    "ifc_to_fds.modules.verification.checkers.solver": {
+      "path": "ifc_to_fds/modules/verification/checkers/solver.py",
+      "sha256": "7e524b19773eea4716804501b8fecf8608bc9783dc20f011f2c9739461a3e696",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.solver"
+    },
+    "ifc_to_fds.modules.verification.checkers.structural": {
+      "path": "ifc_to_fds/modules/verification/checkers/structural.py",
+      "sha256": "f787025d72dc0613f6abe93b8e1c0910c0b0199dc9c31813c07d6a9d2cc7ad7f",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.structural"
+    },
+    "ifc_to_fds.modules.verification.checkers.syntax": {
+      "path": "ifc_to_fds/modules/verification/checkers/syntax.py",
+      "sha256": "4c3e3981b0a0ecada043a2201110e262386ac31e202a43f5c827d2e63e50b034",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.syntax"
+    },
+    "ifc_to_fds.modules.verification.checkers.traceability": {
+      "path": "ifc_to_fds/modules/verification/checkers/traceability.py",
+      "sha256": "c97cb69a42f0092d1aff1fcec17ef1dd99acbc6f3defb1fb9df719051b3fd48a",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.traceability"
+    },
+    "ifc_to_fds.validation.checkers.air_path": {
+      "path": "ifc_to_fds/validation/checkers/air_path.py",
+      "sha256": "b337503ce12649d82fd52913a6b4ce7bf036a096a1c55c2c6c9736f772337881",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.air_path"
+    },
+    "ifc_to_fds.validation.checkers.boundary": {
+      "path": "ifc_to_fds/validation/checkers/boundary.py",
+      "sha256": "c1f810226cb3facba6c1f656f6b086fc71005af3e8b18ab22d4959d70ed8ec89",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.boundary"
+    },
+    "ifc_to_fds.validation.checkers.domain": {
+      "path": "ifc_to_fds/validation/checkers/domain.py",
+      "sha256": "22eaeede7c486c60b2b736cb9fb1f15dc932bdf462e8a234c19092e7e49f2af1",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.domain"
+    },
+    "ifc_to_fds.validation.checkers.geometry": {
+      "path": "ifc_to_fds/validation/checkers/geometry.py",
+      "sha256": "9bed519975eafd7972863080f3b11501479ac928829d5d33f211a080e3c1c39e",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.geometry"
+    },
+    "ifc_to_fds.validation.checkers.mep": {
+      "path": "ifc_to_fds/validation/checkers/mep.py",
+      "sha256": "fa13c5f54f4a3bde00303e582231592a6febff7d846843474565fe6dd0ef2089",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.mep"
+    },
+    "ifc_to_fds.validation.checkers.openings": {
+      "path": "ifc_to_fds/validation/checkers/openings.py",
+      "sha256": "480a2be5471912280cb3c7e28621ef4ab8aedeb2df7967e671b0d19e2ea3f30c",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.openings"
+    },
+    "ifc_to_fds.validation.checkers.representation": {
+      "path": "ifc_to_fds/validation/checkers/representation.py",
+      "sha256": "fd876283218deda8e68e619f679f4d939b939608ee1d758d31907fe57d315172",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.representation"
+    },
+    "ifc_to_fds.validation.checkers.scope": {
+      "path": "ifc_to_fds/validation/checkers/scope.py",
+      "sha256": "cbb54aab5b00a418519429696e0e992cd17ab67c59052375947b4dbf4ae0405b",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.scope"
+    },
+    "ifc_to_fds.validation.checkers.solver": {
+      "path": "ifc_to_fds/validation/checkers/solver.py",
+      "sha256": "b90cc7acc6f532efb9c1685db9e37f3dc297fb92fa1431e4bbcc6b953d91e12d",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.solver"
+    },
+    "ifc_to_fds.validation.checkers.structural": {
+      "path": "ifc_to_fds/validation/checkers/structural.py",
+      "sha256": "b8143a432578169f095fe7a85094cf53f5ed51d40c13aa2f6bd5530c9b72386c",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.structural"
+    },
+    "ifc_to_fds.validation.checkers.syntax": {
+      "path": "ifc_to_fds/validation/checkers/syntax.py",
+      "sha256": "997263c0576a4be026105bf693f61a1a99cb3b4b6e8efd7db25881ba2abeb115",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.syntax"
+    },
+    "ifc_to_fds.validation.checkers.traceability": {
+      "path": "ifc_to_fds/validation/checkers/traceability.py",
+      "sha256": "dad42f2bc97732299736a70b743caee7c4122f91088763d8c8ddb3ba135ae394",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.verification.application.checkers.traceability"
+    },
+    "ifc_to_fds.validation.checkers": {
+      "path": "ifc_to_fds/validation/checkers/__init__.py",
+      "sha256": "658d1d6025455b66909b5e791b2d460b2ea50c214c2c1073e7c05a42f87b41c3",
+      "reason": "Existing compatibility surface; no new implementation."
+    },
+    "ifc_to_fds.validation.golden.bundle_io": {
+      "path": "ifc_to_fds/validation/golden/bundle_io.py",
+      "sha256": "dc28ae99bc97bee9eff18a412a9e1a52c51d1778e11c6b19e4049e0e131606a2",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.reference.infrastructure.bundle_io"
+    },
+    "ifc_to_fds.validation.golden.gate": {
+      "path": "ifc_to_fds/validation/golden/gate.py",
+      "sha256": "53903a7098ee93708fa6ef5ae3b1eb48455fa2b8da9a18c1cf1504b2f2fff60d",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.reference.application.parity"
+    },
+    "ifc_to_fds.validation.golden.normalizer": {
+      "path": "ifc_to_fds/validation/golden/normalizer.py",
+      "sha256": "a0d78b1191d2ba7d7b6f2751ddeb7f4fbc97a4ac4e80e5b47b286fef08ba55a7",
+      "reason": "Existing compatibility surface; no new implementation.",
+      "target": "ifc_to_fds.modules.reference.application.projections"
+    },
+    "ifc_to_fds.validation.golden": {
+      "path": "ifc_to_fds/validation/golden/__init__.py",
+      "sha256": "73a3ce7c013298ce166a99f4a40eec930dc85263d1571ae51e6afbad2e1a8bc3",
+      "reason": "Existing compatibility surface; no new implementation."
+    }
+  }
+}

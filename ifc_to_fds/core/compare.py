@@ -1,15 +1,5 @@
-"""Order-insensitive identity collections; ordered numeric geometry data."""
+"""Compatibility import for ifc_to_fds.runtime.normalization."""
 
-import json
-
-
-def normalize(value):
-    if isinstance(value, dict):
-        return {k: normalize(v) for k, v in sorted(value.items())}
-    if isinstance(value, list):
-        items = [normalize(v) for v in value]
-        # Identity collections may be reordered; coordinates and matrices may not.
-        if all(isinstance(v, (dict, str)) for v in value):
-            return sorted(items, key=lambda v: json.dumps(v, sort_keys=True))
-        return items
-    return value
+from importlib import import_module as _import_module
+import sys as _sys
+_sys.modules[__name__] = _import_module("ifc_to_fds.runtime.normalization")

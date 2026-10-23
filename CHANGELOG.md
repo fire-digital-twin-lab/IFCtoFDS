@@ -5,7 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] — 2026-06-02
+## [Unreleased]
+
+### Changed
+
+- Organize the backend as a modular monolith with public module APIs, shared domain contracts, injected application ports, and compatible legacy imports.
+- Move frontend assets into `frontend/`; separate components, features, state, API transport, viewer responsibilities, and legacy engine helpers while preserving direct-file launchers and worker bundles.
+- Place module implementations by responsibility, split HTTP routes and frontend composition, inject job storage/process/retention dependencies, and enforce reviewed compatibility imports and the declared module dependency graph.
+- Package frontend assets in wheel/sdist and add architecture, regression, exact legacy-output parity, lifecycle, and real HTTP/WASM browser checks. See `docs/architecture/14-ket-qua-to-chuc-ma.md` for results and acceptance limits.
+
+### Fixed
+
+- Generate at least three cells per axis for emitted 3D Cartesian meshes, preventing thin-domain Poisson failures hidden by setup-only runs while preserving domain and geometry.
+- Distinguish fatal FDS diagnostics from numerical residuals; require observed time advancement and end-time completion for transient checks.
+- Validate static grid-aligned HOLE/exterior OPEN vent occupancy from native SMV and GEOM surfaces from checked BINGEOM; keep GEOM cut-cell verification separate.
+- Bind PyroSim handoff to independent source audit, re-export comparison, solver runs and reviewed artifact hashes; prevent evidence overwrites and incomplete verification from appearing ready.
+- Allow inventory to be the first import in a fresh worker process by resolving the legacy core inventory exports lazily, avoiding a circular import.
+
+## [0.1.0] - 2026-06-02
 
 Initial public release.
 

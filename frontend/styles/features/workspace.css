@@ -1,0 +1,294 @@
+/* =====================================================================
+   2. Main Workspace Layout
+   ===================================================================== */
+.workspace-container {
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: 360px minmax(0, 1fr) auto;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Left Sidebar (Configuration & Workflow) */
+.left-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-subtle);
+    overflow: hidden;
+    z-index: 10;
+}
+
+.left-panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Mode Switcher Cards */
+.mode-selector-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: var(--bg-base);
+    padding: 4px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+}
+
+.mode-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    text-align: left;
+    transition: all 0.15s ease;
+}
+
+.mode-card:hover {
+    background: var(--bg-surface-elevated);
+}
+
+.mode-card.active {
+    background: var(--bg-surface-elevated);
+    border-color: var(--accent-border);
+    box-shadow: var(--shadow-sm);
+}
+
+.mode-card-title {
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-primary);
+}
+
+.mode-card-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.3;
+}
+
+.mode-pill-badge {
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+
+.mode-pill-badge.authoritative {
+    background: var(--status-pass-bg);
+    color: var(--status-pass-text);
+}
+
+.mode-pill-badge.legacy {
+    background: var(--status-warning-bg);
+    color: var(--status-warning-text);
+}
+
+.mode-workflow-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    font-size: 11px;
+}
+
+.mode-workflow-banner.verified {
+    background: var(--status-pass-bg);
+    border: 1px solid var(--status-pass-border);
+    color: var(--status-pass-text);
+}
+
+.mode-workflow-banner.quick {
+    background: var(--status-warning-bg);
+    border: 1px solid var(--status-warning-border);
+    color: var(--status-warning-text);
+}
+
+/* Section Cards inside Sidebar */
+.config-section {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.section-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.segmented-control {
+    display: flex;
+    background: var(--bg-base);
+    padding: 2px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+}
+
+.segmented-btn {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.12s ease;
+}
+
+.segmented-btn:hover {
+    color: var(--text-primary);
+}
+
+.segmented-btn.active {
+    background: var(--bg-surface-elevated);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Form Fields */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    display: flex;
+    justify-content: space-between;
+}
+
+.form-input, .form-select {
+    width: 100%;
+    height: 30px;
+    padding: 0 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.form-input:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+}
+
+.grid-3d-bounds {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.axis-bound-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.axis-bound-label {
+    font-size: 9px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.domain-metrics-box {
+    background: var(--bg-base);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 11px;
+}
+
+.domain-stat-row {
+    display: flex;
+    justify-content: space-between;
+}
+
+.domain-budget-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.domain-budget-chip.reasonable {
+    background: var(--status-pass-bg);
+    color: var(--status-pass-text);
+}
+
+.domain-budget-chip.heavy {
+    background: var(--status-warning-bg);
+    color: var(--status-warning-text);
+}
+
+.checkbox-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.checkbox-card input[type="checkbox"] {
+    margin-top: 2px;
+    accent-color: var(--accent-primary);
+}
+
+.info-callout {
+    padding: 8px 10px;
+    border-radius: var(--radius-md);
+    font-size: 11px;
+    line-height: 1.4;
+    display: flex;
+    gap: 8px;
+    background: var(--accent-subtle);
+    border: 1px solid var(--accent-border);
+    color: var(--text-secondary);
+}
+
+.info-callout.warning {
+    background: var(--status-warning-bg);
+    border-color: var(--status-warning-border);
+    color: var(--status-warning-text);
+}
+

@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "snapshot": "case_c_fzk_erdgeschoss.json",
+  "reason": "Correct source-versus-saved operand labels; independently reviewed source self-intersection witnesses. All acceptance fields and geometry are unchanged.",
+  "before_sha256": "7814a1ed0513f1b89d5b9cab1c6d5178a404d27445bd8a3dcf3442f683836e0a",
+  "after_sha256": "572f38ae2b229f819b72cb759a723d425bdec8d99c07dfbd0810488e8dab4c7a",
+  "changes": [
+    {
+      "index": 16,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:17040",
+      "before": "Invalid saved opening:17106: Self-intersecting solid",
+      "after": "Invalid source opening:17106: Self-intersecting solid"
+    },
+    {
+      "index": 17,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:17468",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 18,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:18698",
+      "before": "Invalid saved opening:18768: Self-intersecting solid",
+      "after": "Invalid source opening:18768: Self-intersecting solid"
+    },
+    {
+      "index": 19,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:18698",
+      "before": "Invalid saved opening:18836: Self-intersecting solid",
+      "after": "Invalid source opening:18836: Self-intersecting solid"
+    },
+    {
+      "index": 20,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19199",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 21,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19504",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 22,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
+      "before": "Invalid saved opening:22039: Self-intersecting solid",
+      "after": "Invalid source opening:22039: Self-intersecting solid"
+    },
+    {
+      "index": 23,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
+      "before": "Invalid saved opening:22107: Self-intersecting solid",
+      "after": "Invalid source opening:22107: Self-intersecting solid"
+    },
+    {
+      "index": 24,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
+      "before": "Invalid saved opening:22174: Self-intersecting solid",
+      "after": "Invalid source opening:22174: Self-intersecting solid"
+    },
+    {
+      "index": 25,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23024",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 26,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23944",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 27,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27013",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 28,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27421",
+      "before": "Invalid saved opening:27487: Self-intersecting solid",
+      "after": "Invalid source opening:27487: Self-intersecting solid"
+    },
+    {
+      "index": 29,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27421",
+      "before": "Invalid saved opening:27555: Self-intersecting solid",
+      "after": "Invalid source opening:27555: Self-intersecting solid"
+    },
+    {
+      "index": 30,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27421",
+      "before": "Invalid saved opening:27622: Self-intersecting solid",
+      "after": "Invalid source opening:27622: Self-intersecting solid"
+    },
+    {
+      "index": 31,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27833",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 32,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:28113",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 33,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31079",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 34,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31470",
+      "before": "Invalid saved opening:31539: Self-intersecting solid",
+      "after": "Invalid source opening:31539: Self-intersecting solid"
+    },
+    {
+      "index": 35,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31470",
+      "before": "Invalid saved opening:31607: Self-intersecting solid",
+      "after": "Invalid source opening:31607: Self-intersecting solid"
+    },
+    {
+      "index": 36,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31818",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 37,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32098",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 38,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32407",
+      "before": "Invalid saved opening:32483: Self-intersecting solid",
+      "after": "Invalid source opening:32483: Self-intersecting solid"
+    },
+    {
+      "index": 39,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32407",
+      "before": "Invalid saved opening:32551: Self-intersecting solid",
+      "after": "Invalid source opening:32551: Self-intersecting solid"
+    },
+    {
+      "index": 40,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32407",
+      "before": "Invalid saved opening:32618: Self-intersecting solid",
+      "after": "Invalid source opening:32618: Self-intersecting solid"
+    },
+    {
+      "index": 41,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32829",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 42,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33109",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    },
+    {
+      "index": 43,
+      "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33389",
+      "before": "Invalid saved solid: Self-intersecting solid",
+      "after": "Invalid source solid: Self-intersecting solid"
+    }
+  ]
+}

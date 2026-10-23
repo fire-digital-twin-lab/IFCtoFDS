@@ -17,10 +17,10 @@ const context=vm.createContext({console,document:{
     createElement(tag) { return new Element(tag); }, querySelectorAll() { return []; }
 }});
 context.window=context;
-for(const file of ['events/workbench-events.js','state/selection-store.js','state/visibility-store.js',
+for(const file of ['shared/lifecycle.js','events/workbench-events.js','state/selection-store.js','state/visibility-store.js',
     'commands/command-bus.js','commands/select-command.js','commands/visibility-command.js','commands/camera-command.js',
-    'inspector/inspector-view.js','inspector/inspector-controller.js']) {
-    vm.runInContext(fs.readFileSync(path.join(__dirname,'../js/workbench',file),'utf8'),context,{filename:file});
+    'features/inspector/inspector-view.js','features/inspector/inspector-controller.js']) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/src',file),'utf8'),context,{filename:file});
 }
 class Vector {
     constructor(x=0) { this.x=x; }

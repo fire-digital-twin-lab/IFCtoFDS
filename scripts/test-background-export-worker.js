@@ -7,7 +7,7 @@ const ctx = { console };
 ctx.self = ctx;
 ctx.window = ctx;
 ctx.importScripts = (...files) => files.forEach((file) => {
-    const resolved = path.resolve(root, 'js/workers', file);
+    const resolved = path.resolve(root, 'frontend/src/workers', file);
     vm.runInContext(fs.readFileSync(resolved, 'utf8'), ctx, { filename: resolved });
 });
 
@@ -15,14 +15,20 @@ let response = null;
 ctx.postMessage = (message) => { response = message; };
 vm.createContext(ctx);
 vm.runInContext(
-    fs.readFileSync(path.join(root, 'js/workers/fds-export-worker.js'), 'utf8'),
+    fs.readFileSync(path.join(root, 'frontend/src/workers/fds-export-worker.js'), 'utf8'),
     ctx,
     { filename: 'fds-export-worker.js' }
 );
 
 [
-    'js/vendor/earcut.min.js',
-    'js/ifc/ifc-adapter.js'
+    'frontend/vendor/earcut.min.js',
+    'frontend/src/engines/legacy/ifc/step-parser.js',
+    'frontend/src/engines/legacy/ifc/openings.js',
+    'frontend/src/engines/legacy/ifc/representations.js',
+    'frontend/src/engines/legacy/ifc/clipping.js',
+    'frontend/src/engines/legacy/ifc/triangulation.js',
+    'frontend/src/engines/legacy/ifc/mesh-transforms.js',
+    'frontend/src/engines/legacy/ifc/ifc-adapter.js'
 ].forEach((file) => {
     vm.runInContext(
         fs.readFileSync(path.join(root, file), 'utf8'),
@@ -66,7 +72,7 @@ const inlineHost = { window: {} };
 inlineHost.window = inlineHost;
 vm.createContext(inlineHost);
 vm.runInContext(
-    fs.readFileSync(path.join(root, 'js/workers/fds-export-worker-inline.js'), 'utf8'),
+    fs.readFileSync(path.join(root, 'frontend/generated/fds-export-worker-inline.js'), 'utf8'),
     inlineHost,
     { filename: 'fds-export-worker-inline.js' }
 );

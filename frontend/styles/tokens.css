@@ -1,0 +1,116 @@
+/* =====================================================================
+   IFCtoFDS — Verified BIM-to-FDS Research Workbench
+   Design System & Technical UI Styling
+   ===================================================================== */
+
+:root {
+    color-scheme: dark;
+
+    /* Base Surfaces */
+    --bg-base: #0a0d14;
+    --bg-surface: #101522;
+    --bg-surface-elevated: #161c2d;
+    --bg-surface-hover: #1e263d;
+    --bg-surface-active: #252f4a;
+    --bg-input: #0c101a;
+
+    /* Technical Borders */
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-medium: rgba(255, 255, 255, 0.15);
+    --border-strong: rgba(255, 255, 255, 0.28);
+    --border-focus: #3b82f6;
+
+    /* Typography */
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-disabled: #475569;
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+    /* Accents & Brand */
+    --accent-primary: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-subtle: rgba(59, 130, 246, 0.15);
+    --accent-border: rgba(59, 130, 246, 0.35);
+
+    /* Semantic Status Palette */
+    --status-pass: #10b981;
+    --status-pass-bg: rgba(16, 185, 129, 0.12);
+    --status-pass-border: rgba(16, 185, 129, 0.35);
+    --status-pass-text: #34d399;
+
+    --status-warning: #f59e0b;
+    --status-warning-bg: rgba(245, 158, 11, 0.12);
+    --status-warning-border: rgba(245, 158, 11, 0.35);
+    --status-warning-text: #fbbf24;
+
+    --status-error: #ef4444;
+    --status-error-bg: rgba(239, 68, 68, 0.12);
+    --status-error-border: rgba(239, 68, 68, 0.35);
+    --status-error-text: #f87171;
+
+    --status-reference: #64748b;
+    --status-reference-bg: rgba(100, 116, 139, 0.14);
+    --status-reference-border: rgba(100, 116, 139, 0.35);
+    --status-reference-text: #94a3b8;
+
+    /* Shadows & Radii */
+    --radius-xs: 3px;
+    --radius-sm: 5px;
+    --radius-md: 7px;
+    --radius-lg: 10px;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="light"] {
+    color-scheme: light;
+    --bg-base: #f1f5f9;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #f8fafc;
+    --bg-surface-hover: #e2e8f0;
+    --bg-surface-active: #cbd5e1;
+    --bg-input: #ffffff;
+
+    --border-subtle: rgba(0, 0, 0, 0.08);
+    --border-medium: rgba(0, 0, 0, 0.15);
+    --border-strong: rgba(0, 0, 0, 0.25);
+    --border-focus: #2563eb;
+
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --text-disabled: #94a3b8;
+
+    --accent-primary: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-subtle: rgba(37, 99, 235, 0.1);
+    --accent-border: rgba(37, 99, 235, 0.3);
+
+    --status-pass: #059669;
+    --status-pass-bg: rgba(5, 150, 105, 0.1);
+    --status-pass-border: rgba(5, 150, 105, 0.3);
+    --status-pass-text: #047857;
+
+    --status-warning: #d97706;
+    --status-warning-bg: rgba(217, 119, 6, 0.1);
+    --status-warning-border: rgba(217, 119, 6, 0.3);
+    --status-warning-text: #b45309;
+
+    --status-error: #dc2626;
+    --status-error-bg: rgba(220, 38, 38, 0.1);
+    --status-error-border: rgba(220, 38, 38, 0.3);
+    --status-error-text: #b91c1c;
+
+    --status-reference: #475569;
+    --status-reference-bg: rgba(71, 85, 105, 0.1);
+    --status-reference-border: rgba(71, 85, 105, 0.3);
+    --status-reference-text: #334155;
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+    --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
