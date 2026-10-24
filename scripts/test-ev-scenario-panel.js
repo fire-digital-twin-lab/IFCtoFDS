@@ -213,6 +213,50 @@ async function runTests() {
     assert.equal(mixed[0].confidence, 'low', 'Mixed scenario with ebike must inherit lowest confidence ("low")');
 
     // -------------------------------------------------------------
+    // Test 2.1: Vehicle spacing offset prevents geometry collision
+    // -------------------------------------------------------------
+    console.log('Checking vehicle spacing offset and non-overlapping centers...');
+    const multiEbike = panel.generateScenarioMatrix({
+        vehicleCounts: [2],
+        spacingsM: [0.5],
+        chemistryMix: [{ ebike: 1.0, auto: 0 }],
+        doorStates: ['CLOSED'],
+        baseBundleSha: validSha,
+        scenarioStore: store
+    });
+    assert.equal(multiEbike[0].ev_selections.length, 2);
+    const ebike0 = multiEbike[0].ev_selections[0];
+    const ebike1 = multiEbike[0].ev_selections[1];
+    const ebikeSpacing = ebike1.position[0] - ebike0.position[0];
+    assert.ok(
+        ebikeSpacing >= (1.8 + 0.5 - 1e-4),
+        `E-bike vehicle centers must be spaced by at least vehicleWidth + spacing (expected >= 2.3, got ${ebikeSpacing})`
+    );
+
+    const multiAuto = panel.generateScenarioMatrix({
+        vehicleCounts: [2],
+        spacingsM: [1.0],
+        chemistryMix: [{ ebike: 0, auto: 1.0 }],
+        doorStates: ['CLOSED'],
+        baseBundleSha: validSha,
+        scenarioStore: store
+    });
+    assert.equal(multiAuto[0].ev_selections.length, 2);
+    const auto0 = multiAuto[0].ev_selections[0];
+    const auto1 = multiAuto[0].ev_selections[1];
+    const autoSpacing = auto1.position[0] - auto0.position[0];
+    assert.ok(
+        autoSpacing >= (4.5 + 1.0 - 1e-4),
+        `Auto vehicle centers must be spaced by at least vehicleWidth + spacing (expected >= 5.5, got ${autoSpacing})`
+    );
+
+    // Verify preview placeholder fragment header note
+    assert.ok(
+        multiAuto[0].fds_fragment.includes('! NOTE: Preview placeholder fragment. Authoritative scenario emission generated via ifc_to_fds.fire.scenario_emitter'),
+        'fds_fragment must include preview placeholder note'
+    );
+
+    // -------------------------------------------------------------
     // Test 3: Batch Queue Dispatch and Aggregate Summary
     // -------------------------------------------------------------
     console.log('Checking batch queuing and summary reporting...');

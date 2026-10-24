@@ -206,6 +206,8 @@ def emit_fire_scenario(
     ]
 
     # 1. &REAC namelists (one per unique preset)
+    # Note: HF (hydrogen fluoride) yields from EV battery chemistry are captured in metadata
+    # for toxic exposure evaluation and omitted from single-step FDS &REAC namelists.
     lines.append("! --- Combustion Reaction Namelists ---")
     preset_fuel_ids: Dict[str, str] = {}
     for preset_key, preset in resolved_presets.items():

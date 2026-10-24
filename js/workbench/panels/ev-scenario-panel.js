@@ -166,7 +166,8 @@
                                     soc_percent: socVal,
                                     confidence: ebikePreset.confidence
                                 });
-                                currentX += spacing;
+                                var vehicleWidth = (ebikePreset && ebikePreset.vehicle_class === 'auto') ? 4.5 : 1.8;
+                                currentX += (vehicleWidth + spacing);
                             }
                             for (var a = 0; a < numAuto; a++) {
                                 evSelections.push({
@@ -178,7 +179,8 @@
                                     soc_percent: socVal,
                                     confidence: autoPreset.confidence
                                 });
-                                currentX += spacing;
+                                var vehicleWidth = (autoPreset && autoPreset.vehicle_class === 'auto') ? 4.5 : 1.8;
+                                currentX += (vehicleWidth + spacing);
                             }
 
                             var totalPeakHrr = Number(((numEbike * ebikePreset.typical_peak_hrr_mw + numAuto * autoPreset.typical_peak_hrr_mw) * socFactor).toFixed(4));
@@ -194,6 +196,7 @@
                             var scenarioId = 'SCENARIO_EV_' + String(scenarioIndex).padStart(3, '0');
 
                             var fdsFragment = [
+                                '! NOTE: Preview placeholder fragment. Authoritative scenario emission generated via ifc_to_fds.fire.scenario_emitter',
                                 '&HEAD CHID=\'' + scenarioId + '\', TITLE=\'EV Fire Scenario ' + scenarioId + '\' /',
                                 '&REAC ID=\'EV_BATTERY_REAC\', FUEL=\'PROPANE\', SOOT_YIELD=0.10 /',
                                 '&SURF ID=\'EV_FIRE_SURF\', HRRPUA=250.0, RAMP_Q=\'RAMP_EV\' /',
@@ -288,7 +291,7 @@
                 });
             }
 
-            return fetcher('/api/jobs', {
+            return fetcher('/api/scenario-jobs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

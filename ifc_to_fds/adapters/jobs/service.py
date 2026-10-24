@@ -500,6 +500,14 @@ class JobService:
                         try:
                             # Capture stderr to error.txt if worker fails during startup
                             err_path = Path(queued["directory"]) / "error.txt"
+                            worker_env = os.environ.copy()
+                            repo_root = str(Path(__file__).resolve().parents[3])
+                            existing_pythonpath = worker_env.get("PYTHONPATH", "")
+                            worker_env["PYTHONPATH"] = (
+                                f"{repo_root}{os.pathsep}{existing_pythonpath}"
+                                if existing_pythonpath
+                                else repo_root
+                            )
                             with open(err_path, "a", encoding="utf-8") as err_file:
                                 proc = subprocess.Popen(
                                     [
@@ -510,6 +518,8 @@ class JobService:
                                     ],
                                     stdout=subprocess.DEVNULL,
                                     stderr=err_file,
+                                    cwd=repo_root,
+                                    env=worker_env,
                                     creationflags=getattr(
                                         subprocess, "CREATE_NO_WINDOW", 0
                                     ),
