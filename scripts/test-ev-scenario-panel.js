@@ -260,6 +260,9 @@ async function runTests() {
     // Check rendered inputs exist
     const btnGenerate = elements['ev-btn-generate-batch'];
     assert.ok(btnGenerate, 'Generate EV Fire Batch button must be mounted');
+    const inputSocEl = elements['ev-input-soc-percent'];
+    assert.ok(inputSocEl, 'SoC percent input must be mounted');
+    assert.equal(inputSocEl.value, '80', 'Default SoC percent input must be 80');
     const tableContainer = elements['ev-batch-results-table'];
     assert.ok(tableContainer, 'Results table container must be mounted');
 
@@ -270,6 +273,163 @@ async function runTests() {
 
     // Verify results table is populated
     assert.ok(tableContainer.children.length > 0, 'Results table should have rows populated after generation');
+
+    // -------------------------------------------------------------
+    // Test 5: SoC (State of Charge) Dimension
+    // -------------------------------------------------------------
+    console.log('Checking SoC matrix dimension and scaling...');
+    const socScenarios = panel.generateScenarioMatrix({
+        vehicleCounts: [1],
+        spacingsM: [0.5],
+        chemistryMix: [{ ebike: 0, auto: 1.0 }],
+        doorStates: ['CLOSED'],
+        socPercent: [50, 80, 100],
+        baseBundleSha: validSha,
+        scenarioStore: store
+    });
+    assert.equal(socScenarios.length, 3, 'Should generate 3 scenarios across SoC dimension');
+    assert.equal(socScenarios[0].soc_percent, 50);
+    assert.equal(socScenarios[1].soc_percent, 80);
+    assert.equal(socScenarios[2].soc_percent, 100);
+    assert.equal(socScenarios[0].ev_selections[0].soc_percent, 50);
+    assert.equal(socScenarios[1].ev_selections[0].soc_percent, 80);
+    assert.equal(socScenarios[2].ev_selections[0].soc_percent, 100);
+    assert.ok(socScenarios[0].total_peak_hrr_mw < socScenarios[1].total_peak_hrr_mw, '50% SoC peak HRR must be less than 80% SoC');
+    assert.ok(socScenarios[1].total_peak_hrr_mw < socScenarios[2].total_peak_hrr_mw, '80% SoC peak HRR must be less than 100% SoC');
+
+    // Default SoC percent should be [80]
+    const defaultSocScenario = panel.generateScenarioMatrix({
+        vehicleCounts: [1],
+        spacingsM: [0.5],
+        chemistryMix: [{ ebike: 0, auto: 1.0 }],
+        doorStates: ['CLOSED'],
+        baseBundleSha: validSha,
+        scenarioStore: store
+    });
+    assert.equal(defaultSocScenario[0].soc_percent, 80, 'Default scenario should have soc_percent 80');
+
+    // -------------------------------------------------------------
+    // Test 6: HTTP 429 Handling, Retry & Numeric Status Safety
+    // -------------------------------------------------------------
+    console.log('Checking HTTP 429 handling, retry with backoff, and numeric status safety...');
+
+    // 6.1 Temporary 429 succeeds on retry with backoff
+    let attemptCount429 = 0;
+    const retryDispatch = async (scenario) => {
+        attemptCount429++;
+        if (attemptCount429 === 1) {
+            // Return numeric 429 status object on first attempt
+            return { status: 429, error: 'Queue is full' };
+        }
+        return {
+            job_id: 'job_retry_success',
+            scenario_id: scenario.scenario_id,
+            state: 'COMPLETED',
+            verdict: 'PASS',
+            peak_hrr_mw: scenario.total_peak_hrr_mw
+        };
+    };
+    const retryBatchOutput = await panel.queueScenarioBatch(
+        [socScenarios[0]],
+        retryDispatch,
+        { maxRetries: 2, retryDelayMs: 10 }
+    );
+    assert.equal(attemptCount429, 2, 'Should retry on 429');
+    assert.equal(retryBatchOutput.results[0].state, 'COMPLETED');
+    assert.equal(retryBatchOutput.summary.passed, 1);
+
+    // 6.2 Persistent 429 gracefully marks QUEUED_WAITING and does not abort batch
+    const persistent429Dispatch = async (scenario) => {
+        return { status: 429, error: 'Queue is full' };
+    };
+    const queuedWaitingOutput = await panel.queueScenarioBatch(
+        [socScenarios[0]],
+        persistent429Dispatch,
+        { maxRetries: 1, retryDelayMs: 5 }
+    );
+    assert.equal(queuedWaitingOutput.results.length, 1);
+    assert.equal(queuedWaitingOutput.results[0].state, 'QUEUED_WAITING');
+    assert.equal(queuedWaitingOutput.summary.queued_waiting, 1);
+    assert.equal(queuedWaitingOutput.summary.rejected, 0);
+
+    // 6.3 Dispatch throws Error with 429 status or message
+    const error429Dispatch = async (scenario) => {
+        const err = new Error('HTTP 429 Too Many Requests');
+        err.status = 429;
+        throw err;
+    };
+    const errBatchOutput = await panel.queueScenarioBatch(
+        [socScenarios[0]],
+        error429Dispatch,
+        { maxRetries: 1, retryDelayMs: 5 }
+    );
+    assert.equal(errBatchOutput.results[0].state, 'QUEUED_WAITING');
+    assert.equal(errBatchOutput.summary.queued_waiting, 1);
+
+    // -------------------------------------------------------------
+    // Test 7: JobService Polling & Terminal Status Mapping
+    // -------------------------------------------------------------
+    console.log('Checking JobService polling and status mapping...');
+
+    // 7.1 Async queued job polls until COMPLETED (must NOT treat QUEUED/RUNNING as rejected)
+    const jobPollStates = ['QUEUED', 'RUNNING', 'COMPLETED'];
+    let pollIndex = 0;
+    const asyncDispatch = async (scenario) => {
+        return {
+            id: 'job_async_1',
+            status: 202,
+            state: 'QUEUED'
+        };
+    };
+    const mockPollFn = async (jobId) => {
+        assert.equal(jobId, 'job_async_1');
+        const state = jobPollStates[Math.min(pollIndex++, jobPollStates.length - 1)];
+        return {
+            id: jobId,
+            state: state,
+            verdict: state === 'COMPLETED' ? 'PASS' : undefined,
+            peak_hrr_mw: 3.6
+        };
+    };
+
+    const polledBatchOutput = await panel.queueScenarioBatch(
+        [socScenarios[0]],
+        asyncDispatch,
+        { pollJobFn: mockPollFn, pollIntervalMs: 10 }
+    );
+    assert.equal(polledBatchOutput.results[0].state, 'COMPLETED');
+    assert.equal(polledBatchOutput.summary.passed, 1);
+    assert.equal(polledBatchOutput.summary.rejected, 0);
+
+    // 7.2 Async job polls until FAILED -> mapped to rejected
+    pollIndex = 0;
+    const failPollStates = ['QUEUED', 'FAILED'];
+    const mockFailPollFn = async (jobId) => {
+        const state = failPollStates[Math.min(pollIndex++, failPollStates.length - 1)];
+        return { id: jobId, state: state, error: 'Solver divergence' };
+    };
+    const failedBatchOutput = await panel.queueScenarioBatch(
+        [socScenarios[0]],
+        asyncDispatch,
+        { pollJobFn: mockFailPollFn, pollIntervalMs: 10 }
+    );
+    assert.equal(failedBatchOutput.results[0].state, 'FAILED');
+    assert.equal(failedBatchOutput.summary.rejected, 1);
+
+    // 7.3 Async job polls until TIMED_OUT -> mapped to rejected
+    pollIndex = 0;
+    const timeoutPollStates = ['QUEUED', 'TIMED_OUT'];
+    const mockTimeoutPollFn = async (jobId) => {
+        const state = timeoutPollStates[Math.min(pollIndex++, timeoutPollStates.length - 1)];
+        return { id: jobId, state: state };
+    };
+    const timeoutBatchOutput = await panel.queueScenarioBatch(
+        [socScenarios[0]],
+        asyncDispatch,
+        { pollJobFn: mockTimeoutPollFn, pollIntervalMs: 10 }
+    );
+    assert.equal(timeoutBatchOutput.results[0].state, 'TIMED_OUT');
+    assert.equal(timeoutBatchOutput.summary.rejected, 1);
 
     console.log('All EV Scenario Panel tests passed cleanly!');
 }

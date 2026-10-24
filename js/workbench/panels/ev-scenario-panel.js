@@ -80,6 +80,7 @@
      * @param {number[]} [options.spacingsM]
      * @param {Array<{ebike: number, auto: number}>} [options.chemistryMix]
      * @param {string[]} [options.doorStates]
+     * @param {number[]} [options.socPercent]
      * @param {string} options.baseBundleSha
      * @param {Object} options.scenarioStore
      * @param {Object} [options.presets]
@@ -103,6 +104,7 @@
         var spacingsM = (options.spacingsM && options.spacingsM.length) ? options.spacingsM : [0.5];
         var chemistryMix = (options.chemistryMix && options.chemistryMix.length) ? options.chemistryMix : [{ ebike: 0.5, auto: 0.5 }];
         var doorStates = (options.doorStates && options.doorStates.length) ? options.doorStates : ['CLOSED'];
+        var socPercent = (options.socPercent && options.socPercent.length) ? options.socPercent : [80];
         var presets = options.presets || DEFAULT_PRESETS;
         var maxScenarios = typeof options.maxScenarios === 'number' ? options.maxScenarios : Infinity;
 
@@ -120,99 +122,106 @@
                     var mix = chemistryMix[mIdx];
                     for (var dIdx = 0; dIdx < doorStates.length; dIdx++) {
                         var door = doorStates[dIdx];
+                        for (var socIdx = 0; socIdx < socPercent.length; socIdx++) {
+                            var socVal = typeof socPercent[socIdx] === 'number' ? socPercent[socIdx] : 80;
 
-                        if (scenarios.length >= maxScenarios) {
-                            return scenarios;
-                        }
-
-                        scenarioIndex++;
-                        var ebikeRatio = typeof mix.ebike === 'number' ? mix.ebike : 0.5;
-                        var autoRatio = typeof mix.auto === 'number' ? mix.auto : 0.5;
-
-                        var numEbike, numAuto;
-                        if (ebikeRatio === 0 && autoRatio > 0) {
-                            numEbike = 0;
-                            numAuto = vCount;
-                        } else if (autoRatio === 0 && ebikeRatio > 0) {
-                            numEbike = vCount;
-                            numAuto = 0;
-                        } else {
-                            numEbike = Math.round(vCount * ebikeRatio);
-                            if (numEbike === 0 && ebikeRatio > 0 && vCount === 1) {
-                                numEbike = 1;
+                            if (scenarios.length >= maxScenarios) {
+                                return scenarios;
                             }
-                            numAuto = vCount - numEbike;
-                            if (numAuto < 0) numAuto = 0;
-                        }
 
-                        var hasEbike = numEbike > 0;
-                        var hasAuto = numAuto > 0;
-                        var confidence = resolveLowestConfidence(hasEbike, hasAuto, presets);
+                            scenarioIndex++;
+                            var ebikeRatio = typeof mix.ebike === 'number' ? mix.ebike : 0.5;
+                            var autoRatio = typeof mix.auto === 'number' ? mix.auto : 0.5;
 
-                        var evSelections = [];
-                        var currentX = 0.0;
-                        for (var e = 0; e < numEbike; e++) {
-                            evSelections.push({
-                                preset_id: ebikePreset.preset_id,
-                                vehicle_class: ebikePreset.vehicle_class,
-                                chemistry: ebikePreset.chemistry,
-                                position: [Number(currentX.toFixed(3)), 0.0, 0.55],
-                                peak_hrr_mw: ebikePreset.typical_peak_hrr_mw,
-                                confidence: ebikePreset.confidence
-                            });
-                            currentX += spacing;
-                        }
-                        for (var a = 0; a < numAuto; a++) {
-                            evSelections.push({
-                                preset_id: autoPreset.preset_id,
-                                vehicle_class: autoPreset.vehicle_class,
-                                chemistry: autoPreset.chemistry,
-                                position: [Number(currentX.toFixed(3)), 0.0, 0.75],
-                                peak_hrr_mw: autoPreset.typical_peak_hrr_mw,
-                                confidence: autoPreset.confidence
-                            });
-                            currentX += spacing;
-                        }
-
-                        var totalPeakHrr = Number((numEbike * ebikePreset.typical_peak_hrr_mw + numAuto * autoPreset.typical_peak_hrr_mw).toFixed(4));
-
-                        var openingEvents = [
-                            {
-                                entity_key: 'OPENING_MAIN',
-                                state: door,
-                                event_time_s: 0.0
+                            var numEbike, numAuto;
+                            if (ebikeRatio === 0 && autoRatio > 0) {
+                                numEbike = 0;
+                                numAuto = vCount;
+                            } else if (autoRatio === 0 && ebikeRatio > 0) {
+                                numEbike = vCount;
+                                numAuto = 0;
+                            } else {
+                                numEbike = Math.round(vCount * ebikeRatio);
+                                if (numEbike === 0 && ebikeRatio > 0 && vCount === 1) {
+                                    numEbike = 1;
+                                }
+                                numAuto = vCount - numEbike;
+                                if (numAuto < 0) numAuto = 0;
                             }
-                        ];
 
-                        var scenarioId = 'SCENARIO_EV_' + String(scenarioIndex).padStart(3, '0');
+                            var hasEbike = numEbike > 0;
+                            var hasAuto = numAuto > 0;
+                            var confidence = resolveLowestConfidence(hasEbike, hasAuto, presets);
+                            var socFactor = socVal / 100.0;
 
-                        var fdsFragment = [
-                            '&HEAD CHID=\'' + scenarioId + '\', TITLE=\'EV Fire Scenario ' + scenarioId + '\' /',
-                            '&REAC ID=\'EV_BATTERY_REAC\', FUEL=\'PROPANE\', SOOT_YIELD=0.10 /',
-                            '&SURF ID=\'EV_FIRE_SURF\', HRRPUA=250.0, RAMP_Q=\'RAMP_EV\' /',
-                            '&RAMP ID=\'RAMP_EV\', T=0.0, F=0.0 /',
-                            '&RAMP ID=\'RAMP_EV\', T=180.0, F=1.0 /'
-                        ].join('\n');
+                            var evSelections = [];
+                            var currentX = 0.0;
+                            for (var e = 0; e < numEbike; e++) {
+                                evSelections.push({
+                                    preset_id: ebikePreset.preset_id,
+                                    vehicle_class: ebikePreset.vehicle_class,
+                                    chemistry: ebikePreset.chemistry,
+                                    position: [Number(currentX.toFixed(3)), 0.0, 0.55],
+                                    peak_hrr_mw: Number((ebikePreset.typical_peak_hrr_mw * socFactor).toFixed(4)),
+                                    soc_percent: socVal,
+                                    confidence: ebikePreset.confidence
+                                });
+                                currentX += spacing;
+                            }
+                            for (var a = 0; a < numAuto; a++) {
+                                evSelections.push({
+                                    preset_id: autoPreset.preset_id,
+                                    vehicle_class: autoPreset.vehicle_class,
+                                    chemistry: autoPreset.chemistry,
+                                    position: [Number(currentX.toFixed(3)), 0.0, 0.75],
+                                    peak_hrr_mw: Number((autoPreset.typical_peak_hrr_mw * socFactor).toFixed(4)),
+                                    soc_percent: socVal,
+                                    confidence: autoPreset.confidence
+                                });
+                                currentX += spacing;
+                            }
 
-                        var scenario = {
-                            scenario_id: scenarioId,
-                            bundle_sha256: options.baseBundleSha,
-                            ev_library_version: EV_LIBRARY_VERSION,
-                            confidence: confidence,
-                            vehicle_count: vCount,
-                            spacing_m: spacing,
-                            chemistry_mix: { ebike: ebikeRatio, auto: autoRatio },
-                            door_state: door,
-                            total_peak_hrr_mw: totalPeakHrr,
-                            ev_count: vCount,
-                            ev_selections: evSelections,
-                            opening_events: openingEvents,
-                            fds_fragment: fdsFragment,
-                            disclaimer: DISCLAIMER,
-                            notes: ASSUMPTIONS
-                        };
+                            var totalPeakHrr = Number(((numEbike * ebikePreset.typical_peak_hrr_mw + numAuto * autoPreset.typical_peak_hrr_mw) * socFactor).toFixed(4));
 
-                        scenarios.push(scenario);
+                            var openingEvents = [
+                                {
+                                    entity_key: 'OPENING_MAIN',
+                                    state: door,
+                                    event_time_s: 0.0
+                                }
+                            ];
+
+                            var scenarioId = 'SCENARIO_EV_' + String(scenarioIndex).padStart(3, '0');
+
+                            var fdsFragment = [
+                                '&HEAD CHID=\'' + scenarioId + '\', TITLE=\'EV Fire Scenario ' + scenarioId + '\' /',
+                                '&REAC ID=\'EV_BATTERY_REAC\', FUEL=\'PROPANE\', SOOT_YIELD=0.10 /',
+                                '&SURF ID=\'EV_FIRE_SURF\', HRRPUA=250.0, RAMP_Q=\'RAMP_EV\' /',
+                                '&RAMP ID=\'RAMP_EV\', T=0.0, F=0.0 /',
+                                '&RAMP ID=\'RAMP_EV\', T=180.0, F=1.0 /'
+                            ].join('\n');
+
+                            var scenario = {
+                                scenario_id: scenarioId,
+                                bundle_sha256: options.baseBundleSha,
+                                ev_library_version: EV_LIBRARY_VERSION,
+                                confidence: confidence,
+                                vehicle_count: vCount,
+                                spacing_m: spacing,
+                                chemistry_mix: { ebike: ebikeRatio, auto: autoRatio },
+                                door_state: door,
+                                soc_percent: socVal,
+                                total_peak_hrr_mw: totalPeakHrr,
+                                ev_count: vCount,
+                                ev_selections: evSelections,
+                                opening_events: openingEvents,
+                                fds_fragment: fdsFragment,
+                                disclaimer: DISCLAIMER,
+                                notes: ASSUMPTIONS
+                            };
+
+                            scenarios.push(scenario);
+                        }
                     }
                 }
             }
@@ -222,16 +231,39 @@
     }
 
     /**
+     * Checks if a response or error represents HTTP 429 Too Many Requests.
+     */
+    function is429(val) {
+        if (!val) return false;
+        if (val === 429 || val === '429') return true;
+        if (typeof val === 'object') {
+            if (val.status === 429 || val.statusCode === 429) return true;
+            if (String(val.state).toUpperCase() === '429' || String(val.verdict).toUpperCase() === '429') return true;
+            var msg = String(val.message || val.error || val.statusText || '');
+            if (msg.indexOf('429') !== -1 || /too many requests|queue (is )?full/i.test(msg)) return true;
+        }
+        return false;
+    }
+
+    /**
      * Queue and run scenario batch, collecting per-job results and synthesizing an aggregate summary.
+     * Gracefully handles 429 rate limiting with retry/backoff, and polls JobService until terminal state.
      *
      * @param {Array<Object>} scenarios
      * @param {Function} [dispatchJobFn]
+     * @param {Object} [options]
      * @returns {Promise<{results: Array<any>, summary: Object}>}
      */
-    async function queueScenarioBatch(scenarios, dispatchJobFn) {
+    async function queueScenarioBatch(scenarios, dispatchJobFn, options) {
         if (!Array.isArray(scenarios)) {
             throw new Error('scenarios must be an array');
         }
+
+        if (typeof dispatchJobFn === 'object' && options === undefined) {
+            options = dispatchJobFn;
+            dispatchJobFn = options.dispatchJobFn;
+        }
+        options = options || {};
 
         var defaultDispatch = function (scenario) {
             var payload = {
@@ -261,6 +293,9 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             }).then(function (res) {
+                if (res && res.status === 429) {
+                    return { status: 429, error: 'Queue is full' };
+                }
                 return res.json ? res.json() : res;
             });
         };
@@ -270,24 +305,195 @@
         var passed = 0;
         var inconclusive = 0;
         var rejected = 0;
+        var queuedWaiting = 0;
+
+        var maxRetries = typeof options.maxRetries === 'number' ? options.maxRetries : 2;
+        var baseRetryDelayMs = typeof options.retryDelayMs === 'number' ? options.retryDelayMs : 50;
+        var pollIntervalMs = typeof options.pollIntervalMs === 'number' ? options.pollIntervalMs : 100;
+        var maxPollAttempts = typeof options.maxPollAttempts === 'number' ? options.maxPollAttempts : 60;
+
+        var pollFn = options.pollJobFn || function (id) {
+            var fetcher = (root.IfcFds && root.IfcFds.verified && typeof root.IfcFds.verified.authFetch === 'function')
+                ? root.IfcFds.verified.authFetch
+                : (typeof fetch !== 'undefined' ? fetch : null);
+            if (!fetcher) {
+                return Promise.resolve({ id: id, state: 'COMPLETED', verdict: 'PASS' });
+            }
+            return fetcher('/api/jobs/' + id).then(function (r) {
+                if (r && r.status === 429) {
+                    return { status: 429, error: 'Queue is full' };
+                }
+                return r.json ? r.json() : r;
+            });
+        };
 
         for (var i = 0; i < scenarios.length; i++) {
-            var res = await dispatch(scenarios[i]);
+            var scenario = scenarios[i];
+            var res = null;
+            var attempt = 0;
+
+            while (attempt <= maxRetries) {
+                try {
+                    var rawRes = await dispatch(scenario);
+                    if (is429(rawRes)) {
+                        if (attempt < maxRetries) {
+                            attempt++;
+                            var delay = baseRetryDelayMs * Math.pow(2, attempt - 1);
+                            await new Promise(function (resolve) { setTimeout(resolve, delay); });
+                            continue;
+                        }
+                        res = {
+                            scenario_id: scenario.scenario_id,
+                            job_id: (rawRes && (rawRes.job_id || rawRes.id)) || null,
+                            state: 'QUEUED_WAITING',
+                            verdict: 'QUEUED_WAITING',
+                            status: 429,
+                            mesh_status: 'UNKNOWN',
+                            peak_hrr_mw: scenario.total_peak_hrr_mw,
+                            error: 'Queue is full (HTTP 429): retries exhausted'
+                        };
+                        break;
+                    }
+                    res = rawRes;
+                    break;
+                } catch (err) {
+                    if (is429(err)) {
+                        if (attempt < maxRetries) {
+                            attempt++;
+                            var delay = baseRetryDelayMs * Math.pow(2, attempt - 1);
+                            await new Promise(function (resolve) { setTimeout(resolve, delay); });
+                            continue;
+                        }
+                        res = {
+                            scenario_id: scenario.scenario_id,
+                            job_id: (err && (err.job_id || err.id)) || null,
+                            state: 'QUEUED_WAITING',
+                            verdict: 'QUEUED_WAITING',
+                            status: 429,
+                            mesh_status: 'UNKNOWN',
+                            peak_hrr_mw: scenario.total_peak_hrr_mw,
+                            error: (err && err.message) || 'Queue is full (HTTP 429): retries exhausted'
+                        };
+                        break;
+                    }
+                    res = {
+                        scenario_id: scenario.scenario_id,
+                        job_id: null,
+                        state: 'FAILED',
+                        verdict: 'REJECTED',
+                        status: (err && err.status) || 500,
+                        mesh_status: 'FAIL',
+                        peak_hrr_mw: scenario.total_peak_hrr_mw,
+                        error: (err && err.message) || String(err)
+                    };
+                    break;
+                }
+            }
+
+            // Check if job is non-terminal and needs polling
+            var jobId = res && (res.id || res.job_id);
+            var stateStr = String((res && (res.state || res.status)) || '').toUpperCase();
+            var verdictStr = String((res && res.verdict) || '').toUpperCase();
+            var terminalStates = ['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'QUEUED_WAITING'];
+            var terminalVerdicts = ['PASS', 'PASSED', 'INCONCLUSIVE', 'REJECTED', 'FAIL', 'FAILED', 'QUEUED_WAITING'];
+
+            var isAlreadyTerminal = terminalStates.indexOf(stateStr) !== -1 || terminalVerdicts.indexOf(verdictStr) !== -1;
+
+            if (jobId && !isAlreadyTerminal) {
+                var pollAttempts = 0;
+                var isTerminal = false;
+
+                while (!isTerminal && pollAttempts < maxPollAttempts) {
+                    pollAttempts++;
+                    await new Promise(function (resolve) { setTimeout(resolve, pollIntervalMs); });
+                    var pollRes = null;
+                    try {
+                        pollRes = await pollFn(jobId);
+                    } catch (pollErr) {
+                        if (is429(pollErr)) {
+                            await new Promise(function (resolve) { setTimeout(resolve, pollIntervalMs * 2); });
+                            continue;
+                        }
+                        pollRes = {
+                            id: jobId,
+                            state: 'FAILED',
+                            error: pollErr.message || String(pollErr)
+                        };
+                    }
+
+                    if (pollRes) {
+                        if (is429(pollRes)) {
+                            await new Promise(function (resolve) { setTimeout(resolve, pollIntervalMs * 2); });
+                            continue;
+                        }
+                        var pState = String(pollRes.state || pollRes.status || '').toUpperCase();
+                        if (pState === 'COMPLETED') {
+                            isTerminal = true;
+                            res = Object.assign({}, res, pollRes);
+                            if (!res.verdict) {
+                                if (pollRes.result && pollRes.result.verdict) {
+                                    res.verdict = pollRes.result.verdict;
+                                } else {
+                                    var getResultFn = options.getResultFn || null;
+                                    if (getResultFn) {
+                                        try {
+                                            var rData = await getResultFn(jobId);
+                                            if (rData) res = Object.assign({}, res, rData);
+                                        } catch (_) {}
+                                    } else {
+                                        var fetcher = (root.IfcFds && root.IfcFds.verified && typeof root.IfcFds.verified.authFetch === 'function')
+                                            ? root.IfcFds.verified.authFetch
+                                            : (typeof fetch !== 'undefined' ? fetch : null);
+                                        if (fetcher) {
+                                            try {
+                                                var rData = await fetcher('/api/jobs/' + jobId + '/result').then(function(r) { return r.json ? r.json() : r; });
+                                                if (rData) res = Object.assign({}, res, rData);
+                                            } catch (_) {}
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (pState === 'FAILED' || pState === 'TIMED_OUT' || pState === 'CANCELLED') {
+                            isTerminal = true;
+                            res = Object.assign({}, res, pollRes);
+                        }
+                    }
+                }
+
+                if (!isTerminal && pollAttempts >= maxPollAttempts) {
+                    res = Object.assign({}, res, {
+                        state: 'TIMED_OUT',
+                        verdict: 'TIMED_OUT',
+                        error: 'Job polling exceeded max attempts'
+                    });
+                }
+            }
+
+            if (res && !res.scenario_id) {
+                res.scenario_id = scenario.scenario_id;
+            }
+
             results.push(res);
-            var v = (res.verdict || res.status || res.state || '').toUpperCase();
+
+            var v = String((res && (res.verdict || res.state || res.status)) || '').toUpperCase();
+            if (res && res.status === 200 && !res.verdict && !res.state) {
+                v = 'PASS';
+            }
+
             if (v === 'PASS' || v === 'PASSED') {
                 passed++;
-            } else if (v === 'INCONCLUSIVE' || (res.mesh_status && res.mesh_status === 'FAIL')) {
+            } else if (v === 'INCONCLUSIVE' || (res && res.mesh_status && String(res.mesh_status).toUpperCase() === 'FAIL')) {
                 inconclusive++;
-            } else if (v === 'REJECTED' || v === 'FAIL' || v === 'FAILED') {
-                rejected++;
             } else if (v === 'COMPLETED') {
-                // If COMPLETED and no explicit failure, evaluate mesh_status
-                if (res.mesh_status === 'FAIL') {
+                if (res && res.mesh_status && String(res.mesh_status).toUpperCase() === 'FAIL') {
                     inconclusive++;
                 } else {
                     passed++;
                 }
+            } else if (v === 'QUEUED_WAITING' || v === 'QUEUED' || v === 'RUNNING') {
+                queuedWaiting++;
+            } else if (v === 'REJECTED' || v === 'FAIL' || v === 'FAILED' || v === 'TIMED_OUT' || v === 'CANCELLED') {
+                rejected++;
             } else {
                 rejected++;
             }
@@ -298,6 +504,7 @@
             passed: passed,
             inconclusive: inconclusive,
             rejected: rejected,
+            queued_waiting: queuedWaiting,
             disclaimer: DISCLAIMER,
             assumptions: ASSUMPTIONS
         };
@@ -400,6 +607,20 @@
         grpMix.appendChild(selectMix);
         form.appendChild(grpMix);
 
+        // State of Charge (SoC %)
+        var grpSoc = doc.createElement('div');
+        grpSoc.className = 'form-group';
+        var lblSoc = doc.createElement('label');
+        lblSoc.className = 'form-label';
+        lblSoc.textContent = 'State of Charge (SoC %, comma-separated, e.g. 50, 80, 100)';
+        var inputSoc = doc.createElement('input');
+        inputSoc.id = 'ev-input-soc-percent';
+        inputSoc.className = 'form-input';
+        inputSoc.value = '80';
+        grpSoc.appendChild(lblSoc);
+        grpSoc.appendChild(inputSoc);
+        form.appendChild(grpSoc);
+
         // Door status
         var grpDoor = doc.createElement('div');
         grpDoor.className = 'form-group';
@@ -474,6 +695,9 @@
             var spacings = inputSpacing.value.split(',').map(function (s) { return parseFloat(s.trim()); }).filter(Boolean);
             if (!spacings.length) spacings = [0.5];
 
+            var socs = inputSoc.value.split(',').map(function (s) { return parseFloat(s.trim()); }).filter(function (n) { return !isNaN(n) && n > 0; });
+            if (!socs.length) socs = [80];
+
             var mixVal = selectMix.value;
             var mixes = [{ ebike: 0.5, auto: 0.5 }];
             if (mixVal === '100-ebike') mixes = [{ ebike: 1.0, auto: 0.0 }];
@@ -487,6 +711,7 @@
                 spacingsM: spacings,
                 chemistryMix: mixes,
                 doorStates: doors,
+                socPercent: socs,
                 baseBundleSha: sha || 'simulated_bundle_sha',
                 scenarioStore: currentStore
             };
@@ -511,8 +736,15 @@
                 var sumHeader = doc.createElement('div');
                 sumHeader.style.fontWeight = 'bold';
                 sumHeader.style.marginBottom = '4px';
-                sumHeader.textContent = 'Aggregate Verdict: ' + batchOutput.summary.passed + ' Passed, ' +
-                    batchOutput.summary.inconclusive + ' Inconclusive, ' + batchOutput.summary.rejected + ' Rejected';
+                var statusParts = [
+                    batchOutput.summary.passed + ' Passed',
+                    batchOutput.summary.inconclusive + ' Inconclusive',
+                    batchOutput.summary.rejected + ' Rejected'
+                ];
+                if (batchOutput.summary.queued_waiting) {
+                    statusParts.push(batchOutput.summary.queued_waiting + ' Queued/Waiting');
+                }
+                sumHeader.textContent = 'Aggregate Verdict: ' + statusParts.join(', ');
                 summaryBox.appendChild(sumHeader);
 
                 var sumDisclaimer = doc.createElement('div');
@@ -530,7 +762,7 @@
 
                 var thead = doc.createElement('thead');
                 var trHead = doc.createElement('tr');
-                ['ID', 'Vehicles', 'Peak HRR', 'Mesh', 'Verdict'].forEach(function (col) {
+                ['ID', 'Vehicles', 'SoC %', 'Peak HRR', 'Mesh', 'Verdict'].forEach(function (col) {
                     var th = doc.createElement('th');
                     th.style.textAlign = 'left';
                     th.style.padding = '4px';
@@ -556,6 +788,11 @@
                     tdCount.textContent = (generated[idx] && generated[idx].vehicle_count) || '-';
                     tr.appendChild(tdCount);
 
+                    var tdSoc = doc.createElement('td');
+                    tdSoc.style.padding = '4px';
+                    tdSoc.textContent = (generated[idx] && generated[idx].soc_percent != null) ? (generated[idx].soc_percent + '%') : '-';
+                    tr.appendChild(tdSoc);
+
                     var tdHrr = doc.createElement('td');
                     tdHrr.style.padding = '4px';
                     tdHrr.textContent = (res.peak_hrr_mw || (generated[idx] && generated[idx].total_peak_hrr_mw) || '-') + ' MW';
@@ -569,10 +806,10 @@
                     var tdVerdict = doc.createElement('td');
                     tdVerdict.style.padding = '4px';
                     tdVerdict.style.fontWeight = 'bold';
-                    var verdictVal = res.verdict || res.state || 'UNKNOWN';
+                    var verdictVal = String(res.verdict || res.state || res.status || 'UNKNOWN');
                     tdVerdict.textContent = verdictVal;
-                    if (verdictVal === 'PASS') tdVerdict.style.color = 'var(--status-pass)';
-                    else if (verdictVal === 'INCONCLUSIVE') tdVerdict.style.color = 'var(--status-warning)';
+                    if (verdictVal === 'PASS' || verdictVal === 'PASSED') tdVerdict.style.color = 'var(--status-pass)';
+                    else if (verdictVal === 'INCONCLUSIVE' || verdictVal === 'QUEUED_WAITING' || verdictVal === 'QUEUED') tdVerdict.style.color = 'var(--status-warning)';
                     else tdVerdict.style.color = 'var(--status-fail)';
                     tr.appendChild(tdVerdict);
 
