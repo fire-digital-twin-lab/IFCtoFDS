@@ -673,11 +673,13 @@
             });
         });
 
-        // Sidebar Nav Switcher (Workflow vs Model Tree)
+        // Sidebar Nav Switcher (Workflow vs Model Tree vs EV Scenario Batch)
         var tabWorkflow = document.getElementById('sidebar-tab-workflow');
         var tabTree = document.getElementById('sidebar-tab-tree');
+        var tabEv = document.getElementById('sidebar-tab-ev');
         var panelWorkflow = document.getElementById('sidebar-panel-workflow');
         var panelTree = document.getElementById('sidebar-panel-tree');
+        var panelEv = document.getElementById('sidebar-panel-ev');
 
         if (tabWorkflow && tabTree && panelWorkflow && panelTree) {
             tabWorkflow.addEventListener('click', function () {
@@ -685,20 +687,56 @@
                 tabWorkflow.setAttribute('aria-selected', 'true');
                 tabTree.classList.remove('active');
                 tabTree.setAttribute('aria-selected', 'false');
+                if (tabEv) {
+                    tabEv.classList.remove('active');
+                    tabEv.setAttribute('aria-selected', 'false');
+                }
                 panelWorkflow.style.display = 'block';
                 panelTree.style.display = 'none';
+                if (panelEv) panelEv.style.display = 'none';
             });
             tabTree.addEventListener('click', function () {
                 tabTree.classList.add('active');
                 tabTree.setAttribute('aria-selected', 'true');
                 tabWorkflow.classList.remove('active');
                 tabWorkflow.setAttribute('aria-selected', 'false');
+                if (tabEv) {
+                    tabEv.classList.remove('active');
+                    tabEv.setAttribute('aria-selected', 'false');
+                }
                 panelWorkflow.style.display = 'none';
                 panelTree.style.display = 'flex';
+                if (panelEv) panelEv.style.display = 'none';
                 if (ns.workbench && ns.workbench.navigation && ns.workbench.navigation.modelTree) {
                     ns.workbench.navigation.modelTree.render();
                 }
             });
+            if (tabEv && panelEv) {
+                tabEv.addEventListener('click', function () {
+                    tabEv.classList.add('active');
+                    tabEv.setAttribute('aria-selected', 'true');
+                    tabWorkflow.classList.remove('active');
+                    tabWorkflow.setAttribute('aria-selected', 'false');
+                    tabTree.classList.remove('active');
+                    tabTree.setAttribute('aria-selected', 'false');
+                    panelWorkflow.style.display = 'none';
+                    panelTree.style.display = 'none';
+                    panelEv.style.display = 'flex';
+
+                    var evPanel = (ns.workbench && ns.workbench.panels && ns.workbench.panels.evScenarioPanel) || (ns.ui && ns.ui.evScenarioPanel);
+                    if (evPanel && !panelEv.dataset.mounted) {
+                        panelEv.dataset.mounted = 'true';
+                        evPanel.mount(panelEv, {
+                            scenarioStore: ns.workbench && ns.workbench.state && ns.workbench.state.scenarioStore,
+                            getBaseBundleSha: function () {
+                                return (state.lastVerifiedResult && state.lastVerifiedResult.bundle_sha256) ||
+                                    (ns.workbench && ns.workbench.state && ns.workbench.state.scenarioStore && ns.workbench.state.scenarioStore.getBaseMappingSha && ns.workbench.state.scenarioStore.getBaseMappingSha()) ||
+                                    '';
+                            }
+                        });
+                    }
+                });
+            }
         }
 
         // Semantic Tree Group & Search

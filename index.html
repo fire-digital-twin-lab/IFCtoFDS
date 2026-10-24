@@ -77,7 +77,7 @@
             <!-- Left Sidebar: Configuration & Workflow -->
             <aside class="left-panel" aria-label="Workflow configuration">
                 <div class="left-panel-content">
-                    <!-- Sidebar Tab Switcher: Workflow vs Semantic Model Tree -->
+                    <!-- Sidebar Tab Switcher: Workflow vs Semantic Model Tree vs EV Scenario Batch -->
                     <div class="sidebar-nav-tabs" role="tablist" style="display:flex;gap:4px;margin-bottom:10px">
                         <button id="sidebar-tab-workflow" class="mode-card active" style="flex:1;padding:6px;justify-content:center;height:32px" type="button" role="tab" aria-selected="true">
                             <span class="mode-card-title" style="font-size:11px">
@@ -89,6 +89,12 @@
                             <span class="mode-card-title" style="font-size:11px">
                                 <i data-lucide="network" style="width:13px;height:13px"></i>
                                 <span>Model Tree</span>
+                            </span>
+                        </button>
+                        <button id="sidebar-tab-ev" class="mode-card" style="flex:1;padding:6px;justify-content:center;height:32px" type="button" role="tab" aria-selected="false">
+                            <span class="mode-card-title" style="font-size:11px">
+                                <i data-lucide="flame" style="width:13px;height:13px"></i>
+                                <span>EV Batch</span>
                             </span>
                         </button>
                     </div>
@@ -380,6 +386,9 @@
                     </div>
                     <div id="semantic-model-tree" style="max-height:calc(100vh - 220px);overflow-y:auto;padding-right:2px"></div>
                 </div>
+
+                <!-- Panel 3: EV Fire Scenario Batch Panel (Task 5) -->
+                <div id="sidebar-panel-ev" style="display:none;flex-direction:column;gap:8px"></div>
                 </div>
             </aside>
 
@@ -803,6 +812,9 @@
     <script src="js/workbench/navigation/color-overlay.js"></script>
     <script src="js/workbench/navigation/model-tree.js"></script>
     <script src="js/workbench/navigation/section-box.js"></script>
+
+    <!-- Workbench Panels (EV Fire Scenario Batch) -->
+    <script src="js/workbench/panels/ev-scenario-panel.js"></script>
 
     <script src="js/ui/audit-drawer.js"></script>
     <script src="js/app-controller.js"></script>
