@@ -133,17 +133,134 @@ def test_sqlite_persistence_retry_and_logging(tmp_path, monkeypatch, caplog):
 
 
 def test_startup_orphan_directory_cleanup(tmp_path):
-    """F02: Orphan directories in root not registered in SQLite are removed on startup."""
+    """F02: Boot NEVER implicitly purges unregistered dirs; explicit prune does.
+
+    The implicit boot sweep is disabled to protect pre-upgrade artifacts (the
+    service cannot distinguish a healthy DB from a restored/migrated one).
+    Retention for registered jobs still applies; unregistered dirs are purged
+    only via an explicit prune_unregistered=True call.
+    """
+    # Seed the DB with one registered job so the DB is non-fresh.
+    keep_dir = tmp_path / "job-keepme"
+    keep_dir.mkdir(parents=True, exist_ok=True)
+    seed_repo = JobRepository(root=tmp_path)
+    seed_repo.set("job-keepme", {
+        "id": "job-keepme",
+        "state": "COMPLETED",
+        "directory": str(keep_dir),
+        "created": time.time() - 200,
+        "finished": time.time() - 100,
+        "mode": "convert",
+    })
+
     orphan_dir = tmp_path / "job-orphan123"
     orphan_dir.mkdir(parents=True, exist_ok=True)
     (orphan_dir / "garbage.txt").write_text("old file")
 
-    # Start service: startup sweep must remove unregistered job directory
+    # Boot must NOT remove the unregistered dir implicitly.
     service = JobService(root=tmp_path)
     try:
-        assert not orphan_dir.exists(), "Orphan directory was not cleaned up on startup"
+        assert orphan_dir.exists(), "Boot must not implicitly purge unregistered dirs"
+        assert keep_dir.exists(), "Registered job directory must not be removed"
+        # Explicit prune still purges unregistered dirs but keeps registered ones.
+        service.cleanup_orphaned_directories(prune_unregistered=True)
+        assert not orphan_dir.exists(), "Explicit prune must remove unregistered dirs"
+        assert keep_dir.exists(), "Registered job directory must survive explicit prune"
     finally:
         service.close()
+
+
+def test_startup_orphan_cleanup_preserves_dirs_on_fresh_db(tmp_path):
+    """B1: Fresh/empty DB (e.g. after upgrade losing jobs.sqlite3) must NOT wipe job-* dirs."""
+    orphan_dir = tmp_path / "job-orphan123"
+    orphan_dir.mkdir(parents=True, exist_ok=True)
+    (orphan_dir / "keep.txt").write_text("precious artifact")
+
+    # Ensure NO jobs.sqlite3 exists -> fresh DB
+    assert not (tmp_path / "jobs.sqlite3").exists(), "Test requires a fresh DB (no sqlite file)"
+
+    service = JobService(root=tmp_path)
+    try:
+        assert orphan_dir.exists(), "Orphan dir must SURVIVE JobService init with a fresh DB"
+        assert (orphan_dir / "keep.txt").is_file()
+    finally:
+        service.close()
+
+
+def test_startup_orphan_cleanup_removes_orphans_with_seeded_db(tmp_path):
+    """B1: Explicit prune_unregistered=True purges unregistered dirs (opt-in)."""
+    keep_dir = tmp_path / "job-keepme"
+    keep_dir.mkdir(parents=True, exist_ok=True)
+    seed_repo = JobRepository(root=tmp_path)
+    seed_repo.set("job-keepme", {
+        "id": "job-keepme",
+        "state": "COMPLETED",
+        "directory": str(keep_dir),
+        "created": time.time() - 200,
+        "finished": time.time() - 100,
+        "mode": "convert",
+    })
+
+    orphan_dir = tmp_path / "job-orphan123"
+    orphan_dir.mkdir(parents=True, exist_ok=True)
+    (orphan_dir / "garbage.txt").write_text("old file")
+
+    service = JobService(root=tmp_path)
+    try:
+        assert orphan_dir.exists(), "Boot must not implicitly purge unregistered dirs"
+        service.cleanup_orphaned_directories(prune_unregistered=True)
+        assert not orphan_dir.exists(), "Explicit prune must remove unregistered dirs"
+        assert keep_dir.exists(), "Registered job directory must not be removed"
+    finally:
+        service.close()
+
+
+def test_empty_existing_db_preserves_orphans(tmp_path):
+    """B1: An existing-but-empty DB (0 jobs, e.g. upgrade/data loss) must NOT wipe job-* dirs."""
+    # Init the repository with ZERO jobs so jobs.sqlite3 EXISTS but holds no rows.
+    empty_repo = JobRepository(root=tmp_path)
+    assert not empty_repo.all_jobs()
+    assert (tmp_path / "jobs.sqlite3").exists(), "Test requires an existing (but empty) DB file"
+
+    orphan_dir = tmp_path / "job-orphan123"
+    orphan_dir.mkdir(parents=True, exist_ok=True)
+    (orphan_dir / "keep.txt").write_text("precious artifact")
+
+    service = JobService(root=tmp_path)
+    try:
+        assert orphan_dir.exists(), "Orphan dir must SURVIVE with an existing-but-empty DB"
+        assert (orphan_dir / "keep.txt").is_file()
+        # Manual sweep calls must also be safe by default (no fresh_db flag passed).
+        service.cleanup_orphaned_directories()
+        assert orphan_dir.exists(), "Manual cleanup_orphaned_directories() must not wipe on empty DB"
+    finally:
+        service.close()
+
+
+def test_two_boots_preserve_orphans_on_empty_db(tmp_path):
+    """B1 regression: boot1 (fresh, no file) preserves AND boot2 (file now exists, still 0 jobs) preserves."""
+    orphan_dir = tmp_path / "job-orphan123"
+    orphan_dir.mkdir(parents=True, exist_ok=True)
+    (orphan_dir / "keep.txt").write_text("precious artifact")
+
+    assert not (tmp_path / "jobs.sqlite3").exists(), "Test requires boot1 with no sqlite file"
+
+    boot1 = JobService(root=tmp_path)
+    try:
+        assert orphan_dir.exists(), "Boot1 (fresh DB) must preserve the orphan dir"
+    finally:
+        boot1.close()
+
+    # Boot1 created jobs.sqlite3, but the repository still holds ZERO jobs.
+    assert (tmp_path / "jobs.sqlite3").exists()
+    assert not JobRepository(root=tmp_path).all_jobs()
+
+    boot2 = JobService(root=tmp_path)
+    try:
+        assert orphan_dir.exists(), "Boot2 (existing-but-empty DB) must STILL preserve the orphan dir"
+        assert (orphan_dir / "keep.txt").is_file()
+    finally:
+        boot2.close()
 
 
 def test_durable_research_artifacts_retention(tmp_path):
@@ -388,3 +505,320 @@ def test_api_key_auth_and_host_validation(monkeypatch):
     # Also accepts Bearer token
     res_bearer = client.get("/api/reference-cases", headers={"Authorization": "Bearer super-secret-key-12345"})
     assert res_bearer.status_code == 200
+
+
+def test_corrupt_result_json_marks_failed(tmp_path):
+    """A1: Truncated result.json or missing status field must mark job FAILED, never COMPLETED."""
+    import threading
+
+    service = JobService(root=tmp_path)
+    worker = None
+    try:
+        def make_running_job(jid, result_text):
+            job_dir = tmp_path / jid
+            job_dir.mkdir(parents=True, exist_ok=True)
+            (job_dir / "result.json").write_text(result_text, encoding="utf-8")
+
+            class MockProcess:
+                pid = 999999999
+                returncode = 0
+                def poll(self):
+                    return 0
+
+            service.repository.set(jid, {
+                "id": jid,
+                "state": "RUNNING",
+                "directory": str(job_dir),
+                "created": time.time() - 10,
+                "started": time.time() - 5,
+                "mode": "convert",
+                "durable": False,
+                "process": MockProcess(),
+            })
+            return job_dir
+
+        corrupt_dir = make_running_job("job-corrupt", '{"status": "MAPPING_VER')
+        nostatus_dir = make_running_job("job-nostatus", '{"artifacts": {}}')
+
+        # Step the real completion logic in _loop on a background thread.
+        worker = threading.Thread(target=service._loop, daemon=True)
+        worker.start()
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            states = [
+                (service.repository.get(j) or {}).get("state")
+                for j in ("job-corrupt", "job-nostatus")
+            ]
+            if all(s != "RUNNING" for s in states):
+                break
+            time.sleep(0.05)
+        service.closed = True
+        service.wake.set()
+        worker.join(timeout=5)
+        worker = None
+
+        for jid, job_dir in (("job-corrupt", corrupt_dir), ("job-nostatus", nostatus_dir)):
+            job = service.repository.get(jid)
+            assert job is not None
+            assert job["state"] == "FAILED", (
+                f"{jid} must not be COMPLETED with bad result.json: {job}"
+            )
+            assert "result.json" in str(job.get("error") or "")
+            assert len(str(job.get("error") or "")) <= 2000
+            assert (job_dir / "diagnostics.json").is_file()
+    finally:
+        service.closed = True
+        service.wake.set()
+        if worker is not None:
+            worker.join(timeout=5)
+        service.close()
+
+
+def test_non_dict_result_json_marks_failed(tmp_path):
+    """M11a: result.json holding valid JSON that is not an object (array/string)
+    with returncode 0 -> FAILED with 'result.json' in error, never COMPLETED."""
+    import threading
+
+    service = JobService(root=tmp_path)
+    worker = None
+    try:
+        def make_running_job(jid, result_text):
+            job_dir = tmp_path / jid
+            job_dir.mkdir(parents=True, exist_ok=True)
+            (job_dir / "result.json").write_text(result_text, encoding="utf-8")
+
+            class MockProcess:
+                pid = 999999999
+                returncode = 0
+                def poll(self):
+                    return 0
+
+            service.repository.set(jid, {
+                "id": jid,
+                "state": "RUNNING",
+                "directory": str(job_dir),
+                "created": time.time() - 10,
+                "started": time.time() - 5,
+                "mode": "convert",
+                "durable": False,
+                "process": MockProcess(),
+            })
+            return job_dir
+
+        dirs = {
+            "job-array": make_running_job("job-array", '["not", "an", "object"]'),
+            "job-string": make_running_job("job-string", '"just a string"'),
+        }
+
+        worker = threading.Thread(target=service._loop, daemon=True)
+        worker.start()
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            states = [
+                (service.repository.get(j) or {}).get("state")
+                for j in dirs
+            ]
+            if all(s != "RUNNING" for s in states):
+                break
+            time.sleep(0.05)
+        service.closed = True
+        service.wake.set()
+        worker.join(timeout=5)
+        worker = None
+
+        for jid, job_dir in dirs.items():
+            job = service.repository.get(jid)
+            assert job is not None
+            assert job["state"] == "FAILED", (
+                f"{jid} must not be COMPLETED with non-dict result.json: {job}"
+            )
+            assert "result.json" in str(job.get("error") or "")
+            assert (job_dir / "diagnostics.json").is_file()
+    finally:
+        service.closed = True
+        service.wake.set()
+        if worker is not None:
+            worker.join(timeout=5)
+        service.close()
+
+
+def test_inventory_mode_status_less_dict_completes(tmp_path):
+    """M11b: inventory-mode job with a status-less dict result.json -> COMPLETED
+    (the mode == 'inventory' exemption in the completion path is honored)."""
+    import threading
+
+    service = JobService(root=tmp_path)
+    worker = None
+    try:
+        job_dir = tmp_path / "job-inventory"
+        job_dir.mkdir(parents=True, exist_ok=True)
+        (job_dir / "result.json").write_text(
+            json.dumps({"elements": 3}), encoding="utf-8"
+        )
+
+        class MockProcess:
+            pid = 999999999
+            returncode = 0
+            def poll(self):
+                return 0
+
+        service.repository.set("job-inventory", {
+            "id": "job-inventory",
+            "state": "RUNNING",
+            "directory": str(job_dir),
+            "created": time.time() - 10,
+            "started": time.time() - 5,
+            "mode": "inventory",
+            "durable": False,
+            "process": MockProcess(),
+        })
+
+        worker = threading.Thread(target=service._loop, daemon=True)
+        worker.start()
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            if (service.repository.get("job-inventory") or {}).get("state") != "RUNNING":
+                break
+            time.sleep(0.05)
+        service.closed = True
+        service.wake.set()
+        worker.join(timeout=5)
+        worker = None
+
+        job = service.repository.get("job-inventory")
+        assert job is not None
+        assert job["state"] == "COMPLETED", (
+            f"inventory-mode job must be COMPLETED without a status field: {job}"
+        )
+    finally:
+        service.closed = True
+        service.wake.set()
+        if worker is not None:
+            worker.join(timeout=5)
+        service.close()
+
+
+def test_restored_db_skips_unregistered_sweep_this_boot(tmp_path):
+    """I-B: Boot never implicitly purges unregistered dirs -- even when the DB
+    looks restored (present, non-empty, stale rows, fresh mtime). Only an
+    explicit prune_unregistered=True call purges them."""
+    # Seed DB with 1 stale row whose directory points at moved (now absent) dirs.
+    moved_dir = tmp_path / "job-moved-away"
+    seed_repo = JobRepository(root=tmp_path)
+    seed_repo.set("job-stale", {
+        "id": "job-stale",
+        "state": "COMPLETED",
+        "directory": str(moved_dir),
+        "created": time.time() - 7200,
+        "finished": time.time() - 3600,
+        "mode": "convert",
+    })
+
+    orphan_dir = tmp_path / "job-orphan-restore"
+    orphan_dir.mkdir(parents=True, exist_ok=True)
+    (orphan_dir / "artifact.txt").write_text("user data")
+    old = time.time() - 7200
+    os.utime(orphan_dir, (old, old))
+
+    # Simulate partial restore/migration: DB file rewritten just before boot.
+    db_path = tmp_path / "jobs.sqlite3"
+    assert db_path.exists()
+    future = time.time() + 120
+    os.utime(db_path, (future, future))
+
+    service = JobService(root=tmp_path)
+    try:
+        assert orphan_dir.exists(), "Orphan dir must SURVIVE boot: no implicit purge"
+        assert (orphan_dir / "artifact.txt").is_file()
+        assert service.repository.get("job-stale") is not None
+        # Explicit opt-in prune still works.
+        service.cleanup_orphaned_directories(prune_unregistered=True)
+        assert not orphan_dir.exists(), "Explicit prune must remove unregistered dirs"
+    finally:
+        service.close()
+
+
+def test_rmtree_logged_onexc_fallback_for_py310_py311(tmp_path, monkeypatch):
+    """P0: _rmtree_logged falls back to onerror on 3.10/3.11 where onexc is missing."""
+    import shutil as _shutil
+    from ifc_to_fds.adapters.jobs.service import _rmtree_logged
+
+    target = tmp_path / "job-oldpy"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "f.txt").write_text("x", encoding="utf-8")
+    real_rmtree = _shutil.rmtree
+    calls = []
+    raised = {"once": False}
+
+    def fake_rmtree(path, *args, **kwargs):
+        calls.append(dict(kwargs))
+        if "onexc" in kwargs and not raised["once"]:
+            raised["once"] = True
+            raise TypeError(
+                "rmtree() got an unexpected keyword argument 'onexc' (simulated 3.10/3.11)"
+            )
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(_shutil, "rmtree", fake_rmtree)
+    _rmtree_logged(target)
+    assert not target.exists(), "helper must still remove the tree via onerror fallback"
+    assert any("onexc" in c for c in calls), "expected an onexc attempt first"
+    assert any("onerror" in c for c in calls), "expected onerror fallback path to be used"
+
+
+def test_invalid_result_preserves_richer_worker_diagnostic(tmp_path):
+    """M2: corrupt result.json must NOT clobber a richer pre-existing diagnostics.json."""
+    import threading
+
+    service = JobService(root=tmp_path)
+    worker = None
+    try:
+        jid = "job-preserve-diag"
+        job_dir = tmp_path / jid
+        job_dir.mkdir(parents=True, exist_ok=True)
+        (job_dir / "result.json").write_text('{"status": "MAPPING_VER', encoding="utf-8")
+        marker = {"name": "WorkerRicher", "message": "richer worker diagnostic", "marker": True}
+        (job_dir / "diagnostics.json").write_text(json.dumps(marker), encoding="utf-8")
+
+        class MockProcess:
+            pid = 999999999
+            returncode = 0
+            def poll(self):
+                return 0
+
+        service.repository.set(jid, {
+            "id": jid,
+            "state": "RUNNING",
+            "directory": str(job_dir),
+            "created": time.time() - 10,
+            "started": time.time() - 5,
+            "mode": "convert",
+            "durable": False,
+            "process": MockProcess(),
+        })
+
+        worker = threading.Thread(target=service._loop, daemon=True)
+        worker.start()
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            state = (service.repository.get(jid) or {}).get("state")
+            if state != "RUNNING":
+                break
+            time.sleep(0.05)
+        service.closed = True
+        service.wake.set()
+        worker.join(timeout=5)
+        worker = None
+
+        job = service.repository.get(jid)
+        assert job is not None
+        assert job["state"] == "FAILED"
+        assert "result.json" in str(job.get("error") or "")
+        preserved = json.loads((job_dir / "diagnostics.json").read_text(encoding="utf-8"))
+        assert preserved == marker, "richer worker diagnostics.json must be preserved, not overwritten"
+    finally:
+        service.closed = True
+        service.wake.set()
+        if worker is not None:
+            worker.join(timeout=5)
+        service.close()

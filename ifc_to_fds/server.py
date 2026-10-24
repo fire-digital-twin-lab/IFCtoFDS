@@ -272,10 +272,30 @@ def status(jid: str):
         raise HTTPException(404, "Unknown job")
 
 
-@app.delete("/api/jobs/{jid}")
-def cancel(jid: str):
+@app.post("/api/jobs/{jid}/cancel")
+def cancel_job(jid: str):
     try:
-        return manager.delete_job(jid)
+        return manager.cancel(jid)
+    except KeyError:
+        raise HTTPException(404, "Unknown job")
+
+
+@app.delete("/api/jobs/{jid}")
+def delete_job(jid: str, purge: bool = False):
+    try:
+        if not purge:
+            with manager.lock:
+                # Read-only use of the jobs view (do not mutate); writes go
+                # through the repository/service methods under the same lock.
+                job = manager.jobs.get(jid)
+                if not job:
+                    raise HTTPException(404, "Unknown job")
+                if job["state"] not in ("QUEUED", "RUNNING"):
+                    raise HTTPException(
+                        409,
+                        "Job is terminal; pass ?purge=true to delete its artifacts",
+                    )
+        return manager.delete_job(jid, purge=purge)
     except KeyError:
         raise HTTPException(404, "Unknown job")
 

@@ -1,4 +1,7 @@
+import json
+import shutil
 import time
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 from ifc_to_fds.server import app
@@ -199,3 +202,167 @@ def test_checkpoint_artifacts_accessible_on_failed_or_incomplete_jobs(tmp_path):
         res_chk.headers.get("X-Verification-Status")
         == "UNACCEPTED-AUDIT_INCOMPLETE-DO_NOT_USE_AS_VERIFIED_OUTPUT"
     )
+
+
+def _register_completed_job():
+    """Register a COMPLETED job fixture directly in the repository.
+
+    The directory lives under manager.root so the purge guard
+    (parent == root) treats it as a genuine job directory.
+    """
+    from ifc_to_fds.server import manager
+
+    jid = "test-completed-" + uuid.uuid4().hex[:8]
+    job_dir = manager.root / ("job-" + jid)
+    job_dir.mkdir(parents=True, exist_ok=True)
+    (job_dir / "result.json").write_text(
+        json.dumps({"status": "MAPPING_VERIFIED"}), encoding="utf-8"
+    )
+    manager.repository.set(jid, {
+        "id": jid,
+        "state": "COMPLETED",
+        "directory": str(job_dir),
+        "created": time.time() - 10,
+        "finished": time.time(),
+        "mode": "convert",
+    })
+    return jid, job_dir
+
+
+def _forget_job(jid, job_dir):
+    """Remove a fixture job row + directory; fail loudly on residue (I-D)."""
+    from ifc_to_fds.server import manager
+
+    manager.repository.delete(jid)
+    shutil.rmtree(job_dir, ignore_errors=True)
+    assert manager.repository.get(jid) is None, f"fixture job {jid} still registered"
+    assert not job_dir.exists(), f"fixture job dir {job_dir} still on disk"
+
+
+def test_forget_job_detects_lingering_directory(monkeypatch):
+    """I-D: verified cleanup must fail loudly if the fixture dir survives."""
+    from ifc_to_fds.server import manager
+
+    jid, job_dir = _register_completed_job()
+    real_rmtree = shutil.rmtree
+    monkeypatch.setattr(shutil, "rmtree", lambda *args, **kwargs: None)
+    with pytest.raises(AssertionError, match="still on disk"):
+        _forget_job(jid, job_dir)
+    manager.repository.delete(jid)
+    real_rmtree(job_dir, ignore_errors=True)
+    assert manager.repository.get(jid) is None
+    assert not job_dir.exists()
+
+
+def test_forget_job_detects_lingering_row(monkeypatch):
+    """I-D: verified cleanup must fail loudly if the fixture row survives."""
+    from ifc_to_fds.server import manager
+
+    jid, job_dir = _register_completed_job()
+    real_delete = manager.repository.delete
+    monkeypatch.setattr(manager.repository, "delete", lambda _jid: None)
+    with pytest.raises(AssertionError, match="still registered"):
+        _forget_job(jid, job_dir)
+    real_delete(jid)
+    shutil.rmtree(job_dir, ignore_errors=True)
+    assert manager.repository.get(jid) is None
+    assert not job_dir.exists()
+
+
+def test_cancel_completed_job_returns_snapshot_and_preserves_artifacts():
+    """B2: POST /cancel on a COMPLETED job returns its snapshot; artifacts survive."""
+    from ifc_to_fds.server import manager
+
+    jid, job_dir = _register_completed_job()
+    try:
+        response = client.post(f"/api/jobs/{jid}/cancel")
+        assert response.status_code == 200, response.text
+        assert response.json()["id"] == jid
+        assert response.json()["state"] == "COMPLETED"
+        assert job_dir.exists(), "cancel must not purge artifacts of a COMPLETED job"
+        assert manager.repository.get(jid) is not None
+    finally:
+        _forget_job(jid, job_dir)
+
+
+def test_delete_completed_job_without_purge_is_rejected():
+    """B2: DELETE without purge on a COMPLETED job returns 409; artifacts survive."""
+    from ifc_to_fds.server import manager
+
+    jid, job_dir = _register_completed_job()
+    try:
+        response = client.delete(f"/api/jobs/{jid}")
+        assert response.status_code == 409, response.text
+        assert job_dir.exists(), "rejected DELETE must not purge artifacts"
+        assert manager.repository.get(jid) is not None
+    finally:
+        _forget_job(jid, job_dir)
+
+
+def test_delete_completed_job_with_purge_removes_row_and_dir():
+    """B2: DELETE?purge=true on a COMPLETED job removes dir + row (404 on next GET)."""
+    from ifc_to_fds.server import manager
+
+    jid, job_dir = _register_completed_job()
+    try:
+        response = client.delete(f"/api/jobs/{jid}", params={"purge": "true"})
+        assert response.status_code == 200, response.text
+        assert not job_dir.exists(), "purge must remove the artifacts directory"
+        assert manager.repository.get(jid) is None
+        assert client.get(f"/api/jobs/{jid}").status_code == 404
+    finally:
+        _forget_job(jid, job_dir)
+
+
+def test_cancel_queued_job_transitions_to_cancelled():
+    """B2: POST /cancel on an active QUEUED job transitions it to CANCELLED."""
+    from ifc_to_fds.server import manager
+
+    jid = "test-queued-" + uuid.uuid4().hex[:8]
+    job_dir = manager.root / ("job-" + jid)
+    job_dir.mkdir(parents=True, exist_ok=True)
+    manager.repository.set(jid, {
+        "id": jid,
+        "state": "QUEUED",
+        "directory": str(job_dir),
+        "created": time.time(),
+        "mode": "convert",
+        "process": None,
+    })
+    try:
+        response = client.post(f"/api/jobs/{jid}/cancel")
+        assert response.status_code == 200, response.text
+        assert response.json()["state"] == "CANCELLED"
+    finally:
+        _forget_job(jid, job_dir)
+
+
+def test_cancel_unknown_job_returns_404():
+    response = client.post("/api/jobs/does-not-exist-123/cancel")
+    assert response.status_code == 404
+
+
+def test_delete_running_job_with_purge_returns_cancelled_and_preserves_dir():
+    """P2: DELETE?purge=true on RUNNING safely downgrades to cancel; dir survives."""
+    from ifc_to_fds.server import manager
+
+    jid = "test-running-" + uuid.uuid4().hex[:8]
+    job_dir = manager.root / ("job-" + jid)
+    job_dir.mkdir(parents=True, exist_ok=True)
+    manager.repository.set(jid, {
+        "id": jid,
+        "state": "RUNNING",
+        "directory": str(job_dir),
+        "created": time.time(),
+        "started": time.time(),
+        "mode": "convert",
+        "process": None,
+    })
+    try:
+        response = client.delete(f"/api/jobs/{jid}", params={"purge": "true"})
+        assert response.status_code == 200, response.text
+        assert response.json()["state"] == "CANCELLED"
+        assert job_dir.exists(), "safe downgrade must preserve the job directory"
+        assert manager.repository.get(jid) is not None
+    finally:
+        _forget_job(jid, job_dir)

@@ -127,13 +127,16 @@ def parse_fds(text):
                 except (ValueError, TypeError):
                     parsed.errors.append("Invalid IFC_SOURCE metadata")
             elif not active and re.search(r"IFC\s+entity\b", comment, re.IGNORECASE):
-                source = {"legacy": True}
                 step_m = re.search(r"entity\s+#?(\d+)", comment, re.IGNORECASE)
-                if step_m:
-                    source["step_id"] = int(step_m.group(1))
                 guid_m = re.search(r"GUID\s*=\s*['\"]?([^;\s,'\"]+)['\"]?", comment, re.IGNORECASE)
-                if guid_m:
-                    source["global_id"] = guid_m.group(1)
+                if step_m or guid_m:
+                    source = {"legacy": True}
+                    if step_m:
+                        source["step_id"] = int(step_m.group(1))
+                    if guid_m:
+                        source["global_id"] = guid_m.group(1)
+                else:
+                    source = {}
             i = end - 1
         elif active and c in ("'", '"'):
             quote = c

@@ -18,17 +18,18 @@
         };
     }
 
-    function restoreVisibilityState(store, prevState) {
-        if (store.restoreState) { store.restoreState(prevState, 'undo'); return; }
-        store.resetVisibility('undo');
-        if (prevState.hiddenKeys.length) store.hideKeys(prevState.hiddenKeys, 'undo');
-        if (prevState.isolatedKeys) store.isolateKeys(prevState.isolatedKeys, 'undo');
-        if (prevState.ghostKeys.length) store.ghostKeys(prevState.ghostKeys, 'undo');
+    function restoreVisibilityState(store, prevState, source) {
+        var tag = source || 'undo';
+        if (store.restoreState) { store.restoreState(prevState, tag); return; }
+        store.resetVisibility(tag);
+        if (prevState.hiddenKeys.length) store.hideKeys(prevState.hiddenKeys, tag);
+        if (prevState.isolatedKeys) store.isolateKeys(prevState.isolatedKeys, tag);
+        if (prevState.ghostKeys.length) store.ghostKeys(prevState.ghostKeys, tag);
         for (var st in prevState.storeyVisibility) {
-            store.setStoreyVisibility(st, prevState.storeyVisibility[st], 'undo');
+            store.setStoreyVisibility(st, prevState.storeyVisibility[st], tag);
         }
         for (var sys in prevState.systemVisibility) {
-            store.setSystemVisibility(sys, prevState.systemVisibility[sys], 'undo');
+            store.setSystemVisibility(sys, prevState.systemVisibility[sys], tag);
         }
     }
 
@@ -67,13 +68,13 @@
         var same = this._prevState.isolatedKeys && this._prevState.isolatedKeys.length === this.keys.length &&
             this.keys.every(function (key) { return this._prevState.isolatedKeys.indexOf(key) >= 0; }, this);
         if (same) {
-            this.visibilityStore.restoreState(this._beforeIsolation || Object.assign({}, this._prevState, {isolatedKeys:null}), 'command');
+            restoreVisibilityState(this.visibilityStore, this._beforeIsolation || Object.assign({}, this._prevState, {isolatedKeys:null}), 'command');
         } else {
             this._beforeIsolation = cloneVisibilityState(this.visibilityStore);
             var next = cloneVisibilityState(this.visibilityStore);
             next.isolatedKeys = this.keys.slice();
             next.hiddenKeys = next.hiddenKeys.filter(function (key) { return this.keys.indexOf(key) < 0; }, this);
-            this.visibilityStore.restoreState(next, 'command');
+            restoreVisibilityState(this.visibilityStore, next, 'command');
         }
         return true;
     };

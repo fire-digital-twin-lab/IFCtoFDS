@@ -63,6 +63,21 @@ def test_saved_audit_detects_manifest_and_source_tampering(tiny_ifc):
     assert report.gates["source_inventory"].status == "FAIL"
 
 
+def test_rebase_vector_shape_validated():
+    from ifc_to_fds.application.dto.configuration import validate_configuration
+
+    with pytest.raises(ValueError):
+        validate_configuration({"rebase_vector": [1, 2]})
+    with pytest.raises(ValueError):
+        validate_configuration({"rebase_vector": ["a", 0, 0]})
+    with pytest.raises(ValueError):
+        validate_configuration({"rebase_vector": [float("nan"), 0, 0]})
+    with pytest.raises(ValueError):
+        validate_configuration({"rebase_vector": [float("inf"), 0, 0]})
+    config = validate_configuration({"rebase_vector": [1, 2, 3]})
+    assert list(config["rebase_vector"]) == [1, 2, 3]
+
+
 def test_graph_mutation_rejected(tiny_ifc):
     path, _, _ = tiny_ifc
     result = convert([path])
@@ -114,4 +129,19 @@ def test_federation_transforms_representation_bounds_and_empty_mesh(tiny_ifc, tm
     assert elem1.representation_bounds.ymax == pytest.approx(11.0)
     assert elem1.representation_bounds.zmin == pytest.approx(2.0)
     assert elem1.representation_bounds.zmax == pytest.approx(5.0)
+
+
+def test_rebase_vector_rejects_bool():
+    """P2/C5: bool is an int subclass -- [True, 0, 0] must be rejected."""
+    from ifc_to_fds.application.dto.configuration import validate_configuration
+
+    with pytest.raises(ValueError):
+        validate_configuration({"rebase_vector": [True, 0, 0]})
+
+
+def test_load_sources_rebase_vector_shape_raises_value_error(tiny_ifc):
+    """federation.py must raise ValueError (not bare assert) on bad rebase shape."""
+    path, _, _ = tiny_ifc
+    with pytest.raises(ValueError, match="rebase_vector must be"):
+        load_sources([path], {"rebase_vector": [1, 2]})
 

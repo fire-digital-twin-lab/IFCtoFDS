@@ -25,6 +25,15 @@ class StructuralCompletenessChecker:
     name = "structural_completeness"
 
     def check(self, context):
+        if context.parsed is None or context.model is None:
+            return CheckerOutcome(
+                gate_name=self.name,
+                result=GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason="Incomplete diagnostic artifact: FDS text missing",
+                ),
+                findings=[],
+            )
         emitted = {
             p.source.get("entity_key")
             for p in context.parsed.primitives

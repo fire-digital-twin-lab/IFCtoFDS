@@ -13,6 +13,15 @@ class TraceabilityChecker:
     def check(self, context: ValidationContext, parsed: Any = None) -> CheckerOutcome:
         parsed = parsed if parsed is not None else context.parsed
         model = context.model
+        if parsed is None or model is None:
+            return CheckerOutcome(
+                gate_name="traceability",
+                result=GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason="Incomplete diagnostic artifact: FDS text missing",
+                ),
+                findings=[],
+            )
         manifest = context.manifest
         fds_text = context.fds_text
         findings: List[Finding] = []
@@ -34,9 +43,11 @@ class TraceabilityChecker:
                 ]
                 if len(candidates) == 1:
                     key = candidates[0].entity_key
-                    if status != GateStatus.FAIL:
-                        status = GateStatus.INCONCLUSIVE
-                    reasons.append(f"Legacy source metadata lacks file hash: {p.id}")
+                    p.source["entity_key"] = candidates[0].entity_key
+            if p.source.get("legacy"):
+                if status != GateStatus.FAIL:
+                    status = GateStatus.INCONCLUSIVE
+                reasons.append(f"Legacy source metadata lacks file hash: {p.id}")
 
             if key not in known:
                 status = GateStatus.FAIL
