@@ -10,6 +10,13 @@ from ifc_to_fds.fire.ev_library import (
     list_ev_presets,
     load_ev_preset,
 )
+from ifc_to_fds.fire.scenario_emitter import (
+    DeviceSelection,
+    EVSelection,
+    OpeningEvent,
+    ScenarioBundle,
+    emit_fire_scenario,
+)
 
 __all__ = [
     "EVPreset",
@@ -20,4 +27,9 @@ __all__ = [
     "library_dir",
     "list_ev_presets",
     "load_ev_preset",
+    "DeviceSelection",
+    "EVSelection",
+    "OpeningEvent",
+    "ScenarioBundle",
+    "emit_fire_scenario",
 ]
