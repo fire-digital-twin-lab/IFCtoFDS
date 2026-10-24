@@ -49,12 +49,14 @@ def test_mesh_gate_blocks_coarse_ebike():
 
 
 def test_mesh_gate_passes_very_fine_mesh():
-    """Verify D*/dx > 16.0 passes with very fine resolution note."""
+    """Verify D*/dx > 16.0 does NOT pass (strictly enforce 4.0 <= D*/dx <= 16.0)."""
     scenario_5mw = {"total_peak_hrr_mw": 5.0}
     res = check_mesh_resolution(scenario_5mw, cell_size=0.05)
-    assert res.status == GateStatus.PASS
+    assert res.status != GateStatus.PASS
+    assert res.status == GateStatus.FAIL
     assert res.evidence["d_star_over_dx"] > 16.0
-    assert "very fine" in res.reason
+    assert "Mesh resolution too fine" in res.reason
+    assert "exceeds validated [4.0, 16.0] range" in res.reason
 
 
 def test_mesh_resolution_checker_not_applicable_when_no_fire(box_model):
@@ -134,3 +136,110 @@ def test_check_mesh_resolution_with_scenario_bundle():
     # 4.5 MW = 4500 kW -> D* = (4500/1111.4)^0.4 ~= 1.7454 -> D*/0.2 ~= 8.727
     assert res.evidence["peak_hrr_kw"] == 4500.0
     assert res.evidence["d_star_over_dx"] == pytest.approx(8.727, rel=1e-2)
+
+
+def test_solver_blocked_when_mesh_resolution_fails(box_model, monkeypatch):
+    """When mesh resolution fails, runner sets solver gate to INCONCLUSIVE without calling solver."""
+    solver_called = False
+
+    def fake_solver_gates(fds_text, config):
+        nonlocal solver_called
+        solver_called = True
+        return GateResult(status=GateStatus.PASS), GateResult(status=GateStatus.PASS)
+
+    monkeypatch.setattr("ifc_to_fds.validation.checkers.solver.solver_gates", fake_solver_gates)
+
+    plan = getattr(box_model, "mapping_plan", None)
+    if plan is None:
+        from ifc_to_fds.domain.mapping import MappingPlan
+        plan = MappingPlan()
+
+    # e-bike-lfp produces ~100 kW -> D* ~ 0.38m -> cell_size 0.5m yields D*/dx ~ 0.76 < 4.0 (fails)
+    ev = EVSelection(preset_id="e-bike-lfp", position=(1.0, 0.5, 0.5))
+    bundle = emit_fire_scenario(
+        mapping_plan=plan,
+        bundle_sha256="b" * 64,
+        ev_selections=[ev],
+        verification_status="MAPPING_VERIFIED",
+    )
+
+    fds_text = (
+        "&HEAD CHID='EV_FIRE_COARSE', TITLE='EV Fire Coarse Mesh' /\n"
+        "&TIME T_END=60.0 /\n"
+        "&MESH ID='M1', IJK=4,4,4, XB=0.0,2.0,0.0,2.0,0.0,2.0 /\n"
+        f"{bundle.fds_fragment}\n"
+        "&TAIL /\n"
+    )
+
+    runner = ValidationRunner()
+    report = runner.validate(box_model, fds_text)
+
+    assert report.gates["mesh_resolution"].status == GateStatus.FAIL
+    assert report.gates["solver"].status == GateStatus.INCONCLUSIVE
+    assert "Mesh resolution gate did not pass" in report.gates["solver"].reason
+    assert not solver_called
+
+
+def test_mesh_gate_multi_source_fails_if_any_source_out_of_bounds():
+    """Verify check_mesh_resolution evaluates each vehicle selection individually."""
+    ev_auto = EVSelection(preset_id="auto-nmc", position=(1.0, 0.5, 0.5))
+    ev_ebike = EVSelection(preset_id="e-bike-lfp", position=(5.0, 0.5, 0.5))
+
+    bundle = ScenarioBundle(
+        scenario_id="ev_scen_multi",
+        bundle_sha256="d" * 64,
+        ev_library_version="1.0.0",
+        fds_fragment="! multi",
+        total_peak_hrr_mw=4.6,
+        ev_count=2,
+        ev_selections=[ev_auto, ev_ebike],
+    )
+
+    # cell_size 0.2m: auto-nmc (4.5MW) -> D*/dx ~ 8.7 (pass); e-bike-lfp (0.1MW) -> D*/dx ~ 1.9 (fail)
+    res = check_mesh_resolution(bundle, cell_size=0.2)
+    assert res.status == GateStatus.FAIL
+    assert "e-bike-lfp" in res.reason
+    assert "< 4.0" in res.reason
+
+
+def test_mesh_resolution_checker_multi_burner_evaluates_per_source(box_model):
+    """Verify MeshResolutionChecker evaluates each detected burner individually."""
+    fds_text = (
+        "&HEAD CHID='MULTI_BURNER', TITLE='Multi burner test' /\n"
+        "&TIME T_END=60.0 /\n"
+        "&MESH ID='M1', IJK=10,10,10, XB=0.0,2.0,0.0,2.0,0.0,2.0 /\n"
+        "&REAC ID='REAC_TEST', FUEL='OFFGAS', C=2.0, H=4.0, O=1.0 /\n"
+        "&SURF ID='BURNER_AUTO', HRRPUA=555.56 /\n"
+        "&VENT ID='VENT_AUTO', XB=0.0,4.5,0.0,1.8,0.0,0.0, SURF_ID='BURNER_AUTO' /\n"
+        "&SURF ID='BURNER_EBIKE', HRRPUA=92.59 /\n"
+        "&VENT ID='VENT_EBIKE', XB=5.0,6.8,0.0,0.6,0.0,0.0, SURF_ID='BURNER_EBIKE' /\n"
+        "&TAIL /\n"
+    )
+    runner = ValidationRunner()
+    context = runner.create_context(box_model, fds_text)
+    checker = MeshResolutionChecker()
+    outcome = checker.check(context)
+
+    assert outcome.result.status == GateStatus.FAIL
+    assert "VENT_EBIKE" in outcome.result.reason or "BURNER_EBIKE" in outcome.result.reason
+    assert "< 4.0" in outcome.result.reason
+
+
+def test_mesh_resolution_checker_dimensional_fallback_inconclusive(box_model):
+    """If burning area cannot be determined from geometry, return INCONCLUSIVE."""
+    fds_text = (
+        "&HEAD CHID='NO_AREA', TITLE='No area test' /\n"
+        "&TIME T_END=60.0 /\n"
+        "&MESH ID='M1', IJK=10,10,10, XB=0.0,2.0,0.0,2.0,0.0,2.0 /\n"
+        "&REAC ID='REAC_TEST', FUEL='OFFGAS', C=2.0, H=4.0, O=1.0 /\n"
+        "&SURF ID='FIRE_SURF', HRRPUA=500.0 /\n"
+        "&TAIL /\n"
+    )
+    runner = ValidationRunner()
+    context = runner.create_context(box_model, fds_text)
+    checker = MeshResolutionChecker()
+    outcome = checker.check(context)
+
+    assert outcome.result.status == GateStatus.INCONCLUSIVE
+    assert "Cannot determine burning area for HRR calculation" in outcome.result.reason
+
