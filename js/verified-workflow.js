@@ -82,7 +82,7 @@
         cancel: function () {
             stopped = true; generation++;
             var active = jobId; jobId = null; get('cancel').disabled = true;
-            return active ? authFetch('/api/jobs/' + active, {method: 'DELETE'}).then(response) : Promise.resolve();
+            return active ? authFetch('/api/jobs/' + active + '/cancel', {method: 'POST'}).then(response) : Promise.resolve();
         },
         init: function () {
             authFetch('/api/reference-cases').then(response).then(function (data) {

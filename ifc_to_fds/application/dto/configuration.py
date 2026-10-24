@@ -90,4 +90,17 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
     if not math.isfinite(cell) or cell <= 0:
         raise ValueError("cell_size must be finite and positive")
     config["cell_size"] = cell
+    rebase_vector = config.get("rebase_vector")
+    if rebase_vector is not None:
+        if (
+            not isinstance(rebase_vector, (list, tuple))
+            or len(rebase_vector) != 3
+            or any(
+                isinstance(x, bool)
+                or not isinstance(x, (int, float))
+                or not math.isfinite(x)
+                for x in rebase_vector
+            )
+        ):
+            raise ValueError("rebase_vector must be [x,y,z] finite numbers")
     return config

@@ -193,6 +193,67 @@ def test_reverse_projection_coverage_detects_missing_fire_protection(box_model, 
         validate_reference(corrupted_files)
 
 
+def _set_system_ids(files, entity_key, system_ids):
+    """Test helper: set system_ids for one element consistently across every
+    file that carries its record, so manifest/inventory/projection parity holds
+    and only the mep-reference linkage under test varies."""
+    files["expected-inventory.json"][entity_key]["system_ids"] = list(system_ids)
+    for rec in files["golden-manifest.json"]["records"]:
+        if rec["entity_key"] == entity_key:
+            rec["system_ids"] = list(system_ids)
+    for payload in files.values():
+        if isinstance(payload, dict) and entity_key in payload:
+            entry = payload[entity_key]
+            if isinstance(entry, dict) and "system_ids" in entry:
+                entry["system_ids"] = list(system_ids)
+
+
+def test_unknown_system_id_fails_reference_validation(box_model, tmp_path):
+    """A2: system_ids absent from mep-reference.json must fail closed, not be silently filtered."""
+    text, _ = serialize_fds(box_model)
+    package = build_package(box_model)
+    manifest = build_manifest(box_model, text)
+    report = AcceptanceReport()
+
+    ref_dir = tmp_path / "ref_bundle_unknown_sys"
+    create_candidate(ref_dir, box_model, manifest, package, report, {}, text)
+
+    repo = FilesystemReferenceRepository()
+    _, _, files = repo.inspect_case(ref_dir)
+
+    corrupted_files = copy.deepcopy(files)
+    _set_system_ids(corrupted_files, "fixture:1", ["UNKNOWN-SYS"])
+    assert all(
+        s.get("system_id") != "UNKNOWN-SYS"
+        for s in corrupted_files["mep-reference.json"].get("systems", [])
+    )
+
+    with pytest.raises(ValueError, match="unknown system_id"):
+        validate_reference(corrupted_files)
+
+
+def test_known_system_id_passes_reference_validation(box_model, tmp_path):
+    """A2 regression: system_ids present in mep-reference.json must keep validating."""
+    text, _ = serialize_fds(box_model)
+    package = build_package(box_model)
+    manifest = build_manifest(box_model, text)
+    report = AcceptanceReport()
+
+    ref_dir = tmp_path / "ref_bundle_known_sys"
+    create_candidate(ref_dir, box_model, manifest, package, report, {}, text)
+
+    repo = FilesystemReferenceRepository()
+    _, _, files = repo.inspect_case(ref_dir)
+
+    known_files = copy.deepcopy(files)
+    _set_system_ids(known_files, "fixture:1", ["sys_known_1"])
+    known_files["mep-reference.json"].setdefault("systems", []).append(
+        {"system_id": "sys_known_1", "name": "Known", "system_type": "PLUMBING"}
+    )
+
+    validate_reference(known_files)  # must not raise
+
+
 def test_registered_cases_detects_tampered_bundle_checksum(tmp_path, monkeypatch):
     """F08: registered_cases verifies bundle checksum and flags tampered bundles as CORRUPTED."""
     case_dir = tmp_path / "test_ref_case"
@@ -260,3 +321,45 @@ def test_draft_reference_evaluates_inconclusive_not_pass(box_model, tmp_path):
     assert "DRAFT" in gate.reason
     assert gate.evidence.get("data_integrity_verified") is True
     assert gate.evidence.get("human_approval_verified") is False
+
+
+def test_system_entry_missing_system_id_fails_closed(box_model, tmp_path):
+    """P1: mep-reference system entry without system_id must fail closed with
+    ValueError, not escape as KeyError."""
+    text, _ = serialize_fds(box_model)
+    package = build_package(box_model)
+    manifest = build_manifest(box_model, text)
+    report = AcceptanceReport()
+
+    ref_dir = tmp_path / "ref_bundle_missing_sysid"
+    create_candidate(ref_dir, box_model, manifest, package, report, {}, text)
+
+    repo = FilesystemReferenceRepository()
+    _, _, files = repo.inspect_case(ref_dir)
+
+    corrupted_files = copy.deepcopy(files)
+    corrupted_files["mep-reference.json"]["systems"] = [{"name": "NoId"}]
+
+    with pytest.raises(ValueError, match="system entry missing system_id"):
+        validate_reference(corrupted_files)
+
+
+def test_null_system_ids_does_not_raise_type_error(box_model, tmp_path):
+    """P1: inventory element with system_ids null must fail closed with
+    ValueError, never escape as TypeError."""
+    text, _ = serialize_fds(box_model)
+    package = build_package(box_model)
+    manifest = build_manifest(box_model, text)
+    report = AcceptanceReport()
+
+    ref_dir = tmp_path / "ref_bundle_null_sysids"
+    create_candidate(ref_dir, box_model, manifest, package, report, {}, text)
+
+    repo = FilesystemReferenceRepository()
+    _, _, files = repo.inspect_case(ref_dir)
+
+    corrupted_files = copy.deepcopy(files)
+    corrupted_files["expected-inventory.json"]["fixture:1"]["system_ids"] = None
+
+    with pytest.raises(ValueError):
+        validate_reference(corrupted_files)  # must not raise TypeError

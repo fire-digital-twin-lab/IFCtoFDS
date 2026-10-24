@@ -159,12 +159,27 @@
         this.renderer.setSize(width, height);
     };
 
+    // Reapplies the FDS coordinate-rebase offset to the verified overlay group so it
+    // stays aligned with the FDS primitives after load and after toggle recreation.
+    function applyRebaseOffset(viewer, group) {
+        if (!viewer || !group || !group.position) return;
+        var offset = viewer.fdsCoordinateRebase || [0, 0, 0];
+        group.position.copy(toThree(offset[0], offset[1], offset[2]));
+    }
+
+    // Verified artifact fetches go through ns.verified.authFetch so the API key is sent;
+    // falls back to plain fetch with getAuthHeaders() when authFetch is unavailable.
+    function verifiedFetch(url, options) {
+        var verified = ns.verified || {};
+        if (typeof verified.authFetch === 'function') return verified.authFetch(url, options);
+        options = options || {};
+        if (typeof verified.getAuthHeaders === 'function') options = Object.assign({}, options, {headers: verified.getAuthHeaders(options.headers)});
+        return fetch(url, options);
+    }
+
     SceneViewer.prototype.loadFdsModel = function (model) {
         this.fdsCoordinateRebase = model.coordinateRebase || [0, 0, 0];
-        if (this.verifiedReferenceGroup && this.verifiedReferenceGroup.position) {
-            var offset = this.fdsCoordinateRebase;
-            this.verifiedReferenceGroup.position.copy(toThree(offset[0], offset[1], offset[2]));
-        }
+        applyRebaseOffset(this, this.verifiedReferenceGroup);
         this.setNavigationMode('orbit');
         this.setSelectedObjects([]);
         clearGroup(this.meshGroup);
@@ -211,13 +226,14 @@
             controller = new AbortController();
             var token = generation, signal = controller.signal;
             try {
-                var response = await fetch(artifacts.geometry.url, {signal:signal});
+                var response = await verifiedFetch(artifacts.geometry.url, {signal:signal});
                 if (!response.ok) throw new Error('Geometry index unavailable');
                 var index = await response.json();
                 if (token !== generation) return;
                 if (self.verifiedReferenceGroup) self.ifcGroup.remove(self.verifiedReferenceGroup);
                 self.verifiedReferenceGroup = new THREE.Group();
                 self.ifcGroup.add(self.verifiedReferenceGroup);
+                applyRebaseOffset(self, self.verifiedReferenceGroup);
                 var entries = Object.values(index.elements).filter(function (entry) {
                     return entry.mesh && entry.simulation_role === 'REFERENCE_GEOMETRY' && entry.scope_decision !== 'OUT_OF_SCOPE';
                 });
@@ -226,7 +242,7 @@
                     while (next < entries.length && token === generation) {
                         var entry = entries[next++], ref = entry.mesh;
                         var url = artifacts.geometry.url.replace(/\/artifacts\/geometry$/, '/geometry/' + ref.payload);
-                        var res = await fetch(url, {signal:signal});
+                        var res = await verifiedFetch(url, {signal:signal});
                         if (!res.ok) throw new Error('Geometry payload unavailable: ' + entry.entity_key);
                         var buffer = await res.arrayBuffer();
                         var hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))).map(function (x) {return x.toString(16).padStart(2, '0');}).join('');
@@ -259,6 +275,7 @@
         this.verifiedReferenceGroup = new THREE.Group();
         this.verifiedReferenceGroup.name = 'Verified source reference (not FDS obstacles)';
         this.ifcGroup.add(this.verifiedReferenceGroup);
+        applyRebaseOffset(this, this.verifiedReferenceGroup);
         var entries = (packageData || {}).elements || {}, self = this;
         (manifest.records || []).forEach(function (record) {
             var entry = entries[record.entity_key];
@@ -294,7 +311,7 @@
                 var endpoint = group.length === 1 && expectedBytes > 16 * 1024 * 1024
                     ? '/geometry/' + group[0].mesh.payload
                     : '/geometry-batch?' + group.map(function (e) { return 'payloads=' + e.mesh.payload; }).join('&');
-                var res = await fetch('/api/jobs/' + jobId + endpoint, {signal:signal, headers: ns.verified.getAuthHeaders()});
+                var res = await verifiedFetch('/api/jobs/' + jobId + endpoint, {signal:signal});
                 if (!res.ok) throw new Error('Geometry batch unavailable');
                 var buffer = await res.arrayBuffer();
                 if (buffer.byteLength !== expectedBytes) throw new Error('Geometry batch length mismatch');

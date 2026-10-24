@@ -72,8 +72,13 @@ def source_representations(product):
         for item in items:
             if not item.is_a("IfcMappedItem"):
                 continue
-            source = item.MappingSource
-            nested = source.MappedRepresentation
+            source = getattr(item, "MappingSource", None)
+            nested = getattr(source, "MappedRepresentation", None) if source is not None else None
+            if nested is None:
+                mappings.append(dict(
+                    map_step_id=source.id() if source is not None else None,
+                    error="missing mapping source"))
+                continue
             if nested.id() not in seen and len(seen) < 16:
                 mappings.append(dict(map_step_id=source.id(),
                     representation=describe(nested, seen | {nested.id()})))

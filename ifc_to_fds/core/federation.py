@@ -1,5 +1,7 @@
 """Explicit source federation; no alignment by bounding boxes or GlobalId."""
 
+import math
+
 import numpy as np
 from time import perf_counter
 from .inventory import extract_inventory
@@ -158,6 +160,20 @@ def load_sources(paths, source_options=None, reference=False):
             ]
         else:
             rebase_vec = [0.0, 0.0, 0.0]
+
+    if rebase_vec is not None:
+        if (
+            not isinstance(rebase_vec, (list, tuple))
+            or len(rebase_vec) != 3
+            or any(
+                isinstance(x, bool)
+                or not isinstance(x, (int, float))
+                or not math.isfinite(x)
+                for x in rebase_vec
+            )
+        ):
+            raise ValueError("rebase_vector must be [x,y,z] finite numbers")
+        rebase_vec = list(map(float, rebase_vec))
 
     if rebase_vec and any(abs(x) > 1e-6 for x in rebase_vec):
         dx, dy, dz = rebase_vec

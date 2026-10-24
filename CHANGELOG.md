@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Job lifecycle API contract: `POST /api/jobs/{jid}/cancel` is idempotent
+  and never purges artifacts (active jobs transition to `CANCELLED`, terminal
+  jobs are returned unchanged). `DELETE /api/jobs/{jid}` without
+  `?purge=true` refuses terminal jobs with `409` ("pass `?purge=true` to
+  delete its artifacts"); `?purge=true` deletes terminal-job artifacts and
+  the job row, and downgrades to cancel (no purge) for active jobs.
+
 ## [0.1.0] — 2026-06-02
 
 Initial public release.

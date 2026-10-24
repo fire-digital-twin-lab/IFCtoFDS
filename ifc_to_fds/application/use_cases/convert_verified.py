@@ -133,6 +133,10 @@ class ConvertVerifiedUseCase:
                 {
                     "stage": "VALIDATION",
                     "status": report.status.value,
+                    # NOTE: finalize() never issues SIMULATION_VERIFIED yet
+                    # (simulation_status is REJECTED or INCONCLUSIVE only), so the
+                    # MAPPING_VERIFIED-only seal is intentional; full dual-state
+                    # acceptance rides with the simulation epic (Phase E).
                     "checkpoint_status": "DRAFT_NOT_SEALED" if report.status.value != "MAPPING_VERIFIED" else "VERIFIED_SEALED",
                     "output_complete": manifest.output_complete,
                     "bundle_sha256": manifest.bundle_sha256,

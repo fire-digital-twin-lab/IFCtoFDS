@@ -11,6 +11,15 @@ class DomainChecker:
     def check(self, context: ValidationContext, parsed: Any = None) -> CheckerOutcome:
         parsed = parsed if parsed is not None else context.parsed
         model = context.model
+        if parsed is None or model is None:
+            return CheckerOutcome(
+                gate_name="domain",
+                result=GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason="Incomplete diagnostic artifact: FDS text missing",
+                ),
+                findings=[],
+            )
         findings: List[Finding] = []
         metrics: Dict[str, Any] = {}
         status = GateStatus.PASS

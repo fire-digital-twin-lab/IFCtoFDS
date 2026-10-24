@@ -1329,7 +1329,10 @@
                 if (result.type === 'complete') finish(null, result.model);
                 else if (result.type === 'error') finish(new Error(result.message || 'FDS display parsing failed'));
             });
-            handle.worker.addEventListener('error', function (event) { finish(new Error(event.message || 'FDS display worker failed')); });
+            handle.worker.addEventListener('error', function (event) {
+                if (requestId !== state.exportRequestId) return;
+                finish(new Error(event.message || 'FDS display worker failed'));
+            });
             handle.worker.postMessage({type:'parse-fds', requestId:requestId, text:text});
         });
     }

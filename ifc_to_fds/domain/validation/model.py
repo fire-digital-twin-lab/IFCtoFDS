@@ -132,6 +132,11 @@ class AcceptanceReport(BaseModel):
         return value
 
     def finalize(self):
+        # NOTE (M13 contract): SIMULATION_VERIFIED is intentionally never issued
+        # here -- simulation_status is only REJECTED or INCONCLUSIVE until the
+        # simulation epic defines solver/physics/scenario/mesh gates. The
+        # MAPPING_VERIFIED-only checkpoint seal in convert_verified.py relies on
+        # this. Pinned by test_finalize_never_issues_simulation_verified.
         simulation = {
             "solver",
             "effective_geometry",

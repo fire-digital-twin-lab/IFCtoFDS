@@ -57,6 +57,57 @@ def test_nonphysical_products_remain_accounted():
     assert len({e.entity_key for e in model.elements}) == len(model.elements)
 
 
+def test_corrupt_mapped_item_does_not_abort_inventory():
+    from ifc_to_fds.core.inventory import source_representations
+
+    class FakeItem:
+        def __init__(self, mapping_source):
+            self.MappingSource = mapping_source
+
+        def is_a(self, cls=None):
+            if cls is None:
+                return "IfcMappedItem"
+            return cls == "IfcMappedItem"
+
+        def id(self):
+            return 999
+
+    class FakeSourceWithNoRep:
+        def id(self):
+            return 555
+        MappedRepresentation = None
+
+    class FakeRep:
+        RepresentationIdentifier = "Body"
+        RepresentationType = "MappedRepresentation"
+
+        def __init__(self, items):
+            self.Items = items
+
+        def id(self):
+            return 1
+
+    class FakeRepresentation:
+        def __init__(self, reps):
+            self.Representations = reps
+
+    class FakeProduct:
+        def __init__(self, rep):
+            self.Representation = FakeRepresentation([rep])
+
+    corrupt_none = FakeItem(None)
+    corrupt_no_nested = FakeItem(FakeSourceWithNoRep())
+    rep = FakeRep([corrupt_none, corrupt_no_nested])
+    result = source_representations(FakeProduct(rep))
+    assert isinstance(result, list) and len(result) == 1
+    assert result[0]["item_count"] == 2
+    mappings = result[0].get("mapped_sources", [])
+    assert len(mappings) == 2
+    assert all("error" in m for m in mappings)
+    assert mappings[0]["map_step_id"] is None
+    assert mappings[1]["map_step_id"] == 555
+
+
 def test_dangling_opening_filling_does_not_crash(tiny_ifc, tmp_path):
     import ifcopenshell.api.root
 
@@ -84,4 +135,44 @@ def test_dangling_opening_filling_does_not_crash(tiny_ifc, tmp_path):
     host_wall = next(e for e in model.elements if e.step_id == wall.id())
     assert len(host_wall.openings) == 1
     assert host_wall.openings[0].filling_entity_keys == []
+
+
+def test_mapped_item_missing_source_attr_does_not_raise():
+    """P1: IfcMappedItem WITHOUT a MappingSource attribute must not raise
+    AttributeError -- an error entry is recorded instead."""
+    from ifc_to_fds.core.inventory import source_representations
+
+    class FakeItemNoAttr:
+        def is_a(self, cls=None):
+            if cls is None:
+                return "IfcMappedItem"
+            return cls == "IfcMappedItem"
+
+        def id(self):
+            return 1001
+
+    class FakeRep:
+        RepresentationIdentifier = "Body"
+        RepresentationType = "MappedRepresentation"
+
+        def __init__(self, items):
+            self.Items = items
+
+        def id(self):
+            return 2
+
+    class FakeRepresentation:
+        def __init__(self, reps):
+            self.Representations = reps
+
+    class FakeProduct:
+        def __init__(self, rep):
+            self.Representation = FakeRepresentation([rep])
+
+    result = source_representations(FakeProduct(FakeRep([FakeItemNoAttr()])))
+    assert isinstance(result, list) and len(result) == 1
+    mappings = result[0].get("mapped_sources", [])
+    assert len(mappings) == 1
+    assert mappings[0].get("error") == "missing mapping source"
+    assert mappings[0].get("map_step_id") is None
 
