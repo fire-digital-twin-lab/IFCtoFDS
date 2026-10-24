@@ -16,6 +16,7 @@ from ifc_to_fds.validation.checkers.openings import OpeningsChecker
 from ifc_to_fds.validation.checkers.mep import MepChecker
 from ifc_to_fds.validation.checkers.representation import RepresentationChecker
 from ifc_to_fds.validation.checkers.boundary import BoundaryChecker
+from ifc_to_fds.validation.checkers.mesh_resolution import MeshResolutionChecker
 from ifc_to_fds.validation.checkers.solver import SolverChecker
 
 
@@ -40,6 +41,7 @@ class ValidationRunner:
             MepChecker(),
             RepresentationChecker(),
             BoundaryChecker(),
+            MeshResolutionChecker(),
             SolverChecker(),
         ]
 

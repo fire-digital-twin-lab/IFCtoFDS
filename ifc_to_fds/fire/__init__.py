@@ -17,6 +17,11 @@ from ifc_to_fds.fire.scenario_emitter import (
     ScenarioBundle,
     emit_fire_scenario,
 )
+from ifc_to_fds.validation.checkers.mesh_resolution import (
+    MeshResolutionChecker,
+    calculate_d_star,
+    check_mesh_resolution,
+)
 
 __all__ = [
     "EVPreset",
@@ -32,4 +37,7 @@ __all__ = [
     "OpeningEvent",
     "ScenarioBundle",
     "emit_fire_scenario",
+    "MeshResolutionChecker",
+    "calculate_d_star",
+    "check_mesh_resolution",
 ]
