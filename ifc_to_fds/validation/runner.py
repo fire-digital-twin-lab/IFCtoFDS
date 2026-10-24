@@ -16,6 +16,7 @@ from ifc_to_fds.validation.checkers.openings import OpeningsChecker
 from ifc_to_fds.validation.checkers.mep import MepChecker
 from ifc_to_fds.validation.checkers.representation import RepresentationChecker
 from ifc_to_fds.validation.checkers.boundary import BoundaryChecker
+from ifc_to_fds.validation.checkers.mesh_resolution import MeshResolutionChecker
 from ifc_to_fds.validation.checkers.solver import SolverChecker
 
 
@@ -40,6 +41,7 @@ class ValidationRunner:
             MepChecker(),
             RepresentationChecker(),
             BoundaryChecker(),
+            MeshResolutionChecker(),
             SolverChecker(),
         ]
 
@@ -77,12 +79,20 @@ class ValidationRunner:
         context = self.create_context(model, fds_text, manifest, config)
         outcomes: List[CheckerOutcome] = []
         syntax_passed = True
+        mesh_passed = True
         for checker in self.checkers:
             if isinstance(checker, SolverChecker):
-                outcome = checker.check(context, syntax_passed=syntax_passed)
+                outcome = checker.check(
+                    context, syntax_passed=syntax_passed, mesh_passed=mesh_passed
+                )
             else:
                 outcome = checker.check(context)
                 if checker.name == "syntax" and outcome.result.status != GateStatus.PASS:
                     syntax_passed = False
+                elif checker.name == "mesh_resolution" and outcome.result.status not in (
+                    GateStatus.PASS,
+                    GateStatus.NOT_APPLICABLE,
+                ):
+                    mesh_passed = False
             outcomes.append(outcome)
         return self.evaluator.evaluate(context, outcomes)

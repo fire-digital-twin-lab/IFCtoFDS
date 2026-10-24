@@ -2,6 +2,33 @@
 
 Extracts meshes and reports kernel/topology failures explicitly. Extraction
 does not establish independent geometry or opening verification.
+
+Geometry Validation Boundary & Fire Safety Fidelity:
+----------------------------------------------------
+In CFD fire and smoke simulations (such as FDS), geometric topology dictates
+fluid flow paths, air entrainment, compartment pressure, and smoke boundaries.
+A common naive heuristic in CAD/BIM conversion is to substitute failed or
+non-manifold solids and 2D open sheets with axis-aligned bounding boxes (AABBs).
+
+This pipeline explicitly enforces a strict geometry validation boundary and
+rejects bounding box substitution for invalid or open geometries:
+
+1. Void Carving Preservation: Architectural elements frequently define critical
+   voids (doors, window openings, shafts, stairwells, and HVAC penetrations).
+   Silently substituting a complex or invalid mesh with its bounding box fills
+   these carved voids, sealing intentional openings and corrupting building cavities.
+2. Phantom Fire Barriers: Open sheets (e.g. 2D covering surfaces, thin plate
+   railings) or unclosed topological shells substituted by 3D bounding boxes
+   turn paper-thin or decorative elements into solid, impermeable obstacles.
+   These "phantom barriers" artificially block smoke movement, alter cavity
+   topology (e.g., merging or partitioning compartment cavities), and produce
+   catastrophically misleading fire safety simulations.
+3. Honest Rejection: If an IFC source contains unclosed surfaces, non-manifold
+   edges, zero-volume sheets, or self-intersections (such as architectural
+   sample models with non-watertight coverings or stairs), the engine retains
+   the raw mesh for diagnostics, marks the element as `GeometryStatus.FAILED`,
+   and allows downstream verification gates to honestly reject the model (`REJECTED`)
+   rather than producing unverified or dangerously fabricated FDS geometries.
 """
 
 from typing import Any, List, Optional
@@ -135,9 +162,16 @@ def process_model_geometry(
                 mesh.volume, mesh.area = float(tm.volume), float(tm.area)
                 elem.geometry_status = GeometryStatus.VALID
             else:
-                # A leaf's bounding box fills voids and changes the source solid.
-                # Retain the raw mesh for diagnosis; unsupported topology is
-                # explicit in the inventory and must not become an obstacle.
+                # GEOMETRY VALIDATION BOUNDARY:
+                # Open sheets (2D surfaces) and non-manifold meshes are strictly rejected
+                # rather than silently substituted with axis-aligned bounding boxes (AABBs).
+                # Silent AABB substitution would fill intentional architectural voids
+                # (destroying opening cuts and cavity connectivity) and fabricate
+                # "phantom fire barriers" (turning decorative or open sheets into solid
+                # obstacles that block smoke/gas flow in FDS).
+                # Retain the raw mesh for audit diagnosis; unsupported topology is
+                # explicit in the inventory and flagged as GeometryStatus.FAILED so the
+                # downstream verification gates reject the model cleanly.
                 elem.geometry_status = GeometryStatus.FAILED
                 elem.validation_notes.append(f"Invalid source solid (no repair applied): {quality}")
             for opening in elem.openings:

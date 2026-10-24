@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 import shutil
 import time
 import uuid
@@ -366,3 +367,74 @@ def test_delete_running_job_with_purge_returns_cancelled_and_preserves_dir():
         assert manager.repository.get(jid) is not None
     finally:
         _forget_job(jid, job_dir)
+
+
+def test_submit_scenario_job_executes_mesh_gate(monkeypatch):
+    """Scenario batch job endpoint submits scenario, evaluates mesh gate, and saves result."""
+    from ifc_to_fds.server import manager
+
+    payload = {
+        "scenario_id": "SCENARIO_EV_001",
+        "bundle_sha256": "a" * 64,
+        "ev_library_version": "1.0.0",
+        "total_peak_hrr_mw": 4.5,
+        "scenario_data": {
+            "scenario_id": "SCENARIO_EV_001",
+            "bundle_sha256": "a" * 64,
+            "ev_library_version": "1.0.0",
+            "total_peak_hrr_mw": 4.5,
+            "ev_selections": [
+                {
+                    "preset_id": "auto-nmc",
+                    "vehicle_class": "auto",
+                    "chemistry": "NMC",
+                    "position": [0.0, 0.0, 0.75],
+                    "peak_hrr_mw": 4.5,
+                    "soc_percent": 80,
+                }
+            ],
+        },
+    }
+
+    # Verify 429 when manager cannot accept
+    monkeypatch.setattr(manager, "can_accept", lambda: False)
+    res_429 = client.post("/api/scenario-jobs", json=payload)
+    assert res_429.status_code == 429
+
+    monkeypatch.undo()
+
+    # Submit valid scenario job
+    response = client.post("/api/scenario-jobs", json=payload)
+    assert response.status_code == 202, response.text
+    job_info = response.json()
+    assert "id" in job_info
+    assert job_info["state"] == "QUEUED"
+    jid = job_info["id"]
+
+    # Poll until completed
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{jid}").json()
+        if job["state"] in ("COMPLETED", "FAILED", "TIMED_OUT"):
+            break
+        time.sleep(0.1)
+
+    assert job["state"] == "COMPLETED", job
+
+    # Verify scenario.json written in job directory
+    raw_job = manager.repository.get(jid)
+    assert raw_job is not None
+    job_dir = Path(raw_job["directory"])
+    assert (job_dir / "scenario.json").is_file()
+    saved_scenario = json.loads((job_dir / "scenario.json").read_text(encoding="utf-8"))
+    assert saved_scenario["scenario_id"] == "SCENARIO_EV_001"
+
+    # Verify result.json via result endpoint
+    res = client.get(f"/api/jobs/{jid}/result").json()
+    assert res["status"] == "COMPLETED"
+    assert res["verdict"] == "PASS"
+    assert res["mesh_status"] == "PASS"
+    assert res["peak_hrr_mw"] == 4.5
+    assert "evidence" in res
+    assert "ev_evaluations" in res["evidence"]
+

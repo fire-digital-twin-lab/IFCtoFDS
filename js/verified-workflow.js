@@ -63,6 +63,27 @@
     }
     ns.verified = {
         getAuthHeaders: getAuthHeaders,
+        authFetch: authFetch,
+        queueScenarioBatch: function (scenarios, dispatchFn) {
+            var panel = (ns.workbench && ns.workbench.panels && ns.workbench.panels.evScenarioPanel) || (ns.ui && ns.ui.evScenarioPanel);
+            if (!panel) {
+                return Promise.reject(new Error('evScenarioPanel module not loaded'));
+            }
+            return panel.queueScenarioBatch(scenarios, dispatchFn || function (scenario) {
+                var payload = {
+                    scenario_id: scenario.scenario_id,
+                    bundle_sha256: scenario.bundle_sha256,
+                    ev_library_version: scenario.ev_library_version,
+                    total_peak_hrr_mw: scenario.total_peak_hrr_mw,
+                    scenario_data: scenario
+                };
+                return authFetch('/api/jobs', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                }).then(response);
+            });
+        },
         hasFiles: function () { return selectedFiles().length > 0; },
         setFallback: function (file) {
             if (fallback !== file) { inventoryGeneration++; get('storeys').replaceChildren(); }

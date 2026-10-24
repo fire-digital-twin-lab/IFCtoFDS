@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import shutil
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query, Body
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from .jobs import JobManager
@@ -259,6 +259,24 @@ async def submit_preview(file: UploadFile = File(...)):
     directory, paths = await store_uploads([file])
     try:
         return manager.submit(paths, {}, directory, mode="preview")
+    except OverflowError as exc:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise HTTPException(429, str(exc))
+
+
+@app.post("/api/scenario-jobs", status_code=202)
+async def submit_scenario_job(payload: dict = Body(...)):
+    if not manager.can_accept():
+        raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
+    import uuid
+
+    directory = manager.root / ("job-" + uuid.uuid4().hex)
+    directory.mkdir(parents=True, exist_ok=True)
+    try:
+        (directory / "scenario.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+        return manager.submit([], payload, directory, mode="scenario")
     except OverflowError as exc:
         shutil.rmtree(directory, ignore_errors=True)
         raise HTTPException(429, str(exc))

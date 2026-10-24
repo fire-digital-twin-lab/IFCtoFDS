@@ -1,0 +1,22 @@
+{
+  "chemistry": "LFP",
+  "citations": [
+    {
+      "detail": "Chua co thi nghiem calorimetry rieng cho pin xe dien 2 banh LFP trong thu vien; dai HRR duoc suy tu nang luong pack 0.5-3 kWh va toc do chay quan sat trong bao cao su co, chi dung cho phan tich gia dinh.",
+      "source": "engineering-assumption"
+    }
+  ],
+  "confidence": "low",
+  "growth": "t-squared",
+  "notes": "Gia dinh: preset mo phong cho xe may/xe dap dien dung pin LFP 0.5-3 kWh, chua co so lieu calorimeter rieng. Dai HRR dinh va hieu suat chay chi de kich ban gia dinh, bat buoc ky su PCCC tham dinh doc lap truoc khi dung cho thiet ke.",
+  "pack_kwh_range": [0.5, 3.0],
+  "peak_hrr_mw_range": [0.02, 0.15],
+  "t_alpha_s": [75.0, 300.0],
+  "vehicle_class": "e-bike",
+  "version": "1.0.0",
+  "yields": {
+    "co": [0.05, 0.2],
+    "hf": [0.0, 0.02],
+    "soot": [0.05, 0.15]
+  }
+}
