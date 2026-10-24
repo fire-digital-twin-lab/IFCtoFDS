@@ -7,10 +7,11 @@ FDS scenario bundles with &REAC, &RAMP, &SURF, &OBST, &VENT, &DEVC, &CTRL nameli
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ifc_to_fds.domain.mapping import MappingPlan
 from ifc_to_fds.fire.ev_library import EV_LIBRARY_VERSION, EVPreset, load_ev_preset
@@ -38,6 +39,16 @@ class EVSelection(BaseModel):
     dimensions: Optional[Tuple[float, float, float]] = None
     pack_kwh: Optional[float] = None
     peak_hrr_mw: Optional[float] = None
+
+    @field_validator("dimensions")
+    @classmethod
+    def validate_dimensions(
+        cls, v: Optional[Tuple[float, float, float]]
+    ) -> Optional[Tuple[float, float, float]]:
+        if v is not None:
+            if len(v) != 3 or any(d <= 0.0 or not math.isfinite(d) for d in v):
+                raise ValueError("EV dimensions (dx, dy, dz) must be strictly positive (> 0.0)")
+        return v
 
 
 class DeviceSelection(BaseModel):
@@ -175,6 +186,7 @@ def emit_fire_scenario(
             {
                 "ev": ev,
                 "preset": preset,
+                "preset_key": preset_key,
                 "actual_kwh": actual_kwh,
                 "actual_peak_hrr": actual_peak_hrr,
                 "dx": dx,
@@ -195,12 +207,15 @@ def emit_fire_scenario(
 
     # 1. &REAC namelists (one per unique preset)
     lines.append("! --- Combustion Reaction Namelists ---")
+    preset_fuel_ids: Dict[str, str] = {}
     for preset_key, preset in resolved_presets.items():
         reac_id = clean_fds_id(f"REAC_{preset.preset_id.upper()}")
+        fuel_id = clean_fds_id(f"OFFGAS_{reac_id}")
+        preset_fuel_ids[preset_key] = fuel_id
         co_yield = (preset.yields.co[0] + preset.yields.co[1]) / 2.0
         soot_yield = (preset.yields.soot[0] + preset.yields.soot[1]) / 2.0
         lines.append(
-            f"&REAC ID='{reac_id}', FUEL='BATTERY_OFFGAS', C=2.0, H=4.0, O=1.0, "
+            f"&REAC ID='{reac_id}', FUEL='{fuel_id}', C=2.0, H=4.0, O=1.0, "
             f"CO_YIELD={co_yield:g}, SOOT_YIELD={soot_yield:g} /"
         )
     lines.append("")
@@ -259,8 +274,9 @@ def emit_fire_scenario(
         lines.append(f"&RAMP ID='{ramp_id}', T={t_decay_end:.1f}, F=0.0000 /")
 
         # &SURF
+        fuel_id = preset_fuel_ids[cfg["preset_key"]]
         lines.append(
-            f"&SURF ID='{surf_id}', HRRPUA={hrrpua_kw_m2:.2f}, RAMP_Q='{ramp_id}' /"
+            f"&SURF ID='{surf_id}', HRRPUA={hrrpua_kw_m2:.2f}, RAMP_Q='{ramp_id}', FUEL_ID='{fuel_id}' /"
         )
 
         # &OBST
@@ -291,8 +307,8 @@ def emit_fire_scenario(
     if normalized_opening_events:
         lines.append("! --- Opening & Boundary Controls ---")
         for ev_open in normalized_opening_events:
-            clean_key = clean_fds_id(ev_open.entity_key)
-            timer_devc_id = clean_fds_id(f"DEVC_{clean_key}_TIME")
+            clean_key = clean_fds_id(ev_open.entity_key)[:20].rstrip("._-")
+            timer_devc_id = f"DEVC_{clean_key}_TIME"
             ctrl_id = clean_fds_id(f"CTRL_{clean_key}")
 
             lines.append(
@@ -310,13 +326,16 @@ def emit_fire_scenario(
                     lines.append(
                         f"&HOLE XB={format_xb(xb)}, CTRL_ID='{ctrl_id}' /"
                     )
+                elif ev_open.state == "CLOSED":
+                    lines.append(
+                        f"&OBST XB={format_xb(xb)}, SURF_ID='INERT', CTRL_ID='{ctrl_id}' /"
+                    )
             lines.append("")
 
     fds_fragment = "\n".join(lines)
 
-    # Deterministic scenario ID
-    seed = f"{bundle_sha256}_{len(normalized_evs)}_{total_peak_hrr_mw:.4f}"
-    scenario_hash = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
+    # Deterministic scenario ID based on full scenario fragment
+    scenario_hash = hashlib.sha256(fds_fragment.encode("utf-8")).hexdigest()[:12]
     scenario_id = f"ev_scenario_{scenario_hash}"
 
     return ScenarioBundle(

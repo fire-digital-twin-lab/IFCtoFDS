@@ -3,7 +3,8 @@
 import pytest
 import re
 
-from ifc_to_fds.domain.mapping import MappingPlan
+from ifc_to_fds.domain.bim.bounding_box import BoundingBox
+from ifc_to_fds.domain.mapping import MappingDecision, MappingPlan, MappingStrategy
 from ifc_to_fds.fire import (
     DeviceSelection,
     EVSelection,
@@ -244,3 +245,153 @@ def test_custom_pack_and_peak_hrr():
             ev_selections=[ev_out_of_range],
             verification_status="MAPPING_VERIFIED",
         )
+
+
+def test_scenario_id_unique_across_matrix_permutations():
+    """Verify scenario_id does not collide across permutations of position, delay, or doors."""
+    plan = _sample_mapping_plan()
+    ev_base = EVSelection(preset_id="e-bike-lfp", position=(0.0, 0.0, 0.55), ignition_delay_s=0.0)
+    ev_moved = EVSelection(preset_id="e-bike-lfp", position=(5.0, 0.0, 0.55), ignition_delay_s=0.0)
+    ev_delayed = EVSelection(preset_id="e-bike-lfp", position=(0.0, 0.0, 0.55), ignition_delay_s=60.0)
+
+    bundle_base = emit_fire_scenario(
+        mapping_plan=plan,
+        bundle_sha256=_valid_bundle_hash(),
+        ev_selections=[ev_base],
+        verification_status="MAPPING_VERIFIED",
+    )
+    bundle_moved = emit_fire_scenario(
+        mapping_plan=plan,
+        bundle_sha256=_valid_bundle_hash(),
+        ev_selections=[ev_moved],
+        verification_status="MAPPING_VERIFIED",
+    )
+    bundle_delayed = emit_fire_scenario(
+        mapping_plan=plan,
+        bundle_sha256=_valid_bundle_hash(),
+        ev_selections=[ev_delayed],
+        verification_status="MAPPING_VERIFIED",
+    )
+    bundle_doors = emit_fire_scenario(
+        mapping_plan=plan,
+        bundle_sha256=_valid_bundle_hash(),
+        ev_selections=[ev_base],
+        opening_states={"DOOR_1": {"state": "OPEN", "event_time_s": 30.0}},
+        verification_status="MAPPING_VERIFIED",
+    )
+
+    # Identical bundle_sha256 and vehicle count/type MUST NOT collide when parameters change
+    assert bundle_base.scenario_id != bundle_moved.scenario_id
+    assert bundle_base.scenario_id != bundle_delayed.scenario_id
+    assert bundle_base.scenario_id != bundle_doors.scenario_id
+    assert bundle_moved.scenario_id != bundle_delayed.scenario_id
+
+
+def test_mixed_preset_unique_fuel_and_surf_binding():
+    """Verify mixed presets produce distinct FUEL names and proper FUEL_ID on &SURF."""
+    plan = _sample_mapping_plan()
+    evs = [
+        EVSelection(preset_id="e-bike-lfp", position=(0.0, 0.0, 0.55)),
+        EVSelection(preset_id="auto-nmc", position=(5.0, 0.0, 0.75)),
+    ]
+
+    bundle = emit_fire_scenario(
+        mapping_plan=plan,
+        bundle_sha256=_valid_bundle_hash(),
+        ev_selections=evs,
+        verification_status="MAPPING_VERIFIED",
+    )
+
+    frag = bundle.fds_fragment
+    # Extract all FUEL definitions from &REAC lines
+    reac_fuels = re.findall(r"&REAC.*?FUEL='([^']+)'", frag)
+    assert len(reac_fuels) == 2, f"Expected 2 &REAC lines, found {len(reac_fuels)}"
+    # Distinct FUEL names (no duplicate FUEL in FDS)
+    assert len(set(reac_fuels)) == len(reac_fuels)
+
+    # Verify &SURF lines have matching FUEL_ID pointing to a defined reaction FUEL
+    surf_fuel_ids = re.findall(r"&SURF.*?FUEL_ID='([^']+)'", frag)
+    assert len(surf_fuel_ids) == 2, f"Expected 2 &SURF lines with FUEL_ID, found {len(surf_fuel_ids)}"
+    for fid in surf_fuel_ids:
+        assert fid in reac_fuels, f"FUEL_ID '{fid}' on &SURF must match one of &REAC fuels {reac_fuels}"
+
+
+def test_door_events_with_representation_bounds():
+    """Verify door OPEN emits &HOLE and door CLOSED emits controlled &OBST when bounds exist."""
+    decision_open = MappingDecision(
+        entity_key="DOOR_OPEN",
+        strategy=MappingStrategy.OBST_HOLE,
+        simulation_role="DOOR",
+        fds_representation="HOLE",
+        representation_bounds=BoundingBox(xmin=1.0, xmax=2.0, ymin=0.0, ymax=0.2, zmin=0.0, zmax=2.1),
+    )
+    decision_close = MappingDecision(
+        entity_key="DOOR_CLOSE",
+        strategy=MappingStrategy.OBST,
+        simulation_role="DOOR",
+        fds_representation="OBST",
+        representation_bounds=BoundingBox(xmin=5.0, xmax=6.0, ymin=0.0, ymax=0.2, zmin=0.0, zmax=2.1),
+    )
+    plan = MappingPlan(decisions=[decision_open, decision_close])
+
+    ev = EVSelection(preset_id="e-bike-lfp", position=(0.0, 0.0, 0.55))
+    opening_states = {
+        "DOOR_OPEN": {"state": "OPEN", "event_time_s": 45.0},
+        "DOOR_CLOSE": {"state": "CLOSED", "event_time_s": 90.0},
+    }
+
+    bundle = emit_fire_scenario(
+        mapping_plan=plan,
+        bundle_sha256=_valid_bundle_hash(),
+        ev_selections=[ev],
+        opening_states=opening_states,
+        verification_status="MAPPING_VERIFIED",
+    )
+
+    frag = bundle.fds_fragment
+    # &HOLE for DOOR_OPEN with CTRL_ID and matching XB
+    assert "&HOLE XB=1,2,0,0.2,0,2.1, CTRL_ID='CTRL_DOOR_OPEN' /" in frag
+
+    # Controlled &OBST for DOOR_CLOSE with SURF_ID='INERT' and CTRL_ID
+    assert "&OBST XB=5,6,0,0.2,0,2.1, SURF_ID='INERT', CTRL_ID='CTRL_DOOR_CLOSE' /" in frag
+
+
+def test_ev_selection_dimensions_must_be_strictly_positive():
+    """Verify EVSelection validator ensures dx, dy, dz are strictly > 0.0."""
+    # Valid dimensions
+    ev_valid = EVSelection(preset_id="auto-nmc", position=(0, 0, 0), dimensions=(4.5, 1.8, 1.5))
+    assert ev_valid.dimensions == (4.5, 1.8, 1.5)
+
+    # Zero dimension
+    with pytest.raises(ValueError, match="strictly positive"):
+        EVSelection(preset_id="auto-nmc", position=(0, 0, 0), dimensions=(4.5, 0.0, 1.5))
+
+    # Negative dimension
+    with pytest.raises(ValueError, match="strictly positive"):
+        EVSelection(preset_id="auto-nmc", position=(0, 0, 0), dimensions=(-1.0, 1.8, 1.5))
+
+
+def test_door_timer_devc_id_preserves_suffix():
+    """Verify door timer devc naming prevents truncation of _TIME suffix on long entity keys."""
+    plan = _sample_mapping_plan()
+    ev = EVSelection(preset_id="e-bike-lfp", position=(0, 0, 0))
+    long_key = "DOOR_EMERGENCY_EXIT_NORTH_WING_LEVEL_1"
+    opening_states = {long_key: {"state": "OPEN", "event_time_s": 30.0}}
+
+    bundle = emit_fire_scenario(
+        mapping_plan=plan,
+        bundle_sha256=_valid_bundle_hash(),
+        ev_selections=[ev],
+        opening_states=opening_states,
+        verification_status="MAPPING_VERIFIED",
+    )
+
+    frag = bundle.fds_fragment
+    # Suffix _TIME must be preserved in DEVC ID and referenced correctly in CTRL INPUT_ID
+    match = re.search(r"&DEVC ID='([^']+)', QUANTITY='TIME'", frag)
+    assert match is not None
+    devc_id = match.group(1)
+    assert devc_id.endswith("_TIME")
+    assert len(devc_id) <= 30
+    assert f"INPUT_ID='{devc_id}'" in frag
+
