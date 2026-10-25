@@ -84,12 +84,55 @@ def parse_fds(text):
         "HEAD": {"CHID", "TITLE"},
         "TIME": {"T_END"},
         "MESH": {"ID", "IJK", "XB"},
-        "SURF": {"ID", "COLOR", "RGB", "DEFAULT", "TRANSPARENCY"},
+        "SURF": {
+            "ID",
+            "COLOR",
+            "RGB",
+            "DEFAULT",
+            "TRANSPARENCY",
+            "HRRPUA",
+            "RAMP_Q",
+            "FUEL_ID",
+            "MATL_ID",
+            "BACKING",
+            "THICKNESS",
+        },
         "TAIL": set(),
-        "OBST": {"ID", "XB", "SURF_ID"},
+        "OBST": {"ID", "XB", "SURF_ID", "CTRL_ID", "DEVC_ID"},
         "GEOM": {"ID", "VERTS", "FACES", "SURF_ID"},
-        "HOLE": {"ID", "XB"},
-        "VENT": {"ID", "XB", "SURF_ID"},
+        "HOLE": {"ID", "XB", "CTRL_ID", "DEVC_ID"},
+        "VENT": {"ID", "XB", "SURF_ID", "CTRL_ID", "DEVC_ID"},
+        "REAC": {
+            "ID",
+            "FUEL",
+            "C",
+            "H",
+            "O",
+            "N",
+            "CO_YIELD",
+            "SOOT_YIELD",
+            "HEAT_OF_COMBUSTION",
+            "FORMULA",
+        },
+        "RAMP": {"ID", "T", "F"},
+        "DEVC": {
+            "ID",
+            "PROP_ID",
+            "XYZ",
+            "QUANTITY",
+            "SETPOINT",
+            "INITIAL_STATE",
+            "CTRL_ID",
+            "IOR",
+        },
+        "CTRL": {
+            "ID",
+            "FUNCTION_TYPE",
+            "INPUT_ID",
+            "LATCH",
+            "DELAY",
+            "CONSTANT",
+        },
     }
     while i < len(text):
         c = text[i]
@@ -183,7 +226,7 @@ def parse_fds(text):
                         f"{kind}.{k}" for k in values if k not in allowed[kind]
                     )
                 r = FDSRecord(kind, values, source)
-                if r.id:
+                if r.id and kind != "RAMP":
                     identity = (
                         kind
                         if kind not in ("OBST", "HOLE", "GEOM", "VENT")

@@ -1219,6 +1219,9 @@
     // the first time the user clicks Convert, and cache the result for repeated exports.
     function ensureFullModel() {
         if (state.fullModel && !state.fullModel.elements.some(function (e) { return e.exportGeometryComplete === false; })) return Promise.resolve(state.fullModel);
+        if (state.ifcModel && state.ifcModel.backendPreview) {
+            return Promise.resolve(state.ifcModel);
+        }
         if (!state.ifcSourceText) {
             return Promise.reject(new Error('IFC source not in memory — please reopen the file.'));
         }

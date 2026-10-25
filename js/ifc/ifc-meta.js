@@ -189,6 +189,7 @@
     }
 
     ns.IfcMeta = {
-        buildModel: buildModel
+        buildModel: buildModel,
+        classifyType: classifyType
     };
 })(window.IfcFds.ifc);

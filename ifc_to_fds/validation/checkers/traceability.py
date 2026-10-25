@@ -7,6 +7,13 @@ from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
 from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, Severity, ValidationContext
 
 
+SCENARIO_PRIMITIVE_PREFIXES = ("OBST_EV_", "VENT_BURNER_", "BURNER_")
+
+
+def is_scenario_primitive(pid: str) -> bool:
+    return bool(pid and pid.startswith(SCENARIO_PRIMITIVE_PREFIXES))
+
+
 class TraceabilityChecker:
     name = "traceability"
 
@@ -32,6 +39,8 @@ class TraceabilityChecker:
         actual_ids = set()
 
         for p in parsed.primitives:
+            if is_scenario_primitive(p.id):
+                continue
             actual_ids.add(p.id)
             key = p.source.get("entity_key", "")
             if not key and p.source.get("legacy"):
@@ -163,6 +172,8 @@ class TraceabilityChecker:
                     )
                 )
             for p in parsed.primitives:
+                if is_scenario_primitive(p.id):
+                    continue
                 if p.id not in reverse or p.source.get("entity_key") not in reverse[p.id]:
                     status = GateStatus.FAIL
                     findings.append(

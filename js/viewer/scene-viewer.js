@@ -330,7 +330,7 @@
                 self.ifcSolidGroup.add(self.makeIfcElement({mesh:{vertices:vertices,faces:faces},
                     entityKey:entry.entity_key, sourceId:entry.source_id, stepId:entry.step_id,
                     ifcType:entry.ifc_type, globalId:entry.global_id, name:entry.name, bounds:entry.bounds,
-                    convertible:false, backendSourcePreview:true, deferEdges:true, raw:entry}));
+                    convertible:!/^(IFCSPACE|IFCOPENINGELEMENT|IFCRAILING|IFCANNOTATION|IFCGRID)$/i.test(entry.ifc_type || ''), backendSourcePreview:true, deferEdges:true, raw:entry}));
                 if ((done + 1) % 32 === 0) self.applyIfcCategoryVisibility();
                 onProgress(++done, entries.length);
                 }

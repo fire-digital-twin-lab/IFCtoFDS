@@ -292,6 +292,74 @@ def test_empty_fds_text_all_runner_gates_pinned(box_model):
     assert report.gates["source_inventory"].status == GateStatus.NOT_RUN
 
 
+def test_parser_whitelists_fire_namelists_and_surf_combustion_properties():
+    fds = """
+&HEAD CHID='fire_test', TITLE='EV Fire Scenario' /
+&TIME T_END=600.0 /
+&MESH ID='M1', IJK=10,10,10, XB=0,2,0,2,0,2 /
+&REAC ID='REAC_EV', FUEL='OFFGAS', C=2.0, H=4.0, O=1.0, CO_YIELD=0.1, SOOT_YIELD=0.1 /
+&RAMP ID='RAMP_Q', T=0.0, F=0.0 /
+&RAMP ID='RAMP_Q', T=100.0, F=1.0 /
+&SURF ID='BURNER', HRRPUA=1500.0, RAMP_Q='RAMP_Q', FUEL_ID='OFFGAS' /
+&DEVC ID='HEAT_1', QUANTITY='TEMPERATURE', XYZ=1.0,1.0,1.8 /
+&CTRL ID='CTRL_1', FUNCTION_TYPE='ANY', INPUT_ID='HEAT_1' /
+&OBST ID='OBST_1', XB=0.5,1.5,0.5,1.5,0,0.5, SURF_ID='INERT', CTRL_ID='CTRL_1' /
+&VENT ID='VENT_1', XB=0.5,1.5,0.5,1.5,0.5,0.5, SURF_ID='BURNER' /
+&TAIL /
+"""
+    parsed = parse_fds(fds)
+    assert not parsed.errors
+    assert not parsed.unsupported
+
+
+def test_traceability_checker_skips_scenario_fire_primitives(box_model):
+    import hashlib
+    from ifc_to_fds.domain.validation.model import ValidationContext, GateStatus
+    from ifc_to_fds.validation.checkers.traceability import TraceabilityChecker
+
+    text, manifest = serialize_fds(box_model)
+    fire_fragment = """
+&OBST ID='OBST_EV_1', XB=0.5,1.5,0.5,1.5,0,0.5, SURF_ID='INERT' /
+&VENT ID='VENT_BURNER_1', XB=0.5,1.5,0.5,1.5,0.5,0.5, SURF_ID='BURNER' /
+"""
+    combined_fds = text.replace("&TAIL /", fire_fragment + "\n&TAIL /")
+    manifest.fds_sha256 = hashlib.sha256(combined_fds.encode()).hexdigest()
+    ctx = ValidationContext(
+        model=box_model,
+        fds_text=combined_fds,
+        manifest=manifest,
+        parsed_fds=parse_fds(combined_fds),
+    )
+    outcome = TraceabilityChecker().check(ctx)
+    assert outcome.result.status == GateStatus.PASS
+    assert "OBST_EV_1" not in str(outcome.findings)
+    assert "VENT_BURNER_1" not in str(outcome.findings)
+
+
+def test_thin_or_open_covering_classified_as_semantic_only(box_model):
+    from ifc_to_fds.core.canonical import CanonicalElement, MappingStrategy, MappingStatus, TriangleMesh
+    from ifc_to_fds.mapping.policy import plan_mapping
+
+    thin_mesh = TriangleMesh(
+        vertices=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+        faces=[[0, 1, 2]],
+    )
+    covering = CanonicalElement(
+        global_id="covering_1",
+        step_id=999,
+        ifc_type="IfcCovering",
+        name="Wall Paint Finish",
+        mesh=thin_mesh,
+    )
+    box_model.elements.append(covering)
+    plan_mapping(box_model)
+
+    assert covering.mapping_strategy == MappingStrategy.SEMANTIC_ONLY
+    assert covering.mapping_status == MappingStatus.SEMANTIC_ONLY
+    assert covering.simulation_role == "REFERENCE_GEOMETRY"
+
+
+
 def test_traceability_legacy_backfill_writes_entity_key_standalone(box_model):
     from ifc_to_fds.domain.validation.model import Severity, ValidationContext
     from ifc_to_fds.validation.checkers.traceability import TraceabilityChecker

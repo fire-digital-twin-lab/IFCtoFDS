@@ -52,11 +52,23 @@
                 var model = {filename:file.name, backendPreview:true, bounds:result.bounds, diagnostics:[],
                     inventorySummary:{total_elements:result.total_elements, sources:result.sources, storey_references:result.storeys},
                     storeys:result.storeys, elements:entries.map(function (entry) {
+                        var cls = (ns.ifc && ns.ifc.IfcMeta && typeof ns.ifc.IfcMeta.classifyType === 'function')
+                            ? ns.ifc.IfcMeta.classifyType(entry.ifc_type)
+                            : null;
+                        var nonConvertible = /^(IFCSPACE|IFCOPENINGELEMENT|IFCRAILING|IFCANNOTATION|IFCGRID)$/i.test(entry.ifc_type || '');
+                        var isConvertible = cls ? cls.convertible : !nonConvertible;
+                        var isSolid = cls ? cls.exportAsSolid : (isConvertible && !/^(IFCWINDOW|IFCDOOR)$/i.test(entry.ifc_type || ''));
+                        var role = cls ? cls.fdsRole : (/^(IFCWINDOW|IFCDOOR)$/i.test(entry.ifc_type || '') ? 'opening' : (isConvertible ? 'solid' : 'ignore'));
                         return {entityKey:entry.entity_key, sourceId:entry.source_id, stepId:entry.step_id,
                             globalId:entry.global_id, name:entry.name, ifcType:entry.ifc_type,
                             mepCategory:entry.mep_category, systemNames:entry.system_names,
-                            storey:entry.storey, bounds:entry.bounds, convertible:false,
-                            conversionNote:'Backend source preview; use Verified Mapping to export', raw:entry};
+                            storey:entry.storey, bounds:entry.bounds,
+                            convertible: isConvertible,
+                            exportAsSolid: isSolid,
+                            canExportAsSolid: isConvertible,
+                            fdsRole: role,
+                            conversionNote: cls ? cls.note : (isConvertible ? 'Converted by default.' : 'Excluded or reference.'),
+                            raw:entry};
                     })};
                 viewer.loadIfcModel({elements:[], bounds:result.bounds});
                 await viewer.loadBackendPreview(index, run.id, signal, function (done, total) {
