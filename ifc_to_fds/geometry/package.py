@@ -177,7 +177,7 @@ def audit_package(model, package, report, config):
         )
         if not in_scope or e.role != "PHYSICAL":
             continue
-        if e.simulation_role == "REFERENCE_GEOMETRY" or getattr(e, "mapping_strategy", None) in (
+        if getattr(e, "mapping_strategy", None) in (
             MappingStrategy.SEMANTIC_ONLY,
             MappingStrategy.EXCLUDED_SCOPE,
             MappingStrategy.EXCLUDED_APPROVED,
