@@ -205,7 +205,7 @@
         viewer.setIfcOpacity(Number(els.ifcOpacity.value));
         updateIfcMetrics(model);
         updateSourcePill(state.currentIfcFile, model);
-        setExportEnabled(countConvertibleIfc(model) > 0);
+        setExportEnabled(!model.backendPreview && countConvertibleIfc(model) > 0);
         setSaveProcessedEnabled(!!(model && !model.backendPreview && model.elements && model.elements.length));
         setupClippingForBounds(boundsForClipping());
         if (ns.workbench && ns.workbench.navigation) {
