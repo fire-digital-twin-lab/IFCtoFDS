@@ -2,572 +2,357 @@
 
 <div align="center">
 
-# IFCtoFDS
+# IFCtoFDS: Nền Tảng Ánh Xạ Hình Học BIM-sang-FDS & Mô Phỏng Cháy Xe Điện
 
-**From BIM geometry to traceable FDS mapping.**<br>
-Từ hình học BIM đến ánh xạ FDS có thể truy xuất và kiểm chứng.
+**Từ mô hình hình học BIM đến ánh xạ FDS có thể truy xuất nguồn gốc, kiểm chứng độc lập và mô phỏng cháy pin Li-ion hàng loạt.**
 
-[English](#english) · [Tiếng Việt](#tieng-viet)
+[English Version (Tài liệu Tiếng Anh)](README.en.md) · [Báo Cáo Nghiên Cứu](docs/COMPREHENSIVE_AUDIT_REPORT.md) · [Đóng Góp Sự Cố](https://github.com/fire-digital-twin-lab/IFCtoFDS/issues)
 
 [![Conversion correctness](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/workflows/verified.yml/badge.svg)](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/workflows/verified.yml)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)](LICENSE)
+[![FDS](https://img.shields.io/badge/FDS-6.11.1-red)](https://pages.nist.gov/fds-smv/)
+[![IFC](https://img.shields.io/badge/IFC-2x3%20%7C%204-green)](https://technical.buildingsmart.org/)
 
-[**Watch the demo**](#demo) · [**Quick start**](#en-setup) · [Documentation](#en-development) · [Report an issue](https://github.com/fire-digital-twin-lab/IFCtoFDS/issues)
+<br>
 
-<img src="demo/readme/workbench.png" width="1100" alt="IFCtoFDS workbench displaying the public KIT AC20-FZK-Haus model">
+<img src="demo/readme/workbench.png" width="1100" alt="Giao diện nghiên cứu IFCtoFDS với mô hình mẫu KIT AC20-FZK-Haus">
 
-*The research workbench with a public IFC example. / Giao diện nghiên cứu với mô hình IFC mẫu công khai.*
+*Giao diện nghiên cứu IFCtoFDS Workbench hiển thị mô hình công trình mẫu công khai KIT AC20-FZK-Haus.*
 
 </div>
 
-<a id="demo"></a>
-
-## See it in action · Xem minh họa
-
-<p align="center">
-  <a href="demo/demo.gif"><img src="demo/readme/demo-preview.gif" width="800" alt="Animated demonstration of the original IFCtoFDS browser conversion workflow"></a>
-</p>
-
-**Original browser workflow / Quy trình trình duyệt gốc.** This legacy demonstration illustrates interactive conversion; it does not show the current Verified audit workflow. GIF này minh họa chuyển đổi tương tác ở phiên bản legacy, không phải quy trình audit Verified hiện tại. [Full-resolution animation / Xem bản gốc](demo/demo.gif) · [Media sources / Nguồn minh họa](demo/readme/SOURCES.md).
-
-<details>
-<summary><strong>Contents / Mục lục</strong></summary>
-
-**English:** [Overview](#en-overview) · [Quick start](#en-setup) · [Workflows](#en-modes) · [Usage](#en-cli) · [Results](#en-results) · [Limitations](#en-limits) · [Development](#en-development) · [Credits](#en-attribution)
-
-**Tiếng Việt:** [Giới thiệu](#vi-overview) · [Bắt đầu](#vi-setup) · [Chế độ](#vi-modes) · [Sử dụng](#vi-cli) · [Kết quả](#vi-results) · [Giới hạn](#vi-limits) · [Phát triển](#vi-development) · [Ghi công](#vi-attribution)
-
-</details>
-
-<a id="workflow"></a>
-
-## Mapping workflow · Quy trình ánh xạ
-
-```mermaid
-flowchart LR
-    A[IFC sources] --> B[Geometry and inventory]
-    B --> C[Scope, domain and decisions]
-    C --> D[FDS and companion artifacts]
-    D --> E[Independent audit]
-    A --> E
-    E --> F[Acceptance report]
-```
-
-*The audit reopens source IFC and inspects exported artifacts. / Audit đọc lại IFC nguồn và kiểm tra artifact đã xuất.*
-
-<a id="english"></a>
-
-## English
-
-<a id="en-overview"></a>
-
-### Overview
-
-IFCtoFDS is a geometry preprocessing workbench for transferring IFC building models into geometry representations for Fire Dynamics Simulator (FDS). It supports visual inspection, source-element traceability and independent checks of the exported mapping.
-
-This repository is the **Fire Digital Twin Lab research fork** of [ProfRino/IFCtoFDS](https://github.com/ProfRino/IFCtoFDS). It extends the browser workbench with a Python/IfcOpenShell pipeline, explicit scope and domain controls, multi-source processing, mapping manifests and acceptance reports. It is intended for engineers, researchers and developers building reproducible BIM-to-FDS workflows.
-
-**A generated FDS file is not, by itself, an accepted mapping or a complete fire simulation.** Read it together with its manifest and acceptance report. Engineering use requires independent review by a qualified fire safety engineer.
-
-
-| Inspect | Map | Trace | Review |
-|---|---|---|---|
-| Explore IFC and FDS geometry in one workbench | Choose Quick Preview or a policy-driven Verified workflow | Follow source identities through manifests and geometry packages | Examine independent gates, findings and downloadable evidence |
-
-<a id="en-setup"></a>
-
-### Installation and first run
-
-The package declares **Python 3.10 or later**. The repository's CI configuration covers Python 3.11 and 3.12 on Windows and Linux. Dependencies, including IfcOpenShell, are declared in [pyproject.toml](pyproject.toml). The workbench requires a modern browser with WebGL support.
-
-Clone this fork:
-
-```sh
-git clone https://github.com/fire-digital-twin-lab/IFCtoFDS.git
-cd IFCtoFDS
-```
-
-**Windows PowerShell**
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .
-python -m ifc_to_fds serve --port 8000
-```
-
-If activation is restricted, use `.\.venv\Scripts\python.exe` in place of `python` for the installation and service commands.
-
-**Linux**
-
-```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -e .
-python -m ifc_to_fds serve --port 8000
-```
-
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000) and keep the service running.
-
-1. Load an IFC model; the [bundled examples](examples/SOURCES.md) provide a starting point.
-2. Select **Verified Mapping**, review the scope and configure a simulation domain when exporting a selected region.
-3. Supply reviewed entity decisions or reference-case settings when required by the model and profile.
-4. Run the conversion, inspect the acceptance report and download the associated artifacts.
-
-FDS is not required merely to start the workbench or perform basic mapping checks. Solver-dependent boundary validation requires additional setup; see the [artifact and boundary guide](docs/artifact-boundary-v05.md).
-
-For browser-only exploration, open local `index.html` or use the [upstream demo](https://profrino.github.io/IFCtoFDS/). The demo and [upstream releases](https://github.com/ProfRino/IFCtoFDS/releases) are separate from this fork's local Verified workflow. Some browser assets load from CDNs, so opening the static page does not guarantee offline operation.
-
-<a id="en-modes"></a>
-
-### Conversion modes
-
-| Aspect | Quick Conversion — UI: **Quick Preview** | Verified Conversion — UI: **Verified Mapping** |
-|---|---|---|
-| Purpose | Interactive inspection and preliminary export | Source-based mapping with independent audit |
-| Runtime | Browser JavaScript | Local Python/IfcOpenShell service or CLI |
-| Geometry | Supported IFC subset; heuristic OBST/GEOM, HOLE and voxel workflows | Source geometry, explicit mapping policies and audited representations |
-| Controls | Preview settings, openings and optional solids | Scope, domain, reviewed entity decisions and audit profile |
-| Output | Preview FDS file | FDS with geometry, provenance, MEP and acceptance artifacts |
-| Acceptance | Does not establish mapping acceptance | Determined by the required audit gates |
-
-**Verified Mapping** names the workflow, not a guaranteed outcome. Quick options, including furniture, MEP and proxy solids, do not constitute reviewed decisions for Verified.
-
-<a id="en-cli"></a>
-
-### Usage
-
-The building screenshot shows Quick Preview of the public KIT model. The Verified screenshot is an existing QA capture of the small `box.ifc` test fixture, illustrating how audit gates are presented; it is not an acceptance result for the KIT building.
-
-![Quick Preview — AC20-FZK-Haus](demo/readme/quick-preview.png)
-
-*Quick Preview · KIT AC20-FZK-Haus.*
-
-![Verified Mapping — box.ifc QA fixture audit](demo/readme/verified-results.png)
-
-*Verified Mapping · `box.ifc` QA fixture. Mapping acceptance is separate from solver evidence and simulation acceptance.*
-
-<details>
-<summary><strong>CLI examples and scoped conversion</strong></summary>
-
-Run these commands from the repository root with the virtual environment active.
-
-**Inspect the source inventory**
-
-```sh
-python -m ifc_to_fds inventory examples/AC20-FZK-Haus.ifc --json
-```
-
-**Convert a full model**
-
-```sh
-python -m ifc_to_fds convert examples/AC20-FZK-Haus.ifc -o out/fzk.fds --cell-size 0.2 --profile mapping
-```
-
-Acceptance depends on source data and evidence; a bundled example is not a promise of `MAPPING_VERIFIED`.
-
-**Configure a scoped conversion**
-
-Use `--config` for a project-specific JSON configuration containing `scope` and an independent `simulation_domain`. The domain fields are `xmin`, `xmax`, `ymin`, `ymax`, `zmin`, `zmax`, in common-world metres.
-
-The CLI also accepts `--storey`, `--bbox` and `--domain`. Domain arguments follow `XMIN XMAX YMIN YMAX ZMIN ZMAX`. Resolve repeated storey names by source identity. Establish domain values for the actual model: viewer clipping and the scope bounding box do not automatically define the simulation domain.
-
-See the [mapping guide](docs/golden-mapping-parity.md) for configuration, federation and reviewed decisions. Use `--decisions` for explicit entity decisions. The legacy `--include-review` flag remains exposed, but enabling it is rejected by the Verified configuration validator.
-
-**Audit saved output independently**
-
-```sh
-python -m ifc_to_fds audit examples/AC20-FZK-Haus.ifc --fds out/fzk.fds --manifest out/fzk_manifest.json --geometry-package out/fzk_geometry.json -o out/fzk_reaudit.json
-```
-
-Keep the geometry index and its referenced payload directory together. Unless `--config` is supplied, audit uses the configuration recorded in the manifest.
-
-Conversion and audit exit codes: `0` means the requested acceptance level was achieved; `1` means `REJECTED`; `2` means `INCONCLUSIVE`; `3` indicates an operational error. Use `python -m ifc_to_fds --help` or a subcommand's `--help` to inspect arguments.
-
-</details>
-
-<a id="en-results"></a>
-
-### Artifacts and acceptance
-
-Treat Verified output as a **mapping bundle**. CLI output `out/fzk.fds` produces companion files with the `fzk` stem. The service uses `model` internally and provides artifact download links.
-
-| Artifact | Purpose |
-|---|---|
-| `fzk.fds` | FDS geometry and source provenance comments |
-| `fzk_manifest.json`, `fzk_manifest.csv` | Source identities, mapping dispositions and primitive assignments |
-| `fzk_acceptance_report.json`, `fzk_acceptance_report.md` | Audit gates, findings and acceptance results |
-| `fzk_geometry.json` + `fzk_geometry.payloads/` | Geometry index and binary meshes, including retained reference geometry |
-| `fzk_geometry.zip` | Portable geometry index and payload archive |
-| `fzk_inventory.json`, `fzk_mep_graph.json` | Source inventory and extracted MEP systems/port relationships |
-| `fzk_configuration.json`, `fzk_parity.json` | Run configuration and reference-comparison results |
-| `fzk_timings.json`, `fzk_checksums.json` | Stage timings and artifact checksums |
-
-An interrupted run may only have checkpoint or diagnostic files. Their presence does not establish acceptance.
-
-Reports separate `mapping_status` and `simulation_status`; top-level `status` answers the requested profile.
-
-| Mapping status | Meaning |
-|---|---|
-| `MAPPING_VERIFIED` | Required mapping gates passed or have justified `NOT_APPLICABLE` dispositions |
-| `REJECTED` | A required check identified a confirmed failure |
-| `INCONCLUSIVE` | Required evidence, decisions or supported validation are missing |
-
-The `mapping` profile evaluates mapping requirements. The `research-basement` profile additionally requires an approved reference case and applicable research evidence. The `simulation` profile requires scenario, physics and effective-geometry evidence; the current implementation does **not** issue `SIMULATION_VERIFIED`.
-
-Provenance and checksums support traceability and integrity. They do not independently prove geometric equivalence or simulation validity.
-
-<a id="en-limits"></a>
-
-### Capabilities and limitations
-
-- **Geometry and openings.** Verified uses IfcOpenShell source geometry. Eligible closed, axis-aligned passive boxes without openings can use `OBST`; more complex supported solids use `GEOM`. The optional all-GEOM setting is diagnostic. Quick HOLE and voxel controls belong to the browser pipeline.
-- **Scope and domain.** Scope selects source entities; the simulation domain defines FDS mesh bounds; viewer clipping changes the inspection view. Scoped exports without a domain remain incomplete. Unscoped full-model runs may use full source bounds.
-- **Boundary treatment.** Opt-in `VALIDATED_BOUNDARY_OBST_SINGLE_MESH` applies to narrowly eligible structural boxes and requires independent checks plus solver/effective-geometry evidence. It is not general clipping for arbitrary GEOM or MEP.
-- **MEP, HVAC and fire protection.** MEP defaults to reference geometry outside FDS, with available semantics and connectivity retained in companion artifacts. Missing source connections are not invented. Promotion to a passive obstacle requires explicit reviewed decisions and applicable checks.
-- **Operational behaviour.** Duct airflow, fan curves, dampers and sprinkler activation are not automatically configured. Door/window filling geometry does not establish a reviewed open/closed scenario state.
-- **Materials and scenarios.** The Verified serializer currently writes `T_END=0.0` and assigns geometry the `CONCRETE` surface identifier. This does not establish verified material properties. Fire sources, thermal properties, operating conditions and simulation mesh suitability require separate engineering work.
-- **Incomplete evidence.** Assess unsupported geometry, unresolved decisions and missing boundary proof through the report. FDS generation, successful parsing or a solver smoke test alone does not establish full simulation acceptance.
-
-<a id="en-development"></a>
-
-### Documentation and development
-
-The browser and Python pipelines serve different purposes. Python is organised around domain models, application use cases, ports and adapters, with compatibility modules retained during the architecture transition.
-
-<details>
-<summary>Repository structure</summary>
-
-```text
-index.html                 Browser workbench
-js/                        IFC preview, FDS export, workers and viewer
-ifc_to_fds/
-  domain/                  Domain models and validation contracts
-  application/             Use cases, configuration and ports
-  adapters/                Geometry, storage and external integrations
-  interfaces/              Service and worker interfaces
-  core/, geometry/         Inventory, placement and mesh processing
-  mapping/, mep/           Representation policies and MEP extraction
-  validation/              Independent checks and acceptance
-docs/                      Guides and architecture decisions
-tests/                     Python regression tests
-scripts/                   JavaScript, browser, solver and research tooling
-examples/                  IFC models and source attribution
-```
-
-</details>
-
-| Documentation | Focus |
-|---|---|
-| [Mapping profiles and golden parity](docs/golden-mapping-parity.md) | Acceptance, scope/domain, decisions and reference cases |
-| [Artifact and boundary guide](docs/artifact-boundary-v05.md) | Compact API, binary geometry and solver-backed boundary policy |
-| [Source fidelity and large IFC import](docs/adr/ADR-007-source-fidelity-and-backend-preview.md) | Passive MEP export, retained opening hosts, exact domain intersections and backend preview |
-| [Architecture decision](docs/adr/ADR-002-hexagonal-architecture.md) | Ports, adapters and the architecture transition |
-| [Correctness review](docs/post-refactor-correctness.md) | Documented correctness work and evidence |
-| [Example sources](examples/SOURCES.md) | KIT and IfcOpenShell Duplex attribution |
-| [CI workflow](.github/workflows/verified.yml) | Python, JavaScript, browser, solver and optional research checks |
-
-Bundled models: [AC20-FZK-Haus.ifc](examples/AC20-FZK-Haus.ifc), [AC20-Institute-Var-2.ifc](examples/AC20-Institute-Var-2.ifc) and [IfcOpenShell-Duplex.ifc](examples/IfcOpenShell-Duplex.ifc).
-
-Install test dependencies and run the non-solver suite:
-
-```sh
-python -m pip install -e ".[test]"
-python -m pytest -q -m "not solver and not browser"
-```
-
-Representative JavaScript checks require Node.js:
-
-```sh
-node scripts/test-worker-bundle-parity.js
-node scripts/test-golden-workflow.js
-node scripts/test-verified-regressions.js
-```
-
-Consult CI for the complete check set and browser setup. Solver tests require a configured FDS executable; private research acceptance also requires external data and an approved reference bundle. Record unexecuted checks separately from passing checks.
-
-#### Contributing
-
-Use the [issue tracker](https://github.com/fire-digital-twin-lab/IFCtoFDS/issues) for reproducible bugs and feature proposals, or submit a pull request with a clear description and relevant checks. Include the revision, configuration and diagnostics; use a shareable IFC sample without confidential project data.
-
-<a id="en-attribution"></a>
-
-### Attribution, citation and license
-
-Upstream IFCtoFDS was developed by **Prof Rino Lovreglio, Massey University**, with **resilienceengineer** credited as a project collaborator. This fork develops the research mapping and validation workflow under **Fire Digital Twin Lab**, retaining upstream attribution.
-
-For the original software, use [CITATION.cff](CITATION.cff), which currently describes the upstream release:
-
-> Lovreglio, R. *IFCtoFDS*. Massey University.
-> [Original repository](https://github.com/ProfRino/IFCtoFDS)
-
-For research using this fork, also identify the [fork repository](https://github.com/fire-digital-twin-lab/IFCtoFDS), commit, configuration and relevant acceptance artifacts.
-
-The project is distributed under **GNU AGPL-3.0-or-later**, as declared in its package metadata. See [LICENSE](LICENSE). Third-party dependencies and example models retain their respective licenses and notices.
+---
+
+## Mục lục
+
+1. [Tổng quan dự án](#1-tổng-quan-dự-án)
+2. [Sơ đồ quy trình tổng thể](#2-sơ-đồ-quy-trình-tổng-thể)
+3. [Bốn trụ cột công nghệ cốt lõi](#3-bốn-trụ-cột-công-nghệ-cốt-lõi)
+4. [Cơ sở khoa học & Tiêu chuẩn tính toán](#4-cơ-sở-khoa-học--tiêu-chuẩn-tính-toán)
+5. [Cài đặt & Bắt đầu nhanh trong 3 phút](#5-cài-đặt--bắt-đầu-nhanh-trong-3-phút)
+6. [Hướng dẫn quy trình thao tác thực tế](#6-hướng-dẫn-quy-trình-thao-tác-thực-tế)
+7. [Đặc tả Artifacts & Hệ thống Cổng Kiểm định](#7-đặc-tả-artifacts--hệ-thống-cổng-kiểm-định)
+8. [Đặc tả REST API & Giao diện Dòng lệnh (CLI)](#8-đặc-tả-rest-api--giao-diện-dòng-lệnh-cli)
+9. [Khả năng, Giới hạn & Tính toàn vẹn Fail-Closed](#9-khả-năng-giới-hạn--tính-toàn-vẹn-fail-closed)
+10. [Kiểm thử tự động & Phát triển mã nguồn](#10-kiểm-thử-tự-động--phát-triển-mã-nguồn)
+11. [Ghi công, Trích dẫn Khoa học & Giấy phép](#11-ghi-công-trích-dẫn-khoa-học--giấy-phép)
 
 ---
 
-<a id="tieng-viet"></a>
+## 1. Tổng quan dự án
 
-## Tiếng Việt
+**IFCtoFDS** là phần mềm mã nguồn mở chuyên sâu phục vụ nghiên cứu và thực hành kỹ thuật an toàn phòng cháy chữa cháy (PCCC), đóng vai trò cầu nối chuẩn xác giữa mô hình Thông tin Công trình (**BIM - Industry Foundation Classes**) và công cụ tính toán động lực học khói lửa hàng đầu thế giới (**NIST Fire Dynamics Simulator - FDS**).
 
-<a id="vi-overview"></a>
+Kho lưu trữ này là **bản fork nghiên cứu chính thức của Fire Digital Twin Lab**, phát triển kế thừa và mở rộng toàn diện từ công trình khởi nguyên của [GS. Rino Lovreglio (Đại học Massey)](https://github.com/ProfRino/IFCtoFDS).
 
-### Giới thiệu
+### Đột phá công nghệ của Fork:
+- **Engine Chuyển đổi Hình học Chuẩn xác (Verified Pipeline)**: Triển khai trên nền tảng Python / IfcOpenShell với nhân hình học OpenCASCADE 64-bit, loại bỏ hoàn toàn các lỗi sai số làm tròn dấu phẩy động.
+- **Hệ thống Kiểm định Độc lập 12 Cổng (Independent Audit Engine)**: Tự động đọc lại tệp IFC nguồn độc lập với bộ nhớ trình xuất, đối chiếu tính tương đương hình học, kiểm tra bảo toàn lỗ mở và bảo đảm tính toàn vẹn bao che.
+- **Quy trình Mô phỏng Cháy Xe Điện Hàng loạt (EV Fire Scenario Batch)**: Hệ thống đầu tiên hỗ trợ thiết lập thư viện vật lý pin Li-ion (NMC, LFP), tự động sinh namelist cháy phức hợp FDS 6+, thẩm định tỷ lệ độ mịn lưới plume đám cháy $D^*/\Delta x$ theo chuẩn NFPA 92 / NUREG 1824 và gửi hàng loạt kịch bản phân tích qua giao diện ma trận.
 
-IFCtoFDS là công cụ tiền xử lý hình học, chuyển mô hình công trình IFC thành biểu diễn hình học dùng cho Fire Dynamics Simulator (FDS). Công cụ hỗ trợ kiểm tra trực quan, truy xuất đến phần tử nguồn và kiểm chứng độc lập kết quả ánh xạ.
+> ⚠️ **Lưu ý nguyên tắc kỹ thuật an toàn PCCC:**  
+> Việc tạo thành công tệp đầu vào FDS (`.fds`) **chưa đồng nghĩa** với việc mô hình đã đủ điều kiện an toàn hoặc kịch bản mô phỏng đã hoàn chỉnh. Tệp FDS bắt buộc phải được đọc và đánh giá đồng bộ cùng **Bản kê Ánh xạ (`manifest.json`)** và **Báo cáo Nghiệm thu Kiểm định (`acceptance_report.json`)**. Mọi kết quả ứng dụng trong thiết kế công trình thực tế bắt buộc phải được kỹ sư an toàn PCCC có chứng chỉ hành nghề thẩm tra độc lập.
 
-Repository này là **fork nghiên cứu của Fire Digital Twin Lab**, phát triển từ [ProfRino/IFCtoFDS](https://github.com/ProfRino/IFCtoFDS). Fork bổ sung quy trình Python/IfcOpenShell, khai báo phạm vi và miền tính toán, xử lý nhiều nguồn IFC, manifest ánh xạ và báo cáo kiểm chứng. Đối tượng sử dụng gồm kỹ sư, nhà nghiên cứu và lập trình viên xây dựng quy trình BIM-to-FDS có khả năng tái lập.
+---
 
-**Việc tạo được file FDS chưa chứng minh ánh xạ đã đạt yêu cầu hoặc mô hình mô phỏng cháy đã hoàn chỉnh.** Cần đọc file cùng manifest và báo cáo kiểm chứng. Việc sử dụng trong kỹ thuật cần được kỹ sư an toàn cháy có chuyên môn thẩm tra độc lập.
+## 2. Sơ đồ quy trình tổng thể
 
+```mermaid
+flowchart TD
+    subgraph INTAKE["1. Tiếp nhận & Trích xuất BIM"]
+        A[Tệp IFC Nguồn Công trình] --> B[IfcOpenShell & OpenCASCADE]
+        B --> C[Bản Kê Phần tử Inventory]
+        B --> D[Đồ thị Mạng MEP & Lỗ mở]
+    end
 
-| Quan sát | Ánh xạ | Truy xuất | Kiểm chứng |
-|---|---|---|---|
-| Xem hình học IFC và FDS trong cùng giao diện | Chọn Quick Preview hoặc quy trình Verified theo chính sách | Theo dõi định danh nguồn qua manifest và gói hình học | Đọc các bước kiểm tra, phát hiện và bằng chứng có thể tải xuống |
+    subgraph MAPPING["2. Ánh xạ Hình học & Không gian"]
+        C --> E[Xác định Ranh giới Miền Tính toán]
+        D --> E
+        E --> F{Phân loại Hình học}
+        F -->|Khối hộp chuẩn trục| G[Namelist &OBST]
+        F -->|Đa diện phức tạp| H[Namelist &GEOM Float64]
+        F -->|Lớp mỏng / Không khối| I[Khai báo SEMANTIC_ONLY]
+    end
 
-<a id="vi-setup"></a>
+    subgraph SCENARIO["3. Kịch bản Cháy Xe Điện (EV Pipeline)"]
+        J[(Thư viện Vật lý Pin EV)] --> K[Ma trận Cấu hình Giao diện]
+        K --> L[Bộ sinh Kịch bản Scenario Emitter]
+        L --> M[Sinh &REAC, &RAMP, &SURF, &VENT, &DEVC, &CTRL]
+        M --> N{Cổng Kiểm định Lưới D*/dx}
+        N -->|4 <= D*/dx <= 16| O[Cho phép kích hoạt FDS Solver]
+        N -->|Ngoài khoảng chuẩn| P[Chặn Solver: Báo INCONCLUSIVE/FAIL]
+    end
 
-### Cài đặt và bắt đầu
+    subgraph AUDIT["4. Động cơ Thẩm định Độc lập 12 Cổng"]
+        G --> Q[Tệp FDS Hoàn chỉnh]
+        H --> Q
+        O --> Q
+        Q --> R[Đọc lại IFC Nguồn từ Đĩa]
+        A --> R
+        R --> S[Kiểm tra Đối chiếu 12 Cổng Độc lập]
+        S --> T[Báo cáo Nghiệm thu Acceptance Report]
+    end
 
-Gói khai báo yêu cầu **Python 3.10 trở lên**. Cấu hình CI bao gồm Python 3.11 và 3.12 trên Windows và Linux. Các phụ thuộc, gồm IfcOpenShell, được khai báo trong [pyproject.toml](pyproject.toml). Giao diện cần trình duyệt hiện đại hỗ trợ WebGL.
+    style INTAKE fill:#eef2ff,stroke:#6366f1,stroke-width:2px;
+    style MAPPING fill:#f0fdf4,stroke:#22c55e,stroke-width:2px;
+    style SCENARIO fill:#fffbeb,stroke:#f59e0b,stroke-width:2px;
+    style AUDIT fill:#fef2f2,stroke:#ef4444,stroke-width:2px;
+```
 
-Clone fork này:
+---
 
-```sh
+## 3. Bốn trụ cột công nghệ cốt lõi
+
+### 3.1. Chuyển đổi Hình học BIM sang FDS Chính xác Tuyệt đối
+- **Nhân hình học OpenCASCADE nguyên bản**: Trích xuất toàn bộ thể tích hình khối 3D với độ chính xác số thực dấu phẩy động 64-bit chuẩn (`float64`).
+- **Phân định chiến lược thông minh**:
+  - `&OBST`: Áp dụng cho các cấu kiện khối hộp thụ động kín, song song tuyệt đối với các trục tọa độ và không chứa lỗ mở khoét thủng.
+  - `&GEOM`: Tự động áp dụng cho các cấu kiện có hình học phức tạp, tường/sàn vát góc, hoặc tường bị đục thủng bởi cửa sổ, cửa đi nhằm bảo toàn chính xác biên dạng khoét rỗng CAD.
+  - `SEMANTIC_ONLY`: Tự động nhận diện các lớp trát, sơn tường trang trí mỏng (`IfcCovering` có bề dày $< 0.02\text{ m}$) thành hình học tham chiếu ngữ nghĩa, không biến chúng thành khối vật cản nhân tạo làm nghẽn dòng khí FDS.
+
+### 3.2. Động cơ Thẩm định Độc lập 12 Cổng (Independent Audit Engine)
+Tuân thủ nguyên tắc độc lập kiểm toán: Động cơ thẩm định **không bao giờ tin cậy dữ liệu tạm trong bộ nhớ** của trình xuất mà trực tiếp phân tích cú pháp lại tệp FDS xuất ra và nạp lại tệp IFC gốc từ ổ cứng để đối soát chéo:
+1. **Cổng Cú pháp (`syntax`)**: Kiểm tra ngữ pháp namelist FDS 6+, phát hiện trùng lặp định danh, ký tự bất hợp lệ và kiểm tra danh mục trường hợp lệ.
+2. **Cổng Miền tính toán (`domain`)**: Đối chiếu tọa độ lưới `&MESH` với phạm vi không gian công trình đã phê duyệt.
+3. **Cổng Truy xuất nguồn gốc (`traceability`)**: Truy nguyên từng khối `&OBST` và `&GEOM` về đúng thực thể IFC gốc (mã băm tệp, `step_id`, `GlobalId`), phát hiện các vật thể lạ phát sinh không rõ nguồn gốc.
+4. **Cổng Phạm vi (`scope`)**: Đảm bảo các tầng và không gian được chọn không bị cắt xén làm thay đổi tính toàn vẹn cấu trúc.
+5. **Cổng Hình học (`geometry`)**: Kiểm tra tính đa tạp kín (manifold), phát hiện mặt tam giác suy biến, cạnh hở và thể tích dương.
+6. **Cổng Bảo toàn Lỗ mở (`openings`)**: Đảm bảo cửa sổ, cửa đi và các lỗ mở thông tầng không bị lấp kín do lỗi chuyển đổi hình học (CAD silent reseal).
+7. **Cổng Mạng MEP (`mep`)**: Xác thực đồ thị kết nối hệ thống thông gió hút khói và đường ống chữa cháy.
+8. **Cổng Bao che & Rò rỉ Không khí (`air_path`)**: Thuật toán quét thể tích không gian tự do 3D phát hiện rò rỉ khí qua vỏ bao che công trình (phát hiện lỗ rò rỉ dù chỉ $1.0\text{ m}^3$).
+9. **Cổng Thẩm quyền Vật cản (`representation`)**: Ngăn chặn các vật thể tham chiếu bị gán sai thành vật cản dòng khí.
+10. **Cổng Điều kiện Biên (`boundary`)**: Xác minh tương tác hình học giữa biên công trình và mặt giới hạn tính toán FDS.
+11. **Cổng Tương đồng Đối chứng (`golden_reference_parity`)**: So sánh với tập dữ liệu tham chiếu chuẩn đã được chuyên gia phê duyệt.
+12. **Cổng Trình giải CFD (`solver`)**: Chạy kiểm tra khởi tạo nghiệm thức dry-run với NIST FDS chính thức.
+
+### 3.3. Hệ thống Mô phỏng Kịch bản Cháy Xe Điện Hàng loạt (EV Fire Pipeline)
+- **Thư viện Vật lý Cháy Pin Chuẩn hóa (`ifc_to_fds/fire/ev_library.py`)**: Lưu trữ các bản ghi tham số cháy có phiên bản, bao gồm công suất tỏa nhiệt cực đại ($HRR_{peak}$), hệ số tăng trưởng $t^2$, năng lượng gói pin (kWh), và hệ số phát thải khí độc hại ($CO$, $Soot$, $HF$) được thẩm định từ các nghiên cứu cháy thực nghiệm quy mô lớn (RISE, v.v.).
+- **Bộ sinh Kịch bản FDS Động (`ifc_to_fds/fire/scenario_emitter.py`)**: Tự động tạo mã FDS hoàn chỉnh bao gồm phản ứng cháy `&REAC`, đường cong công suất `&RAMP`, bề mặt đốt `&SURF` tính toán công suất trên đơn vị diện tích ($HRRPUA$), khối xe `&OBST`, mặt lửa `&VENT`, cùng hệ thống cảm biến báo cháy `&DEVC` và điều khiển đóng mở cửa thoát nạn `&CTRL`.
+- **Cổng Kiểm Định Độ Mịn Lưới Plume ($D^*/\Delta x$)**: Tự động tính toán đường kính đặc trưng đám cháy cho từng xe theo chuẩn quốc tế và ngăn chặn chạy FDS nếu kích thước lưới ô tính toán quá thô hoặc quá mịn ngoài khoảng tiêu chuẩn.
+- **Bảo toàn Nguyên tắc A3**: Mọi kịch bản sinh ra liên kết chặt chẽ qua mã băm `bundle_sha256` mà **tuyệt đối không làm thay đổi hay sai lệch mô hình hình học nền**.
+
+### 3.4. Vòng đời Tác vụ Bền vững & Chống Lỗi (Job Engine & Resiliency)
+- **Cơ sở dữ liệu SQLite chế độ WAL (Write-Ahead Logging)**: Lưu vết trạng thái tác vụ an toàn, tự động phục hồi về `FAILED` khi máy chủ khởi động lại đột ngột.
+- **Hợp đồng API phân tách rõ ràng**: Phân định rành mạch giữa `POST /api/jobs/{id}/cancel` (hủy xử lý an toàn, giữ nguyên dữ liệu đã xuất) và `DELETE /api/jobs/{id}?purge=true` (yêu cầu xác nhận rõ ràng mới xóa vĩnh viễn tệp trên đĩa).
+- **Cơ chế chống tràn hàng đợi**: Xử lý tự động lỗi HTTP 429 với giải thuật lũy thừa thời gian chờ (exponential backoff retry) giúp quá trình gửi batch hàng chục kịch bản diễn ra trơn tru.
+
+---
+
+## 4. Cơ sở khoa học & Tiêu chuẩn tính toán
+
+### 4.1. Đường kính Đặc trưng Đám cháy ($D^*$) và Tỷ lệ Độ phân giải Lưới ($D^*/\Delta x$)
+Trong mô phỏng số động lực học chất lưu CFD đám cháy bằng FDS, kích thước ô lưới tính toán ($\Delta x$) quyết định trực tiếp đến độ chính xác của trường nhiệt độ, vận tốc dòng khói và áp suất. Theo các tài liệu kỹ thuật chuẩn mực quốc tế:
+- **NFPA 92**: Standard for Smoke Control Systems.
+- **NUREG-1824**: Verification and Validation of Selected Fire Models for Nuclear Power Plant Applications.
+- **FDS User's Guide / FDS Validation Guide** (NIST).
+
+Đường kính đặc trưng của đám cháy $D^*$ được xác định theo phương trình:
+
+$$D^* = \left( \frac{\dot{Q}}{\rho_\infty \cdot c_p \cdot T_\infty \cdot \sqrt{g}} \right)^{\frac{2}{5}}$$
+
+Trong đó:
+- $\dot{Q}$: Công suất tỏa nhiệt cực đại của đám cháy ($kW$).
+- $\rho_\infty$: Khối lượng riêng của không khí ở điều kiện chuẩn ($\approx 1.204 \text{ kg/m}^3$).
+- $c_p$: Nhiệt dung riêng đẳng áp của không khí ($\approx 1.005 \text{ kJ/(kg}\cdot\text{K)}$).
+- $T_\infty$: Nhiệt độ môi trường ban đầu ($\approx 293.15 \text{ K}$).
+- $g$: Gia tốc trọng trường ($9.81 \text{ m/s}^2$).
+
+Mẫu số chuẩn ở điều kiện khí quyển tiêu chuẩn: $\rho_\infty c_p T_\infty \sqrt{g} \approx 1111.4$.
+
+Khoảng tỷ lệ độ mịn lưới được khuyến nghị bắt buộc trong kiểm định:
+
+$$4 \le \frac{D^*}{\Delta x} \le 16$$
+
+- Khi $\frac{D^*}{\Delta x} < 4$: Ô lưới quá thô, FDS không giải quyết được các cấu trúc cuộn xoáy cột khói plume, kết quả sai lệch nghiêm trọng $\rightarrow$ **Cổng kiểm định đánh lỗi `FAIL` và chặn chạy FDS**.
+- Khi $4 \le \frac{D^*}{\Delta x} \le 16$: Độ phân giải lưới đạt chuẩn hội tụ nghiệm khí động học $\rightarrow$ **Cổng kiểm định xác nhận `PASS`**.
+- Khi $\frac{D^*}{\Delta x} > 16$: Ô lưới quá mịn, chi phí tính toán bùng nổ vượt ngoài giới hạn kiểm chứng $\rightarrow$ **Hệ thống cảnh báo hoặc chuyển `INCONCLUSIVE`**.
+
+### 4.2. Dữ liệu Đặc tính Cháy Pin Xe Điện (EV Fire Physics Reference)
+
+Hệ thống tích hợp sẵn các bộ tham số cháy chuẩn hóa theo thực nghiệm:
+
+| Loại phương tiện | Loại hóa học Pin | Dung lượng gói (kWh) | Công suất đỉnh $HRR_{peak}$ (MW) | Thời gian đạt đỉnh $t_\alpha$ (s) | Hệ số khói $Y_{soot}$ | Hệ số khí $Y_{CO}$ | Khí độc $Y_{HF}$ | Mức tin cậy (Confidence) |
+|---|---|---|---|---|---|---|---|---|
+| **Xe máy điện / Xe đạp điện** | LFP (Lithium Iron Phosphate) | 0.5 – 3.0 | 0.02 – 0.15 | 75 – 300 | 0.05 – 0.15 | 0.05 – 0.20 | 0.00 – 0.02 | `low` *(Giả định kỹ thuật)* |
+| **Xe ô tô điện du lịch** | NMC (Nickel Manganese Cobalt) | 40.0 – 100.0 | 2.0 – 7.0 | 150 – 600 | 0.08 – 0.20 | 0.05 – 0.20 | 0.01 – 0.05 | `medium` *(Thực nghiệm RISE)* |
+
+---
+
+## 5. Cài đặt & Bắt đầu nhanh trong 3 phút
+
+### Yêu cầu hệ thống:
+- Hệ điều hành: Windows 10/11 (64-bit), Ubuntu Linux 22.04/24.04, hoặc macOS.
+- **Python**: Phiên bản 3.10, 3.11 hoặc 3.12.
+- Trình duyệt: Chrome, Edge, Firefox hoặc Safari phiên bản mới hỗ trợ WebGL.
+
+### Bước 1: Sao chép mã nguồn
+```bash
 git clone https://github.com/fire-digital-twin-lab/IFCtoFDS.git
 cd IFCtoFDS
 ```
 
-**Windows PowerShell**
+### Bước 2: Thiết lập môi trường ảo Python
 
+**Trên Windows (PowerShell):**
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e .
-python -m ifc_to_fds serve --port 8000
-```
-
-Nếu việc kích hoạt bị hạn chế, thay `python` bằng `.\.venv\Scripts\python.exe` trong các lệnh cài đặt và khởi động dịch vụ.
-
-**Linux**
-
-```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -e .
-python -m ifc_to_fds serve --port 8000
-```
-
-Mở [http://127.0.0.1:8000](http://127.0.0.1:8000) và giữ dịch vụ hoạt động.
-
-1. Nạp mô hình IFC; có thể bắt đầu với các [mô hình mẫu](examples/SOURCES.md).
-2. Chọn **Verified Mapping**, kiểm tra phạm vi và khai báo miền tính toán khi chỉ xuất một vùng được chọn.
-3. Cung cấp quyết định xét duyệt hoặc thiết lập bộ tham chiếu khi mô hình và hồ sơ yêu cầu.
-4. Chạy chuyển đổi, đọc báo cáo kiểm chứng và tải các artifact liên quan.
-
-Không cần FDS chỉ để khởi động giao diện hoặc kiểm tra mapping cơ bản. Kiểm chứng phần tử biên phụ thuộc solver cần thiết lập bổ sung; xem [hướng dẫn artifact và phần tử biên](docs/artifact-boundary-v05.md).
-
-Để dùng riêng chế độ trình duyệt, mở `index.html` cục bộ hoặc truy cập [demo upstream](https://profrino.github.io/IFCtoFDS/). Demo và [các bản phát hành upstream](https://github.com/ProfRino/IFCtoFDS/releases) tách biệt với quy trình Verified cục bộ của fork. Một số tài nguyên được tải từ CDN, vì vậy mở trang tĩnh không đồng nghĩa với hoạt động hoàn toàn ngoại tuyến.
-
-<a id="vi-modes"></a>
-
-### Chế độ chuyển đổi
-
-| Tiêu chí | Quick Conversion — giao diện: **Quick Preview** | Verified Conversion — giao diện: **Verified Mapping** |
-|---|---|---|
-| Mục đích | Kiểm tra tương tác và xuất sơ bộ | Ánh xạ từ nguồn IFC, có kiểm chứng độc lập |
-| Môi trường | JavaScript trong trình duyệt | Dịch vụ Python/IfcOpenShell cục bộ hoặc CLI |
-| Hình học | Tập IFC được hỗ trợ; xử lý OBST/GEOM, HOLE và voxel theo heuristic | Hình học nguồn, chính sách ánh xạ và biểu diễn có kiểm chứng |
-| Thiết lập | Tùy chọn xem trước, lỗ mở và bổ sung vật thể | Phạm vi, miền, quyết định xét duyệt và hồ sơ kiểm chứng |
-| Đầu ra | File FDS xem trước | FDS cùng artifact hình học, nguồn gốc, MEP và kiểm chứng |
-| Kết luận | Không xác lập kết quả kiểm chứng mapping | Xác định theo các bước kiểm tra bắt buộc |
-
-**Verified Mapping** là tên quy trình, không bảo đảm mọi lần chạy đều đạt. Các tùy chọn Quick, kể cả bổ sung đồ nội thất, MEP và proxy, không thay thế quyết định xét duyệt trong Verified.
-
-<a id="vi-cli"></a>
-
-### Sử dụng
-
-Ảnh công trình minh họa Quick Preview với mô hình KIT công khai. Ảnh Verified lấy từ lần kiểm thử giao diện có sẵn với mẫu nhỏ `box.ifc`, minh họa cách hiển thị các bước audit; đây không phải kết quả kiểm chứng của công trình KIT.
-
-![Quick Preview — AC20-FZK-Haus](demo/readme/quick-preview.png)
-
-*Quick Preview · KIT AC20-FZK-Haus.*
-
-![Verified Mapping — box.ifc QA fixture audit](demo/readme/verified-results.png)
-
-*Verified Mapping · Mẫu kiểm thử `box.ifc`. Kết quả mapping tách biệt với bằng chứng solver và kết luận mô phỏng.*
-
-<details>
-<summary><strong>Ví dụ CLI và chuyển đổi theo phạm vi</strong></summary>
-
-Chạy các lệnh tại thư mục gốc repository sau khi kích hoạt môi trường ảo.
-
-**Kiểm kê mô hình nguồn**
-
-```sh
-python -m ifc_to_fds inventory examples/AC20-FZK-Haus.ifc --json
-```
-
-**Chuyển đổi toàn mô hình**
-
-```sh
-python -m ifc_to_fds convert examples/AC20-FZK-Haus.ifc -o out/fzk.fds --cell-size 0.2 --profile mapping
-```
-
-Kết quả phụ thuộc dữ liệu nguồn và bằng chứng; mô hình mẫu không mặc nhiên đạt `MAPPING_VERIFIED`.
-
-**Cấu hình chuyển đổi theo phạm vi**
-
-Dùng `--config` để cung cấp cấu hình JSON riêng cho dự án, gồm `scope` và `simulation_domain` độc lập. Miền dùng các trường `xmin`, `xmax`, `ymin`, `ymax`, `zmin`, `zmax` trong hệ tọa độ chung, đơn vị mét.
-
-CLI cũng hỗ trợ `--storey`, `--bbox` và `--domain`. Sáu tham số miền có thứ tự `XMIN XMAX YMIN YMAX ZMIN ZMAX`. Khi tên tầng trùng nhau, cần dùng định danh nguồn rõ ràng. Giá trị miền phải được xác định theo mô hình thực tế: clipping của viewer và bounding box chọn phạm vi không tự động xác lập miền tính toán.
-
-Xem [hướng dẫn mapping](docs/golden-mapping-parity.md) về cấu hình, phối hợp nhiều nguồn và quyết định xét duyệt. Dùng `--decisions` cho quyết định từng phần tử. CLI vẫn hiển thị cờ cũ `--include-review`, nhưng bộ kiểm tra cấu hình Verified từ chối khi bật cờ này.
-
-**Kiểm chứng độc lập đầu ra đã lưu**
-
-```sh
-python -m ifc_to_fds audit examples/AC20-FZK-Haus.ifc --fds out/fzk.fds --manifest out/fzk_manifest.json --geometry-package out/fzk_geometry.json -o out/fzk_reaudit.json
-```
-
-Giữ geometry index cùng thư mục payload được tham chiếu. Nếu không truyền `--config`, audit dùng cấu hình đã ghi trong manifest.
-
-Mã thoát của chuyển đổi và audit: `0` khi đạt mức kiểm chứng yêu cầu; `1` cho `REJECTED`; `2` cho `INCONCLUSIVE`; `3` khi có lỗi vận hành. Xem tham số bằng `python -m ifc_to_fds --help` hoặc `--help` của lệnh con.
-
-</details>
-
-<a id="vi-results"></a>
-
-### Đầu ra và kết quả kiểm chứng
-
-Sử dụng đầu ra Verified như một **bộ artifact ánh xạ**. Với đầu ra CLI `out/fzk.fds`, file đi kèm dùng tên cơ sở `fzk`. Dịch vụ dùng `model` nội bộ và cung cấp liên kết tải artifact.
-
-| Artifact | Mục đích |
-|---|---|
-| `fzk.fds` | Hình học FDS và chú thích nguồn gốc |
-| `fzk_manifest.json`, `fzk_manifest.csv` | Định danh nguồn, quyết định ánh xạ và liên kết primitive |
-| `fzk_acceptance_report.json`, `fzk_acceptance_report.md` | Các bước kiểm tra, phát hiện và kết quả kiểm chứng |
-| `fzk_geometry.json` + `fzk_geometry.payloads/` | Geometry index và mesh nhị phân, gồm hình học tham chiếu được giữ lại |
-| `fzk_geometry.zip` | Gói geometry index và payload để lưu trữ, trao đổi |
-| `fzk_inventory.json`, `fzk_mep_graph.json` | Kiểm kê nguồn và quan hệ hệ thống/port MEP được trích xuất |
-| `fzk_configuration.json`, `fzk_parity.json` | Cấu hình lần chạy và kết quả đối chiếu tham chiếu |
-| `fzk_timings.json`, `fzk_checksums.json` | Thời gian các giai đoạn và checksum artifact |
-
-Lần chạy bị gián đoạn có thể chỉ còn checkpoint hoặc file chẩn đoán. Sự tồn tại của chúng không xác lập kết quả đạt yêu cầu.
-
-Báo cáo tách `mapping_status` và `simulation_status`; trường `status` cấp cao nhất trả lời theo hồ sơ được yêu cầu.
-
-| Trạng thái mapping | Ý nghĩa |
-|---|---|
-| `MAPPING_VERIFIED` | Các bước kiểm tra mapping bắt buộc đã đạt hoặc có kết luận `NOT_APPLICABLE` kèm lý do phù hợp |
-| `REJECTED` | Một bước kiểm tra bắt buộc xác nhận có sai lệch hoặc lỗi |
-| `INCONCLUSIVE` | Thiếu bằng chứng, quyết định xét duyệt hoặc khả năng kiểm chứng cần thiết |
-
-Hồ sơ `mapping` đánh giá yêu cầu ánh xạ. Hồ sơ `research-basement` cần thêm bộ tham chiếu được phê duyệt và bằng chứng nghiên cứu liên quan. Hồ sơ `simulation` cần bằng chứng về kịch bản, vật lý và hình học hữu hiệu; triển khai hiện tại **chưa đưa ra kết luận `SIMULATION_VERIFIED`**.
-
-Nguồn gốc và checksum hỗ trợ truy xuất, kiểm tra tính toàn vẹn. Chúng không tự chứng minh tính tương đương hình học hoặc tính hợp lệ của mô phỏng.
-
-<a id="vi-limits"></a>
-
-### Khả năng và giới hạn
-
-- **Hình học và lỗ mở.** Verified dùng hình học nguồn từ IfcOpenShell. Khối thụ động kín, dạng hộp song song các trục, không có lỗ mở và đủ điều kiện có thể dùng `OBST`; khối phức tạp được hỗ trợ dùng `GEOM`. Tùy chọn toàn bộ GEOM phục vụ chẩn đoán. Điều khiển HOLE và voxel của Quick thuộc quy trình trình duyệt.
-- **Phạm vi và miền.** Scope chọn phần tử nguồn; simulation domain xác định giới hạn lưới FDS; clipping thay đổi vùng quan sát. Xuất theo phạm vi khi chưa có miền vẫn chưa hoàn chỉnh. Lần chạy toàn mô hình không giới hạn phạm vi có thể dùng bounds toàn nguồn.
-- **Phần tử biên.** Chính sách tùy chọn `VALIDATED_BOUNDARY_OBST_SINGLE_MESH` áp dụng cho nhóm hộp kết cấu đáp ứng điều kiện chặt chẽ, cần kiểm tra độc lập và bằng chứng solver/hình học hữu hiệu. Đây chưa phải cơ chế cắt tổng quát cho GEOM hoặc MEP bất kỳ.
-- **MEP, HVAC và PCCC.** MEP mặc định là hình học tham chiếu ngoài FDS; ngữ nghĩa và kết nối khả dụng được lưu trong artifact đi kèm. Công cụ không tự tạo kết nối nguồn bị thiếu. Chuyển phần tử thành vật cản thụ động cần quyết định xét duyệt rõ ràng và các kiểm tra liên quan.
-- **Hành vi vận hành.** Lưu lượng ống gió, đường đặc tính quạt, van gió và kích hoạt sprinkler không được cấu hình tự động. Hình học cửa/cửa sổ chèn trong lỗ mở chưa xác lập trạng thái đóng/mở đã xét duyệt cho kịch bản.
-- **Vật liệu và kịch bản.** Bộ xuất Verified hiện ghi `T_END=0.0` và gán định danh surface `CONCRETE` cho hình học. Điều này không xác lập thuộc tính vật liệu đã kiểm chứng. Nguồn cháy, thuộc tính nhiệt, điều kiện vận hành và mức độ phù hợp của lưới mô phỏng cần công việc kỹ thuật riêng.
-- **Bằng chứng chưa đầy đủ.** Cần đánh giá hình học chưa hỗ trợ, quyết định chưa giải quyết và bằng chứng biên còn thiếu qua báo cáo. Chỉ tạo được FDS, đọc cú pháp thành công hoặc chạy kiểm tra solver cơ bản chưa đủ để kết luận mô phỏng đạt yêu cầu.
-
-<a id="vi-development"></a>
-
-### Tài liệu và phát triển
-
-Quy trình trình duyệt và Python phục vụ mục đích khác nhau. Python được tổ chức theo mô hình miền, ca sử dụng, port và adapter; các module tương thích vẫn được giữ trong giai đoạn chuyển đổi kiến trúc.
-
-<details>
-<summary>Cấu trúc repository</summary>
-
-```text
-index.html                 Giao diện trình duyệt
-js/                        Xem trước IFC, xuất FDS, worker và viewer
-ifc_to_fds/
-  domain/                  Mô hình miền và hợp đồng kiểm chứng
-  application/             Ca sử dụng, cấu hình và port
-  adapters/                Tích hợp hình học, lưu trữ và công cụ ngoài
-  interfaces/              Giao diện dịch vụ và worker
-  core/, geometry/         Kiểm kê, vị trí và xử lý mesh
-  mapping/, mep/           Chính sách biểu diễn và trích xuất MEP
-  validation/              Kiểm tra độc lập và kết luận kiểm chứng
-docs/                      Hướng dẫn và quyết định kiến trúc
-tests/                     Kiểm thử hồi quy Python
-scripts/                   Công cụ JavaScript, trình duyệt, solver và nghiên cứu
-examples/                  Mô hình IFC và ghi nhận nguồn
-```
-
-</details>
-
-| Tài liệu | Nội dung |
-|---|---|
-| [Hồ sơ mapping và đối chiếu tham chiếu](docs/golden-mapping-parity.md) | Kiểm chứng, phạm vi/miền, quyết định và bộ tham chiếu |
-| [Hướng dẫn artifact và phần tử biên](docs/artifact-boundary-v05.md) | API rút gọn, hình học nhị phân và chính sách biên có bằng chứng solver |
-| [Giữ hình học nguồn và import IFC lớn](docs/adr/ADR-007-source-fidelity-and-backend-preview.md) | Xuất MEP thụ động, giữ host có opening, giao miền chính xác và preview bằng backend |
-| [Quyết định kiến trúc](docs/adr/ADR-002-hexagonal-architecture.md) | Port, adapter và quá trình chuyển đổi kiến trúc |
-| [Rà soát tính đúng đắn](docs/post-refactor-correctness.md) | Công việc và bằng chứng kiểm tra đã ghi nhận |
-| [Nguồn mô hình mẫu](examples/SOURCES.md) | Ghi công các mô hình KIT và IfcOpenShell Duplex |
-| [Quy trình CI](.github/workflows/verified.yml) | Kiểm tra Python, JavaScript, trình duyệt, solver và nghiên cứu tùy chọn |
-
-Mô hình đi kèm: [AC20-FZK-Haus.ifc](examples/AC20-FZK-Haus.ifc), [AC20-Institute-Var-2.ifc](examples/AC20-Institute-Var-2.ifc) và [IfcOpenShell-Duplex.ifc](examples/IfcOpenShell-Duplex.ifc).
-
-Cài phụ thuộc kiểm thử và chạy nhóm không yêu cầu solver:
-
-```sh
 python -m pip install -e ".[test]"
-python -m pytest -q -m "not solver and not browser"
 ```
 
-Một số kiểm tra JavaScript tiêu biểu cần Node.js:
-
-```sh
-node scripts/test-worker-bundle-parity.js
-node scripts/test-golden-workflow.js
-node scripts/test-verified-regressions.js
+**Trên Linux / macOS:**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[test]"
 ```
 
-Xem CI để biết đầy đủ các bước kiểm tra và cách chuẩn bị trình duyệt. Kiểm thử solver cần FDS executable được cấu hình; kiểm chứng nghiên cứu riêng còn cần dữ liệu bên ngoài và bộ tham chiếu được phê duyệt. Ghi nhận riêng các kiểm tra chưa chạy và các kiểm tra đã đạt.
+### Bước 3: Khởi chạy Giao diện Nghiên cứu (Workbench)
+```bash
+python -m ifc_to_fds serve --port 8000
+```
+Truy cập trình duyệt tại địa chỉ: **[http://127.0.0.1:8000](http://127.0.0.1:8000)**.
 
-#### Đóng góp
+*(Tùy chọn)* Cài đặt NIST FDS chính thức để chạy mô phỏng nghiệm thức:
+```bash
+python scripts/install-fds.py
+```
 
-Gửi lỗi có thể tái hiện và đề xuất tính năng qua [issue tracker](https://github.com/fire-digital-twin-lab/IFCtoFDS/issues), hoặc tạo pull request có mô tả rõ ràng và kiểm tra liên quan. Cung cấp phiên bản mã, cấu hình và chẩn đoán; dùng mô hình IFC được phép chia sẻ, không chứa dữ liệu dự án bảo mật.
+---
 
-<a id="vi-attribution"></a>
+## 6. Hướng dẫn quy trình thao tác thực tế
 
-### Ghi công, trích dẫn và giấy phép
+### Quy trình A: Ánh xạ Hình học & Kiểm định Toàn vẹn (Verified Mapping)
+1. Tại tab **Upload/Select IFC**, chọn tệp công trình BIM (có sẵn mẫu trong thư mục `examples/`).
+2. Chọn tầng cần phân tích hoặc thiết lập miền tính toán FDS (`simulation_domain`).
+3. Nhấp nút **Run Verified Mapping**:
+   - Hệ thống ngầm nạp hình học qua IfcOpenShell.
+   - Xuất tệp `model.fds` và các gói hình học nhị phân `.payloads`.
+   - Động cơ kiểm tra tự động chạy 12 cổng đối soát chéo.
+4. Mở ngăn kéo **Audit Drawer** để xem chi tiết từng cổng kiểm tra và tải báo cáo nghiệm thu `.md` hoặc `.json`.
 
-IFCtoFDS upstream do **Prof Rino Lovreglio, Massey University** phát triển, với **resilienceengineer** được ghi nhận là cộng tác viên. Fork này phát triển quy trình ánh xạ và kiểm chứng nghiên cứu dưới tên **Fire Digital Twin Lab**, đồng thời giữ ghi công upstream.
+### Quy trình B: Thiết lập Ma trận & Chạy Batch Cháy Xe Điện (EV Fire Batch)
+1. Sau khi mô hình đạt kết quả kiểm định hình học hợp lệ (`MAPPING_VERIFIED`), mở tab **Kịch bản Cháy Xe Điện (EV Fire Scenarios)** ở thanh công cụ bên trái.
+2. Thiết lập dải thông số ma trận thực nghiệm:
+   - **Số lượng xe**: Ví dụ `1, 3, 5`.
+   - **Khoảng cách đỗ xe**: Ví dụ `0.8, 1.2` mét (hệ thống tự động tính toán bù chiều rộng xe để chống giao cắt hình học).
+   - **Mức sạc pin (SoC %)**: Ví dụ `50, 80, 100` %.
+   - **Cơ cấu loại pin**: LFP xe máy điện, NMC ô tô điện.
+   - **Trạng thái cửa thoát nạn**: `CLOSED` hoặc `OPEN` (kèm thời gian kích hoạt điều khiển).
+3. Nhấp nút **Generate EV Fire Batch**:
+   - Hệ thống tự động tính toán $D^*$, kiểm tra điều kiện lưới $4 \le D^*/\Delta x \le 16$.
+   - Tự động sinh hàng loạt kịch bản và xếp vào hàng đợi xử lý nền qua `JobService`.
+4. Xem bảng tổng hợp kết quả từng kịch bản: Trạng thái lưới, công suất nhiệt cực đại, và kết luận nghiệm thu tổng hợp.
 
-Để trích dẫn phần mềm gốc, dùng [CITATION.cff](CITATION.cff), hiện mô tả bản phát hành upstream:
+---
 
-> Lovreglio, R. *IFCtoFDS*. Massey University.
-> [Repository gốc](https://github.com/ProfRino/IFCtoFDS)
+## 7. Đặc tả Artifacts & Hệ thống Cổng Kiểm định
 
-Khi nghiên cứu sử dụng fork này, cần ghi thêm [repository của fork](https://github.com/fire-digital-twin-lab/IFCtoFDS), commit, cấu hình và các artifact kiểm chứng liên quan.
+Mỗi lượt chạy Verified sinh ra một **Gói Ánh xạ Hoàn chỉnh (Mapping Bundle)** đồng bộ:
 
-Dự án được phân phối theo **GNU AGPL-3.0-or-later**, như khai báo trong metadata của gói. Xem [LICENSE](LICENSE). Phụ thuộc bên thứ ba và mô hình mẫu giữ giấy phép cùng thông báo tương ứng.
+| Tệp đầu ra | Ý nghĩa và Nội dung kỹ thuật |
+|---|---|
+| `model.fds` | Tệp FDS hoàn chỉnh bao gồm hình học, chú thích nguồn IFC và các namelist cháy |
+| `model_manifest.json` | Bản kê phân công thực thể: ánh xạ 1-1 giữa ID IFC và định danh FDS |
+| `model_acceptance_report.json` | Kết quả chi tiết 12 cổng kiểm tra, mức độ lỗi và danh mục phát hiện |
+| `model_geometry.json` | Chỉ mục hình học nhị phân lưu trữ tọa độ đỉnh và mặt lưới nguyên bản |
+| `model_inventory.json` | Toàn bộ danh mục 100% phần tử trích xuất từ IFC nguồn |
+| `model_mep_graph.json` | Đồ thị kết nối cổng (port-to-port) của hệ thống thông gió và chữa cháy |
+| `model_timings.json` | Thời gian thực thi chi tiết của từng giai đoạn chuyển đổi và kiểm tra |
 
-<a id="project-team"></a>
+### Bảng Ý nghĩa Trạng thái Nghiệm thu (Acceptance Status)
+- **`MAPPING_VERIFIED`**: Mọi cổng kiểm tra hình học và truy xuất bắt buộc đều đạt chuẩn (`PASS`) hoặc có lý giải miễn trừ hợp lệ (`NOT_APPLICABLE`).
+- **`REJECTED`**: Có ít nhất một sai lệch hình học nghiêm trọng (như rò rỉ bao che, vật cản trái phép, lỗi đa tạp).
+- **`INCONCLUSIVE`**: Thiếu dữ liệu đầu vào hoặc chưa hoàn thành bước kiểm chứng độc lập.
+- **`SIMULATION_VERIFIED`**: Cấp độ cao nhất, yêu cầu kiểm chứng trường nghiệm thức vật lý CFD đầy đủ với trình giải FDS.
 
-## Project credits · Ghi công dự án
+---
 
-<table>
-<tr>
-<td align="center" width="180"><a href="https://github.com/ProfRino"><img src="https://github.com/ProfRino.png?size=100" width="80" alt="Prof Rino Lovreglio"><br><strong>Prof Rino Lovreglio</strong></a><br>Upstream project lead<br>Massey University</td>
-<td align="center" width="180"><a href="https://github.com/resilienceengineer"><img src="https://github.com/resilienceengineer.png?size=100" width="80" alt="resilienceengineer"><br><strong>resilienceengineer</strong></a><br>Upstream collaborator</td>
-<td align="center" width="220"><a href="https://github.com/fire-digital-twin-lab/IFCtoFDS"><strong>Fire Digital Twin Lab</strong></a><br>Research fork<br>Mapping and validation</td>
-</tr>
-</table>
+## 8. Đặc tả REST API & Giao diện Dòng lệnh (CLI)
 
-[Back to top / Về đầu trang](#top)
+### Bảng Tra cứu REST API
+
+| Giao thức | Đường dẫn Endpoint | Tham số chính | Chức năng |
+|---|---|---|---|
+| `POST` | `/api/jobs` | `files`, `configuration` | Đưa tệp IFC vào hàng đợi chuyển đổi Verified Mapping |
+| `POST` | `/api/scenario-jobs` | JSON payload kịch bản | Gửi kịch bản cháy xe điện vào hàng đợi tính toán ma trận |
+| `GET` | `/api/jobs/{id}` | - | Lấy trạng thái tiến độ thời gian thực của tác vụ |
+| `GET` | `/api/jobs/{id}/result` | - | Lấy kết quả hoàn chỉnh sau khi tác vụ kết thúc |
+| `POST` | `/api/jobs/{id}/cancel` | - | **Hủy tác vụ an toàn** (không xóa kết quả tệp trên đĩa) |
+| `DELETE` | `/api/jobs/{id}` | `purge=true` | Xóa vĩnh viễn tệp và bản ghi tác vụ (bắt buộc cờ `purge`) |
+| `POST` | `/api/inventory` | `files` | Trích xuất nhanh danh mục phần tử BIM mà không chuyển đổi |
+
+### Lệnh CLI Thường dùng
+
+```bash
+# Xem trợ giúp tổng quát
+python -m ifc_to_fds --help
+
+# Trích xuất danh mục phần tử IFC dạng JSON
+python -m ifc_to_fds inventory examples/AC20-FZK-Haus.ifc --json
+
+# Chuyển đổi toàn bộ mô hình sang FDS với kích thước ô lưới 0.2m
+python -m ifc_to_fds convert examples/AC20-FZK-Haus.ifc -o out/fzk.fds --cell-size 0.2
+
+# Kiểm định độc lập một tệp FDS đã xuất kèm manifest
+python -m ifc_to_fds audit examples/AC20-FZK-Haus.ifc --fds out/fzk.fds --manifest out/fzk_manifest.json --geometry-package out/fzk_geometry.json
+```
+
+---
+
+## 9. Khả năng, Giới hạn & Tính toàn vẹn Fail-Closed
+
+1. **Nguyên tắc Từ chối Trung thực (Fail-Closed Integrity)**:
+   Nếu một mô hình IFC thực tế chứa lỗi mô hình hóa (ví dụ: các tấm ốp tường 2D hở biên, tay vịn cầu thang tự cắt), hệ thống sẽ **báo lỗi trung thực và từ chối cấp chứng nhận (`REJECTED`)**. Hệ thống tuyệt đối không áp dụng các giải thuật "vá víu ngầm" (như tự động thay mặt hở bằng hộp đặc AABB) vì điều này sẽ tạo ra các vật cản khói giả tạo, làm sai lệch hoàn toàn kết quả mô phỏng cháy CFD.
+2. **Xử lý Không gian Khoét rỗng (Openings)**:
+   Lỗ mở cửa đi và cửa sổ trên tường/sàn được trừ khối chuẩn xác trước khi tạo lưới. Các cánh cửa đóng/mở được điều khiển thông qua namelist `&HOLE` và `&OBST` liên động với bộ đếm thời gian `&CTRL`.
+3. **Mạng MEP và Đầu phun**:
+   Hệ thống giữ lại kết nối cổng nguyên bản. Việc kích hoạt phun nước dập lửa của đầu phun Sprinkler được liên kết theo trường nhiệt độ và vận tốc khí thông qua namelist `&DEVC` đặc thù.
+
+---
+
+## 10. Kiểm thử tự động & Phát triển mã nguồn
+
+Dự án áp dụng phương pháp Phát triển Hướng Kiểm thử nghiêm ngặt (**Test-Driven Development - TDD**) với tỷ lệ bao phủ kiểm thử cao.
+
+```bash
+# Chạy toàn bộ 420+ ca kiểm thử tự động của Python
+python -m pytest tests/ -q -m "not solver and not browser"
+
+# Chạy kiểm tra các bộ thử nghiệm giao diện người dùng bằng Node.js
+node scripts/test-ev-scenario-panel.js
+node scripts/test-artifact-viewer.js
+node scripts/test-ui-recovery.js
+node scripts/test-workbench-feature4.js
+```
+
+---
+
+## 11. Ghi công, Trích dẫn Khoa học & Giấy phép
+
+### Dự án Khởi nguyên (Upstream Attribution)
+Dự án IFCtoFDS nguyên bản được sáng lập và phát triển bởi **GS. Rino Lovreglio** (Đại học Massey, New Zealand) cùng cộng sự **resilienceengineer**. Tham khảo kho lưu trữ gốc tại [ProfRino/IFCtoFDS](https://github.com/ProfRino/IFCtoFDS) và trích dẫn theo tệp [CITATION.cff](CITATION.cff).
+
+### Bản quyền Khoa học Fork Nghiên cứu (Research Fork)
+Bản fork nghiên cứu chuyển đổi hình học xác minh và mô phỏng cháy xe điện được phát triển bởi **Fire Digital Twin Lab** (Trường Đại học Xây dựng Hà Nội - HUCE). Khi sử dụng phần mềm trong các công trình nghiên cứu khoa học, luận văn hoặc bài báo hội thảo, vui lòng trích dẫn:
+
+```bibtex
+@software{ifctofds_fire_digital_twin_lab,
+  author = {Fire Digital Twin Lab},
+  title = {IFCtoFDS: Verified BIM Geometry Mapping and Electric Vehicle Fire Scenario Simulation},
+  url = {https://github.com/fire-digital-twin-lab/IFCtoFDS},
+  version = {0.5.0},
+  year = {2026}
+}
+```
+
+### Giấy phép Phân phối (License)
+Phần mềm được phát hành theo giấy phép bản quyền nguồn mở **GNU Affero General Public License phiên bản 3 trở lên (AGPL-3.0-or-later)**. Xem chi tiết tại tệp [LICENSE](LICENSE).
+
+---
+
+<div align="center">
+  <sub>Phát triển vì mục tiêu an toàn sinh mạng và tiến bộ khoa học kỹ thuật phòng cháy chữa cháy công trình.</sub><br>
+  <b><a href="#top">↑ Về đầu trang</a></b>
+</div>
