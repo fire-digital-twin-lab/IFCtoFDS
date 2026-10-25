@@ -1,6 +1,6 @@
 """Boundary policy and representation validation checker."""
 
-from typing import Dict, List
+from typing import Any, Dict, List
 from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
 from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, ValidationContext
 
@@ -8,8 +8,18 @@ from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, 
 class BoundaryChecker:
     name = "boundary"
 
-    def check(self, context: ValidationContext) -> CheckerOutcome:
+    def check(self, context: ValidationContext, parsed: Any = None) -> CheckerOutcome:
+        parsed = parsed if parsed is not None else context.parsed
         model = context.model
+        if parsed is None or model is None:
+            return CheckerOutcome(
+                gate_name="boundary",
+                result=GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason="Incomplete diagnostic artifact: FDS text missing",
+                ),
+                findings=[],
+            )
         findings: List[Finding] = []
         element_statuses: Dict[str, str] = {}
         status = GateStatus.PASS

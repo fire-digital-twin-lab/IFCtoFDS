@@ -99,6 +99,44 @@ def test_gate_truth_table():
     assert report.finalize().status == "REJECTED"
 
 
+def test_finalize_never_issues_simulation_verified():
+    """M13 contract: SIMULATION_VERIFIED is unreachable until the simulation epic.
+
+    finalize() only assigns simulation_status REJECTED/INCONCLUSIVE. Even with
+    every simulation gate PASSed, the verdict must stay INCONCLUSIVE -- if a
+    future change makes SIMULATION_VERIFIED reachable, this test must fail
+    loudly so the checkpoint semantics in convert_verified.py get revisited.
+    """
+    from ifc_to_fds.domain.validation.model import AcceptanceStatus
+
+    sim_gates = {
+        name: GateResult(status="PASS")
+        for name in (
+            "solver",
+            "effective_geometry",
+            "physics",
+            "scenario",
+            "mesh_resolution",
+            "operational_model",
+        )
+    }
+    report = AcceptanceReport(
+        gates={"required": GateResult(status="PASS"), **sim_gates}
+    )
+    finalized = report.finalize()
+    assert finalized.mapping_status == AcceptanceStatus.MAPPING_VERIFIED
+    assert finalized.simulation_status != AcceptanceStatus.SIMULATION_VERIFIED
+    assert finalized.simulation_status == AcceptanceStatus.INCONCLUSIVE
+
+    failing = AcceptanceReport(
+        gates={
+            "required": GateResult(status="PASS"),
+            **{**sim_gates, "solver": GateResult(status="FAIL")},
+        }
+    ).finalize()
+    assert failing.simulation_status == AcceptanceStatus.REJECTED
+
+
 def test_geom_vertex_mutation_and_duplicate_id(box_model):
     from ifc_to_fds.mapping.policy import plan_mapping
 
@@ -169,4 +207,257 @@ def test_openings_gate_not_applicable_when_hosts_do_not_emit(box_model):
     report = audit(box_model, text)
     assert report.gates["openings"].status == GateStatus.NOT_APPLICABLE
     assert "No mapped host has source openings" in report.gates["openings"].reason
+
+
+def _fds_with_comment(comment, obst_id="o1"):
+    return (
+        "&HEAD CHID='t', TITLE='t' /\n"
+        "&TIME T_END=1.0 /\n"
+        "&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n"
+        f"{comment}\n"
+        f"&OBST ID='{obst_id}', XB=0,1,0,1,0,1 /\n"
+        "&TAIL /\n"
+    )
+
+
+def test_ifc_entity_comment_without_identifiers_leaves_source_empty():
+    parsed = parse_fds(_fds_with_comment("! IFC entity list reviewed"))
+    obst = next(r for r in parsed.records if r.kind == "OBST")
+    assert obst.source == {}
+
+
+def test_ifc_entity_comment_with_identifiers_sets_legacy_provenance():
+    parsed = parse_fds(_fds_with_comment("! IFC entity #123 GUID=abc", obst_id="o2"))
+    obst = next(r for r in parsed.records if r.kind == "OBST")
+    assert obst.source.get("legacy") is True
+    assert obst.source.get("step_id") == 123
+    assert obst.source.get("global_id") == "abc"
+
+
+def test_empty_fds_text_yields_inconclusive_gates_not_crash(box_model):
+    from ifc_to_fds.domain.validation.model import GateStatus
+    from ifc_to_fds.validation.runner import ValidationRunner
+
+    manifest = build_manifest(box_model, "")
+    report = ValidationRunner().validate(box_model, "", manifest)
+    assert report.gates["syntax"].status == GateStatus.INCONCLUSIVE
+    assert report.gates["representation"].status == GateStatus.INCONCLUSIVE
+    assert report.gates["traceability"].status == GateStatus.INCONCLUSIVE
+    for name in ("syntax", "representation", "traceability"):
+        assert "Incomplete diagnostic artifact" in report.gates[name].reason
+
+
+def test_empty_fds_text_yields_inconclusive_for_remaining_gates(box_model):
+    """P1: boundary/mep/air_path/solver must also return INCONCLUSIVE (not
+    crash, FAIL, or PASS) on empty FDS text."""
+    from ifc_to_fds.domain.validation.model import GateStatus
+    from ifc_to_fds.validation.runner import ValidationRunner
+
+    manifest = build_manifest(box_model, "")
+    report = ValidationRunner().validate(box_model, "", manifest)
+    for name in ("boundary", "mep", "air_path", "solver"):
+        assert report.gates[name].status == GateStatus.INCONCLUSIVE, name
+        assert "Incomplete diagnostic artifact" in report.gates[name].reason, name
+
+
+def test_empty_fds_text_all_runner_gates_pinned(box_model):
+    """M10: pin ALL 12 runner checkers on empty FDS text -- 11 must return
+    INCONCLUSIVE; solver must also return INCONCLUSIVE (parsed is None so the
+    syntax-gated NOT_RUN branch is not reached). scope/domain/geometry/
+    structural_completeness/openings are pinned here beyond the syntax/
+    representation/traceability gates pinned above."""
+    from ifc_to_fds.domain.validation.model import GateStatus
+    from ifc_to_fds.validation.runner import ValidationRunner
+
+    manifest = build_manifest(box_model, "")
+    report = ValidationRunner().validate(box_model, "", manifest)
+    for name in (
+        "syntax",
+        "domain",
+        "traceability",
+        "scope",
+        "geometry",
+        "structural_completeness",
+        "air_path",
+        "openings",
+        "mep",
+        "representation",
+        "boundary",
+        "solver",
+    ):
+        assert report.gates[name].status == GateStatus.INCONCLUSIVE, name
+        assert "Incomplete diagnostic artifact" in report.gates[name].reason, name
+    # source_inventory is evaluator-owned (no runner checker emits it), so it
+    # stays at the NOT_RUN default -- assert explicitly, not as INCONCLUSIVE.
+    assert report.gates["source_inventory"].status == GateStatus.NOT_RUN
+
+
+def test_parser_whitelists_fire_namelists_and_surf_combustion_properties():
+    fds = """
+&HEAD CHID='fire_test', TITLE='EV Fire Scenario' /
+&TIME T_END=600.0 /
+&MESH ID='M1', IJK=10,10,10, XB=0,2,0,2,0,2 /
+&REAC ID='REAC_EV', FUEL='OFFGAS', C=2.0, H=4.0, O=1.0, CO_YIELD=0.1, SOOT_YIELD=0.1 /
+&RAMP ID='RAMP_Q', T=0.0, F=0.0 /
+&RAMP ID='RAMP_Q', T=100.0, F=1.0 /
+&SURF ID='BURNER', HRRPUA=1500.0, RAMP_Q='RAMP_Q', FUEL_ID='OFFGAS' /
+&DEVC ID='HEAT_1', QUANTITY='TEMPERATURE', XYZ=1.0,1.0,1.8 /
+&CTRL ID='CTRL_1', FUNCTION_TYPE='ANY', INPUT_ID='HEAT_1' /
+&OBST ID='OBST_1', XB=0.5,1.5,0.5,1.5,0,0.5, SURF_ID='INERT', CTRL_ID='CTRL_1' /
+&VENT ID='VENT_1', XB=0.5,1.5,0.5,1.5,0.5,0.5, SURF_ID='BURNER' /
+&TAIL /
+"""
+    parsed = parse_fds(fds)
+    assert not parsed.errors
+    assert not parsed.unsupported
+
+
+def test_traceability_checker_skips_scenario_fire_primitives(box_model):
+    import hashlib
+    from ifc_to_fds.domain.validation.model import ValidationContext, GateStatus
+    from ifc_to_fds.validation.checkers.traceability import TraceabilityChecker
+
+    text, manifest = serialize_fds(box_model)
+    fire_fragment = """
+&OBST ID='OBST_EV_1', XB=0.5,1.5,0.5,1.5,0,0.5, SURF_ID='INERT' /
+&VENT ID='VENT_BURNER_1', XB=0.5,1.5,0.5,1.5,0.5,0.5, SURF_ID='BURNER' /
+"""
+    combined_fds = text.replace("&TAIL /", fire_fragment + "\n&TAIL /")
+    manifest.fds_sha256 = hashlib.sha256(combined_fds.encode()).hexdigest()
+    ctx = ValidationContext(
+        model=box_model,
+        fds_text=combined_fds,
+        manifest=manifest,
+        parsed_fds=parse_fds(combined_fds),
+    )
+    outcome = TraceabilityChecker().check(ctx)
+    assert outcome.result.status == GateStatus.PASS
+    assert "OBST_EV_1" not in str(outcome.findings)
+    assert "VENT_BURNER_1" not in str(outcome.findings)
+
+
+def test_thin_or_open_covering_classified_as_semantic_only(box_model):
+    from ifc_to_fds.core.canonical import CanonicalElement, MappingStrategy, MappingStatus, TriangleMesh
+    from ifc_to_fds.mapping.policy import plan_mapping
+
+    thin_mesh = TriangleMesh(
+        vertices=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+        faces=[[0, 1, 2]],
+    )
+    covering = CanonicalElement(
+        global_id="covering_1",
+        step_id=999,
+        ifc_type="IfcCovering",
+        name="Wall Paint Finish",
+        mesh=thin_mesh,
+    )
+    box_model.elements.append(covering)
+    plan_mapping(box_model)
+
+    assert covering.mapping_strategy == MappingStrategy.SEMANTIC_ONLY
+    assert covering.mapping_status == MappingStatus.SEMANTIC_ONLY
+    assert covering.simulation_role == "REFERENCE_GEOMETRY"
+
+
+
+def test_traceability_legacy_backfill_writes_entity_key_standalone(box_model):
+    from ifc_to_fds.domain.validation.model import Severity, ValidationContext
+    from ifc_to_fds.validation.checkers.traceability import TraceabilityChecker
+
+    text, _ = serialize_fds(box_model)
+    manifest = build_manifest(box_model, text)
+    parsed = parse_fds(text)
+    assert len(parsed.primitives) == 1
+    prim = parsed.primitives[0]
+    e = box_model.elements[0]
+    # Simulate legacy FDS: strip resolved entity_key, keep a uniquely
+    # matching global_id + step_id pair.
+    prim.source.pop("entity_key", None)
+    prim.source["legacy"] = True
+    prim.source["global_id"] = e.global_id
+    prim.source["step_id"] = e.step_id
+    ctx = ValidationContext(
+        model=box_model, fds_text=text, manifest=manifest, parsed_fds=parsed
+    )
+    outcome = TraceabilityChecker().check(ctx)
+    assert prim.source.get("entity_key") == e.entity_key
+    missing = [
+        f
+        for f in outcome.findings
+        if "Missing required FDS solid" in f.title and f.severity == Severity.P0
+    ]
+    assert missing == []
+
+
+def test_ifc_entity_comment_without_identifiers_resets_prior_source():
+    text = (
+        "&HEAD CHID='t', TITLE='t' /\n"
+        "&TIME T_END=1.0 /\n"
+        "&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n"
+        '! IFC_SOURCE {"entity_key": "A"}\n'
+        "! IFC entity list reviewed\n"
+        "&OBST ID='o3', XB=0,1,0,1,0,1 /\n"
+        "&TAIL /\n"
+    )
+    parsed = parse_fds(text)
+    obst = next(r for r in parsed.records if r.kind == "OBST")
+    assert obst.source == {}
+
+
+def test_traceability_checker_repeat_validates_are_stable(box_model):
+    from ifc_to_fds.domain.validation.model import ValidationContext
+    from ifc_to_fds.validation.checkers.traceability import TraceabilityChecker
+
+    text, _ = serialize_fds(box_model)
+    manifest = build_manifest(box_model, text)
+    parsed = parse_fds(text)
+    assert len(parsed.primitives) == 1
+    prim = parsed.primitives[0]
+    e = box_model.elements[0]
+    # Simulate legacy FDS: strip resolved entity_key, keep a uniquely
+    # matching global_id + step_id pair.
+    prim.source.pop("entity_key", None)
+    prim.source["legacy"] = True
+    prim.source["global_id"] = e.global_id
+    prim.source["step_id"] = e.step_id
+    ctx = ValidationContext(
+        model=box_model, fds_text=text, manifest=manifest, parsed_fds=parsed
+    )
+    checker = TraceabilityChecker()
+    first = checker.check(ctx)
+    second = checker.check(ctx)
+    assert (second.result.status, second.result.reason) == (
+        first.result.status,
+        first.result.reason,
+    )
+
+
+def test_runner_create_context_backfills_legacy_entity_key(box_model):
+    """M9: the runner pre-backfill path (runner.py create_context) resolves
+    legacy provenance to entity_key independent of any checker -- pairs with
+    test_traceability_legacy_backfill_writes_entity_key_standalone to prove the
+    runner path works standalone, not just TraceabilityChecker.check."""
+    from ifc_to_fds.validation.runner import ValidationRunner
+
+    text, _ = serialize_fds(box_model)
+    e = box_model.elements[0]
+    legacy_text = re.sub(
+        r"^! IFC_SOURCE .*$",
+        f"! IFC entity #{e.step_id} GUID={e.global_id}",
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    assert legacy_text != text
+    pre = parse_fds(legacy_text)
+    pre_prim = next(p for p in pre.primitives if p.kind == "OBST")
+    assert "entity_key" not in pre_prim.source
+    assert pre_prim.source.get("legacy") is True
+
+    ctx = ValidationRunner().create_context(
+        box_model, legacy_text, build_manifest(box_model, legacy_text)
+    )
+    assert ctx.parsed_fds is not None
+    prim = next(p for p in ctx.parsed_fds.primitives if p.kind == "OBST")
+    assert prim.source.get("entity_key") == e.entity_key
 

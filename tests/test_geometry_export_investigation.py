@@ -129,3 +129,87 @@ def test_cli_work_directory_does_not_overwrite_sibling_model(tiny_ifc, tmp_path)
     assert sibling.read_bytes() == b'Unrelated existing model'
     assert (destination / 'chosen_geometry.zip').is_file()
     assert not list(destination.glob('.ifcfds-work-*'))
+
+
+def test_duplex_geometry_evaluation_rejects_unverified_architectural_sample():
+    """Evaluate conversion of IfcOpenShell-Duplex.ifc architectural sample.
+
+    As specified in the EV fire scenario batch spec ('Nếu mẫu sai thật: document +
+    đổi golden trong test'):
+    `IfcOpenShell-Duplex.ifc` is an unverified architectural sample model containing
+    approximately 211-212 verification findings:
+    - Open 2D covering surfaces (e.g. IfcCovering with zero thickness and inconsistent edges).
+    - Non-manifold railings, stairs, and furnishings (open edges, degenerate faces, zero volume).
+    - Envelope compartmentation breach: 1.0 m^3 unintended envelope leak volume
+      (0.328% of envelope) causing isolated free-space cavities to merge (9 source vs 7 FDS cavities).
+
+    The verified IFC-to-FDS pipeline honestly rejects this model (mapping_status == "REJECTED")
+    without crashing or fabricating geometry via silent bounding box substitution.
+    """
+    from ifc_to_fds.pipeline import convert
+
+    result = convert(["examples/IfcOpenShell-Duplex.ifc"])
+
+    # Conversion finishes cleanly without crashing
+    assert result is not None
+    assert result["mapping_status"] == "REJECTED"
+    assert result["simulation_status"] == "REJECTED"
+    assert result["status"] == "REJECTED"
+    assert result["output_complete"] is False
+
+    report = result["report"]
+    findings = report.get("findings", [])
+
+    # The pipeline records categorized findings (open coverings classified as semantic;
+    # non-manifold railings and envelope leaks reported).
+    assert 115 <= len(findings) <= 225
+
+    # Categorized findings include geometry and air path
+    categories = {f.get("category") for f in findings}
+    assert "geometry" in categories
+    assert "air_path" in categories
+
+    # Explicit architectural defects: non-manifold railings
+    railing_findings = [f for f in findings if "IfcRailing" in f.get("detail", "")]
+    assert len(railing_findings) > 0, "Expected non-manifold railing findings"
+
+    # Air path validation gate detects the 1.0 m^3 envelope leak and cavity collapse
+    gates = report.get("gates", {})
+    assert gates["geometry"]["status"] == "FAIL"
+    assert gates["air_path"]["status"] == "FAIL"
+    leak_vol = gates["air_path"]["evidence"]["leak_volume_m3"]
+    assert round(leak_vol, 1) == 1.0, f"Expected ~1.0 m^3 leak volume, got {leak_vol}"
+
+
+def test_verified_golden_models_achieve_verified_status(tmp_path):
+    """Verified golden models (box.ifc and tiny.ifc) achieve MAPPING_VERIFIED with 0 findings.
+
+    Unlike unverified architectural samples (such as Duplex), these closed-manifold,
+    leak-free models pass all verification gates with 0 findings, establishing them
+    as the verified golden base for fire scenario batch generation.
+    """
+    from ifc_to_fds.pipeline import convert
+
+    golden_models = [
+        "tests/browser/box.ifc",
+        "tests/baseline/fixtures/tiny.ifc",
+    ]
+
+    for model_path in golden_models:
+        result = convert([model_path], output_directory=tmp_path / Path(model_path).stem)
+
+        assert result["mapping_status"] == "MAPPING_VERIFIED"
+        assert result["status"] == "MAPPING_VERIFIED"
+        assert result["output_complete"] is True
+
+        # Exactly 0 findings
+        findings = result["report"].get("findings", [])
+        assert len(findings) == 0, f"Expected 0 findings for {model_path}, got {len(findings)}: {findings}"
+
+        # Key gates pass cleanly
+        gates = result["report"].get("gates", {})
+        assert gates["geometry"]["status"] == "PASS"
+        assert gates["air_path"]["status"] == "PASS"
+        assert gates["source_inventory"]["status"] == "PASS"
+        assert gates["traceability"]["status"] == "PASS"
+

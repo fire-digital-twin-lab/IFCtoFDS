@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import shutil
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query, Body
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from .jobs import JobManager
@@ -264,6 +264,24 @@ async def submit_preview(file: UploadFile = File(...)):
         raise HTTPException(429, str(exc))
 
 
+@app.post("/api/scenario-jobs", status_code=202)
+async def submit_scenario_job(payload: dict = Body(...)):
+    if not manager.can_accept():
+        raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
+    import uuid
+
+    directory = manager.root / ("job-" + uuid.uuid4().hex)
+    directory.mkdir(parents=True, exist_ok=True)
+    try:
+        (directory / "scenario.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+        return manager.submit([], payload, directory, mode="scenario")
+    except OverflowError as exc:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise HTTPException(429, str(exc))
+
+
 @app.get("/api/jobs/{jid}")
 def status(jid: str):
     try:
@@ -272,10 +290,30 @@ def status(jid: str):
         raise HTTPException(404, "Unknown job")
 
 
-@app.delete("/api/jobs/{jid}")
-def cancel(jid: str):
+@app.post("/api/jobs/{jid}/cancel")
+def cancel_job(jid: str):
     try:
-        return manager.delete_job(jid)
+        return manager.cancel(jid)
+    except KeyError:
+        raise HTTPException(404, "Unknown job")
+
+
+@app.delete("/api/jobs/{jid}")
+def delete_job(jid: str, purge: bool = False):
+    try:
+        if not purge:
+            with manager.lock:
+                # Read-only use of the jobs view (do not mutate); writes go
+                # through the repository/service methods under the same lock.
+                job = manager.jobs.get(jid)
+                if not job:
+                    raise HTTPException(404, "Unknown job")
+                if job["state"] not in ("QUEUED", "RUNNING"):
+                    raise HTTPException(
+                        409,
+                        "Job is terminal; pass ?purge=true to delete its artifacts",
+                    )
+        return manager.delete_job(jid, purge=purge)
     except KeyError:
         raise HTTPException(404, "Unknown job")
 

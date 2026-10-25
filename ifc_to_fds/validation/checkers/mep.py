@@ -13,9 +13,19 @@ class MepChecker:
     def __init__(self, expected_mep: Optional[Any] = None):
         self.expected_mep = expected_mep
 
-    def check(self, context: ValidationContext, expected_mep: Optional[Any] = None) -> CheckerOutcome:
-        expected = expected_mep if expected_mep is not None else self.expected_mep
+    def check(self, context: ValidationContext, parsed: Any = None, expected_mep: Optional[Any] = None) -> CheckerOutcome:
+        parsed = parsed if parsed is not None else context.parsed
         model = context.model
+        if parsed is None or model is None:
+            return CheckerOutcome(
+                gate_name="mep",
+                result=GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason="Incomplete diagnostic artifact: FDS text missing",
+                ),
+                findings=[],
+            )
+        expected = expected_mep if expected_mep is not None else self.expected_mep
         manifest = context.manifest
         findings: List[Finding] = []
         status = GateStatus.PASS

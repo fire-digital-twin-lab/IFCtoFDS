@@ -5,6 +5,7 @@ from .boundary import BoundaryChecker
 from .domain import DomainChecker
 from .geometry import GeometryChecker
 from .mep import MepChecker
+from .mesh_resolution import MeshResolutionChecker
 from .openings import OpeningsChecker
 from .representation import RepresentationChecker
 from .scope import ScopeChecker
@@ -25,5 +26,6 @@ __all__ = [
     "MepChecker",
     "RepresentationChecker",
     "BoundaryChecker",
+    "MeshResolutionChecker",
     "SolverChecker",
 ]

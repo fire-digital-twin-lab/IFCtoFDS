@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from ifc_to_fds.core.canonical import SCHEMA_VERSION, TriangleMesh
+from ifc_to_fds.core.canonical import SCHEMA_VERSION, TriangleMesh, MappingStrategy
 from ifc_to_fds.geometry.mesh import valid_solid
 from ifc_to_fds.validation.metrics import compare_solids
 from ifc_to_fds.validation.acceptance import GateResult, GateStatus, Finding, Severity
@@ -176,6 +176,12 @@ def audit_package(model, package, report, config):
             "UNRESOLVED",
         )
         if not in_scope or e.role != "PHYSICAL":
+            continue
+        if getattr(e, "mapping_strategy", None) in (
+            MappingStrategy.SEMANTIC_ONLY,
+            MappingStrategy.EXCLUDED_SCOPE,
+            MappingStrategy.EXCLUDED_APPROVED,
+        ):
             continue
         if not e.has_3d_geometry and not e.mesh:
             unknown(

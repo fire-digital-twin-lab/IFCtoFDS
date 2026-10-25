@@ -40,6 +40,54 @@ class WorkerRunner:
                     ],
                     sources=[m.source.model_dump() for m in models],
                 )
+            elif request.get("mode") == "scenario":
+                from ifc_to_fds.fire.mesh_gate import check_mesh_resolution
+
+                scenario_payload = request.get("configuration") or {}
+                if not scenario_payload and (directory / "scenario.json").is_file():
+                    try:
+                        scenario_payload = json.loads(
+                            (directory / "scenario.json").read_text(encoding="utf-8")
+                        )
+                    except Exception:
+                        scenario_payload = {}
+                scenario_input = (
+                    scenario_payload.get("scenario_data")
+                    if isinstance(scenario_payload, dict) and "scenario_data" in scenario_payload
+                    else scenario_payload
+                )
+                cell_size = (
+                    scenario_payload.get("cell_size", 0.2)
+                    if isinstance(scenario_payload, dict)
+                    else 0.2
+                )
+                mesh_gate = check_mesh_resolution(scenario_input, cell_size=cell_size)
+
+                peak_hrr_mw = 0.0
+                if isinstance(scenario_input, dict):
+                    peak_hrr_mw = (
+                        scenario_input.get("total_peak_hrr_mw")
+                        or scenario_input.get("peak_hrr_mw")
+                        or 0.0
+                    )
+                elif hasattr(scenario_input, "total_peak_hrr_mw"):
+                    peak_hrr_mw = scenario_input.total_peak_hrr_mw
+                if not peak_hrr_mw and isinstance(scenario_payload, dict):
+                    peak_hrr_mw = (
+                        scenario_payload.get("total_peak_hrr_mw")
+                        or scenario_payload.get("peak_hrr_mw")
+                        or 0.0
+                    )
+                if not peak_hrr_mw and mesh_gate.evidence:
+                    peak_hrr_mw = (mesh_gate.evidence.get("peak_hrr_kw") or 0.0) / 1000.0
+
+                result = {
+                    "status": "COMPLETED",
+                    "verdict": mesh_gate.status.value,
+                    "mesh_status": mesh_gate.status.value,
+                    "peak_hrr_mw": float(peak_hrr_mw),
+                    "evidence": mesh_gate.evidence,
+                }
             else:
                 from ifc_to_fds.pipeline import convert, save_artifacts
 

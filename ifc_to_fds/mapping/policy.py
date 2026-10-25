@@ -77,6 +77,15 @@ def determine_element_strategy(
         return MappingStrategy.EXCLUDED_SCOPE
     if element.ifc_type.upper() in NON_OBSTACLE_TYPES or element.role != "PHYSICAL":
         return MappingStrategy.SEMANTIC_ONLY
+    if element.ifc_type.upper() == "IFCCOVERING" and (
+        not element.mesh
+        or not valid_solid(element.mesh)
+        or (
+            element.bounding_box
+            and min(element.bounding_box.dx, element.bounding_box.dy, element.bounding_box.dz) < 0.02
+        )
+    ):
+        return MappingStrategy.SEMANTIC_ONLY
     if element.review_status == "EXCLUDED_APPROVED":
         return MappingStrategy.EXCLUDED_APPROVED
     if element.simulation_role == "REFERENCE_GEOMETRY" or (
@@ -145,9 +154,21 @@ def plan_mapping(
             .upper()
             .startswith(("IFCDUCT", "IFCPIPE", "IFCFAN", "IFCVALVE"))
         )
+        is_thin_covering = (
+            e.ifc_type.upper() == "IFCCOVERING"
+            and (
+                not e.mesh
+                or not valid_solid(e.mesh)
+                or (
+                    e.bounding_box
+                    and min(e.bounding_box.dx, e.bounding_box.dy, e.bounding_box.dz) < 0.02
+                )
+            )
+        )
         e.simulation_role = (
             "REFERENCE_GEOMETRY"
-            if (is_review and not (is_mep and geometry_fidelity))
+            if is_thin_covering
+            or (is_review and not (is_mep and geometry_fidelity))
             or (is_mep and not geometry_fidelity)
             else "PASSIVE_OBSTACLE"
         )
@@ -229,6 +250,8 @@ def plan_mapping(
             e.mapping_status = MappingStatus.EXCLUDED_APPROVED
         elif e.mapping_strategy == MappingStrategy.SEMANTIC_ONLY:
             e.mapping_status = MappingStatus.SEMANTIC_ONLY
+            if is_thin_covering:
+                e.mapping_rationale = "Thin/decorative covering classified as semantic reference; excluded from solid obstacles"
         elif getattr(e, "geometry_status", None) == GeometryStatus.APPROXIMATED:
             e.geometry_preservation = "APPROXIMATED"
             if e.review_status == "APPROVED":

@@ -7,12 +7,28 @@ from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
 from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, Severity, ValidationContext
 
 
+SCENARIO_PRIMITIVE_PREFIXES = ("OBST_EV_", "VENT_BURNER_", "BURNER_")
+
+
+def is_scenario_primitive(pid: str) -> bool:
+    return bool(pid and pid.startswith(SCENARIO_PRIMITIVE_PREFIXES))
+
+
 class TraceabilityChecker:
     name = "traceability"
 
     def check(self, context: ValidationContext, parsed: Any = None) -> CheckerOutcome:
         parsed = parsed if parsed is not None else context.parsed
         model = context.model
+        if parsed is None or model is None:
+            return CheckerOutcome(
+                gate_name="traceability",
+                result=GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason="Incomplete diagnostic artifact: FDS text missing",
+                ),
+                findings=[],
+            )
         manifest = context.manifest
         fds_text = context.fds_text
         findings: List[Finding] = []
@@ -23,6 +39,8 @@ class TraceabilityChecker:
         actual_ids = set()
 
         for p in parsed.primitives:
+            if is_scenario_primitive(p.id):
+                continue
             actual_ids.add(p.id)
             key = p.source.get("entity_key", "")
             if not key and p.source.get("legacy"):
@@ -34,9 +52,11 @@ class TraceabilityChecker:
                 ]
                 if len(candidates) == 1:
                     key = candidates[0].entity_key
-                    if status != GateStatus.FAIL:
-                        status = GateStatus.INCONCLUSIVE
-                    reasons.append(f"Legacy source metadata lacks file hash: {p.id}")
+                    p.source["entity_key"] = candidates[0].entity_key
+            if p.source.get("legacy"):
+                if status != GateStatus.FAIL:
+                    status = GateStatus.INCONCLUSIVE
+                reasons.append(f"Legacy source metadata lacks file hash: {p.id}")
 
             if key not in known:
                 status = GateStatus.FAIL
@@ -152,6 +172,8 @@ class TraceabilityChecker:
                     )
                 )
             for p in parsed.primitives:
+                if is_scenario_primitive(p.id):
+                    continue
                 if p.id not in reverse or p.source.get("entity_key") not in reverse[p.id]:
                     status = GateStatus.FAIL
                     findings.append(

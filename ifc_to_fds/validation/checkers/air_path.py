@@ -4,7 +4,7 @@ Verifies airtightness of compartment boundaries and detects unintended air leaks
 by comparing free-space connected components and leakage volume using binary64 Manifold CSG.
 """
 
-from typing import List
+from typing import Any, List
 
 from ifc_to_fds.domain.bim import BoundingBox
 from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
@@ -25,7 +25,18 @@ ENCLOSURE_TYPES = {
 class AirPathTopologyChecker:
     name = "air_path"
 
-    def check(self, context) -> CheckerOutcome:
+    def check(self, context, parsed: Any = None) -> CheckerOutcome:
+        parsed = parsed if parsed is not None else context.parsed
+        model = context.model
+        if parsed is None or model is None:
+            return CheckerOutcome(
+                gate_name=self.name,
+                result=GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason="Incomplete diagnostic artifact: FDS text missing",
+                ),
+                findings=[],
+            )
         elements = getattr(context.model, "elements", [])
         enclosure_elements = [
             e

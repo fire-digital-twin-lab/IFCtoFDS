@@ -1,0 +1,26 @@
+{
+  "chemistry": "NMC",
+  "citations": [
+    {
+      "detail": "Full-scale BEV fire tests reported per-vehicle peak HRR roughly 4-6 MW; preset widens to 2-7 MW to cover smaller/older NMC packs and test-to-test spread.",
+      "source": "RISE full-scale BEV fire tests (public summary)"
+    },
+    {
+      "detail": "Surveys of EV traction-battery fire incidents report pack sizes 40-100 kWh for passenger cars and multi-MW peaks when the full pack becomes involved.",
+      "source": "EV fire incident literature (public summaries)"
+    }
+  ],
+  "confidence": "medium",
+  "growth": "t-squared",
+  "notes": "Gia dinh mot phan: dai dinh HRR 2-7 MW/xe bao phu bien do thi nghiem; toc do lan truyen giua cac module va tac dong lam mat/chua chay chua duoc tham so hoa, can hieu chinh theo cau hinh xe cu the va tham dinh doc lap.",
+  "pack_kwh_range": [40.0, 100.0],
+  "peak_hrr_mw_range": [2.0, 7.0],
+  "t_alpha_s": [150.0, 600.0],
+  "vehicle_class": "auto",
+  "version": "1.0.0",
+  "yields": {
+    "co": [0.05, 0.2],
+    "hf": [0.01, 0.05],
+    "soot": [0.08, 0.2]
+  }
+}

@@ -81,10 +81,12 @@ def validate_reference(values):
 
     # Bidirectional reverse coverage verification: ensure required elements are not omitted
     mep_graph = values.get("mep-reference.json", {})
-    systems_by_id = {
-        s["system_id"]: s.get("system_type", s.get("category", ""))
-        for s in mep_graph.get("systems", [])
-    }
+    systems_by_id = {}
+    for s in mep_graph.get("systems", []):
+        sid = s.get("system_id") if isinstance(s, dict) else None
+        if not sid:
+            raise ValueError("Reference projection conflicts: system entry missing system_id")
+        systems_by_id[sid] = s.get("system_type", s.get("category", ""))
     for k, v in inventory.items():
         if v.get("mapping_strategy") in ("EXCLUDED_SCOPE", "EXCLUDED_APPROVED"):
             if k not in values.get("exclusions.json", {}):
@@ -92,7 +94,10 @@ def validate_reference(values):
         if v.get("boundary_treatment") == "PENDING_VALIDATION" or v.get("scope_decision") == "BOUNDARY_RETAINED":
             if k not in values.get("boundary-elements.json", {}):
                 raise ValueError(f"Reference projection coverage incomplete: boundary-elements.json missing {k}")
-        sys_ids = v.get("system_ids", [])
+        sys_ids = v.get("system_ids") or []
+        unknown = [sid for sid in sys_ids if sid not in systems_by_id]
+        if unknown:
+            raise ValueError(f"Reference projection conflicts: unknown system_id {unknown}")
         categories = {systems_by_id[sid] for sid in sys_ids if sid in systems_by_id}
         if any(c in ("VENTILATION", "SMOKE_EXTRACT") for c in categories):
             if k not in values.get("hvac-reference.json", {}):
