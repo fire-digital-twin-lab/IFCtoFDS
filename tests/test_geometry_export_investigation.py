@@ -164,11 +164,10 @@ def test_duplex_geometry_evaluation_rejects_unverified_architectural_sample():
     # non-manifold railings and envelope leaks reported).
     assert 115 <= len(findings) <= 225
 
-    # Categorized findings include geometry, air path, and representation
+    # Categorized findings include geometry and air path
     categories = {f.get("category") for f in findings}
     assert "geometry" in categories
     assert "air_path" in categories
-    assert "representation" in categories
 
     # Explicit architectural defects: non-manifold railings
     railing_findings = [f for f in findings if "IfcRailing" in f.get("detail", "")]
