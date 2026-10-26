@@ -438,3 +438,33 @@ def test_submit_scenario_job_executes_mesh_gate(monkeypatch):
     assert "evidence" in res
     assert "ev_evaluations" in res["evidence"]
 
+    # Verify scenario.fds was generated and contains fire physics namelists (C-2)
+    assert (job_dir / "scenario.fds").is_file()
+    fds_content = (job_dir / "scenario.fds").read_text(encoding="utf-8")
+    assert "&REAC" in fds_content
+    assert "&RAMP" in fds_content
+    assert "&SURF" in fds_content
+    assert "&VENT" in fds_content
+    assert "HYDROGEN FLUORIDE" in fds_content
+
+    # Verify scenario_fds artifact is downloadable via API (M-8)
+    art_res = client.get(f"/api/jobs/{jid}/artifacts/scenario_fds")
+    assert art_res.status_code == 200
+    assert "&RAMP" in art_res.text
+
+    # Verify pagination on /api/jobs/{jid}/result (M-8b)
+    res_paged = client.get(f"/api/jobs/{jid}/result?offset=0&limit=1").json()
+    assert res_paged["findings_offset"] == 0
+    assert res_paged["findings_limit"] == 1
+
+
+def test_http_security_headers():
+    """M-7: API responses must carry standard HTTP security headers."""
+    res = client.get("/api/health")
+    assert res.status_code == 200
+    assert res.headers.get("X-Content-Type-Options") == "nosniff"
+    assert res.headers.get("X-Frame-Options") == "DENY"
+    assert res.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+
+
+

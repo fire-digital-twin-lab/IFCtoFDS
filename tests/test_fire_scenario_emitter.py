@@ -288,48 +288,61 @@ def test_scenario_id_unique_across_matrix_permutations():
 
 
 def test_mixed_preset_unique_fuel_and_surf_binding():
-    """Verify mixed presets produce distinct FUEL names and proper FUEL_ID on &SURF."""
+    """Verify mixed presets produce composite &REAC in simple chemistry (H-2) and support multi-reac mode."""
     plan = _sample_mapping_plan()
     evs = [
         EVSelection(preset_id="e-bike-lfp", position=(0.0, 0.0, 0.55)),
         EVSelection(preset_id="auto-nmc", position=(5.0, 0.0, 0.75)),
     ]
 
+    # 1. Default simple chemistry: exactly 1 composite &REAC and &SPEC HF (H-2 and H-3)
     bundle = emit_fire_scenario(
         mapping_plan=plan,
         bundle_sha256=_valid_bundle_hash(),
         ev_selections=evs,
         verification_status="MAPPING_VERIFIED",
     )
-
     frag = bundle.fds_fragment
-    # Extract all FUEL definitions from &REAC lines
     reac_fuels = re.findall(r"&REAC.*?FUEL='([^']+)'", frag)
-    assert len(reac_fuels) == 2, f"Expected 2 &REAC lines, found {len(reac_fuels)}"
-    # Distinct FUEL names (no duplicate FUEL in FDS)
-    assert len(set(reac_fuels)) == len(reac_fuels)
-
-    # Verify &SURF lines have matching FUEL_ID pointing to a defined reaction FUEL
+    assert len(reac_fuels) == 1, f"Expected 1 composite &REAC line in simple chemistry, found {len(reac_fuels)}"
+    assert "REAC_COMPOSITE_EV" in frag
+    assert "&SPEC ID='HYDROGEN FLUORIDE' /" in frag
     surf_fuel_ids = re.findall(r"&SURF.*?FUEL_ID='([^']+)'", frag)
-    assert len(surf_fuel_ids) == 2, f"Expected 2 &SURF lines with FUEL_ID, found {len(surf_fuel_ids)}"
+    assert len(surf_fuel_ids) == 2
     for fid in surf_fuel_ids:
-        assert fid in reac_fuels, f"FUEL_ID '{fid}' on &SURF must match one of &REAC fuels {reac_fuels}"
+        assert fid == reac_fuels[0]
+
+    # 2. Explicit multi-reac mode emits distinct &REAC lines
+    bundle_multi = emit_fire_scenario(
+        mapping_plan=plan,
+        bundle_sha256=_valid_bundle_hash(),
+        ev_selections=evs,
+        verification_status="MAPPING_VERIFIED",
+        allow_multi_reac=True,
+    )
+    multi_fuels = re.findall(r"&REAC.*?FUEL='([^']+)'", bundle_multi.fds_fragment)
+    assert len(multi_fuels) == 2
+    assert len(set(multi_fuels)) == 2
+
 
 
 def test_door_events_with_representation_bounds():
-    """Verify door OPEN emits &HOLE and door CLOSED emits controlled &OBST when bounds exist."""
+    """Verify door control semantics adhere to FDS Section 15.3 (H-5):
+    - OPEN event emits &OBST with CTRL_ID (obstacle present at t=0, removed at t_event -> opens).
+    - CLOSED event emits &HOLE with CTRL_ID (hole present at t=0, removed at t_event -> closes).
+    """
     decision_open = MappingDecision(
         entity_key="DOOR_OPEN",
-        strategy=MappingStrategy.OBST_HOLE,
+        strategy=MappingStrategy.OBST,
         simulation_role="DOOR",
-        fds_representation="HOLE",
+        fds_representation="OBST",
         representation_bounds=BoundingBox(xmin=1.0, xmax=2.0, ymin=0.0, ymax=0.2, zmin=0.0, zmax=2.1),
     )
     decision_close = MappingDecision(
         entity_key="DOOR_CLOSE",
-        strategy=MappingStrategy.OBST,
+        strategy=MappingStrategy.OBST_HOLE,
         simulation_role="DOOR",
-        fds_representation="OBST",
+        fds_representation="HOLE",
         representation_bounds=BoundingBox(xmin=5.0, xmax=6.0, ymin=0.0, ymax=0.2, zmin=0.0, zmax=2.1),
     )
     plan = MappingPlan(decisions=[decision_open, decision_close])
@@ -349,11 +362,12 @@ def test_door_events_with_representation_bounds():
     )
 
     frag = bundle.fds_fragment
-    # &HOLE for DOOR_OPEN with CTRL_ID and matching XB
-    assert "&HOLE XB=1,2,0,0.2,0,2.1, CTRL_ID='CTRL_DOOR_OPEN' /" in frag
+    # Controlled &OBST for DOOR_OPEN (starts closed, opens when removed at t=45s)
+    assert "&OBST XB=1,2,0,0.2,0,2.1, SURF_ID='INERT', CTRL_ID='CTRL_DOOR_OPEN' /" in frag
 
-    # Controlled &OBST for DOOR_CLOSE with SURF_ID='INERT' and CTRL_ID
+    # Controlled &OBST with INITIAL_STATE=.TRUE. for DOOR_CLOSE (starts open, closes when obstacle appears at t=90s)
     assert "&OBST XB=5,6,0,0.2,0,2.1, SURF_ID='INERT', CTRL_ID='CTRL_DOOR_CLOSE' /" in frag
+    assert "INITIAL_STATE=.TRUE." in frag
 
 
 def test_ev_selection_dimensions_must_be_strictly_positive():
@@ -394,4 +408,34 @@ def test_door_timer_devc_id_preserves_suffix():
     assert devc_id.endswith("_TIME")
     assert len(devc_id) <= 30
     assert f"INPUT_ID='{devc_id}'" in frag
+
+
+def test_vehicle_collision_detection_raises():
+    """Item 44: Two overlapping vehicles must raise ValueError."""
+    plan = _sample_mapping_plan()
+    ev1 = EVSelection(preset_id="auto-nmc", position=(0.0, 0.0, 0.75), dimensions=(4.5, 1.8, 1.5))
+    ev2 = EVSelection(preset_id="auto-nmc", position=(0.5, 0.2, 0.75), dimensions=(4.5, 1.8, 1.5))
+
+    with pytest.raises(ValueError, match="Vehicle collision detected"):
+        emit_fire_scenario(
+            mapping_plan=plan,
+            bundle_sha256=_valid_bundle_hash(),
+            ev_selections=[ev1, ev2],
+            verification_status="MAPPING_VERIFIED",
+        )
+
+
+def test_scenario_bundle_embeds_library_digest():
+    """Item 43 (M-14): ScenarioBundle embeds cryptographic library_digest for audit reproducibility."""
+    plan = _sample_mapping_plan()
+    ev = EVSelection(preset_id="e-bike-lfp", position=(0.0, 0.0, 0.55))
+    bundle = emit_fire_scenario(
+        mapping_plan=plan,
+        bundle_sha256=_valid_bundle_hash(),
+        ev_selections=[ev],
+        verification_status="MAPPING_VERIFIED",
+    )
+    assert bundle.ev_library_digest is not None
+    assert len(bundle.ev_library_digest) == 64
+
 

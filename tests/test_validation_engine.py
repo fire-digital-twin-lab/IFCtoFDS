@@ -336,6 +336,37 @@ def test_traceability_checker_skips_scenario_fire_primitives(box_model):
     assert "VENT_BURNER_1" not in str(outcome.findings)
 
 
+def test_air_path_negative_leak_is_inconclusive(monkeypatch, box_model):
+    """C-1 regression test: Negative leak volume (inverted normals) must return INCONCLUSIVE, never PASS."""
+    from ifc_to_fds.domain.validation.model import ValidationContext, GateStatus
+    from ifc_to_fds.validation.checkers.air_path import AirPathTopologyChecker
+    import ifc_to_fds.validation.checkers.air_path as ap_mod
+
+    text, manifest = serialize_fds(box_model)
+    ctx = ValidationContext(
+        model=box_model,
+        fds_text=text,
+        manifest=manifest,
+        parsed_fds=parse_fds(text),
+    )
+
+    orig_sb = ap_mod.solid_boolean
+
+    class MockInvertedMesh:
+        volume = -0.1018
+        is_volume = True
+
+    def mock_sb(meshes, op):
+        if op == "intersection" and len(meshes) == 2:
+            return MockInvertedMesh()
+        return orig_sb(meshes, op)
+
+    monkeypatch.setattr(ap_mod, "solid_boolean", mock_sb)
+    outcome = AirPathTopologyChecker().check(ctx)
+    assert outcome.result.status == GateStatus.INCONCLUSIVE
+    assert "INVALID_VOLUME_SIGN" in outcome.result.reason
+
+
 def test_thin_or_open_covering_classified_as_semantic_only(box_model):
     from ifc_to_fds.core.canonical import CanonicalElement, MappingStrategy, MappingStatus, TriangleMesh
     from ifc_to_fds.mapping.policy import plan_mapping

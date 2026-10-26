@@ -475,6 +475,12 @@ async function runTests() {
     assert.equal(timeoutBatchOutput.results[0].state, 'TIMED_OUT');
     assert.equal(timeoutBatchOutput.summary.rejected, 1);
 
+    // 7.4 H-13 defense: Default dispatch fails cleanly when backend is unavailable, never mock PASS
+    const defaultBatchOutput = await panel.queueScenarioBatch([socScenarios[0]]);
+    assert.equal(defaultBatchOutput.results[0].state, 'FAILED');
+    assert.equal(defaultBatchOutput.results[0].verdict, 'REJECTED');
+    assert.equal(defaultBatchOutput.summary.passed, 0);
+
     console.log('All EV Scenario Panel tests passed cleanly!');
 }
 

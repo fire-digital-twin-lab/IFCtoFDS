@@ -8,6 +8,7 @@ from time import perf_counter
 from typing import Any, Dict, List, Optional, Union
 
 from ifc_to_fds.domain.mapping import MappingManifest, build_mapping_plan
+from ifc_to_fds.domain.validation.model import GateResult, GateStatus
 from ifc_to_fds.geometry.storage import write_package
 from ifc_to_fds.mapping.exporter import serialize_fds
 
@@ -50,6 +51,7 @@ class ConvertVerifiedUseCase:
             model, workspace / "model_geometry.json", owner
         )
         (workspace / "model.fds").write_bytes(fds.encode("utf-8"))
+        (workspace / "mapping_plan.json").write_text(mapping_plan.model_dump_json(), encoding="utf-8")
         packaged = perf_counter()
         configuration["geometry_package_sha256"] = geometry_package["sha256"]
         manifest.geometry_package_sha256 = geometry_package["sha256"]
@@ -159,9 +161,9 @@ class ConvertVerifiedUseCase:
             simulation_status=report.simulation_status.value,
             output_complete=manifest.output_complete,
             geometry_package=geometry_package,
-            parity_report=report.gates["golden_reference_parity"].model_dump(
-                mode="json"
-            ),
+            parity_report=report.gates.get(
+                "golden_reference_parity", GateResult(status=GateStatus.NOT_RUN)
+            ).model_dump(mode="json"),
             fds_text=fds,
             manifest=manifest.model_dump(mode="json"),
             report=report.model_dump(mode="json"),

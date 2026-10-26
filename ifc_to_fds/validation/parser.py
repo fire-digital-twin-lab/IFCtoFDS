@@ -133,6 +133,16 @@ def parse_fds(text):
             "DELAY",
             "CONSTANT",
         },
+        "SPEC": {
+            "ID",
+            "FORMULA",
+            "MASS_FRACTION_0",
+            "LUMPED_COMPONENT_ONLY",
+            "BACKGROUND",
+            "SPEC_ID",
+            "MW",
+            "DENSITY",
+        },
     }
     while i < len(text):
         c = text[i]

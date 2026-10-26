@@ -5,6 +5,7 @@ Converts Canonical BIM Model elements into standard FDS 6+ input namelists
 """
 
 from typing import List, Optional, Tuple
+from pathlib import Path
 import math
 import re
 from dataclasses import dataclass
@@ -38,7 +39,7 @@ class SerializationResult:
     domain: Optional[BoundingBox]
 
 
-def clean_fds_id(name: str, fallback: str) -> str:
+def clean_fds_id(name: str, fallback: str = "ID") -> str:
     cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", name or "")
     cleaned = cleaned.strip("._-")
     if not cleaned:
@@ -67,7 +68,7 @@ def format_source_comment(elem: CanonicalElement) -> str:
 
 
 def compute_mesh_grid(
-    bounds: BoundingBox, cell_size: float = 0.2
+    bounds: BoundingBox, cell_size: float = 0.2, max_total_cells: int = 50_000_000
 ) -> Tuple[List[int], List[float]]:
     if not math.isfinite(cell_size) or cell_size <= 0:
         raise ValueError("cell_size must be finite and positive")
@@ -77,7 +78,96 @@ def compute_mesh_grid(
         max(1, math.ceil((xb[3] - xb[2]) / cell_size)),
         max(1, math.ceil((xb[5] - xb[4]) / cell_size)),
     ]
+    total_cells = ijk[0] * ijk[1] * ijk[2]
+    if total_cells > max_total_cells:
+        raise ValueError(
+            f"Total mesh cells ({total_cells:,}) exceeds maximum safety limit of {max_total_cells:,}. "
+            f"Increase cell_size (current: {cell_size}m) or restrict simulation domain."
+        )
     return ijk, xb
+
+
+def partition_simulation_domain(
+    bounds: BoundingBox,
+    cell_size: float = 0.2,
+    max_cells_per_mesh: int = 500_000,
+) -> List[Tuple[List[int], List[float]]]:
+    """Partitions simulation domain into one or more meshes conforming to FDS MPI limits.
+    Each submesh has at most max_cells_per_mesh cells.
+    Submesh boundaries align strictly with cell_size multiples.
+    """
+    ijk, xb = compute_mesh_grid(bounds, cell_size=cell_size)
+    total_cells = ijk[0] * ijk[1] * ijk[2]
+
+    if total_cells <= max_cells_per_mesh:
+        return [(ijk, xb)]
+
+    # Partition along X and Y first to preserve vertical stratification;
+    # if vertical cell count ijk[2] exceeds max_cells_per_mesh, partition Z as well.
+    nx_parts = 1
+    ny_parts = 1
+    nz_parts = 1
+    while (
+        math.ceil(ijk[0] / nx_parts)
+        * math.ceil(ijk[1] / ny_parts)
+        * math.ceil(ijk[2] / nz_parts)
+    ) > max_cells_per_mesh:
+        cx = math.ceil(ijk[0] / nx_parts)
+        cy = math.ceil(ijk[1] / ny_parts)
+        cz = math.ceil(ijk[2] / nz_parts)
+        if cx >= cy and cx > 1 and nx_parts < ijk[0]:
+            nx_parts += 1
+        elif cy > 1 and ny_parts < ijk[1]:
+            ny_parts += 1
+        elif cz > 1 and nz_parts < ijk[2]:
+            nz_parts += 1
+        else:
+            break
+
+    meshes = []
+    total_x_cells = ijk[0]
+    total_y_cells = ijk[1]
+    total_z_cells = ijk[2]
+
+    base_x_cells = total_x_cells // nx_parts
+    rem_x_cells = total_x_cells % nx_parts
+
+    base_y_cells = total_y_cells // ny_parts
+    rem_y_cells = total_y_cells % ny_parts
+
+    base_z_cells = total_z_cells // nz_parts
+    rem_z_cells = total_z_cells % nz_parts
+
+    dx = (xb[1] - xb[0]) / total_x_cells
+    dy = (xb[3] - xb[2]) / total_y_cells
+    dz = (xb[5] - xb[4]) / total_z_cells
+
+    curr_x_cell = 0
+    for px in range(nx_parts):
+        count_x = base_x_cells + (1 if px < rem_x_cells else 0)
+        sub_xmin = round(xb[0] + curr_x_cell * dx, 6)
+        sub_xmax = round(xb[0] + (curr_x_cell + count_x) * dx, 6) if px < nx_parts - 1 else round(xb[1], 6)
+        curr_x_cell += count_x
+
+        curr_y_cell = 0
+        for py in range(ny_parts):
+            count_y = base_y_cells + (1 if py < rem_y_cells else 0)
+            sub_ymin = round(xb[2] + curr_y_cell * dy, 6)
+            sub_ymax = round(xb[2] + (curr_y_cell + count_y) * dy, 6) if py < ny_parts - 1 else round(xb[3], 6)
+            curr_y_cell += count_y
+
+            curr_z_cell = 0
+            for pz in range(nz_parts):
+                count_z = base_z_cells + (1 if pz < rem_z_cells else 0)
+                sub_zmin = round(xb[4] + curr_z_cell * dz, 6)
+                sub_zmax = round(xb[4] + (curr_z_cell + count_z) * dz, 6) if pz < nz_parts - 1 else round(xb[5], 6)
+                curr_z_cell += count_z
+
+                sub_ijk = [count_x, count_y, count_z]
+                sub_xb = [sub_xmin, sub_xmax, sub_ymin, sub_ymax, sub_zmin, sub_zmax]
+                meshes.append((sub_ijk, sub_xb))
+
+    return meshes
 
 
 def serialize_fds(
@@ -128,7 +218,7 @@ def _serialize_planned_model(model, cell_size):
         raise ValueError("Call plan_mapping before serialization")
     lines: List[str] = []
 
-    chid = clean_fds_id(model.source.filename.replace(".ifc", ""), "IFC_MODEL")
+    chid = clean_fds_id(Path(model.source.filename).stem, "IFC_MODEL")
     lines.append(
         f"&HEAD CHID='{chid}', TITLE='IFCtoFDS conversion; see acceptance report' /"
     )
@@ -162,8 +252,16 @@ def _serialize_planned_model(model, cell_size):
     )
     model.exported_bounds = bounds
     if model.simulation_domain:
-        ijk, mesh_xb = compute_mesh_grid(model.simulation_domain, cell_size=cell_size)
-        lines.append(f"&MESH IJK={ijk[0]},{ijk[1]},{ijk[2]}, XB={format_xb(mesh_xb)} /")
+        multi_mesh_limit = 500_000
+        meshes = partition_simulation_domain(
+            model.simulation_domain,
+            cell_size=cell_size,
+            max_cells_per_mesh=multi_mesh_limit,
+        )
+        for idx, (ijk, mesh_xb) in enumerate(meshes, start=1):
+            mesh_id = f"M{idx}" if len(meshes) > 1 else None
+            id_clause = f" ID='{mesh_id}'," if mesh_id else ""
+            lines.append(f"&MESH{id_clause} IJK={ijk[0]},{ijk[1]},{ijk[2]}, XB={format_xb(mesh_xb)} /")
     else:
         lines.append("! INCOMPLETE: simulation domain has not been declared")
     lines.append("")

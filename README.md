@@ -46,13 +46,33 @@
 
 Kho lưu trữ này là **bản fork nghiên cứu chính thức của Fire Digital Twin Lab**, phát triển kế thừa và mở rộng toàn diện từ công trình khởi nguyên của [GS. Rino Lovreglio (Đại học Massey)](https://github.com/ProfRino/IFCtoFDS).
 
-### Đột phá công nghệ của Fork:
-- **Engine Chuyển đổi Hình học Chuẩn xác (Verified Pipeline)**: Triển khai trên nền tảng Python / IfcOpenShell với nhân hình học OpenCASCADE 64-bit, loại bỏ hoàn toàn các lỗi sai số làm tròn dấu phẩy động.
-- **Hệ thống Kiểm định Độc lập 12 Cổng (Independent Audit Engine)**: Tự động đọc lại tệp IFC nguồn độc lập với bộ nhớ trình xuất, đối chiếu tính tương đương hình học, kiểm tra bảo toàn lỗ mở và bảo đảm tính toàn vẹn bao che.
-- **Quy trình Mô phỏng Cháy Xe Điện Hàng loạt (EV Fire Scenario Batch)**: Hệ thống đầu tiên hỗ trợ thiết lập thư viện vật lý pin Li-ion (NMC, LFP), tự động sinh namelist cháy phức hợp FDS 6+, thẩm định tỷ lệ độ mịn lưới plume đám cháy $D^*/\Delta x$ theo chuẩn NFPA 92 / NUREG 1824 và gửi hàng loạt kịch bản phân tích qua giao diện ma trận.
+### 1.1. Trạng thái hiện tại & Hạn chế sử dụng (Current Status & Usage Guidelines)
 
-> ⚠️ **Lưu ý nguyên tắc kỹ thuật an toàn PCCC:**  
-> Việc tạo thành công tệp đầu vào FDS (`.fds`) **chưa đồng nghĩa** với việc mô hình đã đủ điều kiện an toàn hoặc kịch bản mô phỏng đã hoàn chỉnh. Tệp FDS bắt buộc phải được đọc và đánh giá đồng bộ cùng **Bản kê Ánh xạ (`manifest.json`)** và **Báo cáo Nghiệm thu Kiểm định (`acceptance_report.json`)**. Mọi kết quả ứng dụng trong thiết kế công trình thực tế bắt buộc phải được kỹ sư an toàn PCCC có chứng chỉ hành nghề thẩm tra độc lập.
+Nhằm đảm bảo tính trung thực khoa học và tuyệt đối không tạo cảm giác an toàn giả trong thiết kế PCCC, hệ thống phân định rõ ràng 3 nhóm trạng thái:
+
+#### Nhóm A: Đã hoạt động & Được kiểm chứng tự động (Verified & Production-Ready for Research)
+- **Nhân hình học Verified Python (`ifc_to_fds`)**: Trích xuất thể tích BREP 64-bit qua IfcOpenShell/OpenCASCADE. Áp dụng triệt để nguyên tắc *fail-closed*: từ chối tự động vá lỗi bằng hộp bao AABB để không tạo "vách ngăn ảo" (phantom fire barriers) cản trở dòng khói.
+- **Động cơ thẩm định độc lập 14 Cổng (Independent Audit Engine)**: Tái phân tích độc lập từ đĩa cứng (không tin bộ nhớ xuất), kiểm tra cú pháp, miền tính toán, truy nguyên GUID nguồn, độ hoàn thiện kết cấu, mạng MEP, rò rỉ khí (`air_path`) và đối chiếu gói nhị phân.
+- **Thuật toán chia miền Multi-Mesh (`partition_simulation_domain`)**: Tự động chia miền tính toán vượt quá 500.000 ô thành các submesh song song dọc theo các trục toạ độ cho FDS MPI, bảo đảm biên lưới khớp hoàn hảo với bội số kích thước ô $\Delta x$.
+- **Hạ tầng Job Service cách ly tiến trình**: Lưu trữ SQLite WAL, giám sát bộ nhớ RSS bằng `psutil`, timeout và huỷ tác vụ an toàn trên môi trường Windows/Linux.
+
+#### Nhóm B: Đã hiện thực nhưng có giới hạn kỹ thuật / Cần kỹ sư PCCC thẩm định (Implemented with Boundaries)
+- **Kịch bản Cháy Xe Điện (EV Scenario Emitter)**: Đã nối dây trực tiếp vào worker, sinh tệp `scenario.fds`, hỗ trợ phản ứng composite đơn `&REAC` cho FDS simple chemistry, đường cong $t^2$ chuẩn hoá 20 mốc RAMP đơn điệu ngặt, cân bằng năng lượng pack pin và điều khiển cửa FDS Section 15.3 (`INITIAL_STATE=.TRUE.` trên `&DEVC`).  
+  *Giới hạn*: Khí độc HF được phát dưới dạng `&SPEC` thụ động; các tham số $t_\alpha$, công suất đỉnh bắt buộc phải được kỹ sư PCCC có chứng chỉ thẩm định theo từng loại phương tiện và thiết kế thông gió cụ thể.
+- **Cổng Kiểm định Hình học Hiệu dụng (`effective_geometry`)**:  
+  *Giới hạn*: Adapter đọc chỉ số từ tệp `.smv` của FDS hiện chỉ hỗ trợ chướng ngại vật dạng `&OBST` trên một mesh duy nhất. Với các công trình thực tế có cửa sổ/cửa đi (90%+ cấu kiện xuất thành `&GEOM` cut-cell), cổng này trả về `INCONCLUSIVE`. Hệ thống bảo vệ rủi ro này bằng công cụ heuristic tiên nghiệm `check_opening_grid_alignment` (cảnh báo khi bề rộng mở $< 2 \cdot \Delta x$).
+- **Cổng Kiểm tra Rò rỉ Bao che (`air_path`)**:  
+  *Giới hạn*: Phép tính Boolean CSG giữa các khoang khí có thể trả về thể tích có dấu do chiều cuộn tam giác. Hệ thống bắt buộc $V_{leak} \ge 0$; nếu $V_{leak} < -10^{-12}\text{ m}^3$, cổng trả về `INCONCLUSIVE` (thay vì cấp PASS sai).
+- **Cấp độ Thẩm duyệt (`SIMULATION_VERIFIED`)**:  
+  Hệ thống hiện tại chỉ cấp trạng thái `MAPPING_VERIFIED` (xác thực tính toàn vẹn hình học sang FDS). Trạng thái `SIMULATION_VERIFIED` chưa bao giờ được tự động phát hành vì yêu cầu kết quả chạy solver và thẩm định chuyên gia.
+
+#### Nhóm C: Kế hoạch phát triển dài hạn (Roadmap)
+- Tự động hóa thiết lập đầu phun Sprinkler tự động và hệ thống hút khói sự cố tầng hầm.
+- Adapter cut-cell đọc biên dạng lưới solver SMV cho cấu kiện dạng `&GEOM`.
+- Phân tán MPI tự động trên cụm máy chủ điện toán đám mây.
+
+> ⚠️ **Quy định về phạm vi "Độc lập" (Audit Independence):**  
+> Động cơ audit đạt tính độc lập tuyệt đối ở khâu **đọc lại tệp IFC nguồn từ đĩa** và **phân tích cú pháp lại tệp FDS vừa xuất** mà không sử dụng dữ liệu bộ nhớ của trình xuất. Tuy nhiên, cấu hình audit (phạm vi tầng, bounding box, dung sai) được kế thừa từ chính cấu hình tác vụ chuyển đổi ban đầu.
 
 ---
 
@@ -263,9 +283,27 @@ Mỗi lượt chạy Verified sinh ra một **Gói Ánh xạ Hoàn chỉnh (Mapp
 
 ### Bảng Ý nghĩa Trạng thái Nghiệm thu (Acceptance Status)
 - **`MAPPING_VERIFIED`**: Mọi cổng kiểm tra hình học và truy xuất bắt buộc đều đạt chuẩn (`PASS`) hoặc có lý giải miễn trừ hợp lệ (`NOT_APPLICABLE`).
-- **`REJECTED`**: Có ít nhất một sai lệch hình học nghiêm trọng (như rò rỉ bao che, vật cản trái phép, lỗi đa tạp).
+- **`REJECTED`**: Có ít nhất một sai lệch hình học nghiêm trọng (như rò rỉ bao che, vật cản trái phép, cấu kiện tự giao).
 - **`INCONCLUSIVE`**: Thiếu dữ liệu đầu vào hoặc chưa hoàn thành bước kiểm chứng độc lập.
-- **`SIMULATION_VERIFIED`**: Cấp độ cao nhất, yêu cầu kiểm chứng trường nghiệm thức vật lý CFD đầy đủ với trình giải FDS.
+
+### 7.2. Hướng dẫn Đọc & Đánh giá Kết quả Nghiệm thu (Audit Interpretation Protocol)
+
+Để đánh giá chính xác một mô hình FDS đã qua kiểm định, quy trình khuyến nghị gồm 6 bước:
+
+1. **Không bao giờ đọc `model.fds` đơn lẻ**: Luôn mở kèm tệp báo cáo nghiệm thu `model_acceptance_report.md` (bản định dạng dễ đọc) hoặc `model_acceptance_report.json` (bản dữ liệu máy học đầy đủ).
+2. **Kiểm tra trạng thái tổng thể (`status`)**:
+   - `MAPPING_VERIFIED`: Đạt chuẩn tất cả cổng kiểm định bắt buộc.
+   - `REJECTED`: Bị từ chối do vi phạm tính toàn vẹn hình học (Ví dụ: tệp mẫu `AC20-FZK-Haus.ifc` bị từ chối vì chứa 10+ cấu kiện tự giao trong CAD gốc; hệ thống từ chối vá ngầm bằng bounding box).
+   - `INCONCLUSIVE`: Chưa đủ điều kiện kết luận (Ví dụ: chưa cài FDS để chạy cổng `solver`, hoặc công trình có tường khoét lỗ mở chuyển thành `&GEOM` qua cổng `effective_geometry`).
+3. **Đối chiếu bảng các cổng (`gates`)**:
+   - Tra cứu từng cổng có `required: true`. Một cổng bắt buộc không đạt `PASS` hoặc `NOT_APPLICABLE` sẽ chặn toàn bộ kết quả nghiệm thu.
+   - Khi cổng `openings` báo `FAIL`: mở danh mục `findings` và `metrics` để xem chi tiết sai số diện tích và dung sai khoét rỗng.
+4. **Kiểm tra chỉ số rò rỉ khí (`air_path`)**:
+   - Xem trường `evidence.leak_volume_m3`. Hệ thống bắt buộc $V_{leak} \ge 0$; nếu kết quả mang dấu âm hoặc vượt quá dung sai bao che, cổng sẽ chuyển `INCONCLUSIVE` hoặc `FAIL`.
+5. **Tra cứu danh mục phát hiện (`findings`)**:
+   - Mỗi phát hiện đều gán kèm mã phần tử nguồn (`GlobalId` / `entity_key`). Kỹ sư có thể dùng mã này mở trực tiếp mô hình trên Revit / ArchiCAD để sửa lỗi hình học gốc.
+6. **Xác minh toàn vẹn tệp qua băm SHA-256 (`model_checksums.json`)**:
+   - Chứa chuỗi băm SHA-256 của từng tệp đầu ra trong gói. Nếu băm không khớp, gói dữ liệu đã bị can thiệp ngoài luồng.
 
 ---
 
@@ -305,8 +343,9 @@ python -m ifc_to_fds audit examples/AC20-FZK-Haus.ifc --fds out/fzk.fds --manife
 
 1. **Nguyên tắc Từ chối Trung thực (Fail-Closed Integrity)**:
    Nếu một mô hình IFC thực tế chứa lỗi mô hình hóa (ví dụ: các tấm ốp tường 2D hở biên, tay vịn cầu thang tự cắt), hệ thống sẽ **báo lỗi trung thực và từ chối cấp chứng nhận (`REJECTED`)**. Hệ thống tuyệt đối không áp dụng các giải thuật "vá víu ngầm" (như tự động thay mặt hở bằng hộp đặc AABB) vì điều này sẽ tạo ra các vật cản khói giả tạo, làm sai lệch hoàn toàn kết quả mô phỏng cháy CFD.
-2. **Xử lý Không gian Khoét rỗng (Openings)**:
-   Lỗ mở cửa đi và cửa sổ trên tường/sàn được trừ khối chuẩn xác trước khi tạo lưới. Các cánh cửa đóng/mở được điều khiển thông qua namelist `&HOLE` và `&OBST` liên động với bộ đếm thời gian `&CTRL`.
+2. **Xử lý Không gian Khoét rỗng (Openings) & Phân định Nhánh Legacy**:
+   - Trong nhân Python chuẩn xác (**Verified Pipeline**), các lỗ mở cửa sổ/cửa đi được trừ khối trực tiếp qua CSG Manifold3D và xuất thành `&GEOM` (hoặc `&OBST` nếu là khối hộp thẳng trục). Các chiến lược `VOXEL` và `HOLE` cắt tường thủ công chỉ thuộc về nhánh giao diện duyệt nhanh JavaScript (**Quick Preview Legacy**) và không được cấp thẩm quyền kiểm định nghiên cứu.
+   - Các sự kiện mở/đóng cửa trong kịch bản cháy được điều khiển thông qua `&OBST` kết hợp `&CTRL` và `&DEVC` có `INITIAL_STATE` theo chuẩn FDS User Guide Section 15.3, hoạt động đồng nhất trên cả tường `&GEOM` lẫn `&OBST`.
 3. **Mạng MEP và Đầu phun**:
    Hệ thống giữ lại kết nối cổng nguyên bản. Việc kích hoạt phun nước dập lửa của đầu phun Sprinkler được liên kết theo trường nhiệt độ và vận tốc khí thông qua namelist `&DEVC` đặc thù.
 

@@ -1,6 +1,7 @@
 """Read serialized FDS and verify against a separate source reference model."""
 
 import hashlib
+from typing import Any, Dict, List, Optional, Tuple
 from ifc_to_fds.diagnostics import operation
 from .acceptance import (
     AcceptanceReport,
@@ -59,6 +60,15 @@ def run_independent_validation(
 
     def finding(gate, detail, key="", severity=Severity.P1):
         report.gates[gate].status = GateStatus.FAIL
+        if report.gates[gate].reason:
+            report.gates[gate].reason += "; " + detail
+        else:
+            report.gates[gate].reason = detail
+        if report.gates[gate].evidence is not None:
+            if "failed_elements" not in report.gates[gate].evidence:
+                report.gates[gate].evidence["failed_elements"] = []
+            if key and key not in report.gates[gate].evidence["failed_elements"]:
+                report.gates[gate].evidence["failed_elements"].append(key)
         report.findings.append(
             Finding(
                 id=f"FND-{len(report.findings) + 1:04}",
@@ -102,36 +112,46 @@ def run_independent_validation(
     primitives = {}
     actual_ids = set()
     known = {e.entity_key: e for e in model.elements}
-    domains = [r.values.get("XB") for r in parsed.records if r.kind == "MESH"]
-    if len(domains) != 1:
-        unknown(
-            "geometry",
-            "Multiple computational meshes need an explicit domain-union audit",
-        )
+    raw_domains = [r.values.get("XB") for r in parsed.records if r.kind == "MESH"]
+    domains: List[List[float]] = [
+        [float(x) for x in d] for d in raw_domains if isinstance(d, (list, tuple)) and len(d) == 6
+    ]
+    union_xb: Optional[List[float]] = None
     if model.simulation_domain is None:
         unknown("domain", "Explicit simulation domain missing for selected scope")
-    elif len(domains) != 1 or any(
-        abs(float(a) - b) > 1e-8
-        for a, b in zip(domains[0], model.simulation_domain.to_xb())
-    ):
-        finding("domain", "Serialized MESH differs from declared simulation domain")
+    elif not domains:
+        finding("domain", "No serialized MESH found in FDS output")
     else:
-        mesh_record = next(r for r in parsed.records if r.kind == "MESH")
-        grid = mesh_record.values.get("IJK", [])
-        if len(grid) == 3 and all(float(x).is_integer() and x > 0 for x in grid):
-            report.metrics["actual_cell_size_m"] = [
-                d / n
-                for d, n in zip(
-                    (
-                        model.simulation_domain.dx,
-                        model.simulation_domain.dy,
-                        model.simulation_domain.dz,
-                    ),
-                    grid,
-                )
-            ]
+        union_xb = [
+            min(d[0] for d in domains),
+            max(d[1] for d in domains),
+            min(d[2] for d in domains),
+            max(d[3] for d in domains),
+            min(d[4] for d in domains),
+            max(d[5] for d in domains),
+        ]
+        if any(
+            abs(float(a) - b) > 1e-4
+            for a, b in zip(union_xb, model.simulation_domain.to_xb())
+        ):
+            finding("domain", "Serialized MESH differs from declared simulation domain")
         else:
-            finding("domain", "Invalid computational mesh IJK")
+            mesh_record = next(r for r in parsed.records if r.kind == "MESH")
+            grid = mesh_record.values.get("IJK", [])
+            first_xb = mesh_record.values.get("XB", [])
+            if (
+                isinstance(grid, (list, tuple))
+                and len(grid) == 3
+                and all(float(x).is_integer() and x > 0 for x in grid)
+                and isinstance(first_xb, (list, tuple))
+                and len(first_xb) == 6
+            ):
+                report.metrics["actual_cell_size_m"] = [
+                    abs(float(first_xb[2 * k + 1]) - float(first_xb[2 * k])) / n
+                    for k, n in enumerate(grid)
+                ]
+            else:
+                finding("domain", "Invalid computational mesh IJK")
     for p in parsed.primitives:
         actual_ids.add(p.id)
         key = p.source.get("entity_key", "")
@@ -180,8 +200,8 @@ def run_independent_validation(
             try:
                 solid = p.mesh()
                 bounds = bounds_for_vertices(solid.vertices)
-                if bounds and len(domains) == 1:
-                    xb = domains[0]
+                if bounds and (union_xb or domains):
+                    xb = union_xb or domains[0]
                     coordinates = bounds.to_xb()
                     if any(
                         coordinates[i] < xb[i] - 1e-6

@@ -50,6 +50,7 @@ class MappingDecision(BaseModel):
         default_factory=list, json_schema_extra={"deprecated": True}
     )
     representation_bounds: Optional[BoundingBox] = None
+    element_bounds: Optional[BoundingBox] = None
     rationale: Optional[str] = None
     boundary_treatment: str = "NOT_APPLICABLE"
     scope_decision: ScopeDecision = ScopeDecision.IN_SCOPE

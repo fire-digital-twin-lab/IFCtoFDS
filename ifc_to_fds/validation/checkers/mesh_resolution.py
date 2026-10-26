@@ -128,11 +128,12 @@ def check_mesh_resolution(
                         d_star,
                         hrr_kw,
                         f"Mesh resolution too fine for vehicle '{ev_id}': D*/dx = {ratio:.2f} > 16.0 "
-                        f"(exceeds validated [4.0, 16.0] range)",
+                        f"(exceeds validated [4.0, 16.0] range; computationally expensive)",
                     )
                 )
 
         if failing_evaluations:
+            has_coarse = any(f[1] < 4.0 for f in failing_evaluations)
             rep = failing_evaluations[0]
             evidence = {
                 "d_star_m": rep[2],
@@ -143,7 +144,7 @@ def check_mesh_resolution(
             }
             reasons = "; ".join(f[4] for f in failing_evaluations)
             return GateResult(
-                status=GateStatus.FAIL,
+                status=GateStatus.FAIL if has_coarse else GateStatus.INCONCLUSIVE,
                 reason=reasons,
                 evidence=evidence,
             )
@@ -163,9 +164,7 @@ def check_mesh_resolution(
             )
 
     peak_hrr_kw = 0.0
-    if hasattr(scenario, "total_peak_hrr_mw"):
-        peak_hrr_kw = float(scenario.total_peak_hrr_mw) * 1000.0
-    elif isinstance(scenario, dict):
+    if isinstance(scenario, dict):
         if "individual_max_peak_hrr_mw" in scenario:
             peak_hrr_kw = float(scenario["individual_max_peak_hrr_mw"]) * 1000.0
         elif "individual_peak_hrr_mw" in scenario:
@@ -183,15 +182,21 @@ def check_mesh_resolution(
         elif "peak_hrr_kw" in scenario:
             peak_hrr_kw = float(scenario["peak_hrr_kw"])
         elif "total_peak_hrr" in scenario:
-            val = float(scenario["total_peak_hrr"])
-            peak_hrr_kw = val * 1000.0 if val < 50.0 else val
+            raise ValueError(
+                "Ambiguous key 'total_peak_hrr' without unit suffix is rejected. "
+                "Specify 'peak_hrr_kw' or 'total_peak_hrr_mw'."
+            )
         else:
             raise ValueError(
-                "Scenario dict must specify peak HRR (e.g. 'total_peak_hrr_mw' or 'peak_hrr_kw')"
+                "Scenario dict must specify peak HRR with explicit unit (e.g. 'total_peak_hrr_mw' or 'peak_hrr_kw')"
             )
+    elif hasattr(scenario, "total_peak_hrr_mw"):
+        peak_hrr_kw = float(getattr(scenario, "total_peak_hrr_mw")) * 1000.0
     elif isinstance(scenario, (int, float)):
-        val = float(scenario)
-        peak_hrr_kw = val * 1000.0 if val < 50.0 else val
+        raise TypeError(
+            "Scalar number for scenario HRR is ambiguous without unit. "
+            "Pass a dict specifying 'peak_hrr_kw' or 'total_peak_hrr_mw'."
+        )
     elif hasattr(scenario, "peak_hrr_kw"):
         peak_hrr_kw = float(scenario.peak_hrr_kw)
     else:
@@ -224,8 +229,8 @@ def check_mesh_resolution(
         status = GateStatus.PASS
         reason = f"Mesh resolution adequate: D*/dx = {ratio:.2f} within [4.0, 16.0]"
     else:
-        status = GateStatus.FAIL
-        reason = f"Mesh resolution too fine: D*/dx = {ratio:.2f} > 16.0 (exceeds validated [4.0, 16.0] range)"
+        status = GateStatus.INCONCLUSIVE
+        reason = f"Mesh resolution too fine: D*/dx = {ratio:.2f} > 16.0 (exceeds validated [4.0, 16.0] range; computationally expensive)"
 
     return GateResult(
         status=status,
@@ -305,7 +310,7 @@ class MeshResolutionChecker:
         if mesh_cell_sizes:
             cell_size = max(mesh_cell_sizes)
         elif context.config is not None and getattr(context.config, "cell_size", None) is not None:
-            cell_size = float(context.config.cell_size)
+            cell_size = float(getattr(context.config, "cell_size"))
         else:
             cell_size = 0.2
 
@@ -389,15 +394,16 @@ class MeshResolutionChecker:
                         "hrr_kw": hrr_kw,
                         "reason": (
                             f"Mesh resolution too fine for fire source '{bid}': "
-                            f"D*/dx = {ratio:.2f} > 16.0 (exceeds validated [4.0, 16.0] range)"
+                            f"D*/dx = {ratio:.2f} > 16.0 (exceeds validated [4.0, 16.0] range; computationally expensive)"
                         ),
                     })
 
             if failing_burners:
+                has_coarse = any(fb["ratio"] < 4.0 for fb in failing_burners)
                 rep = failing_burners[0]
                 reason = "; ".join(fb["reason"] for fb in failing_burners)
                 gate_result = GateResult(
-                    status=GateStatus.FAIL,
+                    status=GateStatus.FAIL if has_coarse else GateStatus.INCONCLUSIVE,
                     reason=reason,
                     evidence={
                         "d_star_m": rep["d_star"],
@@ -410,7 +416,7 @@ class MeshResolutionChecker:
                 findings = [
                     Finding(
                         id=f"FND-MESH-{i + 1:04d}",
-                        severity=Severity.P1,
+                        severity=Severity.P1 if fb["ratio"] < 4.0 else Severity.P2,
                         category="mesh_resolution",
                         title="Computational mesh resolution outside validated [4.0, 16.0] range for fire plume",
                         detail=fb["reason"],

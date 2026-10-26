@@ -7,15 +7,28 @@ import json
 import os
 from pathlib import Path
 import shutil
-from typing import Optional
+from typing import Optional, List
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query, Body
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ConfigDict
 from .jobs import JobManager
 from .results import ARTIFACTS
 from .http_limits import BodyLimitMiddleware
 from .mapping.scope import SpatialScope
 from .validation.acceptance import AuditConfig
+from .fire.scenario_emitter import DeviceSelection
+
+
+class ScenarioJobRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    scenario_id: Optional[str] = None
+    bundle_sha256: Optional[str] = None
+    ev_library_version: Optional[str] = None
+    total_peak_hrr_mw: Optional[float] = None
+    peak_hrr_kw: Optional[float] = None
+    devices: Optional[List[DeviceSelection]] = None
+    scenario_data: Optional[dict] = None
 
 manager = JobManager(
     max_waiting=int(os.getenv("IFCFDS_MAX_WAITING", "2")),
@@ -87,7 +100,12 @@ async def security_guard(request: Request, call_next):
             content={"detail": "Use the workbench served by this local backend"},
         )
 
-    return await call_next(request)
+    response = await call_next(request)
+    # HTTP security headers (M-7)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return response
 
 
 @app.get("/api/reference-cases")
@@ -265,18 +283,19 @@ async def submit_preview(file: UploadFile = File(...)):
 
 
 @app.post("/api/scenario-jobs", status_code=202)
-async def submit_scenario_job(payload: dict = Body(...)):
+async def submit_scenario_job(payload: ScenarioJobRequest):
     if not manager.can_accept():
         raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
     import uuid
 
+    raw_payload = payload.model_dump(mode="json", exclude_none=True)
     directory = manager.root / ("job-" + uuid.uuid4().hex)
     directory.mkdir(parents=True, exist_ok=True)
     try:
         (directory / "scenario.json").write_text(
-            json.dumps(payload), encoding="utf-8"
+            json.dumps(raw_payload), encoding="utf-8"
         )
-        return manager.submit([], payload, directory, mode="scenario")
+        return manager.submit([], raw_payload, directory, mode="scenario")
     except OverflowError as exc:
         shutil.rmtree(directory, ignore_errors=True)
         raise HTTPException(429, str(exc))
@@ -319,10 +338,23 @@ def delete_job(jid: str, purge: bool = False):
 
 
 @app.get("/api/jobs/{jid}/result")
-def result(jid: str):
+def result(
+    jid: str,
+    offset: int = Query(0, ge=0),
+    limit: Optional[int] = Query(None, ge=1),
+):
     try:
         manager.touch(jid)
-        return manager.result(jid)
+        data = manager.result(jid)
+        if (offset > 0 or limit is not None) and isinstance(data, dict):
+            all_f = data.get("findings", [])
+            end = (offset + limit) if limit is not None else len(all_f)
+            paged = dict(data)
+            paged["findings"] = all_f[offset:end]
+            paged["findings_offset"] = offset
+            paged["findings_limit"] = limit
+            return paged
+        return data
     except KeyError:
         raise HTTPException(404, "Unknown job")
     except ValueError as exc:
@@ -384,7 +416,10 @@ def checkpoint_artifact(jid: str, artifact: str):
 def geometry_batch(jid: str, payloads: list[str] = Query(...)):
     if not 1 <= len(payloads) <= 16:
         raise HTTPException(422, "Request between 1 and 16 geometry payloads")
-    manager.touch(jid)
+    try:
+        manager.touch(jid)
+    except KeyError:
+        raise HTTPException(404, "Unknown job")
     # Reuse the job-local, completed-artifact whitelist for every member.
     paths = [Path(geometry_payload(jid, key).path) for key in payloads]
     length = sum(path.stat().st_size for path in paths)

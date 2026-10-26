@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -51,12 +51,66 @@ class EVSelection(BaseModel):
         return v
 
 
+VALID_FDS_DEVICE_QUANTITIES = {
+    "TEMPERATURE",
+    "VELOCITY",
+    "U-VELOCITY",
+    "V-VELOCITY",
+    "W-VELOCITY",
+    "VISIBILITY",
+    "OPTICAL DENSITY",
+    "VOLUME FRACTION",
+    "MASS FRACTION",
+    "MASS LOSS RATE",
+    "HEAT FLUX",
+    "GAUGE HEAT FLUX",
+    "RADIATIVE HEAT FLUX",
+    "CONVECTIVE HEAT FLUX",
+    "TOTAL HEAT FLUX",
+    "TIME",
+    "WALL TEMPERATURE",
+    "PRESSURE",
+    "DENSITY",
+    "HRR",
+    "MLR",
+    "SPRINKLER LINK TEMPERATURE",
+    "CHAMBER OBSCURATION",
+    "EXTINCTION COEFFICIENT",
+}
+
+
+def escape_fds_string(val: Any) -> str:
+    """Sanitize string for FDS namelists to prevent injection.
+    Disallows quotes, slashes, newlines, and ampersands.
+    """
+    s = str(val)
+    if any(char in s for char in ("'", '"', '/', '\n', '\r', '&')):
+        raise ValueError(f"FDS string parameter contains disallowed characters: {val!r}")
+    return s.strip()
+
+
 class DeviceSelection(BaseModel):
     id: str
     device_type: str
     position: Tuple[float, float, float]
     setpoint: float
     quantity: str
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        return escape_fds_string(v)
+
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, v: str) -> str:
+        clean = escape_fds_string(v).upper()
+        if clean not in VALID_FDS_DEVICE_QUANTITIES:
+            raise ValueError(
+                f"Invalid FDS device quantity: {v!r}. "
+                f"Must be one of: {sorted(VALID_FDS_DEVICE_QUANTITIES)}"
+            )
+        return clean
 
 
 class OpeningEvent(BaseModel):
@@ -69,6 +123,7 @@ class ScenarioBundle(BaseModel):
     scenario_id: str
     bundle_sha256: str
     ev_library_version: str
+    ev_library_digest: Optional[str] = None
     fds_fragment: str
     total_peak_hrr_mw: float
     ev_count: int
@@ -86,28 +141,36 @@ def _resolve_preset(preset_id: str) -> EVPreset:
     )
 
 
-def _normalize_opening_events(opening_states: Optional[Dict[str, Any]]) -> List[OpeningEvent]:
+def _normalize_opening_events(opening_states: Any) -> List[OpeningEvent]:
     if not opening_states:
         return []
     events: List[OpeningEvent] = []
-    for key, val in opening_states.items():
-        if isinstance(val, OpeningEvent):
-            events.append(val)
-        elif isinstance(val, dict):
-            state = str(val.get("state", "CLOSED")).upper()
-            raw_time = val.get("event_time_s", val.get("eventTime", 0.0))
-            event_time = float(raw_time if raw_time is not None else 0.0)
-            entity_key = str(val.get("entity_key", key))
-            events.append(OpeningEvent(entity_key=entity_key, state=state, event_time_s=event_time))
-        elif isinstance(val, str):
-            state = val.strip().upper()
-            events.append(OpeningEvent(entity_key=key, state=state, event_time_s=0.0))
-        elif isinstance(val, list):
-            for item in val:
-                if isinstance(item, OpeningEvent):
-                    events.append(item)
-                elif isinstance(item, dict):
-                    events.append(OpeningEvent.model_validate(item))
+    if isinstance(opening_states, list):
+        for item in opening_states:
+            if isinstance(item, OpeningEvent):
+                events.append(item)
+            elif isinstance(item, dict):
+                events.append(OpeningEvent.model_validate(item))
+        return events
+    if isinstance(opening_states, dict):
+        for key, val in opening_states.items():
+            if isinstance(val, OpeningEvent):
+                events.append(val)
+            elif isinstance(val, dict):
+                state = str(val.get("state", "CLOSED")).upper()
+                raw_time = val.get("event_time_s", val.get("eventTime", 0.0))
+                event_time = float(raw_time if raw_time is not None else 0.0)
+                entity_key = str(val.get("entity_key", key))
+                events.append(OpeningEvent(entity_key=entity_key, state=state, event_time_s=event_time))
+            elif isinstance(val, str):
+                state = val.strip().upper()
+                events.append(OpeningEvent(entity_key=key, state=state, event_time_s=0.0))
+            elif isinstance(val, list):
+                for item in val:
+                    if isinstance(item, OpeningEvent):
+                        events.append(item)
+                    elif isinstance(item, dict):
+                        events.append(OpeningEvent.model_validate(item))
     return events
 
 
@@ -115,9 +178,10 @@ def emit_fire_scenario(
     mapping_plan: MappingPlan,
     bundle_sha256: str,
     ev_selections: List[EVSelection],
-    opening_states: Optional[Dict[str, Any]] = None,
+    opening_states: Optional[Union[Dict[str, Any], List[Any]]] = None,
     devices: Optional[List[DeviceSelection]] = None,
     verification_status: str = "MAPPING_VERIFIED",
+    allow_multi_reac: bool = False,
 ) -> ScenarioBundle:
     """Emits an FDS fire scenario bundle adhering to strict verification invariants."""
     if (
@@ -195,6 +259,30 @@ def emit_fire_scenario(
             }
         )
 
+    # Collision detection between placed vehicles (Item 44)
+    placed_boxes: List[Tuple[float, float, float, float, float, float]] = []
+    for cfg in ev_configs:
+        e_pos = cfg["ev"].position
+        e_dx, e_dy, e_dz = cfg["dx"], cfg["dy"], cfg["dz"]
+        e_box = (
+            round(e_pos[0] - e_dx / 2.0, 4),
+            round(e_pos[0] + e_dx / 2.0, 4),
+            round(e_pos[1] - e_dy / 2.0, 4),
+            round(e_pos[1] + e_dy / 2.0, 4),
+            round(e_pos[2] - e_dz / 2.0, 4),
+            round(e_pos[2] + e_dz / 2.0, 4),
+        )
+        for prev in placed_boxes:
+            if (
+                max(e_box[0], prev[0]) < min(e_box[1], prev[1]) - 1e-4
+                and max(e_box[2], prev[2]) < min(e_box[3], prev[3]) - 1e-4
+                and max(e_box[4], prev[4]) < min(e_box[5], prev[5]) - 1e-4
+            ):
+                raise ValueError(
+                    f"Vehicle collision detected: vehicle at {e_pos} intersects another vehicle bounding box"
+                )
+        placed_boxes.append(e_box)
+
     lines: List[str] = [
         "! ==========================================================================",
         "! EV Fire Scenario Fragment (Generated by IFCtoFDS Task 3 Scenario Emitter)",
@@ -205,22 +293,51 @@ def emit_fire_scenario(
         "",
     ]
 
-    # 1. &REAC namelists (one per unique preset)
-    # Note: HF (hydrogen fluoride) yields from EV battery chemistry are captured in metadata
-    # for toxic exposure evaluation and omitted from single-step FDS &REAC namelists.
-    lines.append("! --- Combustion Reaction Namelists ---")
+    # 1. &REAC namelists
+    lines.append("! --- Combustion Reaction & Species Namelists ---")
     preset_fuel_ids: Dict[str, str] = {}
-    for preset_key, preset in resolved_presets.items():
-        reac_id = clean_fds_id(f"REAC_{preset.preset_id.upper()}")
-        fuel_id = clean_fds_id(f"OFFGAS_{reac_id}")
-        preset_fuel_ids[preset_key] = fuel_id
-        co_yield = (preset.yields.co[0] + preset.yields.co[1]) / 2.0
-        soot_yield = (preset.yields.soot[0] + preset.yields.soot[1]) / 2.0
+    if allow_multi_reac:
+        lines.append("! Multi-REAC mode: one reaction per preset")
+        for preset_key, preset in resolved_presets.items():
+            reac_id = clean_fds_id(f"REAC_{preset.preset_id.upper()}")
+            fuel_id = clean_fds_id(f"OFFGAS_{reac_id}")
+            preset_fuel_ids[preset_key] = fuel_id
+            co_yield = (preset.yields.co[0] + preset.yields.co[1]) / 2.0
+            soot_yield = (preset.yields.soot[0] + preset.yields.soot[1]) / 2.0
+            lines.append(
+                f"&REAC ID='{reac_id}', FUEL='{fuel_id}', C=2.0, H=4.0, O=1.0, "
+                f"CO_YIELD={co_yield:g}, SOOT_YIELD={soot_yield:g} /"
+            )
+        lines.append("")
+    else:
+        lines.append("! Simple chemistry in FDS permits exactly one &REAC namelist.")
+        lines.append("! Multi-vehicle mixes are blended into an effective composite reaction.")
+        total_hrr = sum(cfg["actual_peak_hrr"] for cfg in ev_configs) or 1.0
+        weighted_co = sum(
+            cfg["actual_peak_hrr"] * ((cfg["preset"].yields.co[0] + cfg["preset"].yields.co[1]) / 2.0)
+            for cfg in ev_configs
+        ) / total_hrr
+        weighted_soot = sum(
+            cfg["actual_peak_hrr"] * ((cfg["preset"].yields.soot[0] + cfg["preset"].yields.soot[1]) / 2.0)
+            for cfg in ev_configs
+        ) / total_hrr
+        weighted_hf = sum(
+            cfg["actual_peak_hrr"] * ((cfg["preset"].yields.hf[0] + cfg["preset"].yields.hf[1]) / 2.0)
+            for cfg in ev_configs
+        ) / total_hrr
+
+        composite_reac_id = "REAC_COMPOSITE_EV" if len(resolved_presets) > 1 else clean_fds_id(f"REAC_{list(resolved_presets.values())[0].preset_id.upper()}")
+        composite_fuel_id = clean_fds_id(f"OFFGAS_{composite_reac_id}")
+        for preset_key in resolved_presets:
+            preset_fuel_ids[preset_key] = composite_fuel_id
+
         lines.append(
-            f"&REAC ID='{reac_id}', FUEL='{fuel_id}', C=2.0, H=4.0, O=1.0, "
-            f"CO_YIELD={co_yield:g}, SOOT_YIELD={soot_yield:g} /"
+            f"&REAC ID='{composite_reac_id}', FUEL='{composite_fuel_id}', C=2.0, H=4.0, O=1.0, "
+            f"CO_YIELD={weighted_co:.4f}, SOOT_YIELD={weighted_soot:.4f} /"
         )
-    lines.append("")
+        lines.append(f"! Passive tracer for battery toxic offgas (effective Y_HF={weighted_hf:.4f})")
+        lines.append("&SPEC ID='HYDROGEN FLUORIDE' /")
+        lines.append("")
 
     # 2. EV Fire Sources: RAMP, SURF, OBST, VENT
     lines.append("! --- EV Physical Obstacles and Fire Sources ---")
@@ -228,6 +345,7 @@ def emit_fire_scenario(
         ev: EVSelection = cfg["ev"]
         preset: EVPreset = cfg["preset"]
         actual_peak_hrr: float = cfg["actual_peak_hrr"]
+        actual_kwh: float = cfg["actual_kwh"]
         dx, dy, dz = cfg["dx"], cfg["dy"], cfg["dz"]
 
         cx, cy, cz = ev.position
@@ -246,34 +364,50 @@ def emit_fire_scenario(
         obst_id = clean_fds_id(f"OBST_EV_{idx}")
         vent_id = clean_fds_id(f"VENT_BURNER_{idx}")
 
-        # T-squared RAMP calculation
+        # Standard T-squared RAMP calculation: Q(t) = 1055 * (t / t_alpha)^2 (kW)
+        # At peak: Q_peak = 1055 * (t_growth / t_alpha)^2 => t_growth = t_alpha * sqrt(Q_peak / 1055)
         t_delay = max(0.0, float(ev.ignition_delay_s))
         t_alpha = (preset.t_alpha_s[0] + preset.t_alpha_s[1]) / 2.0
-        t_growth = t_alpha
-        t_plateau = t_growth
-        t_decay = t_growth
+        q_peak_kw = actual_peak_hrr * 1000.0
+        t_growth = max(1.0, t_alpha * math.sqrt(max(0.001, q_peak_kw / 1055.0)))
+        t_plateau = max(1.0, t_growth / 2.0)
+        t_decay = max(1.0, t_growth)
 
-        lines.append(f"! Fire Curve Ramp: {ramp_id} (delay={t_delay}s, growth={t_growth}s)")
+        # Energy balance (MJ)
+        integral_factor_s = (1.0 / 3.0) * t_growth + t_plateau + 0.5 * t_decay
+        e_total_mj = (q_peak_kw * integral_factor_s) / 1000.0
+        battery_mj = actual_kwh * 3.6
+
+        lines.append(f"! Fire Curve: {ramp_id} (delay={t_delay:.2f}s, growth={t_growth:.2f}s via standard t^2 Q=1055*(t/t_alpha)^2)")
+        lines.append(f"! Energy balance: total fire curve energy = {e_total_mj:.1f} MJ, nominal battery pack = {battery_mj:.1f} MJ")
         if t_delay > 0:
-            lines.append(f"&RAMP ID='{ramp_id}', T=0.0, F=0.0 /")
-            lines.append(f"&RAMP ID='{ramp_id}', T={t_delay:.1f}, F=0.0 /")
+            lines.append(f"&RAMP ID='{ramp_id}', T=0.00, F=0.0 /")
+            lines.append(f"&RAMP ID='{ramp_id}', T={t_delay:.2f}, F=0.0 /")
         else:
-            lines.append(f"&RAMP ID='{ramp_id}', T=0.0, F=0.0 /")
+            lines.append(f"&RAMP ID='{ramp_id}', T=0.00, F=0.0 /")
 
-        for frac in (0.25, 0.50, 0.75, 1.0):
-            t_curr = t_delay + frac * t_growth
+        prev_t = round(t_delay, 2) if t_delay > 0 else 0.0
+        num_ramp_points = 20
+        for i in range(1, num_ramp_points + 1):
+            frac = i / float(num_ramp_points)
+            t_curr = round(t_delay + frac * t_growth, 2)
+            if t_curr <= prev_t:
+                t_curr = round(prev_t + 0.01, 2)
+            prev_t = t_curr
             f_curr = frac * frac
-            lines.append(f"&RAMP ID='{ramp_id}', T={t_curr:.1f}, F={f_curr:.4f} /")
+            lines.append(f"&RAMP ID='{ramp_id}', T={t_curr:.2f}, F={f_curr:.4f} /")
 
         # Plateau
-        t_plateau_end = t_delay + t_growth + t_plateau
-        lines.append(f"&RAMP ID='{ramp_id}', T={t_plateau_end:.1f}, F=1.0000 /")
+        t_plateau_end = round(max(prev_t + 0.01, t_delay + t_growth + t_plateau), 2)
+        lines.append(f"&RAMP ID='{ramp_id}', T={t_plateau_end:.2f}, F=1.0000 /")
+        prev_t = t_plateau_end
 
         # Decay
-        t_decay_mid = t_plateau_end + 0.5 * t_decay
-        lines.append(f"&RAMP ID='{ramp_id}', T={t_decay_mid:.1f}, F=0.5000 /")
-        t_decay_end = t_plateau_end + t_decay
-        lines.append(f"&RAMP ID='{ramp_id}', T={t_decay_end:.1f}, F=0.0000 /")
+        t_decay_mid = round(max(prev_t + 0.01, t_plateau_end + 0.5 * t_decay), 2)
+        lines.append(f"&RAMP ID='{ramp_id}', T={t_decay_mid:.2f}, F=0.5000 /")
+        prev_t = t_decay_mid
+        t_decay_end = round(max(prev_t + 0.01, t_plateau_end + t_decay), 2)
+        lines.append(f"&RAMP ID='{ramp_id}', T={t_decay_end:.2f}, F=0.0000 /")
 
         # &SURF
         fuel_id = preset_fuel_ids[cfg["preset_key"]]
@@ -313,37 +447,79 @@ def emit_fire_scenario(
             timer_devc_id = f"DEVC_{clean_key}_TIME"
             ctrl_id = clean_fds_id(f"CTRL_{clean_key}")
 
-            lines.append(
-                f"&DEVC ID='{timer_devc_id}', QUANTITY='TIME', SETPOINT={ev_open.event_time_s:.1f} /"
-            )
-            lines.append(
-                f"&CTRL ID='{ctrl_id}', FUNCTION_TYPE='ANY', INPUT_ID='{timer_devc_id}' /"
-            )
-
             # Check if mapping plan contains bounds for this entity
             decision = mapping_plan.get_decision(ev_open.entity_key)
-            if decision and decision.representation_bounds:
-                xb = decision.representation_bounds.to_xb()
+            xb = None
+            if decision:
+                if decision.representation_bounds is not None:
+                    xb = decision.representation_bounds.to_xb()
+                elif getattr(decision, "element_bounds", None) is not None:
+                    elem_b = decision.element_bounds
+                    if elem_b is not None:
+                        xb = elem_b.to_xb()
+
+            if xb is not None:
+                # FDS User Guide Section 15.3:
+                # Obstructions with CTRL_ID are removed when control evaluates to .TRUE.
+                # - OPEN event at t_event: closed initially (OBST present), removed at t_event -> door OPENS.
+                # - CLOSED event at t_event: DEVC with INITIAL_STATE=.TRUE. starts .TRUE. (OBST removed / door open),
+                #   and transitions to .FALSE. at SETPOINT (OBST appears / door closes). Works on both &OBST and &GEOM.
                 if ev_open.state == "OPEN":
                     lines.append(
-                        f"&HOLE XB={format_xb(xb)}, CTRL_ID='{ctrl_id}' /"
+                        f"&DEVC ID='{timer_devc_id}', QUANTITY='TIME', SETPOINT={ev_open.event_time_s:.2f} /"
                     )
-                elif ev_open.state == "CLOSED":
+                    lines.append(
+                        f"&CTRL ID='{ctrl_id}', FUNCTION_TYPE='ANY', INPUT_ID='{timer_devc_id}' /"
+                    )
                     lines.append(
                         f"&OBST XB={format_xb(xb)}, SURF_ID='INERT', CTRL_ID='{ctrl_id}' /"
                     )
+                elif ev_open.state == "CLOSED":
+                    lines.append(
+                        f"&DEVC ID='{timer_devc_id}', QUANTITY='TIME', SETPOINT={ev_open.event_time_s:.2f}, INITIAL_STATE=.TRUE. /"
+                    )
+                    lines.append(
+                        f"&CTRL ID='{ctrl_id}', FUNCTION_TYPE='ANY', INPUT_ID='{timer_devc_id}' /"
+                    )
+                    lines.append(
+                        f"&OBST XB={format_xb(xb)}, SURF_ID='INERT', CTRL_ID='{ctrl_id}' /"
+                    )
+            else:
+                lines.append(
+                    f"&DEVC ID='{timer_devc_id}', QUANTITY='TIME', SETPOINT={ev_open.event_time_s:.2f} /"
+                )
+                lines.append(
+                    f"&CTRL ID='{ctrl_id}', FUNCTION_TYPE='ANY', INPUT_ID='{timer_devc_id}' /"
+                )
+                lines.append(f"! Note: Opening '{ev_open.entity_key}' bounds not present in mapping plan")
             lines.append("")
 
     fds_fragment = "\n".join(lines)
+
+    # Validate emitted fragment syntax against FDS parser grammar
+    from ifc_to_fds.validation.parser import parse_fds
+    scaffold = f"&HEAD CHID='TEST' /\n&TIME T_END=1.0 /\n&MESH IJK=1,1,1, XB=0,1,0,1,0,1 /\n{fds_fragment}\n&TAIL /\n"
+    parsed_check = parse_fds(scaffold)
+    if parsed_check.errors:
+        raise ValueError(f"FDS syntax error in emitted scenario fragment: {parsed_check.errors}")
 
     # Deterministic scenario ID based on full scenario fragment
     scenario_hash = hashlib.sha256(fds_fragment.encode("utf-8")).hexdigest()[:12]
     scenario_id = f"ev_scenario_{scenario_hash}"
 
+    # Compute EV library content digest for reproducibility (M-14)
+    lib_digest = None
+    try:
+        from ifc_to_fds.fire.ev_library import library_digest
+        lib_digest = library_digest()
+    except Exception:
+        pass
+
     return ScenarioBundle(
         scenario_id=scenario_id,
         bundle_sha256=bundle_sha256,
         ev_library_version=EV_LIBRARY_VERSION,
+        ev_library_digest=lib_digest,
         fds_fragment=fds_fragment,
         total_peak_hrr_mw=round(total_peak_hrr_mw, 6),
         ev_count=len(normalized_evs),
