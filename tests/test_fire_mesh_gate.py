@@ -49,11 +49,11 @@ def test_mesh_gate_blocks_coarse_ebike():
 
 
 def test_mesh_gate_passes_very_fine_mesh():
-    """Verify D*/dx > 16.0 does NOT pass (strictly enforce 4.0 <= D*/dx <= 16.0)."""
+    """Verify D*/dx > 16.0 does NOT pass (strictly enforce 4.0 <= D*/dx <= 16.0; returns INCONCLUSIVE)."""
     scenario_5mw = {"total_peak_hrr_mw": 5.0}
     res = check_mesh_resolution(scenario_5mw, cell_size=0.05)
     assert res.status != GateStatus.PASS
-    assert res.status == GateStatus.FAIL
+    assert res.status == GateStatus.INCONCLUSIVE
     assert res.evidence["d_star_over_dx"] > 16.0
     assert "Mesh resolution too fine" in res.reason
     assert "exceeds validated [4.0, 16.0] range" in res.reason
@@ -136,6 +136,51 @@ def test_check_mesh_resolution_with_scenario_bundle():
     # 4.5 MW = 4500 kW -> D* = (4500/1111.4)^0.4 ~= 1.7454 -> D*/0.2 ~= 8.727
     assert res.evidence["peak_hrr_kw"] == 4500.0
     assert res.evidence["d_star_over_dx"] == pytest.approx(8.727, rel=1e-2)
+
+
+def test_check_mesh_resolution_rejects_ambiguous_units():
+    """H-1: verify ambiguous unit keys and bare scalars are rejected."""
+    with pytest.raises(ValueError, match="Ambiguous key 'total_peak_hrr'"):
+        check_mesh_resolution({"total_peak_hrr": 50.0}, cell_size=0.2)
+
+    with pytest.raises(TypeError, match="Scalar number for scenario HRR is ambiguous"):
+        check_mesh_resolution(50.0, cell_size=0.2)
+
+
+def test_device_selection_sanitization_and_injection_defense():
+    """H-7: verify DeviceSelection whitelists quantities and rejects injection."""
+    from ifc_to_fds.fire.scenario_emitter import DeviceSelection
+
+    # Valid device
+    dev = DeviceSelection(
+        id="DEV_TEMP_1",
+        device_type="thermocouple",
+        position=(1.0, 2.0, 1.5),
+        setpoint=68.0,
+        quantity="TEMPERATURE",
+    )
+    assert dev.quantity == "TEMPERATURE"
+
+    # Injection attempt in quantity
+    with pytest.raises(ValueError, match="disallowed characters|Invalid FDS device quantity"):
+        DeviceSelection(
+            id="D1",
+            device_type="thermocouple",
+            position=(1.0, 2.0, 1.5),
+            setpoint=1.0,
+            quantity="TEMPERATURE' /\n&OBST XB=0,1,0,1,0,1, SURF_ID='INERT",
+        )
+
+    # Disallowed quantity
+    with pytest.raises(ValueError, match="Invalid FDS device quantity"):
+        DeviceSelection(
+            id="D1",
+            device_type="sensor",
+            position=(1.0, 1.0, 1.0),
+            setpoint=0.0,
+            quantity="NON_EXISTENT_QUANTITY",
+        )
+
 
 
 def test_solver_blocked_when_mesh_resolution_fails(box_model, monkeypatch):

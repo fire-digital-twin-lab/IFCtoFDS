@@ -77,7 +77,7 @@
                     total_peak_hrr_mw: scenario.total_peak_hrr_mw,
                     scenario_data: scenario
                 };
-                return authFetch('/api/jobs', {
+                return authFetch('/api/scenario-jobs', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)

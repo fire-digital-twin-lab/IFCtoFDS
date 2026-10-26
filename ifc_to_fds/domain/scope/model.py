@@ -1,7 +1,7 @@
 """Scope domain models separating SelectionScope, SimulationDomain, and BoundaryPolicy."""
 
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..bim.bounding_box import BoundingBox
@@ -26,6 +26,7 @@ class SelectionScope(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = "FullModel"
     bounding_box: Optional[BoundingBox] = None
+    coordinate_frame: Optional[Literal["WORLD", "REBASED"]] = None
     storeys: List[str] = Field(default_factory=list)
     include_connecting_structures: bool = True
     elements: List[str] = Field(default_factory=list)

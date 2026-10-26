@@ -63,4 +63,7 @@ def test_validator_rejects_resealed_geom_even_with_matching_provenance(box_model
     assert report.status == "REJECTED"
     assert report.gates["geometry"].status == "FAIL"
     assert report.gates["openings"].status == "FAIL"
+    assert report.gates["openings"].reason != ""
+    assert "void-guid" in report.gates["openings"].reason
+    assert report.gates["openings"].evidence
     assert any("void-guid" in f.detail for f in report.findings)

@@ -111,6 +111,10 @@ class OpeningsChecker:
                         reasons.append(f"Source opening subtraction not proven: {opening.opening_global_id}")
                     elif output_residual > opening_tolerance:
                         status = GateStatus.FAIL
+                        reasons.append(
+                            f"Opening blocked in emitted host: {opening.opening_global_id} "
+                            f"(output_residual={output_residual:.6e} > tolerance={opening_tolerance:.6e})"
+                        )
                         findings.append(
                             Finding(
                                 id=f"FND-{len(findings) + 1:04}",
@@ -132,6 +136,11 @@ class OpeningsChecker:
                         or passage["source_free_components"] != passage["output_free_components"]
                     ):
                         status = GateStatus.FAIL
+                        reasons.append(
+                            f"Opening passage altered: {opening.opening_global_id} "
+                            f"(normalized_symmetric_difference={passage.get('normalized_symmetric_difference', 0.0):.6e}, "
+                            f"free_components source={passage.get('source_free_components')} vs output={passage.get('output_free_components')})"
+                        )
                         findings.append(
                             Finding(
                                 id=f"FND-{len(findings) + 1:04}",
@@ -143,19 +152,41 @@ class OpeningsChecker:
                             )
                         )
 
+                    from ifc_to_fds.validation.effective import check_opening_grid_alignment
+                    cell_sz = getattr(config, "cell_size", 0.2) or 0.2
+                    align_info = check_opening_grid_alignment(
+                        opening.bounding_box or opening_solid.bounds,
+                        cell_size=cell_sz,
+                    )
+
                     metrics.setdefault(key, {})[f"opening:{opening.opening_global_id}"] = dict(
                         source_residual=source_residual,
                         output_residual=output_residual,
                         passage=passage,
+                        grid_alignment=align_info,
                     )
                 except Exception as exc:
                     if status != GateStatus.FAIL:
                         status = GateStatus.INCONCLUSIVE
                     reasons.append(f"{opening.opening_global_id}: {exc}")
 
+        reason_str = "; ".join(reasons) if reasons else (
+            "All host openings verified successfully"
+            if status == GateStatus.PASS
+            else "Openings validation inconclusive"
+        )
+        evidence = {
+            "findings_count": len(findings),
+            "element_statuses": element_statuses,
+            "metrics": metrics,
+        }
         return CheckerOutcome(
             gate_name="openings",
-            result=GateResult(status=status, reason="; ".join(reasons)),
+            result=GateResult(
+                status=status,
+                reason=reason_str,
+                evidence=evidence,
+            ),
             findings=findings,
             metrics=metrics,
             element_statuses=element_statuses,

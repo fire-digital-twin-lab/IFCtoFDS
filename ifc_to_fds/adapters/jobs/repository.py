@@ -26,6 +26,7 @@ class JobRepository:
             raise RuntimeError("Database not initialized")
         conn = sqlite3.connect(str(self._db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA synchronous=NORMAL;")
         return conn
 
     def _init_db(self) -> None:

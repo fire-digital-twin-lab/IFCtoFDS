@@ -351,18 +351,36 @@ class AirPathTopologyChecker:
 
             v_leak = float(leak_intersection.volume) if leak_intersection and hasattr(leak_intersection, "volume") else 0.0
 
+            if v_leak < -1e-12:
+                return CheckerOutcome(
+                    gate_name=self.name,
+                    result=GateResult(
+                        status=GateStatus.INCONCLUSIVE,
+                        reason=f"INVALID_VOLUME_SIGN: Computed leak volume is negative ({v_leak:.6e} m3); mesh winding or normal orientation undefined.",
+                        evidence={
+                            "enclosure_count": len(enclosure_elements),
+                            "leak_volume_m3": v_leak,
+                            "source_cavities": len(c_ref),
+                            "fds_cavities": len(c_fds),
+                        },
+                    ),
+                    findings=[],
+                    metrics={"air_path": {"error": f"Negative leak volume: {v_leak}"}},
+                )
+
             surface_tol = getattr(context.config, "surface_tolerance_m", 0.001) if context.config else 0.001
             v_ref = float(s_ref.volume)
-            leak_ratio = v_leak / max(v_ref, 1e-12)
+            abs_v_leak = abs(v_leak)
+            leak_ratio = abs_v_leak / max(abs(v_ref), 1e-12)
             configured_leak_vol = getattr(context.config, "max_leak_volume_m3", 1e-4) if context.config else 1e-4
             leak_vol_tol = max(float(configured_leak_vol), surface_tol ** 3)
-            leak_tol = max(1e-4, (surface_tol ** 3) / max(v_ref, 1e-12))
+            leak_tol = max(1e-4, (surface_tol ** 3) / max(abs(v_ref), 1e-12))
 
             findings: List[Finding] = []
             status = GateStatus.PASS
             reasons = []
 
-            if v_leak > leak_vol_tol or leak_ratio > leak_tol:
+            if abs_v_leak > leak_vol_tol or leak_ratio > leak_tol:
                 if has_missing_opening_mesh:
                     return CheckerOutcome(
                         gate_name=self.name,

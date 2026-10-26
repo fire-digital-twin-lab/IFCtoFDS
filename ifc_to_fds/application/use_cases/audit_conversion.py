@@ -123,7 +123,7 @@ class AuditConversionUseCase:
             s.get("source_id"): {k: s.get(k) for k in fields} for s in manifest.sources
         }
         if actual == declared:
-            if report.gates["source_inventory"].status != GateStatus.FAIL:
+            if report.gates.get("source_inventory", GateResult(status=GateStatus.NOT_RUN)).status != GateStatus.FAIL:
                 report.gates["source_inventory"] = GateResult(
                     status=GateStatus.PASS,
                     reason="All source hashes and product identities re-read from IFC; per-product reference geometry rebuilt",
@@ -263,7 +263,6 @@ class AuditConversionUseCase:
                     status=GateStatus.NOT_RUN,
                     reason="Simulation verification is not implemented by this mapping stage",
                 )
-        report.finalize()
         from ifc_to_fds.results import research_context
 
         report.configuration["research"] = research_context(

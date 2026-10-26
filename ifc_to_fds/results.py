@@ -70,6 +70,8 @@ def research_context(sources, config, report=None):
 
 ARTIFACTS = {
     "fds": "model.fds",
+    "scenario_fds": "scenario.fds",
+    "scenario": "scenario.json",
     "manifest": "model_manifest.json",
     "manifest_csv": "model_manifest.csv",
     "report": "model_acceptance_report.json",
@@ -84,7 +86,7 @@ ARTIFACTS = {
 }
 
 
-def public_result(result):
+def public_result(result, directory=None):
     report = result["report"]
 
     def counts(value):
@@ -93,6 +95,14 @@ def public_result(result):
         if isinstance(value, list):
             return len(value)
         return value
+
+    all_findings = report.get("findings", [])
+    dir_path = Path(directory) if directory else None
+    available_artifacts = {
+        k: dict(filename=v)
+        for k, v in ARTIFACTS.items()
+        if dir_path is None or (dir_path / v).is_file()
+    }
 
     return dict(
         schema_version="0.5.0",
@@ -110,8 +120,8 @@ def public_result(result):
             )
             for k, v in report["gates"].items()
         },
-        findings=report["findings"][:20],
-        findings_count=len(report["findings"]),
+        findings=all_findings,
+        findings_count=len(all_findings),
         blocker_count=sum(
             v["required"] and v["status"] not in ("PASS", "NOT_APPLICABLE")
             for v in report["gates"].values()
@@ -119,5 +129,5 @@ def public_result(result):
         research=research_context(
             result["manifest"]["sources"], result["configuration"], report
         ),
-        artifacts={k: dict(filename=v) for k, v in ARTIFACTS.items()},
+        artifacts=available_artifacts,
     )

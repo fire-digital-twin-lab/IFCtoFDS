@@ -16,7 +16,7 @@ def exit_status(status):
         "SIMULATION_VERIFIED": 0,
         "REJECTED": 1,
         "INCONCLUSIVE": 2,
-    }[str(status)]
+    }.get(str(status), 3)
 
 
 def main(argv=None):
@@ -82,6 +82,7 @@ def main(argv=None):
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--api-key", help="API key required for /api/* requests")
+    p.add_argument("--api-key-file", help="Path to file containing API key")
     p.add_argument("--allowed-hosts", help="Comma-separated list of allowed Host header values")
     args = parser.parse_args(argv)
     try:
@@ -90,7 +91,17 @@ def main(argv=None):
 
             loopback_hosts = {"127.0.0.1", "localhost", "::1", "testserver"}
             is_public_host = args.host not in loopback_hosts
-            api_key = args.api_key or os.getenv("IFCFDS_API_KEY")
+            api_key = args.api_key
+            if not api_key and getattr(args, "api_key_file", None):
+                key_path = Path(args.api_key_file)
+                if not key_path.is_file():
+                    sys.stderr.write(
+                        f"SECURITY ERROR: Specified --api-key-file does not exist or is not a file: {args.api_key_file}\n"
+                    )
+                    return 1
+                api_key = key_path.read_text(encoding="utf-8").strip()
+            if not api_key:
+                api_key = os.getenv("IFCFDS_API_KEY")
 
             if is_public_host and not api_key:
                 sys.stderr.write(

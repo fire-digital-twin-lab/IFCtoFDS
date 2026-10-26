@@ -16,6 +16,7 @@ def build_mapping_plan(model: Any, cell_size: float = 0.2) -> MappingPlan:
                 simulation_role=e.simulation_role,
                 fds_representation=e.fds_representation,
                 representation_bounds=e.representation_bounds,
+                element_bounds=e.bounding_box,
                 rationale=e.mapping_rationale,
                 boundary_treatment=e.boundary_treatment,
                 scope_decision=e.scope_decision,

@@ -271,7 +271,7 @@ class JobService:
                     except psutil.NoSuchProcess:
                         pass
                 parent.kill()
-                process.wait(timeout=10)
+                process.wait(timeout=2)
             except (psutil.NoSuchProcess, subprocess.TimeoutExpired):
                 pass
 
@@ -316,20 +316,29 @@ class JobService:
         )
 
     def cancel(self, jid):
+        proc_to_stop = None
+        was_active = False
         with self.lock:
             job = self.repository.get(jid)
             if job and job["state"] in ("QUEUED", "RUNNING"):
                 job["state"] = "CANCELLED"
                 job["finished"] = time.time()
-                self._stop(job["process"])
+                proc_to_stop = job.get("process")
+                was_active = True
                 self._terminal_diagnostic(job, "AbortError", "Job cancelled by user")
-                self._cleanup(job)
                 self.repository.set(jid, job)
             self.wake.set()
+        if proc_to_stop:
+            self._stop(proc_to_stop)
+        with self.lock:
+            job = self.repository.get(jid)
+            if job and was_active:
+                self._cleanup(job)
             return self.snapshot(jid)
 
     def delete_job(self, jid: str, purge: bool = False) -> Dict[str, Any]:
         """Cancels active jobs; purges terminal jobs only when purge=True."""
+        dir_to_purge = None
         with self.lock:
             job = self.repository.get(jid)
             if not job:
@@ -344,10 +353,13 @@ class JobService:
                 return self.snapshot(jid)
             directory = Path(job["directory"]).resolve()
             if directory.parent == self.root.resolve():
-                _rmtree_logged(directory)
+                dir_to_purge = directory
             self.repository.delete(jid)
             self.wake.set()
-            return {"id": jid, "state": "DELETED"}
+            result = {"id": jid, "state": "DELETED"}
+        if dir_to_purge:
+            _rmtree_logged(dir_to_purge)
+        return result
 
     def close(self):
         self.closed = True
@@ -361,6 +373,7 @@ class JobService:
         while not self.closed:
             has_running = False
             has_queued = False
+            dirs_to_delete = []
             with self.lock:
                 self.wake.clear()
                 now = time.time()
@@ -373,7 +386,7 @@ class JobService:
                         if last_active + self.retention_s < now:
                             directory = Path(job["directory"]).resolve()
                             if directory.parent == self.root.resolve():
-                                _rmtree_logged(directory)
+                                dirs_to_delete.append(directory)
                             self.repository.delete(jid)
 
                 # 2. Queue wait timeout sweep
@@ -501,6 +514,7 @@ class JobService:
                             # Capture stderr to error.txt if worker fails during startup
                             err_path = Path(queued["directory"]) / "error.txt"
                             worker_env = os.environ.copy()
+                            worker_env.pop("IFCFDS_API_KEY", None)
                             repo_root = str(Path(__file__).resolve().parents[3])
                             existing_pythonpath = worker_env.get("PYTHONPATH", "")
                             worker_env["PYTHONPATH"] = (
@@ -539,6 +553,10 @@ class JobService:
 
                 # Check if there are further queued jobs
                 has_queued = any(j.get("state") == "QUEUED" for j in self.repository.all_jobs())
+
+            # Perform heavy I/O outside self.lock
+            for d in dirs_to_delete:
+                _rmtree_logged(d)
 
             wait_timeout = 0.1 if (has_running or has_queued) else 5.0
             self.wake.wait(wait_timeout)

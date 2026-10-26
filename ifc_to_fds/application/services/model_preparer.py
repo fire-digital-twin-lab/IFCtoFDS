@@ -26,9 +26,22 @@ def prepare_model(
 
     scope_start = perf_counter()
     scope_raw = dict(configuration.get("scope", {}) or {})
+    coord_frame = scope_raw.get("coordinate_frame") or configuration.get("coordinate_frame")
+    if coord_frame not in (None, "WORLD", "REBASED"):
+        raise ValueError(f"Invalid coordinate_frame: {coord_frame!r}, must be 'WORLD' or 'REBASED'")
+
     if scope_raw.get("bounding_box") and has_rebase:
         raw_box = BoundingBox.model_validate(scope_raw["bounding_box"])
-        if abs(raw_box.xmin) > 1000.0 or abs(raw_box.ymin) > 1000.0:
+        should_rebase = False
+        if coord_frame == "WORLD":
+            should_rebase = True
+        elif coord_frame == "REBASED":
+            should_rebase = False
+        elif abs(raw_box.xmin) > 1000.0 or abs(raw_box.ymin) > 1000.0:
+            should_rebase = True
+
+        if should_rebase:
+            scope_raw["coordinate_frame"] = "REBASED"
             scope_raw["bounding_box"] = BoundingBox(
                 xmin=raw_box.xmin - dx,
                 xmax=raw_box.xmax - dx,
@@ -45,7 +58,23 @@ def prepare_model(
         model.requested_scope = scope.model_dump(mode="json")
     if configuration.get("simulation_domain"):
         domain_box = BoundingBox.model_validate(configuration["simulation_domain"])
-        if has_rebase and (abs(domain_box.xmin) > 1000.0 or abs(domain_box.ymin) > 1000.0):
+        domain_frame = (
+            configuration.get("simulation_domain_coordinate_frame")
+            or coord_frame
+        )
+        if domain_frame not in (None, "WORLD", "REBASED"):
+            raise ValueError(
+                f"Invalid simulation_domain_coordinate_frame: {domain_frame!r}, must be 'WORLD' or 'REBASED'"
+            )
+        should_rebase_domain = False
+        if domain_frame == "WORLD":
+            should_rebase_domain = True
+        elif domain_frame == "REBASED":
+            should_rebase_domain = False
+        elif has_rebase and (abs(domain_box.xmin) > 1000.0 or abs(domain_box.ymin) > 1000.0):
+            should_rebase_domain = True
+
+        if has_rebase and should_rebase_domain:
             domain_box = BoundingBox(
                 xmin=domain_box.xmin - dx,
                 xmax=domain_box.xmax - dx,

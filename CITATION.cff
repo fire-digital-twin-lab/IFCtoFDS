@@ -7,13 +7,15 @@ authors:
     family-names: Lovreglio
     affiliation: Massey University
     orcid: "https://orcid.org/0000-0003-4596-7656"
-repository-code: "https://github.com/ProfRino/IFCtoFDS"
-url: "https://github.com/ProfRino/IFCtoFDS"
+  - name: "Fire Digital Twin Lab"
+    affiliation: "Hanoi University of Civil Engineering (HUCE)"
+repository-code: "https://github.com/fire-digital-twin-lab/IFCtoFDS"
+url: "https://github.com/fire-digital-twin-lab/IFCtoFDS"
 abstract: >
-  A browser-based workbench that converts IFC building models into Fire
-  Dynamics Simulator (FDS) input geometry. Imports IFC, lets the user choose
-  between HOLE-based and voxelized opening strategies, and emits a ready-to-run
-  .fds file with full source-element provenance.
+  A verified BIM-to-FDS mapping and electric vehicle fire scenario simulation
+  framework. Converts IFC building models into NIST Fire Dynamics Simulator input
+  geometry with 14-gate independent audit, 64-bit float precision, automated
+  multi-mesh domain partitioning, and standardized t^2 EV battery fire simulation.
 license: AGPL-3.0-or-later
-version: "0.1.0"
-date-released: "2026-06-02"
+version: "0.5.0"
+date-released: "2026-10-26"

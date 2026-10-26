@@ -281,14 +281,7 @@
                 : (typeof fetch !== 'undefined' ? fetch : null);
 
             if (!fetcher) {
-                return Promise.resolve({
-                    job_id: 'mock_' + scenario.scenario_id,
-                    scenario_id: scenario.scenario_id,
-                    state: 'COMPLETED',
-                    mesh_status: 'PASS',
-                    verdict: 'PASS',
-                    peak_hrr_mw: scenario.total_peak_hrr_mw
-                });
+                return Promise.reject(new Error('Backend unavailable: fetch API not found'));
             }
 
             return fetcher('/api/scenario-jobs', {
@@ -320,7 +313,7 @@
                 ? root.IfcFds.verified.authFetch
                 : (typeof fetch !== 'undefined' ? fetch : null);
             if (!fetcher) {
-                return Promise.resolve({ id: id, state: 'COMPLETED', verdict: 'PASS' });
+                return Promise.reject(new Error('Backend unavailable: fetch API not found'));
             }
             return fetcher('/api/jobs/' + id).then(function (r) {
                 if (r && r.status === 429) {
