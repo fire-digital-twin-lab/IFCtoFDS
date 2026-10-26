@@ -518,4 +518,59 @@ def test_gate_checker_fail_must_have_non_empty_reason():
     assert bool(res.reason.strip())
 
 
+def test_ventilation_ducts_default_to_reference_geometry_not_solid_obst(box_model):
+    """MEP Ventilation ducts must default to REFERENCE_GEOMETRY and NONE strategy, never solid OBST/GEOM."""
+    from ifc_to_fds.core.canonical import CanonicalElement, MappingStrategy
+    from ifc_to_fds.geometry.mesh import box_mesh
+    from ifc_to_fds.mapping.policy import plan_mapping
+    from ifc_to_fds.mapping.exporter import serialize_fds
+
+    duct_box = BoundingBox(xmin=0.0, xmax=5.0, ymin=1.0, ymax=1.5, zmin=2.5, zmax=3.0)
+    duct_elem = CanonicalElement(
+        source_id="test_src",
+        entity_key="test_src:duct_1",
+        global_id="guid_duct_1",
+        step_id=9001,
+        ifc_type="IfcDuctSegment",
+        name="Supply Air Duct 1",
+        role="PHYSICAL",
+        has_3d_geometry=True,
+        bounding_box=duct_box,
+        mesh=box_mesh(duct_box),
+        scope_decision=ScopeDecision.IN_SCOPE,
+    )
+    fitting_box = BoundingBox(xmin=5.0, xmax=6.0, ymin=1.0, ymax=2.0, zmin=2.5, zmax=3.0)
+    fitting_elem = CanonicalElement(
+        source_id="test_src",
+        entity_key="test_src:duct_elbow_1",
+        global_id="guid_duct_elbow_1",
+        step_id=9002,
+        ifc_type="IfcDuctFitting",
+        name="Elbow 90deg",
+        role="PHYSICAL",
+        has_3d_geometry=True,
+        bounding_box=fitting_box,
+        mesh=box_mesh(fitting_box),
+        scope_decision=ScopeDecision.IN_SCOPE,
+    )
+    box_model.elements.extend([duct_elem, fitting_elem])
+
+    plan_mapping(box_model)
+
+    assert duct_elem.simulation_role == "REFERENCE_GEOMETRY"
+    assert duct_elem.mapping_strategy == MappingStrategy.NONE
+    assert fitting_elem.simulation_role == "REFERENCE_GEOMETRY"
+    assert fitting_elem.mapping_strategy == MappingStrategy.NONE
+
+    # In serialized FDS, neither duct nor fitting must be emitted as &OBST or &GEOM
+    fds_text, _ = serialize_fds(box_model)
+    assert "guid_duct_1" not in fds_text
+    assert "guid_duct_elbow_1" not in fds_text
+    assert "OBST_9001" not in fds_text
+    assert "GEOM_9001" not in fds_text
+    assert "OBST_9002" not in fds_text
+    assert "GEOM_9002" not in fds_text
+
+
+
 

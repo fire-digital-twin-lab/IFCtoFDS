@@ -3,6 +3,7 @@
 from ifc_to_fds.core.canonical import MappingStrategy, MappingStatus, ScopeDecision, GeometryStatus
 from ifc_to_fds.geometry.mesh import is_axis_aligned_box, valid_solid
 from ifc_to_fds.diagnostics import operation
+from ifc_to_fds.mep.classifier import MEP_TYPES
 
 NON_OBSTACLE_TYPES = {
     "IFCSPACE",
@@ -88,9 +89,30 @@ def determine_element_strategy(
         return MappingStrategy.SEMANTIC_ONLY
     if element.review_status == "EXCLUDED_APPROVED":
         return MappingStrategy.EXCLUDED_APPROVED
-    if element.simulation_role == "REFERENCE_GEOMETRY" or (
-        element.boundary_treatment == "PENDING_VALIDATION"
-        and element.representation_bounds is None
+    if (
+        element.simulation_role == "REFERENCE_GEOMETRY"
+        or (
+            (
+                (element.ifc_type or "").upper() in MEP_TYPES
+                or (element.ifc_type or "").upper().startswith(
+                    (
+                        "IFCDUCT",
+                        "IFCPIPE",
+                        "IFCFAN",
+                        "IFCVALVE",
+                        "IFCAIRTERMINAL",
+                        "IFCDAMPER",
+                        "IFCFLOW",
+                        "IFCPUMP",
+                    )
+                )
+            )
+            and element.simulation_role != "PASSIVE_OBSTACLE"
+        )
+        or (
+            element.boundary_treatment == "PENDING_VALIDATION"
+            and element.representation_bounds is None
+        )
     ):
         return MappingStrategy.NONE
     if not element.mesh or not valid_solid(element.mesh):
@@ -146,13 +168,38 @@ def plan_mapping(
             e.decision = inherited[0]
         e.review_status = "NOT_REQUIRED"
         is_review = e.ifc_type.upper() in REVIEW_TYPES
+        ifc_type_upper = (e.ifc_type or "").upper()
+        type_class_upper = (e.type_class or "").upper()
         is_mep = bool(
             e.classification_evidence
             or e.system_ids
             or e.ports
-            or (e.type_class or "")
-            .upper()
-            .startswith(("IFCDUCT", "IFCPIPE", "IFCFAN", "IFCVALVE"))
+            or ifc_type_upper in MEP_TYPES
+            or type_class_upper in MEP_TYPES
+            or ifc_type_upper.startswith(
+                (
+                    "IFCDUCT",
+                    "IFCPIPE",
+                    "IFCFAN",
+                    "IFCVALVE",
+                    "IFCAIRTERMINAL",
+                    "IFCDAMPER",
+                    "IFCFLOW",
+                    "IFCPUMP",
+                )
+            )
+            or type_class_upper.startswith(
+                (
+                    "IFCDUCT",
+                    "IFCPIPE",
+                    "IFCFAN",
+                    "IFCVALVE",
+                    "IFCAIRTERMINAL",
+                    "IFCDAMPER",
+                    "IFCFLOW",
+                    "IFCPUMP",
+                )
+            )
         )
         is_thin_covering = (
             e.ifc_type.upper() == "IFCCOVERING"
