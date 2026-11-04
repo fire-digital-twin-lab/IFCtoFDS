@@ -1,6 +1,8 @@
 """R10-07 — per-mode JSON result contracts and fail-closed API protection."""
 
 import json
+import threading
+import time
 
 import pytest
 
@@ -181,3 +183,68 @@ def test_read_result_revalidates_tampered_persisted_result(tmp_path):
     (directory / "result.json").write_text('{"status": ', encoding="utf-8")
     with pytest.raises(ValueError, match="unreadable result.json"):
         repository.read_result("job-1")
+
+
+@pytest.mark.parametrize("mode,payload", [
+    ("convert", {"status": "MAPPING_VERIFIED"}),
+    ("convert", {**valid_convert(), "gates": {}}),
+    ("scenario", {**valid_scenario(), "verdict": "PASS"}),
+    ("scenario", {**valid_scenario(), "artifacts": {}}),
+    ("preview", {"status": "PREVIEW_ONLY"}),
+    ("inventory", {"total_elements": 3}),
+])
+def test_worker_completion_rejects_invalid_mode_specific_result(tmp_path, mode, payload):
+    from ifc_to_fds.adapters.jobs.service import JobService
+
+    service = JobService(root=tmp_path, max_waiting=1)
+    job_id = "job-invalid"
+    directory = tmp_path / job_id
+    directory.mkdir()
+    (directory / "result.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    class ExitedWorker:
+        pid = None
+        returncode = 0
+
+        def poll(self):
+            return 0
+
+    service.repository.set(job_id, {
+        "id": job_id, "mode": mode, "state": "RUNNING",
+        "directory": str(directory), "created": time.time() - 10,
+        "started": time.time() - 5, "process": ExitedWorker(),
+        "durable": False,
+    })
+    worker = threading.Thread(target=service._loop, daemon=True)
+    try:
+        worker.start()
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            job = service.repository.get(job_id)
+            if job and job["state"] != "RUNNING":
+                break
+            time.sleep(0.05)
+        job = service.repository.get(job_id)
+        assert job is not None and job["state"] == "FAILED"
+        assert job.get("durable") is not True
+        assert "Invalid result.json" in job["error"]
+        assert (directory / "diagnostics.json").is_file()
+    finally:
+        service.closed = True
+        service.wake.set()
+        worker.join(timeout=4)
+        service.close()
+
+
+def test_preview_urls_remain_available_after_validation(tmp_path):
+    repository = JobRepository(root=tmp_path)
+    directory = tmp_path / "job-preview"
+    directory.mkdir()
+    (directory / "result.json").write_text(json.dumps(valid_preview()), encoding="utf-8")
+    repository.set("job-preview", {
+        "id": "job-preview", "directory": str(directory),
+        "state": "COMPLETED", "mode": "preview", "created": 0.0,
+    })
+    res = repository.read_result("job-preview")
+    assert res["artifacts"]["geometry"]["url"] == "/api/jobs/job-preview/artifacts/geometry"
+    assert res["artifacts"]["mep"]["url"] == "/api/jobs/job-preview/artifacts/mep"
