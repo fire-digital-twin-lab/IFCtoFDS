@@ -60,7 +60,11 @@ def convert(
     output_directory: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
     """Converts IFC models to FDS with verification (Compatibility Facade)."""
-    return ConvertVerifiedUseCase().execute(
+    # The composition root injects the production conversion ports.
+    # Direct use-case construction remains supported during R10 migration.
+    from ifc_to_fds.bootstrap.container import create_container
+
+    return create_container().get_convert_verified_use_case().execute(
         paths=paths,
         configuration=configuration,
         output_directory=output_directory,
