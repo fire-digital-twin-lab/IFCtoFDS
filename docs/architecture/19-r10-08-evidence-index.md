@@ -88,3 +88,18 @@ directory. A crash before index creation prevents successful job publication.
   (time-of-check/time-of-use) requires immutable sealed storage or filesystem
   snapshot semantics; no claim of adversarial tamper protection is made.
 - Full solver log and scientific evidence record linking.
+
+
+## Kiểm tra bổ sung trước nghiệm thu PR #30 (04/11/2026)
+
+Đợt rà soát bổ sung đã kiểm tra lại các hợp đồng đọc, tải và công bố kết quả theo mode.
+
+- **Phân quyền đầu ra theo công việc:** chỉ trả artifact có trong kết quả của chính công việc. `inventory` không được tự khai báo trường nghiệm thu hoặc tập tệp tải xuống; `preview` không được thêm verdict khoa học qua trường mở rộng.
+- **Kiểm tra hình học:** khi tệp payload không đọc được trong lúc tính SHA-256, API trả lỗi HTTP 409 có kiểm soát. Một yêu cầu geometry batch với các mã payload trùng nhau kiểm tra hash một lần cho mỗi mã duy nhất, nhưng vẫn xuất đủ số phần mà người gọi yêu cầu.
+- **Kiểm thử hồi quy:** thêm test chống trường nghiệm thu giả ở preview/inventory, kiểm tra số lần gọi hàm xác minh payload và giả lập lỗi I/O khi băm.
+- **Giới hạn:** đọc chỉ mục và băm tệp ở API đã tách khỏi khóa điều phối, nhưng vòng hoàn thành worker vẫn thực hiện kiểm tra tệp trong khóa. Các đường tải sử dụng FileResponse/StreamingResponse còn nguy cơ thay đổi tệp giữa lúc kiểm tra và lúc truyền.
+- **Job cũ:** không tạo chỉ mục hoặc chứng cứ khoa học hồi tố khi chưa có quy trình kiểm định độc lập; lỗi thiếu chỉ mục tiếp tục trả về có kiểm soát.
+
+### Điều kiện hoàn thành
+
+Đối chiếu kết quả hai workflow GitHub Actions trên đúng commit HEAD của PR #30; chạy lại bài kiểm thử API trên Windows/Linux, kiểm thử solver và ca IFC thực tế. Không ghi nhận trạng thái nghiệm thu nếu workflow chưa kết thúc thành công; không hợp nhất PR khi còn tìm thấy hồi quy.
