@@ -162,6 +162,18 @@ def test_unknown_mode_fails_closed(mode):
         validate_job_result(mode, {})
 
 
+def test_model_validator_root_error_is_reported_without_worker_crash():
+    doc = valid_convert()
+    doc["mapping_status"] = "INCONCLUSIVE"
+    with pytest.raises(ValueError, match="Invalid convert result fields: result"):
+        validate_job_result("convert", doc)
+
+    doc = valid_scenario()
+    doc["verdict"] = "FAIL"
+    with pytest.raises(ValueError, match="Invalid scenario result fields: result"):
+        validate_job_result("scenario", doc)
+
+
 def test_artifact_names_cannot_be_redirected_or_renamed():
     doc = valid_convert()
     doc["artifacts"]["fds"]["filename"] = "../../other-job/secret.txt"
