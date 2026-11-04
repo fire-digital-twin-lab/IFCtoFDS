@@ -129,4 +129,21 @@ class WorkerRunner:
             (directory / "error.txt").write_text(
                 f"{type(exc).__name__}: {exc}", encoding="utf-8"
             )
+            # Add language-neutral failure evidence without changing the
+            # legacy diagnostic file or worker return code.
+            try:
+                from ifc_to_fds.observability import DiagnosticEvent, append_event
+                append_event(directory, DiagnosticEvent(
+                    code="IFCFDS.JOB.FAILED",
+                    level="ERROR",
+                    stage=diagnostic["stage"],
+                    job_id=str(job_id),
+                    entity_key=str(diagnostic["entity"]) if diagnostic["entity"] is not None else None,
+                    params={"stage": diagnostic["stage"], "error_type": type(exc).__name__},
+                ))
+            except (OSError, ValueError, TypeError) as log_exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Could not write bilingual failure diagnostic: %s", log_exc
+                )
             return 1
