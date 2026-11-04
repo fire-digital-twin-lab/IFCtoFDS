@@ -179,6 +179,15 @@ def verify_evidence_index(
         ):
             raise ValueError(f"Invalid digest for {filename}")
         path = directory / filename
-        if not path.is_file() or _sha256(path) != digest:
+        try:
+            valid = path.is_file() and _sha256(path) == digest
+        except OSError as exc:
+            raise ValueError(
+                f"Evidence file unreadable during verification: {filename}"
+            ) from exc
+        if not valid:
             raise ValueError(f"Evidence file changed or missing: {filename}")
-    _validate_linked_content(directory, mode, result, files)
+    try:
+        _validate_linked_content(directory, mode, result, files)
+    except OSError as exc:
+        raise ValueError("Evidence files disappeared during verification") from exc
