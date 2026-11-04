@@ -43,6 +43,7 @@ class Container:
             DefaultFdsSerializer,
             DefaultGeometryPackageWriter,
         )
+        from ifc_to_fds.adapters.storage.conversion_workspace import LocalConversionWorkspaceFactory
 
         return ConvertVerifiedUseCase(
             audit_use_case=self.get_audit_conversion_use_case(),
@@ -50,6 +51,7 @@ class Container:
             mapping_planner=DefaultMappingPlanner(),
             fds_serializer=DefaultFdsSerializer(),
             geometry_writer=DefaultGeometryPackageWriter(),
+            workspace_factory=LocalConversionWorkspaceFactory(),
         )
 
 
