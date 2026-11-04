@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .result_contract import validate_job_result
+from .evidence_index import verify_evidence_index
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +192,9 @@ class JobRepository:
             )
         except (OSError, ValueError) as exc:
             raise ValueError("Completed job has an unreadable result.json") from exc
-        validate_job_result(job.get("mode", "convert"), result)
+        mode = job.get("mode", "convert")
+        validate_job_result(mode, result)
+        verify_evidence_index(Path(job["directory"]), mode, result)
         # Only add URLs for whitelisted job artifacts. Do not trust URLs or
         # arbitrary filenames stored in the worker's JSON result.
         for name, artifact in result.get("artifacts", {}).items():
