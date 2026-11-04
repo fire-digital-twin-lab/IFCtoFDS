@@ -66,7 +66,13 @@ def test_api_convert_job(tiny_ifc):
     from unittest.mock import patch
     from ifc_to_fds.server import manager
 
-    with patch.object(manager, "result", wraps=manager.result) as checked_result:
+    from ifc_to_fds import server as server_module
+
+    with (
+        patch.object(manager, "result", wraps=manager.result) as checked_result,
+        patch.object(server_module, "_geometry_file", wraps=server_module._geometry_file)
+        as checked_payload,
+    ):
         checked_batch = client.get(
             "/api/jobs/" + jid + "/geometry-batch",
             params=[("payloads", ref["payload"])] * 3,
@@ -74,6 +80,13 @@ def test_api_convert_job(tiny_ifc):
         assert checked_batch.status_code == 200
         assert checked_batch.content == payload.content * 3
         assert checked_result.call_count == 1
+        assert checked_payload.call_count == 1
+
+    # A read error during content hashing is a controlled integrity failure.
+    with patch.object(server_module, "geometry_file_hash", side_effect=OSError("I/O failure")):
+        unreadable = client.get(f"/api/jobs/{jid}/geometry/{ref['payload']}")
+        assert unreadable.status_code == 409
+        assert "cannot be read" in unreadable.json()["detail"]
     assert (
         client.get(
             "/api/jobs/" + jid + "/geometry-batch",
