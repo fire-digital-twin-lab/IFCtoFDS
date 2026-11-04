@@ -476,13 +476,17 @@ class JobService:
                                     is_durable = True
                             except (OSError, ValueError) as exc:
                                 result_error = f"Invalid result.json: {exc}"
+                                # Publish terminal state only *after* the
+                                # diagnostic is persisted: repository readers
+                                # otherwise observe FAILED before evidence
+                                # exists (reproduced on Windows CI).
+                                self._terminal_diagnostic(
+                                    running, "ValidationError", result_error
+                                )
                                 running.update(
                                     state="FAILED",
                                     error=result_error[:2000],
                                     finished=time.time(),
-                                )
-                                self._terminal_diagnostic(
-                                    running, "ValidationError", result_error
                                 )
                             else:
                                 running.update(state="COMPLETED", finished=time.time(), durable=is_durable)
