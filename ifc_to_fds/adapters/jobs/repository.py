@@ -161,22 +161,29 @@ class JobRepository:
         self._jobs[jid] = job
 
     def delete(self, jid: str) -> None:
-        self._jobs.pop(jid, None)
-        if self._db_path:
-            for attempt in range(4):
-                try:
-                    with self._get_connection() as conn:
-                        conn.execute("DELETE FROM jobs WHERE id = ?", (jid,))
-                    return
-                except sqlite3.OperationalError as exc:
-                    if ("locked" in str(exc).lower() or "busy" in str(exc).lower()) and attempt < 3:
-                        time.sleep(0.05 * (2 ** attempt))
-                        continue
-                    logger.error("Failed to delete job %s from SQLite: %s", jid, exc, exc_info=True)
-                    return
-                except sqlite3.Error as exc:
-                    logger.error("Failed to delete job %s from SQLite: %s", jid, exc, exc_info=True)
-                    return
+        """Remove memory state only after SQLite has committed deletion.
+
+        Failure must not claim deletion or permit artifact cleanup while the
+        durable record still points to the job directory.
+        """
+        if not self._db_path:
+            self._jobs.pop(jid, None)
+            return
+        for attempt in range(4):
+            try:
+                with self._get_connection() as conn:
+                    conn.execute("DELETE FROM jobs WHERE id = ?", (jid,))
+                self._jobs.pop(jid, None)
+                return
+            except sqlite3.OperationalError as exc:
+                if ("locked" in str(exc).lower() or "busy" in str(exc).lower()) and attempt < 3:
+                    time.sleep(0.05 * (2 ** attempt))
+                    continue
+                logger.error("Failed to delete job %s from SQLite: %s", jid, exc, exc_info=True)
+                raise JobPersistenceError("Could not delete job metadata") from exc
+            except sqlite3.Error as exc:
+                logger.error("Failed to delete job %s from SQLite: %s", jid, exc, exc_info=True)
+                raise JobPersistenceError("Could not delete job metadata") from exc
 
     def all_jobs(self) -> List[Dict[str, Any]]:
         return list(self._jobs.values())

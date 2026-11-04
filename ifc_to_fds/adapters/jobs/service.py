@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import psutil
 
-from .repository import JobRepository
+from .repository import JobPersistenceError, JobRepository
 from .result_contract import validate_job_result
 from .evidence_index import verify_evidence_index
 
@@ -190,8 +190,15 @@ class JobService:
                         if job_entry and not job_entry.get("durable"):
                             if resolved.parent != root_resolved:
                                 continue
+                            try:
+                                self.repository.delete(job_entry["id"])
+                            except JobPersistenceError:
+                                logger.exception(
+                                    "Preserving retained job %s because SQLite deletion failed",
+                                    job_entry["id"],
+                                )
+                                continue
                             _rmtree_logged(resolved)
-                            self.repository.delete(job_entry["id"])
         except OSError:
             pass
 
@@ -396,9 +403,15 @@ class JobService:
                         last_active = max(job.get("finished") or now, job.get("last_accessed") or 0)
                         if last_active + self.retention_s < now:
                             directory = Path(job["directory"]).resolve()
-                            if directory.parent == self.root.resolve():
-                                dirs_to_delete.append(directory)
-                            self.repository.delete(jid)
+                            try:
+                                self.repository.delete(jid)
+                            except JobPersistenceError:
+                                logger.exception(
+                                    "Keeping job %s after SQLite retention deletion failed", jid
+                                )
+                            else:
+                                if directory.parent == self.root.resolve():
+                                    dirs_to_delete.append(directory)
 
                 # 2. Queue wait timeout sweep
                 for queued in [j for j in self.repository.all_jobs() if j["state"] == "QUEUED"]:
