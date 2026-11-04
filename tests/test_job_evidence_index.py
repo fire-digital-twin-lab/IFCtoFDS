@@ -120,7 +120,37 @@ def test_real_verified_conversion_evidence_is_consistent(tiny_ifc, tmp_path):
     assert audit["audit_outcome"] == "EVIDENCE_VALID"
     assert audit["reported_verdict"] == "MAPPING_VERIFIED"
     assert audit["checks"]["solver_verification"]["status"] == "NOT_RUN"
+    assert audit["checks"]["geometry_payload_integrity"]["status"] == "PASS"
     assert audit["scientific_acceptance"] == "NOT_ESTABLISHED_BY_THIS_AUDIT"
+
+    # An unchanged geometry index alone is not proof that all referenced
+    # binary payloads still exist and match their content-addressed names.
+    stored_index = json.loads(
+        (directory / "model_geometry.json").read_text(encoding="utf-8")
+    )
+    payload_refs = [
+        ref["payload"]
+        for entry in stored_index["elements"].values()
+        for ref in [entry.get("mesh"), *entry.get("openings", {}).values()]
+        if ref is not None
+    ]
+    assert payload_refs, "The tiny IFC acceptance fixture must contain real mesh bytes"
+    key = payload_refs[0]
+    payload_path = directory / "model_geometry.payloads" / (key + ".bin")
+    original_payload = payload_path.read_bytes()
+    try:
+        payload_path.write_bytes(original_payload + b"CORRUPTED")
+        corrupt = audit_persisted_job(directory, "convert")
+        assert corrupt["checks"]["evidence_integrity"]["status"] == "PASS"
+        assert corrupt["checks"]["geometry_payload_integrity"]["status"] == "FAIL"
+        assert corrupt["audit_outcome"] == "INTEGRITY_INVALID"
+        payload_path.unlink()
+        missing = audit_persisted_job(directory, "convert")
+        assert missing["checks"]["geometry_payload_integrity"]["status"] == "FAIL"
+        assert missing["audit_outcome"] == "INTEGRITY_INVALID"
+    finally:
+        payload_path.write_bytes(original_payload)
+    assert audit_persisted_job(directory, "convert")["audit_outcome"] == "EVIDENCE_VALID"
 
     # Hashes include the persisted independent acceptance report and manifest.
     index = json.loads((directory / "result_evidence.json").read_text("utf-8"))
