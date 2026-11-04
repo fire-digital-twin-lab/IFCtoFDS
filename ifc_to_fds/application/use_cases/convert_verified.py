@@ -1,17 +1,17 @@
 """ConvertVerified use case: end-to-end verified BIM-to-FDS conversion."""
 
-import tempfile
-import json
 import gc
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Dict, List, Optional, Union
 
-from ifc_to_fds.domain.mapping import MappingManifest, build_mapping_plan
+from ifc_to_fds.domain.mapping import build_mapping_plan
 from ifc_to_fds.domain.validation.model import GateResult, GateStatus
 from ifc_to_fds.geometry.storage import write_package
 from ifc_to_fds.mapping.exporter import serialize_fds
 from ..ports.conversion import (ModelPreparerPort, MappingPlannerPort, VerifiedFdsSerializerPort, GeometryPackageWriterPort)
+from ..ports.conversion_workspace import ConversionWorkspaceFactoryPort
+from ..services.portable_inventory import compact_inventory
 
 from ..dto.configuration import validate_configuration
 from .audit_conversion import AuditConversionUseCase, prepare_model
@@ -28,6 +28,7 @@ class ConvertVerifiedUseCase:
         mapping_planner: Optional[MappingPlannerPort] = None,
         fds_serializer: Optional[VerifiedFdsSerializerPort] = None,
         geometry_writer: Optional[GeometryPackageWriterPort] = None,
+        workspace_factory: Optional[ConversionWorkspaceFactoryPort] = None,
     ):
         # Transitional fallback preserves direct legacy construction.
         self.audit_use_case = audit_use_case or AuditConversionUseCase()
@@ -35,6 +36,7 @@ class ConvertVerifiedUseCase:
         self.mapping_planner = mapping_planner
         self.fds_serializer = fds_serializer
         self.geometry_writer = geometry_writer
+        self.workspace_factory = workspace_factory
 
     def execute(
         self,
@@ -69,87 +71,34 @@ class ConvertVerifiedUseCase:
             )
         serialized = perf_counter()
 
-        owner = (
-            tempfile.TemporaryDirectory(prefix="ifcfds-artifacts-")
-            if output_directory is None
-            else None
-        )
-        workspace = Path(owner.name if owner is not None else (output_directory or "."))
-        workspace.mkdir(parents=True, exist_ok=True)
+        if self.workspace_factory is not None:
+            workspace = self.workspace_factory.create(output_directory)
+        else:
+            from ifc_to_fds.legacy_conversion_workspace import create_legacy_workspace
+            workspace = create_legacy_workspace(output_directory)
         if self.geometry_writer is not None:
             geometry_package = self.geometry_writer.write(
-                model, workspace / "model_geometry.json", owner
+                model, workspace.geometry_path, workspace.owner
             )
         else:
             geometry_package = write_package(
-                model, workspace / "model_geometry.json", owner
+                model, workspace.geometry_path, workspace.owner
             )
-        (workspace / "model.fds").write_bytes(fds.encode("utf-8"))
-        (workspace / "mapping_plan.json").write_text(mapping_plan.model_dump_json(), encoding="utf-8")
+        workspace.write_prepared(fds, mapping_plan)
         packaged = perf_counter()
         configuration["geometry_package_sha256"] = geometry_package["sha256"]
         manifest.geometry_package_sha256 = geometry_package["sha256"]
         configuration["mep_graph"] = model.mep_graph.model_dump(mode="json")
         manifest.configuration = configuration
         manifest.reseal()
-        manifest_path = workspace / "model_manifest.json"
-        manifest_path.write_text(manifest.model_dump_json(), encoding="utf-8")
-        # Durable checkpoint before the independent audit. These are explicitly
-        # unaccepted artifacts, useful even when a large audit is interrupted.
-        def sanitize_portable_paths(obj):
-            if isinstance(obj, dict):
-                return {
-                    k: (Path(v).name if k == "file_path" and isinstance(v, str) else sanitize_portable_paths(v))
-                    for k, v in obj.items()
-                }
-            elif isinstance(obj, list):
-                return [sanitize_portable_paths(x) for x in obj]
-            return obj
-
-        clean_checkpoint_inventory = sanitize_portable_paths(
-            model.model_dump(
-                mode="json",
-                exclude={
-                    "elements": {
-                        "__all__": {
-                            "mesh": True,
-                            "openings": {"__all__": {"mesh": True}},
-                        }
-                    }
-                },
-            )
-        )
-        for name, value in (
-            ("inventory", clean_checkpoint_inventory),
-            ("mep_graph", configuration["mep_graph"]),
-            ("configuration", configuration),
-        ):
-            (workspace / f"model_{name}.json").write_text(
-                json.dumps(value), encoding="utf-8"
-            )
-        (workspace / "audit-state.json").write_text(
-            json.dumps(
-                {
-                    "stage": "VALIDATION",
-                    "status": "NOT_RUN",
-                    "checkpoint_status": "DRAFT_NOT_SEALED",
-                    "output_complete": False,
-                    "bundle_sha256": manifest.bundle_sha256,
-                    "reason": "Artifacts saved; independent audit has not completed",
-                }
-            ),
-            encoding="utf-8",
-        )
-        manifest = MappingManifest.model_validate_json(
-            manifest_path.read_text(encoding="utf-8")
-        )
+        manifest = workspace.write_draft(model, configuration, manifest)
         # The auditor reopens the source. Release the converter's full meshes
         # before constructing that independent model, rather than retaining both.
         source_timings = dict(model.timings)
         exported_bounds = model.exported_bounds
         del mapping_plan, model
         gc.collect()
-        fds = (workspace / "model.fds").read_bytes().decode("utf-8")
+        fds = workspace.read_fds()
         audited, manifest, report = self.audit_use_case.execute(
             paths, fds, manifest, configuration, geometry_package
         )
@@ -161,26 +110,7 @@ class ConvertVerifiedUseCase:
             **report.metrics.get("stage_timings", {}),
             audit_s=perf_counter() - serialized,
         )
-        (workspace / "model_manifest.json").write_text(
-            manifest.model_dump_json(), encoding="utf-8"
-        )
-        (workspace / "audit-state.json").write_text(
-            json.dumps(
-                {
-                    "stage": "VALIDATION",
-                    "status": report.status.value,
-                    # NOTE: finalize() never issues SIMULATION_VERIFIED yet
-                    # (simulation_status is REJECTED or INCONCLUSIVE only), so the
-                    # MAPPING_VERIFIED-only seal is intentional; full dual-state
-                    # acceptance rides with the simulation epic (Phase E).
-                    "checkpoint_status": "DRAFT_NOT_SEALED" if report.status.value != "MAPPING_VERIFIED" else "VERIFIED_SEALED",
-                    "output_complete": manifest.output_complete,
-                    "bundle_sha256": manifest.bundle_sha256,
-                    "timings": timings,
-                }
-            ),
-            encoding="utf-8",
-        )
+        workspace.finish_audit(manifest, report.status.value, timings)
         from ifc_to_fds.core import get_execution_provenance
 
         audited.exported_bounds = exported_bounds
@@ -202,19 +132,7 @@ class ConvertVerifiedUseCase:
             manifest=manifest.model_dump(mode="json"),
             report=report.model_dump(mode="json"),
             markdown_report=report.to_markdown(),
-            inventory=sanitize_portable_paths(
-                audited.model_dump(
-                    mode="json",
-                    exclude={
-                        "elements": {
-                            "__all__": {
-                                "mesh": True,
-                                "openings": {"__all__": {"mesh": True}},
-                            }
-                        }
-                    },
-                )
-            ),
+            inventory=compact_inventory(audited),
             mep_graph=audited.mep_graph.model_dump(mode="json"),
             configuration=configuration,
             timings=timings,
