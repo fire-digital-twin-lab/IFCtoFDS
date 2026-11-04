@@ -61,6 +61,19 @@ def test_api_convert_job(tiny_ifc):
     )
     assert batch.status_code == 200
     assert batch.content == payload.content * 2
+
+    # One batch validates the large result bundle once, not once per mesh.
+    from unittest.mock import patch
+    from ifc_to_fds.server import manager
+
+    with patch.object(manager, "result", wraps=manager.result) as checked_result:
+        checked_batch = client.get(
+            "/api/jobs/" + jid + "/geometry-batch",
+            params=[("payloads", ref["payload"])] * 3,
+        )
+        assert checked_batch.status_code == 200
+        assert checked_batch.content == payload.content * 3
+        assert checked_result.call_count == 1
     assert (
         client.get(
             "/api/jobs/" + jid + "/geometry-batch",
@@ -493,6 +506,16 @@ def test_submit_scenario_job_executes_mesh_gate(monkeypatch, tiny_ifc):
     art_res = client.get(f"/api/jobs/{jid}/artifacts/scenario_fds")
     assert art_res.status_code == 200
     assert "&RAMP" in art_res.text
+
+    # A known catalogue name is not permission to download a file created
+    # after the result/evidence index was sealed.
+    undeclared = job_dir / "model_manifest.json"
+    assert "manifest" not in res["artifacts"]
+    try:
+        undeclared.write_text('{"forged": true}', encoding="utf-8")
+        assert client.get(f"/api/jobs/{jid}/artifacts/manifest").status_code == 404
+    finally:
+        undeclared.unlink(missing_ok=True)
 
     # Verify pagination on /api/jobs/{jid}/result (M-8b)
     res_paged = client.get(f"/api/jobs/{jid}/result?offset=0&limit=1").json()
