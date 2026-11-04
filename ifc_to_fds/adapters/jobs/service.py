@@ -259,8 +259,15 @@ class JobService:
             return self.repository.snapshot(jid)
 
     def result(self, jid):
+        # Only the in-memory job snapshot needs synchronization. JSON parsing,
+        # file hashing and cross-file audit checks must not hold the scheduler
+        # lock: a large FDS bundle could otherwise block all job progress.
         with self.lock:
-            return self.repository.read_result(jid)
+            job = self.repository.get(jid)
+            if job is None:
+                raise KeyError(jid)
+            snapshot = dict(job)
+        return self.repository.read_result(jid, job=snapshot)
 
     @staticmethod
     def _stop(process):
