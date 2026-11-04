@@ -474,6 +474,35 @@ def test_submit_scenario_job_executes_mesh_gate(monkeypatch, tiny_ifc):
     assert res_paged["findings_limit"] == 1
 
 
+
+def test_result_api_returns_controlled_409_for_tampered_finished_job():
+    """IO-03: JSON mutation after COMPLETED must not return 200 or raw HTTP 500."""
+    from ifc_to_fds.server import manager
+
+    jid = "job-result-invalid-" + uuid.uuid4().hex
+    directory = manager.root / jid
+    directory.mkdir(parents=True)
+    (directory / "result.json").write_text(
+        '{"status":"MAPPING_VERIFIED","artifacts":{"fds":"../../secret"}}',
+        encoding="utf-8",
+    )
+    try:
+        with manager.lock:
+            manager.repository.set(jid, {
+                "id": jid, "state": "COMPLETED", "mode": "convert",
+                "directory": str(directory), "created": time.time(),
+                "finished": time.time(), "durable": False,
+            })
+        response = client.get(f"/api/jobs/{jid}/result")
+        assert response.status_code == 409
+        assert "Invalid convert result fields" in response.json()["detail"]
+    finally:
+        with manager.lock:
+            manager.repository.delete(jid)
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+
 def test_http_security_headers():
     """M-7: API responses must carry standard HTTP security headers."""
     res = client.get("/api/health")
