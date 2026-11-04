@@ -65,7 +65,7 @@ def test_tampered_scenario_evidence_is_rejected(tmp_path, target):
 def test_missing_index_is_rejected(tmp_path):
     result = _scenario(tmp_path)
     (tmp_path / "result_evidence.json").unlink()
-    with pytest.raises(ValueError, match="Cannot parse required evidence"):
+    with pytest.raises(ValueError, match="Missing evidence index: historical or incomplete job"):
         verify_evidence_index(tmp_path, "scenario", result)
 
 
@@ -155,3 +155,66 @@ def test_unverified_simulation_profile_is_not_falsely_sealed(tmp_path):
     index = build_evidence_index(tmp_path, "convert", result)
     assert set(index["files"]) == {"result.json"}
     assert not (tmp_path / "audit-state.json").exists()
+
+
+def test_legacy_completed_result_cannot_be_read_or_silently_resealed(tmp_path):
+    result = _scenario(tmp_path)
+    (tmp_path / "result_evidence.json").unlink()
+    repository = JobRepository(root=tmp_path)
+    repository.set("legacy-job", {
+        "id": "legacy-job", "state": "COMPLETED", "mode": "scenario",
+        "directory": str(tmp_path), "created": 0,
+    })
+    with pytest.raises(ValueError, match="read-only provenance review required"):
+        repository.read_result("legacy-job")
+    assert not (tmp_path / "result_evidence.json").exists()
+
+
+def test_scenario_integrity_hashes_each_file_once(monkeypatch, tmp_path):
+    from ifc_to_fds.adapters.jobs import evidence_index
+
+    result = _scenario(tmp_path)
+    original = evidence_index._sha256
+    paths = []
+
+    def counted(path):
+        paths.append(path.name)
+        return original(path)
+
+    monkeypatch.setattr(evidence_index, "_sha256", counted)
+    verify_evidence_index(tmp_path, "scenario", result)
+    assert sorted(paths) == ["result.json", "scenario.fds"]
+
+
+def test_inconclusive_conversion_report_must_match_result(tmp_path):
+    result = {
+        "status": "INCONCLUSIVE",
+        "mapping_status": "INCONCLUSIVE",
+        "simulation_status": "INCONCLUSIVE",
+        "output_complete": False,
+        "artifacts": {
+            "manifest": {"filename": "model_manifest.json"},
+            "report": {"filename": "model_acceptance_report.json"},
+        },
+    }
+    (tmp_path / "result.json").write_text(json.dumps(result), encoding="utf-8")
+    manifest = {
+        "acceptance_status": "INCONCLUSIVE",
+        "mapping_acceptance": "INCONCLUSIVE",
+        "simulation_acceptance": "INCONCLUSIVE",
+        "output_complete": False,
+    }
+    report = {
+        "status": "INCONCLUSIVE",
+        "mapping_status": "INCONCLUSIVE",
+        "simulation_status": "INCONCLUSIVE",
+    }
+    (tmp_path / "model_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    report_path = tmp_path / "model_acceptance_report.json"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    write_evidence_index(tmp_path, "convert", result)
+    verify_evidence_index(tmp_path, "convert", result)
+    report["mapping_status"] = "REJECTED"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    with pytest.raises(ValueError, match="Acceptance report mapping_status contradicts"):
+        build_evidence_index(tmp_path, "convert", result)
