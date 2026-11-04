@@ -40,7 +40,7 @@ def _read_object(path: Path) -> dict[str, Any]:
 def _required_files(mode: str, result: dict[str, Any]) -> set[str]:
     if mode == "scenario":
         return {"scenario.fds"}
-    if mode == "convert" and result["mapping_status"] == "MAPPING_VERIFIED":
+    if mode == "convert" and result["status"] == "MAPPING_VERIFIED":
         return {
             "model.fds", "model_manifest.json", "model_acceptance_report.json",
             "model_geometry.json", "audit-state.json",
@@ -68,7 +68,7 @@ def _validate_linked_content(directory: Path, mode: str, result: dict[str, Any])
             raise ValueError("Scenario FDS bytes differ from declared evidence SHA-256")
         return
 
-    if mode != "convert" or result["mapping_status"] != "MAPPING_VERIFIED":
+    if mode != "convert" or result["status"] != "MAPPING_VERIFIED":
         return
 
     manifest = _read_object(directory / "model_manifest.json")
