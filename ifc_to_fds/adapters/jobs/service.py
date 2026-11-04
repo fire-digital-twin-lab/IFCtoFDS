@@ -15,6 +15,7 @@ import psutil
 
 from .repository import JobRepository
 from .result_contract import validate_job_result
+from .evidence_index import verify_evidence_index
 
 logger = logging.getLogger(__name__)
 
@@ -463,8 +464,10 @@ class JobService:
                             is_durable = running.get("durable", False)
                             try:
                                 res_data = json.loads((directory / "result.json").read_text(encoding="utf-8"))
-                                validate_job_result(running.get("mode", "convert"), res_data)
-                                if running.get("mode", "convert") == "convert" and res_data["status"] == "MAPPING_VERIFIED":
+                                mode = running.get("mode", "convert")
+                                validate_job_result(mode, res_data)
+                                verify_evidence_index(directory, mode, res_data)
+                                if mode == "convert" and res_data["status"] == "MAPPING_VERIFIED":
                                     # NOTE (M1): SIMULATION_VERIFIED is never issued today
                                     # (ADR-0004 / AcceptanceReport.finalize dead code), so
                                     # narrowing to MAPPING_VERIFIED only is behavior-neutral.
