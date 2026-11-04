@@ -443,8 +443,10 @@ def test_submit_scenario_job_executes_mesh_gate(monkeypatch, tiny_ifc):
 
     # Verify result.json via result endpoint
     res = client.get(f"/api/jobs/{jid}/result").json()
-    assert res["status"] == "COMPLETED"
-    assert res["verdict"] == "PASS"
+    assert res["status"] == "COMPLETED"  # Job execution, NOT scientific acceptance
+    assert res["verdict"] == "INCONCLUSIVE"
+    assert "not been verified" in res["verdict_reason"]
+    assert res["simulation_status"] == "NOT_RUN"
     assert res["mesh_status"] == "PASS"
     assert res["peak_hrr_mw"] == 4.5
     assert "evidence" in res
