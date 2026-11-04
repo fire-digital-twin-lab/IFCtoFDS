@@ -59,3 +59,13 @@ Lịch sử phát hành trước đây vẫn nằm trong
 ### Tương thích
 - Giữ các trường JSON có sẵn và phép tính khoa học; không thay thuật toán IFC/FDS hoặc solver.
 - Đặc tả hợp đồng bằng chứng tại `docs/architecture/15-r10-05-scenario-verdict-contract.md`.
+
+## [Chưa phát hành] — R10-06 (04/11/2026)
+
+### Hạ tầng chất lượng
+- Bổ sung CI riêng để kiểm tra biên dịch Python, Ruff/Pyright có phạm vi kiểm soát, ESLint, test Python và bằng chứng coverage.
+- Thêm công cụ AST đo nợ kỹ thuật và cổng Git merge-base theo từng file để chặn import cục bộ, exception rộng/bare và nuốt lỗi mới.
+- Coverage mới được đo và lưu bằng chứng, chưa áp ngưỡng tùy ý; hiệu năng và cảnh báo số học vẫn cần baseline thực nghiệm.
+- Giữ nguyên CI Python matrix, browser và solver FDS đã được ghim phiên bản.
+
+Chi tiết tại `docs/architecture/17-r10-06-quality-gates.md`.
