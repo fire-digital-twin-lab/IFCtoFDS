@@ -266,7 +266,6 @@ async function runTests() {
         // Simulate results: 2 pass, 1 inconclusive
         const isInc = scenario.scenario_id.endsWith('3');
         return {
-            job_id: 'job_' + scenario.scenario_id,
             scenario_id: scenario.scenario_id,
             state: 'COMPLETED',
             mesh_status: isInc ? 'FAIL' : 'PASS',
@@ -281,9 +280,11 @@ async function runTests() {
 
     const summary = batchOutput.summary;
     assert.equal(summary.total, 3);
-    assert.equal(summary.passed, 2);
-    assert.equal(summary.inconclusive, 1);
-    assert.equal(summary.rejected, 0);
+    assert.equal(summary.passed, 0, 'A mesh PASS must not count as simulation verification');
+    assert.equal(summary.inconclusive, 2);
+    assert.equal(summary.rejected, 1, 'A failed mesh gate is a rejection');
+    assert.equal(batchOutput.results[0].verdict, 'INCONCLUSIVE');
+    assert.equal(batchOutput.results[0].received_verdict, 'PASS');
     assert.ok(summary.disclaimer.includes('Kịch bản giả định, cần kỹ sư PCCC thẩm định độc lập'), 'Aggregate summary must contain independent verification disclaimer');
     assert.ok(summary.assumptions && summary.assumptions.length > 0, 'Aggregate summary must include engineering assumptions notes');
 
@@ -366,7 +367,6 @@ async function runTests() {
             return { status: 429, error: 'Queue is full' };
         }
         return {
-            job_id: 'job_retry_success',
             scenario_id: scenario.scenario_id,
             state: 'COMPLETED',
             verdict: 'PASS',
@@ -380,7 +380,8 @@ async function runTests() {
     );
     assert.equal(attemptCount429, 2, 'Should retry on 429');
     assert.equal(retryBatchOutput.results[0].state, 'COMPLETED');
-    assert.equal(retryBatchOutput.summary.passed, 1);
+    assert.equal(retryBatchOutput.summary.passed, 0);
+    assert.equal(retryBatchOutput.summary.inconclusive, 1);
 
     // 6.2 Persistent 429 gracefully marks QUEUED_WAITING and does not abort batch
     const persistent429Dispatch = async (scenario) => {
@@ -436,14 +437,87 @@ async function runTests() {
         };
     };
 
+    let fetchedFinalResultCount = 0;
+    const finalResultFn = async (jobId) => {
+        assert.equal(jobId, 'job_async_1');
+        fetchedFinalResultCount++;
+        return {
+            status: 'COMPLETED', verdict: 'INCONCLUSIVE',
+            mesh_status: 'PASS', physics_status: 'INCONCLUSIVE',
+            simulation_status: 'NOT_RUN', evidence: {physics: {hf_status: 'NOT_MODELED'}}
+        };
+    };
     const polledBatchOutput = await panel.queueScenarioBatch(
         [socScenarios[0]],
         asyncDispatch,
-        { pollJobFn: mockPollFn, pollIntervalMs: 10 }
+        { pollJobFn: mockPollFn, getResultFn: finalResultFn, pollIntervalMs: 10 }
     );
+    assert.equal(fetchedFinalResultCount, 1, 'The authoritative /result is fetched once');
     assert.equal(polledBatchOutput.results[0].state, 'COMPLETED');
-    assert.equal(polledBatchOutput.summary.passed, 1);
+    assert.equal(polledBatchOutput.summary.passed, 0);
+    assert.equal(polledBatchOutput.summary.inconclusive, 1);
     assert.equal(polledBatchOutput.summary.rejected, 0);
+
+    // A forged early PASS in a RUNNING snapshot must never stop polling.
+    let earlyPollCount = 0;
+    const earlyVerdict = await panel.queueScenarioBatch(
+        [socScenarios[0]],
+        asyncDispatch,
+        {
+            pollIntervalMs: 1,
+            pollJobFn: async () => {
+                earlyPollCount++;
+                return {id: 'job_async_1', state: earlyPollCount === 1 ? 'RUNNING' : 'COMPLETED',
+                    verdict: 'PASS', mesh_status: 'PASS'};
+            },
+            getResultFn: async () => ({
+                status: 'COMPLETED', verdict: 'FAIL', mesh_status: 'FAIL',
+                physics_status: 'INCONCLUSIVE', simulation_status: 'NOT_RUN',
+                evidence: {mesh: {status: 'FAIL'}}
+            })
+        }
+    );
+    assert.equal(earlyPollCount, 2, 'An early PASS from status endpoint cannot terminate polling');
+    assert.equal(earlyVerdict.summary.rejected, 1);
+    assert.equal(earlyVerdict.results[0].verdict, 'REJECTED');
+
+    // Even a dispatch response claiming COMPLETED/PASS must read persisted /result.
+    let directResultFetchCount = 0;
+    const completedSnapshot = await panel.queueScenarioBatch(
+        [socScenarios[0]],
+        async () => ({id: 'job_completed', state: 'COMPLETED', verdict: 'PASS'}),
+        {getResultFn: async (id) => {
+            assert.equal(id, 'job_completed');
+            directResultFetchCount++;
+            return {status: 'COMPLETED', verdict: 'INCONCLUSIVE', mesh_status: 'PASS',
+                physics_status: 'INCONCLUSIVE', simulation_status: 'NOT_RUN',
+                evidence: {physics: {status: 'INCONCLUSIVE'}}};
+        }}
+    );
+    assert.equal(directResultFetchCount, 1);
+    assert.equal(completedSnapshot.summary.passed, 0);
+    assert.equal(completedSnapshot.results[0].received_verdict, 'INCONCLUSIVE');
+
+    // A broken/missing final result is surfaced as uncertainty, not silently
+    // replaced by optimistic job progress.
+    const missingFinalResult = await panel.queueScenarioBatch(
+        [socScenarios[0]],
+        async () => ({id: 'job_missing_result', state: 'COMPLETED', verdict: 'PASS'}),
+        {getResultFn: async () => {throw new Error('HTTP 500 from /result');}}
+    );
+    assert.equal(missingFinalResult.summary.inconclusive, 1);
+    assert.equal(missingFinalResult.results[0].state, 'RESULT_UNAVAILABLE');
+    assert.equal(missingFinalResult.results[0].result_fetch_status, 'FAILED');
+    assert.match(missingFinalResult.results[0].verdict_reason, /HTTP 500/);
+    assert.equal(missingFinalResult.summary.passed, 0);
+
+    const malformedFinalResult = await panel.queueScenarioBatch(
+        [socScenarios[0]],
+        async () => ({id: 'job_malformed_result', state: 'COMPLETED'}),
+        {getResultFn: async () => ({status: 'COMPLETED', verdict: 'PASS'})}
+    );
+    assert.equal(malformedFinalResult.results[0].state, 'RESULT_UNAVAILABLE');
+    assert.match(malformedFinalResult.results[0].verdict_reason, /missing required status or evidence/);
 
     // 7.2 Async job polls until FAILED -> mapped to rejected
     pollIndex = 0;
@@ -480,6 +554,41 @@ async function runTests() {
     assert.equal(defaultBatchOutput.results[0].state, 'FAILED');
     assert.equal(defaultBatchOutput.results[0].verdict, 'REJECTED');
     assert.equal(defaultBatchOutput.summary.passed, 0);
+
+    // -------------------------------------------------------------
+    // R10-05: Fail-closed contract for transport, mesh, physics and solver.
+    // -------------------------------------------------------------
+    console.log('Checking fail-closed scenario acceptance contract...');
+    const scenarioToCheck = socScenarios[0];
+    const unsafeResponses = [
+        [{status: 200}, 'INCONCLUSIVE'],
+        [{state: 'COMPLETED'}, 'INCONCLUSIVE'],
+        [{state: 'COMPLETED', mesh_status: 'PASS', physics_status: 'INCONCLUSIVE',
+          simulation_status: 'NOT_RUN'}, 'INCONCLUSIVE'],
+        [{state: 'COMPLETED', verdict: 'PASS', mesh_status: 'PASS',
+          physics_status: 'INCONCLUSIVE', simulation_status: 'NOT_RUN'}, 'INCONCLUSIVE'],
+        [{state: 'COMPLETED', verdict: 'PASS', mesh_status: 'PASS',
+          physics_status: 'PASS', simulation_status: 'SIMULATION_VERIFIED'}, 'INCONCLUSIVE'],
+        [{state: 'COMPLETED', mesh_status: 'FAIL', physics_status: 'INCONCLUSIVE'}, 'REJECTED'],
+        [{state: 'COMPLETED', verdict: 'PASS', physics_status: 'FAIL'}, 'REJECTED'],
+        [{state: 'FAILED', verdict: 'PASS'}, 'REJECTED'],
+        [{status: 500}, 'REJECTED']
+    ];
+    for (const [reply, expected] of unsafeResponses) {
+        const check = await panel.queueScenarioBatch([scenarioToCheck], async () => reply);
+        assert.equal(check.results[0].verdict, expected,
+            'Unsafe response must not be promoted: ' + JSON.stringify(reply));
+        if (reply.simulation_status === 'SIMULATION_VERIFIED') {
+            assert.equal(check.results[0].simulation_status, 'INCONCLUSIVE');
+            assert.equal(check.results[0].received_simulation_status, 'SIMULATION_VERIFIED');
+        }
+        if (expected === 'INCONCLUSIVE') {
+            assert.match(check.results[0].verdict_reason, /not independently verified/);
+        }
+        assert.equal(check.summary.passed, 0, 'No simulation verification was performed');
+        assert.equal(check.summary.rejected, expected === 'REJECTED' ? 1 : 0);
+        assert.equal(check.summary.inconclusive, expected === 'INCONCLUSIVE' ? 1 : 0);
+    }
 
     console.log('All EV Scenario Panel tests passed cleanly!');
 }

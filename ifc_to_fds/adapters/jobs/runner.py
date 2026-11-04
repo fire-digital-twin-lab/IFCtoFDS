@@ -70,6 +70,9 @@ class WorkerRunner:
                     model=None, fds_text=final_text, manifest=base_manifest, config=AuditConfig()
                 )).result
                 physics = assess_scenario_physics(final_text, bundle, scenario.energy_budget)
+                from ifc_to_fds.fire.scenario_verdict import (
+                    scenario_verdict, scenario_verdict_reason,
+                )
                 scenario_bytes = final_text.encode("utf-8")
                 (directory / "scenario.fds").write_bytes(scenario_bytes)
                 evidence = dict(
@@ -83,13 +86,11 @@ class WorkerRunner:
                 )
                 mesh_status = mesh_gate.status.value
                 physics_status = physics.get("status", "INCONCLUSIVE")
-                if mesh_status == "FAIL" or physics_status == "FAIL":
-                    scenario_verdict = "FAIL"
-                else:
-                    scenario_verdict = mesh_status
+                verdict = scenario_verdict(mesh_status, physics_status)
                 result = {
                     "status": "COMPLETED",
-                    "verdict": scenario_verdict,
+                    "verdict": verdict,
+                    "verdict_reason": scenario_verdict_reason(mesh_status, physics_status),
                     "mesh_status": mesh_status,
                     "physics_status": physics_status,
                     "simulation_status": "NOT_RUN",

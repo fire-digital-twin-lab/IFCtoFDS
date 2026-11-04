@@ -44,3 +44,16 @@ entries remain in the canonical [CHANGELOG.md](CHANGELOG.md).
 ### Safety
 - No IFC extraction, FDS generation, scientific thresholds, solver or independent audit replacement.
 - Migration to the modular runner is **blocked** until complete strict gate/evidence/solver parity has been established.
+
+
+## [Unreleased] — R10-05 (2026-11-04)
+
+### Correctness / Safety
+- EV scenario jobs no longer promote a mesh PASS to overall PASS while independent CFD simulation verification is NOT_RUN.
+- Worker exposes fail-closed scenario verdict and `verdict_reason`; existing mesh and physics statuses remain separate.
+- EV scenario panel stops interpreting HTTP 200, job COMPLETED or legacy verdict PASS as simulation acceptance.
+- Added explicit regression scenarios for missing proof, failed gates, forged/legacy PASS and queue/transport errors.
+
+### Compatibility
+- Kept existing JSON status fields and scientific calculations; no FDS/IFC or solver changes.
+- Documented evidence contract and limits in `docs/architecture/15-r10-05-scenario-verdict-contract.md`.
