@@ -71,8 +71,8 @@ def compare_validation_reports(
 ) -> ValidationParity:
     """Identify parity failures without silently promoting the candidate.
 
-    Baseline parity checks verdicts, gate status/required fields, entity states,
-    counts, and audit coverage. Detailed mode adds gate evidence and reasons,
+    Baseline parity checks verdicts, gate status/required fields, entity states
+    and counts. Detailed mode adds coverage, gate evidence and reasons,
     finding payloads and deterministic metrics, which may expose existing
     differences that must be investigated before any engine migration.
     """
