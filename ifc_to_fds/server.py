@@ -417,16 +417,66 @@ def checkpoint_artifact(jid: str, artifact: str):
         return response
 
 
+def _geometry_access(jid: str):
+    """Validate the job and geometry index once per request, without hashing
+    full evidence while holding the scheduler lock.
+    """
+    with manager.lock:
+        job = manager.jobs.get(jid)
+        if not job:
+            raise HTTPException(404, "Unknown job")
+        if job["state"] != "COMPLETED":
+            raise HTTPException(409, "Job is not complete")
+        directory = Path(job["directory"])
+        mode = job.get("mode")
+    index_path = directory / "model_geometry.json"
+    if not index_path.is_file():
+        raise HTTPException(404, "Geometry index not available for this job")
+    if mode not in ("convert", "preview"):
+        raise HTTPException(409, "Job mode does not publish geometry")
+    try:
+        published = manager.result(jid)
+    except KeyError as exc:
+        raise HTTPException(404, "Unknown job") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if "geometry" not in published.get("artifacts", {}):
+        raise HTTPException(404, "Geometry is not declared by this job")
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        linked = {
+            ref["payload"]
+            for entry in index["elements"].values()
+            for ref in [entry.get("mesh"), *entry.get("openings", {}).values()]
+            if ref
+        }
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise HTTPException(409, "Invalid geometry index") from exc
+    manager.touch(jid)
+    return index_path, linked
+
+
+def _geometry_file(index_path: Path, linked: set[str], payload: str) -> Path:
+    if len(payload) != 64 or any(c not in "0123456789abcdef" for c in payload):
+        raise HTTPException(404, "Unknown geometry payload")
+    if payload not in linked:
+        raise HTTPException(404, "Unlinked geometry payload")
+    path = index_path.with_suffix(".payloads") / (payload + ".bin")
+    if not path.is_file():
+        raise HTTPException(404, "Missing geometry payload")
+    if geometry_file_hash(path) != payload:
+        raise HTTPException(409, "Geometry payload bytes differ from content hash")
+    return path
+
+
 @app.get("/api/jobs/{jid}/geometry-batch")
 def geometry_batch(jid: str, payloads: list[str] = Query(...)):
     if not 1 <= len(payloads) <= 16:
         raise HTTPException(422, "Request between 1 and 16 geometry payloads")
-    try:
-        manager.touch(jid)
-    except KeyError:
-        raise HTTPException(404, "Unknown job")
-    # Reuse the job-local, completed-artifact whitelist for every member.
-    paths = [Path(geometry_payload(jid, key).path) for key in payloads]
+    # A batch must not hash the whole result + bundle once for every payload.
+    # The payload content hash itself is still verified for every member.
+    index_path, linked = _geometry_access(jid)
+    paths = [_geometry_file(index_path, linked, key) for key in payloads]
     length = sum(path.stat().st_size for path in paths)
     if length > 16 * 1024**2:
         raise HTTPException(
@@ -450,40 +500,9 @@ def geometry_batch(jid: str, payloads: list[str] = Query(...)):
 def geometry_payload(jid: str, payload: str):
     if len(payload) != 64 or any(c not in "0123456789abcdef" for c in payload):
         raise HTTPException(404, "Unknown geometry payload")
-    with manager.lock:
-        job = manager.jobs.get(jid)
-        if not job:
-            raise HTTPException(404, "Unknown job")
-        if job["state"] != "COMPLETED":
-            raise HTTPException(409, "Job is not complete")
-        if job.get("mode") == "convert":
-            try:
-                manager.result(jid)
-            except ValueError as exc:
-                raise HTTPException(409, str(exc)) from exc
-        manager.touch(jid)
-        index_path = Path(job["directory"]) / "model_geometry.json"
-        if not index_path.is_file():
-            raise HTTPException(404, "Geometry index not available for this job")
-        if "_geometry_payloads" not in job:
-            index = json.loads(index_path.read_text(encoding="utf-8"))
-            job["_geometry_payloads"] = {
-                ref["payload"]
-                for entry in index["elements"].values()
-                for ref in [entry.get("mesh"), *entry.get("openings", {}).values()]
-                if ref
-            }
-        linked = job["_geometry_payloads"]
-        if payload not in linked:
-            raise HTTPException(404, "Unlinked geometry payload")
-        path = index_path.with_suffix(".payloads") / (payload + ".bin")
-        if not path.is_file():
-            raise HTTPException(404, "Missing geometry payload")
-        # Payload filenames are SHA-256 content IDs; enforce the digest
-        # before serving even when the geometry index itself is unchanged.
-        if geometry_file_hash(path) != payload:
-            raise HTTPException(409, "Geometry payload bytes differ from content hash")
-        return FileResponse(path, media_type="application/octet-stream")
+    index_path, linked = _geometry_access(jid)
+    path = _geometry_file(index_path, linked, payload)
+    return FileResponse(path, media_type="application/octet-stream")
 
 
 @app.post("/api/convert")
