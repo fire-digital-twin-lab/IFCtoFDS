@@ -4,10 +4,28 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
 import json
+import logging
 from pathlib import Path
 from time import perf_counter, sleep
 import traceback
 from typing import List, Optional, Tuple
+
+_logger = logging.getLogger(__name__)
+
+
+def _record_stage_event(directory: Path, stage: str, state: str, elapsed_s: float) -> None:
+    """Write derived, language-neutral diagnostics without changing acceptance."""
+    from ifc_to_fds.observability import DiagnosticEvent, append_event
+    code = f"IFCFDS.STAGE.{state}" if state in ("RUNNING", "COMPLETED", "FAILED") else "IFCFDS.STAGE.STATUS"
+    event = DiagnosticEvent(
+        code=code,
+        level="ERROR" if state == "FAILED" else "INFO",
+        stage=stage,
+        params={"stage": stage, "state": state, "elapsed_s": round(elapsed_s, 3)},
+        job_id=directory.name,
+    )
+    append_event(directory, event)
+
 
 _directory: ContextVar[Optional[Path]] = ContextVar("execution_directory", default=None)
 _stage_stack: ContextVar[Tuple[Tuple[str, float], ...]] = ContextVar(
@@ -49,6 +67,10 @@ def progress(stage: str, state: str, elapsed_s: float = 0.0, **details):
         temporary = directory / "progress.tmp"
         temporary.write_text(json.dumps(value), encoding="utf-8")
         _safe_replace(temporary, directory / "progress.json")
+        try:
+            _record_stage_event(directory, stage, state, elapsed_s)
+        except (OSError, ValueError, TypeError) as exc:
+            _logger.warning("Could not write bilingual diagnostic event: %s", exc)
 
 
 def operation(stage: str):
