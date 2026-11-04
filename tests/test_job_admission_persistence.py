@@ -62,6 +62,24 @@ def test_successful_registration_publishes_only_after_database_commit(
     assert JobRepository(root=tmp_path).get("job-admission")["state"] == "QUEUED"
 
 
+def test_cross_instance_duplicate_registration_never_overwrites_sqlite(tmp_path):
+    """Two independent repository caches must not bypass SQLite uniqueness."""
+    first = JobRepository(root=tmp_path)
+    second = JobRepository(root=tmp_path)
+    original = _job(tmp_path / "original")
+    first.register("job-admission", original)
+
+    conflicting = _job(tmp_path / "different")
+    conflicting["state"] = "RUNNING"
+    with pytest.raises(JobPersistenceError, match="already registered"):
+        second.register("job-admission", conflicting)
+
+    assert second.get("job-admission") is None
+    persisted = JobRepository(root=tmp_path).get("job-admission")
+    assert persisted["state"] == "QUEUED"
+    assert persisted["directory"] == str(tmp_path / "original")
+
+
 def test_service_does_not_spawn_worker_after_registration_failure(
     tmp_path, monkeypatch
 ):
