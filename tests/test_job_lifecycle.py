@@ -45,14 +45,17 @@ def test_sqlite_persistence_and_restart_recovery(tmp_path):
     # Insert a COMPLETED job
     comp_dir = tmp_path / "job-2"
     comp_dir.mkdir(parents=True, exist_ok=True)
-    (comp_dir / "result.json").write_text(json.dumps({"status": "MAPPING_VERIFIED"}), encoding="utf-8")
+    (comp_dir / "result.json").write_text(json.dumps({
+        "total_elements": 0, "storeys": [], "storey_references": [],
+        "sources": [], "research": {},
+    }), encoding="utf-8")
     repo1.set("job-2", {
         "id": "job-2",
         "state": "COMPLETED",
         "directory": str(comp_dir),
         "created": time.time() - 200,
         "finished": time.time() - 100,
-        "mode": "convert",
+        "mode": "inventory",
     })
 
     # Restart service instance pointing to the same root
@@ -69,7 +72,7 @@ def test_sqlite_persistence_and_restart_recovery(tmp_path):
         recovered_job2 = service2.repository.get("job-2")
         assert recovered_job2 is not None
         assert recovered_job2["state"] == "COMPLETED"
-        assert service2.result("job-2")["status"] == "MAPPING_VERIFIED"
+        assert service2.result("job-2")["total_elements"] == 0
     finally:
         service2.close()
 
@@ -653,7 +656,10 @@ def test_inventory_mode_status_less_dict_completes(tmp_path):
         job_dir = tmp_path / "job-inventory"
         job_dir.mkdir(parents=True, exist_ok=True)
         (job_dir / "result.json").write_text(
-            json.dumps({"elements": 3}), encoding="utf-8"
+            json.dumps({
+                "total_elements": 3, "storeys": [], "storey_references": [],
+                "sources": [], "research": {},
+            }), encoding="utf-8"
         )
 
         class MockProcess:
