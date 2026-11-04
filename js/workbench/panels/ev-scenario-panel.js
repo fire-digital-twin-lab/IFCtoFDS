@@ -506,11 +506,15 @@
             // acceptance verdict. Keep the original label for diagnostics.
             res = Object.assign({}, res || {}, {
                 received_verdict: res && res.verdict ? res.verdict : null,
+                received_simulation_status: res && res.simulation_status ? res.simulation_status : null,
+                // An unsupported positive simulation claim must not leak into
+                // the visual simulation column as an accepted result.
+                simulation_status: res && res.simulation_status === 'SIMULATION_VERIFIED'
+                    ? 'INCONCLUSIVE' : (res && res.simulation_status) || 'NOT_RUN',
                 verdict: classification,
-                verdict_reason: (res && res.verdict_reason) ||
-                    (classification === 'INCONCLUSIVE'
-                        ? 'Simulation not independently verified; HTTP/job/mesh status is insufficient'
-                        : null)
+                verdict_reason: classification === 'INCONCLUSIVE'
+                    ? 'Simulation not independently verified; HTTP/job/mesh status is insufficient'
+                    : ((res && res.verdict_reason) || null)
             });
             results.push(res);
 
