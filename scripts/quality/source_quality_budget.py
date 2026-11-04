@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -99,10 +100,54 @@ def compare_to_baseline(current: dict, baseline: dict) -> list[str]:
     return errors
 
 
+
+def compare_git_base(current: dict, root: Path, base: str) -> list[str]:
+    """Fail newly introduced source debt, including increases in old files.
+
+    Only Python paths whose HEAD content differs from the base are inspected.
+    Each changed file has its own budget, so clean new files cannot pay for
+    regressions elsewhere and old debt cannot mask new local error swallowing.
+    """
+    repo_root = root.parent
+    command = [
+        "git", "diff", "--name-only", "--diff-filter=ACMR",
+        base, "HEAD", "--", root.name + "/",
+    ]
+    changed = subprocess.run(
+        command, cwd=repo_root, check=True, capture_output=True, text=True
+    ).stdout.splitlines()
+    errors = []
+    for rel in sorted(changed):
+        if not rel.endswith(".py"):
+            continue
+        source_path = repo_root / rel
+        if not source_path.is_file():
+            continue
+        current_key = source_path.relative_to(root).as_posix()
+        new_counts = current["files"][current_key]
+        old_blob = subprocess.run(
+            ["git", "show", f"{base}:{rel}"],
+            cwd=repo_root, capture_output=True, check=False, text=True
+        )
+        if old_blob.returncode:
+            old_counts = {metric: 0 for metric in METRICS}
+        else:
+            old_visitor = DebtVisitor()
+            old_visitor.visit(ast.parse(old_blob.stdout, filename=f"{base}:{rel}"))
+            old_counts = old_visitor.counts
+        for metric in METRICS:
+            if new_counts[metric] > old_counts[metric]:
+                errors.append(
+                    f"{rel}: {metric} increased "
+                    f"{old_counts[metric]} -> {new_counts[metric]}"
+                )
+    return errors
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=SOURCE)
     parser.add_argument("--baseline", type=Path, default=None)
+    parser.add_argument("--git-base", type=str, default=None)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
     current = inventory(args.root)
@@ -118,6 +163,13 @@ def main() -> int:
         ),
         flush=True,
     )
+    if args.git_base:
+        errors = compare_git_base(current, args.root, args.git_base)
+        if errors:
+            for error in errors:
+                print("SOURCE_QUALITY_NEW_DEBT " + error, flush=True)
+            return 1
+        print("SOURCE_QUALITY_NO_NEW_DEBT", flush=True)
     if args.baseline:
         baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
         errors = compare_to_baseline(current, baseline)
