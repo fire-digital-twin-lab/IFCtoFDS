@@ -32,3 +32,15 @@ entries remain in the canonical [CHANGELOG.md](CHANGELOG.md).
 ### Verification
 - Added checkpoint state, exact draft format, fail-closed audit sealing, container wiring, and no-direct-I/O regression tests.
 - Original frozen baselines A–F and FDS solver regression remain required for merge.
+
+## [Unreleased] — R10-04 (2026-11-04)
+
+### Refactored
+- Extracted post-engine source/package/provenance and placement checks from `AuditConversionUseCase` into `audit_integrity.py` without changing gate decisions.
+- Extracted saved-MEP-graph comparison and coverage aggregation into `audit_mep_coverage.py`; the independent IFC re-read remains mandatory.
+- Added a fail-closed report parity comparator for engine/runner evaluations; this does **not** replace the authoritative engine or run extra solver jobs.
+- Added tests for preflight NOT_RUN, missing MEP graph, mismatching graph, validation gate/evidence/verdict mutations and the existing audit sequencing.
+
+### Safety
+- No IFC extraction, FDS generation, scientific thresholds, solver or independent audit replacement.
+- Migration to the modular runner is **blocked** until complete strict gate/evidence/solver parity has been established.
