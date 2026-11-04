@@ -43,6 +43,8 @@ jobs:
           python scripts/quality/source_quality_budget.py --git-base "$base_sha"
       - name: Check source inventory regression scanner
         run: python -m pytest -q tests/test_source_quality_budget.py
+      - name: Read-only acceptance audit — contracts, integrity and real tiny IFC
+        run: python -m pytest -q tests/test_acceptance_audit.py tests/test_job_evidence_index.py
       - name: Full Python coverage evidence (report only until baseline approval)
         run: python -m pytest -q -m "not solver and not browser" --cov=ifc_to_fds --cov-report=xml:quality-evidence/coverage.xml --cov-report=term
       - name: Publish review evidence (not a reason to invalidate passed tests)
