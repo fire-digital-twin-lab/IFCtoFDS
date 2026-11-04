@@ -134,6 +134,54 @@ def test_missing_or_invalid_json_is_a_failed_audit(tmp_path):
     assert audit["checks"]["result_json"]["status"] == "FAIL"
 
 
+def test_geometry_payload_duplicate_and_offset_consistency(tmp_path, monkeypatch):
+    from ifc_to_fds.adapters.jobs import acceptance_audit
+    from ifc_to_fds.core.canonical import SCHEMA_VERSION
+    from ifc_to_fds.geometry.package_integrity import seal
+
+    binary = b"\\x00" * 36
+    identity = hashlib.sha256(binary).hexdigest()
+    geometry = tmp_path / "model_geometry.json"
+    payload_dir = tmp_path / "model_geometry.payloads"
+    payload_dir.mkdir()
+    (payload_dir / (identity + ".bin")).write_bytes(binary)
+    ref = {
+        "payload": identity,
+        "vertex_count": 1,
+        "face_count": 1,
+        "vertices_offset": 0,
+        "faces_offset": 24,
+        "byte_length": 36,
+    }
+    model = {
+        "schema_version": SCHEMA_VERSION,
+        "storage_format": "float64-uint32-le-v1",
+        "units": "METRE",
+        "coordinate_frame": "COMMON_WORLD",
+        "elements": {
+            "first": {"mesh": ref, "openings": {"duplicate": dict(ref)}},
+        },
+    }
+    geometry.write_text(json.dumps(seal(model)), encoding="utf-8")
+    original = acceptance_audit.file_hash
+    hashed = []
+
+    def counted(path):
+        hashed.append(path.name)
+        return original(path)
+
+    monkeypatch.setattr(acceptance_audit, "file_hash", counted)
+    assert acceptance_audit._verify_geometry_payloads(tmp_path) == 1
+    assert hashed == [identity + ".bin"]
+
+    # Re-sealing a damaged index is not sufficient: reference offsets
+    # must still be internally consistent before a payload can be trusted.
+    model["elements"]["first"]["mesh"] = dict(ref, faces_offset=12)
+    geometry.write_text(json.dumps(seal(model)), encoding="utf-8")
+    with pytest.raises(ValueError, match="offsets are inconsistent"):
+        acceptance_audit._verify_geometry_payloads(tmp_path)
+
+
 def test_read_only_cli_exit_status_is_not_scientific_pass(scenario_job):
     command = [
         sys.executable,
