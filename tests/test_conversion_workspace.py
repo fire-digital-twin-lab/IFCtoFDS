@@ -1,6 +1,7 @@
 """R10-03: checkpoint artifact compatibility and fail-closed audit boundaries."""
 
 import ast
+import hashlib
 import json
 from pathlib import Path
 
@@ -74,26 +75,85 @@ def test_draft_persists_source_of_truth_before_audit(box_model, tmp_path):
     assert (tmp_path / "model_configuration.json").is_file()
 
 
+def _manifest_for_sealing(*, verified: bool):
+    class Manifest:
+        bundle_sha256 = "a" * 64
+        fds_sha256 = hashlib.sha256(b"fixture FDS").hexdigest()
+        output_complete = verified
+        mapping_acceptance = "MAPPING_VERIFIED" if verified else "INCONCLUSIVE"
+        acceptance_status = "MAPPING_VERIFIED" if verified else "INCONCLUSIVE"
+
+        def compute_bundle_sha256(self):
+            return "a" * 64
+
+        def model_dump_json(self):
+            return json.dumps({
+                "bundle_sha256": self.bundle_sha256,
+                "mapping_acceptance": self.mapping_acceptance,
+                "acceptance_status": self.acceptance_status,
+                "output_complete": self.output_complete,
+                "fds_sha256": self.fds_sha256,
+            })
+
+    return Manifest()
+
+
 @pytest.mark.parametrize("status,expected_seal", [
     ("MAPPING_VERIFIED", "VERIFIED_SEALED"),
     ("INCONCLUSIVE", "DRAFT_NOT_SEALED"),
     ("REJECTED", "DRAFT_NOT_SEALED"),
     ("NOT_RUN", "DRAFT_NOT_SEALED"),
 ])
-def test_only_mapping_verified_status_is_sealed(tmp_path, status, expected_seal):
-    class Manifest:
-        bundle_sha256 = "fixture-digest"
-        output_complete = False
-        def model_dump_json(self):
-            return '{"bundle_sha256":"fixture-digest"}'
-
+def test_only_consistent_verified_manifest_is_sealed(tmp_path, status, expected_seal):
+    manifest = _manifest_for_sealing(verified=status == "MAPPING_VERIFIED")
     workspace = LocalConversionWorkspace(tmp_path)
-    workspace.finish_audit(Manifest(), status, {"audit_s": 1.25})
+    (tmp_path / "model.fds").write_bytes(b"fixture FDS")
+    workspace.finish_audit(manifest, status, {"audit_s": 1.25})
     state = json.loads((tmp_path / "audit-state.json").read_text(encoding="utf-8"))
     assert state["status"] == status
     assert state["checkpoint_status"] == expected_seal
-    assert state["bundle_sha256"] == "fixture-digest"
+    assert state["output_complete"] is (status == "MAPPING_VERIFIED")
+    assert state["bundle_sha256"] == "a" * 64
     assert state["timings"] == {"audit_s": 1.25}
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+@pytest.mark.parametrize("mismatch", [
+    "output_incomplete",
+    "mapping_unverified",
+    "acceptance_rejected",
+    "corrupt_bundle_hash",
+    "wrong_fds_hash",
+    "missing_fds",
+])
+def test_inconsistent_verified_checkpoint_is_never_persisted(tmp_path, mismatch):
+    workspace = LocalConversionWorkspace(tmp_path)
+    manifest = _manifest_for_sealing(verified=True)
+    (tmp_path / "model.fds").write_bytes(b"fixture FDS")
+    (tmp_path / "audit-state.json").write_text(
+        json.dumps({"status": "NOT_RUN", "checkpoint_status": "DRAFT_NOT_SEALED"}),
+        encoding="utf-8",
+    )
+    if mismatch == "output_incomplete":
+        manifest.output_complete = False
+    elif mismatch == "mapping_unverified":
+        manifest.mapping_acceptance = "INCONCLUSIVE"
+    elif mismatch == "acceptance_rejected":
+        manifest.acceptance_status = "REJECTED"
+    elif mismatch == "corrupt_bundle_hash":
+        manifest.bundle_sha256 = "b" * 64
+    elif mismatch == "wrong_fds_hash":
+        manifest.fds_sha256 = "f" * 64
+    elif mismatch == "missing_fds":
+        (tmp_path / "model.fds").unlink()
+
+    with pytest.raises(ValueError, match="Cannot seal mapping"):
+        workspace.finish_audit(manifest, "MAPPING_VERIFIED", {})
+    state = json.loads((tmp_path / "audit-state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "NOT_RUN"
+    assert state["checkpoint_status"] == "DRAFT_NOT_SEALED"
+    assert not (tmp_path / "model_manifest.json").exists()
+    assert not list(tmp_path.glob("*.tmp"))
 
 
 def test_temporary_workspace_is_owned_by_factory():
