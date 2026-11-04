@@ -508,6 +508,13 @@ async function runTests() {
         const check = await panel.queueScenarioBatch([scenarioToCheck], async () => reply);
         assert.equal(check.results[0].verdict, expected,
             'Unsafe response must not be promoted: ' + JSON.stringify(reply));
+        if (reply.simulation_status === 'SIMULATION_VERIFIED') {
+            assert.equal(check.results[0].simulation_status, 'INCONCLUSIVE');
+            assert.equal(check.results[0].received_simulation_status, 'SIMULATION_VERIFIED');
+        }
+        if (expected === 'INCONCLUSIVE') {
+            assert.match(check.results[0].verdict_reason, /not independently verified/);
+        }
         assert.equal(check.summary.passed, 0, 'No simulation verification was performed');
         assert.equal(check.summary.rejected, expected === 'REJECTED' ? 1 : 0);
         assert.equal(check.summary.inconclusive, expected === 'INCONCLUSIVE' ? 1 : 0);
