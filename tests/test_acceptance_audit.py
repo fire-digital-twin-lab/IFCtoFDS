@@ -61,9 +61,16 @@ def test_audit_detects_changed_persisted_evidence(scenario_job, broken):
     target.write_bytes(target.read_bytes() + b"\nchanged")
     audit = audit_persisted_job(scenario_job, "scenario")
     assert audit["audit_outcome"] == "INTEGRITY_INVALID"
-    assert audit["checks"]["evidence_integrity"]["status"] == "FAIL" or (
-        audit["checks"]["result_contract"]["status"] == "FAIL"
-    )
+    if broken == "result.json":
+        # The appended garbage invalidates JSON before any model contract or
+        # persisted evidence can be evaluated; NOT_RUN is the correct state.
+        assert audit["checks"]["result_json"]["status"] == "FAIL"
+        assert audit["checks"]["result_contract"]["status"] == "NOT_RUN"
+        assert audit["checks"]["evidence_integrity"]["status"] == "NOT_RUN"
+    else:
+        assert audit["checks"]["result_json"]["status"] == "PASS"
+        assert audit["checks"]["result_contract"]["status"] == "PASS"
+        assert audit["checks"]["evidence_integrity"]["status"] == "FAIL"
 
 
 def test_audit_missing_historical_index_is_not_resealed(scenario_job):
