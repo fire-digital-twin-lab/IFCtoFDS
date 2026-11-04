@@ -373,27 +373,29 @@ def artifact(jid: str, artifact: str):
     if artifact not in ARTIFACTS:
         raise HTTPException(404, "Unknown artifact")
     with manager.lock:
-        if jid not in manager.jobs:
+        job = manager.jobs.get(jid)
+        if not job:
             raise HTTPException(404, "Unknown job")
-        job = manager.jobs[jid]
         if job["state"] != "COMPLETED":
             raise HTTPException(409, "Job is not complete")
         if job.get("mode") not in ("convert", "scenario", "preview", "inventory"):
             raise HTTPException(409, "Job mode is missing or unsupported")
-        try:
-            published = manager.result(jid)
-        except ValueError as exc:
-            raise HTTPException(409, str(exc)) from exc
-        # The global artifact catalogue only defines known filenames. It
-        # does not authorize a completed job to expose every catalogue file.
-        # Require explicit declaration in this job's validated result.
-        if artifact not in published.get("artifacts", {}):
-            raise HTTPException(404, "Artifact is not declared by this job")
-        manager.touch(jid)
-        path = Path(job["directory"]) / ARTIFACTS[artifact]
-        if not path.is_file():
-            raise HTTPException(404, "Artifact not produced by this job")
-        return FileResponse(path, filename=ARTIFACTS[artifact])
+        directory = Path(job["directory"])
+    # Hash all declared evidence outside the shared scheduler lock.
+    try:
+        published = manager.result(jid)
+    except KeyError as exc:
+        raise HTTPException(404, "Unknown job") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    # A global catalogue key alone cannot authorize an undeclared artifact.
+    if artifact not in published.get("artifacts", {}):
+        raise HTTPException(404, "Artifact is not declared by this job")
+    manager.touch(jid)
+    path = directory / ARTIFACTS[artifact]
+    if not path.is_file():
+        raise HTTPException(404, "Artifact not produced by this job")
+    return FileResponse(path, filename=ARTIFACTS[artifact])
 
 
 @app.get("/api/jobs/{jid}/checkpoints/{artifact}")
