@@ -46,3 +46,16 @@ Lịch sử phát hành trước đây vẫn nằm trong
 ### Điều kiện an toàn
 - Không thay trích xuất IFC, xuất FDS, ngưỡng khoa học, solver hoặc quyết định nghiệm thu.
 - Chưa được chuyển hẳn sang `ValidationRunner` khi chưa chứng minh tương đương đầy đủ gate/bằng chứng/solver.
+
+
+## [Chưa phát hành] — R10-05 (04/11/2026)
+
+### Tính đúng đắn / An toàn
+- Không còn nâng lưới `PASS` thành kết luận nghiệm thu khi mô phỏng CFD độc lập vẫn `NOT_RUN`.
+- Worker trả `verdict` fail-closed kèm `verdict_reason`, giữ riêng trạng thái mesh và physics.
+- Giao diện EV không suy diễn `PASS` từ HTTP 200, `COMPLETED` hoặc kết quả PASS cũ thiếu chứng cứ.
+- Bổ sung kiểm thử hồi quy cho dữ liệu thiếu chứng cứ, lỗi gate, PASS giả và lỗi trạng thái hàng đợi.
+
+### Tương thích
+- Giữ các trường JSON có sẵn và phép tính khoa học; không thay thuật toán IFC/FDS hoặc solver.
+- Đặc tả hợp đồng bằng chứng tại `docs/architecture/15-r10-05-scenario-verdict-contract.md`.
