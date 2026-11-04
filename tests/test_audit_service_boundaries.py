@@ -20,18 +20,23 @@ def test_audit_use_case_orchestrates_existing_engine_before_post_checks():
         node for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef) and node.name == "execute"
     )
-    calls = [
-        node.func.id
+    # AST traversal is breadth-first, not source order: compare line numbers.
+    calls = {
+        node.func.id: node.lineno
         for node in ast.walk(execute)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    ]
-    assert "run_independent_validation" in calls
-    assert "apply_independent_source_integrity" in calls
-    assert "apply_mep_and_coverage" in calls
-    assert calls.index("run_independent_validation") < calls.index(
-        "apply_independent_source_integrity"
-    ) < calls.index("apply_mep_and_coverage")
-    assert calls.index("apply_mep_and_coverage") < calls.index("golden_gate")
+    }
+    for required in (
+        "run_independent_validation", "apply_independent_source_integrity",
+        "apply_mep_and_coverage", "golden_gate",
+    ):
+        assert required in calls
+    assert (
+        calls["run_independent_validation"]
+        < calls["apply_independent_source_integrity"]
+        < calls["apply_mep_and_coverage"]
+        < calls["golden_gate"]
+    )
 
 
 def test_topology_preflight_must_not_claim_geometry_package_verified(box_model, monkeypatch):
