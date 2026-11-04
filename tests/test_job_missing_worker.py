@@ -31,7 +31,7 @@ def test_scheduler_marks_running_job_without_process_failed_and_keeps_loop_alive
     directory = tmp_path / ("job-" + jid)
     directory.mkdir()
     now = time.time()
-    service.repository.register(
+    service.repository.set(
         jid,
         {
             "id": jid,
