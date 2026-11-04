@@ -34,3 +34,15 @@ Lịch sử phát hành trước đây vẫn nằm trong
 ### Kiểm thử
 - Thêm test định dạng checkpoint, điều kiện niêm phong fail-closed, DI, và cấm I/O trực tiếp trong use case.
 - Baseline A–F và kiểm thử solver FDS vẫn là điều kiện bắt buộc trước khi merge.
+
+## [Chưa phát hành] — R10-04 (04/11/2026)
+
+### Đã tái cấu trúc
+- Tách bước hậu kiểm tính toàn vẹn nguồn IFC, hình học, vị trí, manifest và provenance thành `audit_integrity.py` mà không đổi quyết định gate.
+- Tách đối chiếu đồ thị MEP đã lưu và thống kê coverage thành `audit_mep_coverage.py`, giữ bắt buộc đọc lại nguồn IFC độc lập.
+- Bổ sung bộ đối chiếu kết quả `engine`/`runner` theo nguyên tắc fail-closed; không thay bộ kiểm định đang có thẩm quyền hoặc gọi thêm solver.
+- Thêm test bảo vệ preflight NOT_RUN, lỗi MEP, thay đổi gate/verdict/evidence và thứ tự audit.
+
+### Điều kiện an toàn
+- Không thay trích xuất IFC, xuất FDS, ngưỡng khoa học, solver hoặc quyết định nghiệm thu.
+- Chưa được chuyển hẳn sang `ValidationRunner` khi chưa chứng minh tương đương đầy đủ gate/bằng chứng/solver.
