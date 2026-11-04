@@ -57,11 +57,42 @@ class ConversionResult(ResultShape):
             raise ValueError("Conversion findings_count differs from findings list")
         if self.output_complete != (self.mapping_status == "MAPPING_VERIFIED"):
             raise ValueError("Conversion output_complete contradicts mapping_status")
-        if self.status == "MAPPING_VERIFIED" and (
-            self.mapping_status != "MAPPING_VERIFIED" or not self.gates
-        ):
-            raise ValueError("MAPPING_VERIFIED requires a verified mapping and gate evidence")
+        actual_blockers = sum(
+            gate.required and gate.status not in ("PASS", "NOT_APPLICABLE")
+            for gate in self.gates.values()
+        )
+        if self.blocker_count != actual_blockers:
+            raise ValueError("Conversion blocker_count contradicts gate statuses")
+        if self.status not in (self.mapping_status, self.simulation_status):
+            raise ValueError("Overall acceptance status contradicts mapping/simulation")
         if self.mapping_status == "MAPPING_VERIFIED":
+            mandatory = {
+                "syntax", "source_inventory", "traceability", "scope",
+                "geometry", "representation", "domain",
+            }
+            missing_gates = mandatory - self.gates.keys()
+            if missing_gates:
+                raise ValueError(f"Verified mapping is missing gates: {sorted(missing_gates)}")
+            simulation_gates = {
+                "solver", "effective_geometry", "physics",
+                "scenario", "mesh_resolution", "operational_model",
+            }
+            required_mapping = [
+                gate for name, gate in self.gates.items()
+                if gate.required and name not in simulation_gates
+            ]
+            if not required_mapping or any(
+                gate.status not in ("PASS", "NOT_APPLICABLE")
+                or (gate.status == "NOT_APPLICABLE" and not gate.reason.strip())
+                for gate in required_mapping
+            ):
+                raise ValueError("Verified mapping contradicts required mapping gate evidence")
+            if any(
+                finding.get("severity") in ("P0", "P1")
+                and finding.get("verification_level", "mapping") == "mapping"
+                for finding in self.findings
+            ):
+                raise ValueError("Verified mapping contains blocking scientific findings")
             missing = {"fds", "manifest", "report", "geometry"} - self.artifacts.keys()
             if missing:
                 raise ValueError(f"Verified mapping is missing artifacts: {sorted(missing)}")
