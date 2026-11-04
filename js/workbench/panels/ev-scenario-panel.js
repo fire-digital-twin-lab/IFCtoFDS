@@ -254,6 +254,7 @@
         if (state === 'QUEUED_WAITING' || verdict === 'QUEUED_WAITING' ||
             state === 'QUEUED' || state === 'RUNNING' || verdict === 'QUEUED' || verdict === 'RUNNING' ||
             res.status === 429) return 'QUEUED_WAITING';
+        if (state === 'RESULT_UNAVAILABLE') return 'INCONCLUSIVE';
         // Even an incoming PASS or SIMULATION_VERIFIED label is insufficient
         // without an independently specified and verified evidence contract.
         // Do not silently promote mesh/energy checks to scientific acceptance.
@@ -351,6 +352,10 @@
                 if (r && r.status === 429) {
                     return { status: 429, error: 'Queue is full' };
                 }
+                if (!r || r.ok === false || (typeof r.status === 'number' && r.status >= 400)) {
+                    throw new Error('Job status endpoint returned HTTP ' +
+                        (r && r.status != null ? r.status : 'unknown'));
+                }
                 return r.json ? r.json() : r;
             });
         };
@@ -418,23 +423,18 @@
                 }
             }
 
-            // Check if job is non-terminal and needs polling
+            // The job lifecycle is independent of scientific acceptance. A job
+            // identifier always refers to an asynchronous backend job whose
+            // authoritative result must be fetched from /result.
             var jobId = res && (res.id || res.job_id);
-            var stateStr = String((res && (res.state || res.status)) || '').toUpperCase();
-            var verdictStr = String((res && res.verdict) || '').toUpperCase();
+            var stateStr = String((res && res.state) || '').toUpperCase();
             var terminalStates = ['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'QUEUED_WAITING'];
-            var terminalVerdicts = ['PASS', 'PASSED', 'INCONCLUSIVE', 'REJECTED', 'FAIL', 'FAILED', 'QUEUED_WAITING'];
-
-            var isAlreadyTerminal = terminalStates.indexOf(stateStr) !== -1 || terminalVerdicts.indexOf(verdictStr) !== -1;
-
-            if (jobId && !isAlreadyTerminal) {
+            if (jobId && terminalStates.indexOf(stateStr) === -1) {
                 var pollAttempts = 0;
-                var isTerminal = false;
-
-                while (!isTerminal && pollAttempts < maxPollAttempts) {
+                while (pollAttempts < maxPollAttempts) {
                     pollAttempts++;
                     await new Promise(function (resolve) { setTimeout(resolve, pollIntervalMs); });
-                    var pollRes = null;
+                    var pollRes;
                     try {
                         pollRes = await pollFn(jobId);
                     } catch (pollErr) {
@@ -442,57 +442,89 @@
                             await new Promise(function (resolve) { setTimeout(resolve, pollIntervalMs * 2); });
                             continue;
                         }
-                        pollRes = {
-                            id: jobId,
-                            state: 'FAILED',
-                            error: pollErr.message || String(pollErr)
-                        };
+                        res = Object.assign({}, res, {
+                            state: 'RESULT_UNAVAILABLE',
+                            result_fetch_status: 'FAILED',
+                            error: 'Job status request failed: ' + ((pollErr && pollErr.message) || String(pollErr))
+                        });
+                        break;
                     }
-
-                    if (pollRes) {
-                        if (is429(pollRes)) {
-                            await new Promise(function (resolve) { setTimeout(resolve, pollIntervalMs * 2); });
-                            continue;
-                        }
-                        var pState = String(pollRes.state || pollRes.status || '').toUpperCase();
-                        if (pState === 'COMPLETED') {
-                            isTerminal = true;
-                            res = Object.assign({}, res, pollRes);
-                            if (!res.verdict) {
-                                if (pollRes.result && pollRes.result.verdict) {
-                                    res = Object.assign({}, res, pollRes.result);
-                                } else {
-                                    var getResultFn = options.getResultFn || null;
-                                    if (getResultFn) {
-                                        try {
-                                            var rData = await getResultFn(jobId);
-                                            if (rData) res = Object.assign({}, res, rData);
-                                        } catch (_) {}
-                                    } else {
-                                        var fetcher = (root.IfcFds && root.IfcFds.verified && typeof root.IfcFds.verified.authFetch === 'function')
-                                            ? root.IfcFds.verified.authFetch
-                                            : (typeof fetch !== 'undefined' ? fetch : null);
-                                        if (fetcher) {
-                                            try {
-                                                var rData = await fetcher('/api/jobs/' + jobId + '/result').then(function(r) { return r.json ? r.json() : r; });
-                                                if (rData) res = Object.assign({}, res, rData);
-                                            } catch (_) {}
-                                        }
-                                    }
-                                }
-                            }
-                        } else if (pState === 'FAILED' || pState === 'TIMED_OUT' || pState === 'CANCELLED') {
-                            isTerminal = true;
-                            res = Object.assign({}, res, pollRes);
-                        }
+                    if (is429(pollRes)) {
+                        await new Promise(function (resolve) { setTimeout(resolve, pollIntervalMs * 2); });
+                        continue;
                     }
+                    if (!pollRes || typeof pollRes !== 'object') {
+                        res = Object.assign({}, res, {
+                            state: 'RESULT_UNAVAILABLE',
+                            result_fetch_status: 'FAILED',
+                            error: 'Job status response is not an object'
+                        });
+                        break;
+                    }
+                    // A polling response's verdict is never an end-of-job signal.
+                    res = Object.assign({}, res, pollRes);
+                    stateStr = String(res.state || '').toUpperCase();
+                    if (terminalStates.indexOf(stateStr) !== -1) break;
                 }
-
-                if (!isTerminal && pollAttempts >= maxPollAttempts) {
+                stateStr = String((res && res.state) || '').toUpperCase();
+                if (terminalStates.indexOf(stateStr) === -1 && stateStr !== 'RESULT_UNAVAILABLE') {
                     res = Object.assign({}, res, {
                         state: 'TIMED_OUT',
                         verdict: 'TIMED_OUT',
                         error: 'Job polling exceeded max attempts'
+                    });
+                }
+            }
+
+            // The final persisted /result payload, not the status snapshot,
+            // decides mesh, physics and scenario verdict classification.
+            if (jobId && String((res && res.state) || '').toUpperCase() === 'COMPLETED') {
+                try {
+                    var finalResult;
+                    if (typeof options.getResultFn === 'function') {
+                        finalResult = await options.getResultFn(jobId);
+                    } else {
+                        var resultFetcher = (root.IfcFds && root.IfcFds.verified &&
+                            typeof root.IfcFds.verified.authFetch === 'function')
+                            ? root.IfcFds.verified.authFetch
+                            : (typeof fetch !== 'undefined' ? fetch : null);
+                        if (!resultFetcher) throw new Error('Backend unavailable: result endpoint cannot be reached');
+                        var resultResponse = await resultFetcher('/api/jobs/' + jobId + '/result');
+                        if (!resultResponse ||
+                            resultResponse.ok === false ||
+                            (typeof resultResponse.status === 'number' && resultResponse.status >= 400)) {
+                            throw new Error('Result endpoint returned HTTP ' +
+                                (resultResponse && resultResponse.status != null ? resultResponse.status : 'unknown'));
+                        }
+                        finalResult = resultResponse.json ? await resultResponse.json() : resultResponse;
+                    }
+                    if (!finalResult || typeof finalResult !== 'object' ||
+                        finalResult.status !== 'COMPLETED' ||
+                        typeof finalResult.verdict !== 'string' ||
+                        typeof finalResult.mesh_status !== 'string' ||
+                        typeof finalResult.physics_status !== 'string' ||
+                        typeof finalResult.simulation_status !== 'string' ||
+                        !finalResult.evidence || typeof finalResult.evidence !== 'object') {
+                        throw new Error('Final scenario result is missing required status or evidence fields');
+                    }
+                    res = Object.assign({}, res, finalResult, {
+                        // Preserve the job lifecycle state even if an API
+                        // response adds unrelated status metadata.
+                        state: 'COMPLETED',
+                        result_fetch_status: 'COMPLETED'
+                    });
+                } catch (resultErr) {
+                    // A failed result fetch is an operational uncertainty,
+                    // not a scientific PASS or a scientific FAIL.
+                    res = Object.assign({}, res, {
+                        state: 'RESULT_UNAVAILABLE',
+                        verdict: 'INCONCLUSIVE',
+                        mesh_status: 'UNKNOWN',
+                        physics_status: 'INCONCLUSIVE',
+                        simulation_status: 'NOT_RUN',
+                        result_fetch_status: 'FAILED',
+                        error: 'Could not obtain verified job result: ' +
+                            ((resultErr && resultErr.message) || String(resultErr))
                     });
                 }
             }
@@ -513,7 +545,8 @@
                     ? 'INCONCLUSIVE' : (res && res.simulation_status) || 'NOT_RUN',
                 verdict: classification,
                 verdict_reason: classification === 'INCONCLUSIVE'
-                    ? 'Simulation not independently verified; HTTP/job/mesh status is insufficient'
+                    ? ((res && res.error) ||
+                        'Simulation not independently verified; HTTP/job/mesh status is insufficient')
                     : ((res && res.verdict_reason) || null)
             });
             results.push(res);
