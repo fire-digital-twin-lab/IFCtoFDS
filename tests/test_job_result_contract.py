@@ -156,6 +156,33 @@ def test_inventory_must_have_structural_fields_and_no_scientific_status():
         validate_job_result("inventory", {"total_elements": 2})
 
 
+@pytest.mark.parametrize("field,value", [
+    ("verdict", "PASS"),
+    ("mapping_status", "MAPPING_VERIFIED"),
+    ("simulation_status", "SIMULATION_VERIFIED"),
+    ("output_complete", True),
+    ("artifacts", {"fds": {"filename": "model.fds"}}),
+])
+def test_inventory_cannot_smuggle_scientific_claim_or_artifact(field, value):
+    doc = valid_inventory()
+    doc[field] = value
+    with pytest.raises(ValueError, match="Inventory cannot declare"):
+        validate_job_result("inventory", doc)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("verdict", "PASS"),
+    ("mapping_status", "MAPPING_VERIFIED"),
+    ("simulation_status", "SIMULATION_VERIFIED"),
+    ("output_complete", True),
+])
+def test_preview_cannot_smuggle_scientific_claim(field, value):
+    doc = valid_preview()
+    doc[field] = value
+    with pytest.raises(ValueError, match="Preview cannot declare"):
+        validate_job_result("preview", doc)
+
+
 @pytest.mark.parametrize("mode", ["unknown", "", "solver"])
 def test_unknown_mode_fails_closed(mode):
     with pytest.raises(ValueError, match="Unsupported result mode"):
