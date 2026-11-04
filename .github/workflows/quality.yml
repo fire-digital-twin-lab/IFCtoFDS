@@ -1,5 +1,11 @@
 name: Source quality and regression evidence
 
+concurrency:
+  # Chỉ giữ lượt chạy mới nhất của cùng nhánh/PR cho workflow này.
+  # Không gộp hai workflow khác nhau và không ảnh hưởng nhánh khác.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
