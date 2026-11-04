@@ -33,10 +33,15 @@
         });
         return bounds;
     }
+    // Credentials are ephemeral tab memory; never read or write browser storage.
+    var sessionApiKey = '';
+    function setApiKey(value) {
+        sessionApiKey = typeof value === 'string' ? value.trim() : '';
+    }
     function getAuthHeaders(extraHeaders) {
         var headers = Object.assign({}, extraHeaders || {});
-        var key = (typeof window !== 'undefined' && window.IFCFDS_API_KEY) || '';
-        try { key = (window.localStorage && window.localStorage.getItem('ifcfds_api_key')) || key; } catch (_) { /* Storage may be disabled. */ }
+        // Retain the legacy in-memory configuration hook, not localStorage.
+        var key = sessionApiKey || (typeof window !== 'undefined' && window.IFCFDS_API_KEY) || '';
         if (key) {
             headers['x-api-key'] = key;
         }
@@ -89,6 +94,7 @@
         });
     }
     ns.verified = {
+        setApiKey: setApiKey,
         getAuthHeaders: getAuthHeaders,
         authFetch: authFetch,
         queueScenarioBatch: function (scenarios, dispatchFn) {
@@ -130,6 +136,13 @@
             return active ? authFetch('/api/jobs/' + active + '/cancel', {method: 'POST'}).then(response) : Promise.resolve();
         },
         init: function () {
+            var apiKeyInput = get('api-key');
+            if (apiKeyInput) {
+                setApiKey(apiKeyInput.value);
+                apiKeyInput.addEventListener('input', function () {
+                    setApiKey(apiKeyInput.value);
+                });
+            }
             synchronizeDomainSources();
             domainAxes.forEach(function (axis) {
                 get('domain-' + axis).addEventListener('input', function () { domainEdited = true; });
