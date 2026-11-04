@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .result_contract import validate_job_result
+
 logger = logging.getLogger(__name__)
 
 
@@ -183,9 +185,16 @@ class JobRepository:
         job = self._jobs[jid]
         if job["state"] != "COMPLETED":
             raise ValueError("Job has no completed result")
-        result = json.loads(
-            Path(job["directory"], "result.json").read_text(encoding="utf-8")
-        )
+        try:
+            result = json.loads(
+                Path(job["directory"], "result.json").read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError) as exc:
+            raise ValueError("Completed job has an unreadable result.json") from exc
+        validate_job_result(job.get("mode", "convert"), result)
+        # Only add URLs for whitelisted job artifacts. Do not trust URLs or
+        # arbitrary filenames stored in the worker's JSON result.
         for name, artifact in result.get("artifacts", {}).items():
-            artifact["url"] = f"/api/jobs/{jid}/artifacts/{name}"
+            if job.get("mode") in ("convert", "scenario"):
+                artifact["url"] = f"/api/jobs/{jid}/artifacts/{name}"
         return result
