@@ -20,9 +20,21 @@ result JSON and declared files. Files are hashed in streaming 1 MiB blocks.
   before making a verified mapping result durable.
 - `JobRepository.read_result` rechecks hashes on each API read and rejects
   modified/missing files with a controlled `ValueError` (HTTP 409 in API).
-- Direct completed-job artifact and geometry URLs cannot bypass the result
-  evidence check. Content-addressed geometry payload bytes are verified against
-  their SHA-256 filenames before individual or batch downloads.
+- Direct completed-job artifact URLs require an explicit declaration in
+  that job's validated result; a globally registered filename alone is never
+  download authorization. Geometry must also be declared by the job.
+  Content-addressed geometry payloads are verified against their SHA-256
+  filenames before download. Batch requests validate the complete result once,
+  then check each individual payload.
+- API evidence hashing runs outside the shared scheduler lock, preventing
+  slow file reads from serializing every API job-status operation. The worker
+  completion loop still has an existing locked verification section and
+  requires separate profiling/refactoring before calling it optimized.
+- Available report and manifest status fields are cross-checked even for
+  overall INCONCLUSIVE/REJECTED conversions; only an overall
+  MAPPING_VERIFIED result requires VERIFIED_SEALED.
+- For missing indexes the API emits an explicit legacy/incomplete-job
+  provenance-review error (HTTP 409), without modifying the old directory.
 - For a conversion with **overall** `status=MAPPING_VERIFIED`, the index
   requires FDS, mapping manifest, independent acceptance report, geometry
   index and audit checkpoint. It checks status coherence across report,
@@ -70,5 +82,9 @@ directory. A crash before index creation prevents successful job publication.
 
 - Independent signature or externally anchored digest for adversarial tamper resistance.
 - Crash/restart recovery and verified historical-job migration.
-- Large-IFC benchmark of evidence hashing cost.
+- Large-IFC benchmark of evidence hashing cost; measure both API paths and
+  worker completion, including lock hold times, with reproducible fixtures.
+- Potential file replacement between verification and FileResponse streaming
+  (time-of-check/time-of-use) requires immutable sealed storage or filesystem
+  snapshot semantics; no claim of adversarial tamper protection is made.
 - Full solver log and scientific evidence record linking.
