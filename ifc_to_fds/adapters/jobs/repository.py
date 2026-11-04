@@ -195,6 +195,6 @@ class JobRepository:
         # Only add URLs for whitelisted job artifacts. Do not trust URLs or
         # arbitrary filenames stored in the worker's JSON result.
         for name, artifact in result.get("artifacts", {}).items():
-            if job.get("mode") in ("convert", "scenario"):
+            if job.get("mode") in ("convert", "scenario", "preview"):
                 artifact["url"] = f"/api/jobs/{jid}/artifacts/{name}"
         return result
