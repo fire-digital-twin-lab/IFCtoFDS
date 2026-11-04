@@ -247,8 +247,10 @@
         var simulation = String(res.simulation_status || '').toUpperCase();
         if (state === 'FAILED' || state === 'CANCELLED' || state === 'TIMED_OUT' ||
             verdict === 'FAIL' || verdict === 'FAILED' || verdict === 'REJECTED' ||
-            verdict === 'TIMED_OUT' || mesh === 'FAIL' || physics === 'FAIL' ||
-            simulation === 'REJECTED' || (typeof res.status === 'number' && res.status >= 400 && res.status !== 429)) {
+            verdict === 'TIMED_OUT' || mesh === 'FAIL' || mesh === 'REJECTED' ||
+            physics === 'FAIL' || physics === 'REJECTED' ||
+            simulation === 'FAIL' || simulation === 'REJECTED' ||
+            (typeof res.status === 'number' && res.status >= 400 && res.status !== 429)) {
             return 'REJECTED';
         }
         if (state === 'QUEUED_WAITING' || verdict === 'QUEUED_WAITING' ||
@@ -541,7 +543,7 @@
                 received_simulation_status: res && res.simulation_status ? res.simulation_status : null,
                 // An unsupported positive simulation claim must not leak into
                 // the visual simulation column as an accepted result.
-                simulation_status: res && res.simulation_status === 'SIMULATION_VERIFIED'
+                simulation_status: res && String(res.simulation_status || '').toUpperCase() === 'SIMULATION_VERIFIED'
                     ? 'INCONCLUSIVE' : (res && res.simulation_status) || 'NOT_RUN',
                 verdict: classification,
                 verdict_reason: classification === 'INCONCLUSIVE'
