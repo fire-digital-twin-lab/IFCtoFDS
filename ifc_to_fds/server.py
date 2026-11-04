@@ -19,6 +19,7 @@ from .validation.acceptance import AuditConfig
 from .fire.scenario_request import ScenarioRequest
 from .geometry.storage import file_hash as geometry_file_hash
 from .adapters.jobs.result_views import make_findings_page
+from .adapters.jobs.repository import JobPersistenceError
 
 manager = JobManager(
     max_waiting=int(os.getenv("IFCFDS_MAX_WAITING", "2")),
@@ -229,7 +230,10 @@ async def inventory(
         job = manager.submit(paths, {}, directory, mode="inventory")
     except OverflowError as exc:
         shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(429, str(exc))
+        raise HTTPException(429, str(exc)) from exc
+    except JobPersistenceError as exc:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
     return await wait_for_job(job["id"])
 
 
@@ -257,7 +261,10 @@ async def submit(files: list[UploadFile] = File(...), configuration: str = Form(
         return manager.submit(paths, config, directory)
     except OverflowError as exc:
         shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(429, str(exc))
+        raise HTTPException(429, str(exc)) from exc
+    except JobPersistenceError as exc:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
 
 
 @app.post("/api/preview-jobs", status_code=202)
@@ -269,7 +276,10 @@ async def submit_preview(file: UploadFile = File(...)):
         return manager.submit(paths, {}, directory, mode="preview")
     except OverflowError as exc:
         shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(429, str(exc))
+        raise HTTPException(429, str(exc)) from exc
+    except JobPersistenceError as exc:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
 
 
 @app.post("/api/scenario-jobs", status_code=202)
@@ -288,7 +298,10 @@ async def submit_scenario_job(payload: ScenarioRequest):
         return manager.submit([], raw_payload, directory, mode="scenario")
     except OverflowError as exc:
         shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(429, str(exc))
+        raise HTTPException(429, str(exc)) from exc
+    except JobPersistenceError as exc:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
     except Exception:
         shutil.rmtree(directory, ignore_errors=True)
         raise
@@ -547,7 +560,10 @@ async def legacy_convert(
         job = manager.submit(paths, config, directory)
     except OverflowError as exc:
         shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(429, str(exc))
+        raise HTTPException(429, str(exc)) from exc
+    except JobPersistenceError as exc:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
     return await wait_for_job(job["id"])
 
 
