@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from ifc_to_fds.domain.mapping import MappingManifest
 from ifc_to_fds.results import ARTIFACTS
 
 EVIDENCE_FILENAME = "result_evidence.json"
@@ -98,8 +99,6 @@ def _validate_linked_content(directory: Path, mode: str, result: dict[str, Any])
         raise ValueError("FDS bytes differ from the verified manifest digest")
     if geometry.get("sha256") != manifest.get("geometry_package_sha256"):
         raise ValueError("Geometry index differs from the verified manifest")
-    from ifc_to_fds.domain.mapping import MappingManifest
-
     parsed = MappingManifest.model_validate(manifest)
     if parsed.compute_bundle_sha256() != parsed.bundle_sha256:
         raise ValueError("Verified bundle hash does not match manifest contents")
