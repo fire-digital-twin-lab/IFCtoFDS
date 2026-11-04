@@ -58,7 +58,10 @@ def audit_persisted_job(directory: str | Path, mode: JobMode) -> dict[str, Any]:
         checks["result_json"] = _check("FAIL", "result.json must be an object")
         return report
     checks["result_json"] = _check("PASS", "Persisted JSON object is readable")
-    report["reported_verdict"] = result.get("verdict", result.get("status"))
+    claimed_verdict = result.get("verdict", result.get("status"))
+    # Do not echo arbitrary untrusted nested JSON in a diagnostic report.
+    if isinstance(claimed_verdict, str) and len(claimed_verdict) <= 64:
+        report["reported_verdict"] = claimed_verdict
     try:
         validate_job_result(mode, result)
     except (ValueError, KeyError, TypeError, ValidationError) as exc:
