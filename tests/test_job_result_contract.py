@@ -27,10 +27,15 @@ def valid_convert():
         "coverage": {},
         "timings": {},
         "gates": {
-            "source_inventory": {
+            name: {
                 "status": "PASS", "required": True,
-                "reason": "Independent source check", "reason_code": "SOURCE_PASS",
+                "reason": "Independent verified gate: " + name,
+                "reason_code": name.upper() + "_PASS",
             }
+            for name in (
+                "syntax", "source_inventory", "traceability", "scope",
+                "geometry", "representation", "domain",
+            )
         },
         "findings": [],
         "findings_count": 0,
@@ -98,6 +103,11 @@ def test_valid_mode_contract_retains_unmodified_document(mode, factory):
     {"simulation_status": "SIMULATION_VERIFIED"},
     {"schema_version": "0.3.0"},
     {"status": 200},
+    {"blocker_count": 1},
+    {"gates": {"source_inventory": {
+        "status": "PASS", "required": True,
+        "reason": "One gate is insufficient", "reason_code": "SOURCE_PASS",
+    }}},
 ])
 def test_convert_cannot_publish_unsupported_or_unproven_verdict(mutation):
     doc = valid_convert()
