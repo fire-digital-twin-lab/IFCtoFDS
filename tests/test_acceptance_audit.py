@@ -139,7 +139,7 @@ def test_geometry_payload_duplicate_and_offset_consistency(tmp_path, monkeypatch
     from ifc_to_fds.core.canonical import SCHEMA_VERSION
     from ifc_to_fds.geometry.package_integrity import seal
 
-    binary = b"\\x00" * 36
+    binary = bytes(36)
     identity = hashlib.sha256(binary).hexdigest()
     geometry = tmp_path / "model_geometry.json"
     payload_dir = tmp_path / "model_geometry.payloads"
