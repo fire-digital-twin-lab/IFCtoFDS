@@ -1,0 +1,7 @@
+{
+  "IFCFDS.STAGE.RUNNING": "Stage {stage} is running.",
+  "IFCFDS.STAGE.COMPLETED": "Stage {stage} completed in {elapsed_s} seconds.",
+  "IFCFDS.STAGE.FAILED": "Stage {stage} failed after {elapsed_s} seconds.",
+  "IFCFDS.STAGE.STATUS": "Stage {stage} changed to {state}.",
+  "IFCFDS.JOB.FAILED": "Job failed during {stage}: {error_type}."
+}

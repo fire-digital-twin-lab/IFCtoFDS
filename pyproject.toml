@@ -47,3 +47,6 @@ include = ["ifc_to_fds*"]
 include = ["ifc_to_fds", "tests"]
 extraPaths = ["."]
 pythonVersion = "3.12"
+
+[tool.setuptools.package-data]
+"ifc_to_fds.observability" = ["locales/*.json"]
