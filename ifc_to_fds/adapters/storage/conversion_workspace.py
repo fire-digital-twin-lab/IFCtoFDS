@@ -4,7 +4,9 @@ Preserves legacy filenames and serialization. The source auditor must read
 the persisted FDS bytes and MappingManifest, not converter in-memory objects.
 """
 
+import hashlib
 import json
+import uuid
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -12,6 +14,16 @@ from typing import Any
 from ifc_to_fds.application.services.portable_inventory import compact_inventory
 from ifc_to_fds.domain.bim import CanonicalModel
 from ifc_to_fds.domain.mapping import MappingManifest, MappingPlan
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Replace a single checkpoint atomically without leaving a truncated file."""
+    temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        temporary.write_text(content, encoding="utf-8")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 class LocalConversionWorkspace:
@@ -76,26 +88,52 @@ class LocalConversionWorkspace:
     def finish_audit(
         self, manifest: MappingManifest, status: str, timings: dict[str, Any]
     ) -> None:
-        (self.directory / "model_manifest.json").write_text(
-            manifest.model_dump_json(), encoding="utf-8"
-        )
-        (self.directory / "audit-state.json").write_text(
-            json.dumps(
-                {
-                    "stage": "VALIDATION",
-                    "status": status,
-                    # Mapping verification is the only currently sealed outcome.
-                    "checkpoint_status": (
-                        "DRAFT_NOT_SEALED"
-                        if status != "MAPPING_VERIFIED"
-                        else "VERIFIED_SEALED"
-                    ),
-                    "output_complete": manifest.output_complete,
-                    "bundle_sha256": manifest.bundle_sha256,
-                    "timings": timings,
-                }
+        # Fail closed before persisting ANY final artifact. A text status alone
+        # must never seal a bundle with incomplete or inconsistent evidence.
+        sealed = status == "MAPPING_VERIFIED"
+        if sealed:
+            if (
+                manifest.output_complete is not True
+                or manifest.mapping_acceptance != "MAPPING_VERIFIED"
+                or manifest.acceptance_status != "MAPPING_VERIFIED"
+            ):
+                raise ValueError(
+                    "Cannot seal mapping: audit status and manifest acceptance disagree"
+                )
+            digest = manifest.bundle_sha256
+            if (
+                not isinstance(digest, str)
+                or len(digest) != 64
+                or any(c not in "0123456789abcdef" for c in digest)
+                or manifest.compute_bundle_sha256() != digest
+            ):
+                raise ValueError("Cannot seal mapping: manifest bundle hash is invalid")
+            fds_path = self.directory / "model.fds"
+            if not fds_path.is_file() or (
+                hashlib.sha256(fds_path.read_bytes()).hexdigest()
+                != manifest.fds_sha256
+            ):
+                raise ValueError("Cannot seal mapping: persisted FDS hash differs")
+
+        checkpoint = {
+            "stage": "VALIDATION",
+            "status": status,
+            "checkpoint_status": (
+                "VERIFIED_SEALED" if sealed else "DRAFT_NOT_SEALED"
             ),
-            encoding="utf-8",
+            "output_complete": manifest.output_complete,
+            "bundle_sha256": manifest.bundle_sha256,
+            "timings": timings,
+        }
+        # Persist the manifest first and checkpoint LAST: a crash between the
+        # two leaves an unsealed checkpoint rather than false verification.
+        _atomic_write_text(
+            self.directory / "model_manifest.json",
+            manifest.model_dump_json(),
+        )
+        _atomic_write_text(
+            self.directory / "audit-state.json",
+            json.dumps(checkpoint),
         )
 
 
