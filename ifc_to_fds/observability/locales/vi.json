@@ -1,0 +1,7 @@
+{
+  "IFCFDS.STAGE.RUNNING": "Giai đoạn {stage} đang thực hiện.",
+  "IFCFDS.STAGE.COMPLETED": "Giai đoạn {stage} đã hoàn tất sau {elapsed_s} giây.",
+  "IFCFDS.STAGE.FAILED": "Giai đoạn {stage} thất bại sau {elapsed_s} giây.",
+  "IFCFDS.STAGE.STATUS": "Giai đoạn {stage} chuyển sang trạng thái {state}.",
+  "IFCFDS.JOB.FAILED": "Tác vụ thất bại ở giai đoạn {stage}: {error_type}."
+}
