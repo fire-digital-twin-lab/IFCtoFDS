@@ -93,6 +93,17 @@ def test_api_convert_job(tiny_ifc):
         fds_path.write_bytes(original)
     assert client.get(f"/api/jobs/{jid}/result").status_code == 200
 
+    # Content-addressed geometry payloads also need byte validation, not
+    # just a trusted, unchanged geometry index or result.json.
+    payload_path = Path(stored_job["directory"]) / "model_geometry.payloads" / (ref["payload"] + ".bin")
+    payload_original = payload_path.read_bytes()
+    try:
+        payload_path.write_bytes(payload_original + b"corrupt")
+        assert client.get(f"/api/jobs/{jid}/geometry/{ref['payload']}").status_code == 409
+    finally:
+        payload_path.write_bytes(payload_original)
+    assert client.get(f"/api/jobs/{jid}/geometry/{ref['payload']}").status_code == 200
+
 
 @pytest.mark.parametrize("cell", ["0", "-1", "nan", "inf"])
 def test_invalid_cell_size(cell):
