@@ -57,3 +57,13 @@ entries remain in the canonical [CHANGELOG.md](CHANGELOG.md).
 ### Compatibility
 - Kept existing JSON status fields and scientific calculations; no FDS/IFC or solver changes.
 - Documented evidence contract and limits in `docs/architecture/15-r10-05-scenario-verdict-contract.md`.
+
+## [Unreleased] — R10-06 (2026-11-04)
+
+### Quality infrastructure
+- Added dedicated quality CI for Python compilation, targeted Ruff/Pyright, targeted JavaScript ESLint, Python regression tests and coverage evidence.
+- Added an AST-based debt inventory and a per-changed-file Git merge-base gate to prevent new function-local imports, broad/bare exceptions and silent exception blocks.
+- Coverage is reported without an invented threshold; benchmark and numerical-warning findings remain open pending reproducible baselines.
+- Existing Python matrix, browser and pinned FDS solver verification remain unchanged.
+
+See `docs/architecture/17-r10-06-quality-gates.md`.
