@@ -1,6 +1,7 @@
 """R10-06: a source-debt inventory must not silently forgive new debt."""
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -69,3 +70,40 @@ def test_bad_baseline_is_not_treated_as_success(tmp_path):
         module.compare_to_baseline(current, {"schema_version": 2})
     with pytest.raises(ValueError, match="Missing valid baseline"):
         module.compare_to_baseline(current, {"schema_version": 1, "totals": {}})
+
+
+def test_git_base_detects_debt_in_modified_file(tmp_path):
+    root = tmp_path / "ifc_to_fds"
+    root.mkdir()
+    source = root / "foo.py"
+    source.write_text("def f():\n    return 1\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "quality@example.invalid"],
+        cwd=tmp_path, check=True
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Quality Test"],
+        cwd=tmp_path, check=True
+    )
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "baseline"], cwd=tmp_path, check=True
+    )
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    source.write_text(
+        "def f():\n    import os\n    return os.getcwd()\n",
+        encoding="utf-8"
+    )
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "new import debt"], cwd=tmp_path, check=True
+    )
+    errors = module.compare_git_base(module.inventory(root), root, base)
+    assert any(
+        "foo.py: imports_in_functions increased 0 -> 1" in error
+        for error in errors
+    )
