@@ -85,6 +85,32 @@ def test_audit_rejects_unsupported_scientific_pass(scenario_job):
     assert audit["checks"]["result_contract"]["status"] == "FAIL"
 
 
+def test_audit_preserves_rejected_scenario_even_with_intact_hashes(scenario_job):
+    result_path = scenario_job / "result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result["verdict"] = "FAIL"
+    result["mesh_status"] = "FAIL"
+    result["verdict_reason"] = "Mesh resolution check failed"
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    write_evidence_index(scenario_job, "scenario", result)
+
+    audit = audit_persisted_job(scenario_job, "scenario")
+    assert audit["audit_outcome"] == "EVIDENCE_VALID"
+    assert audit["reported_verdict"] == "FAIL"
+    assert audit["checks"]["solver_verification"]["status"] == "NOT_RUN"
+    assert audit["scientific_acceptance"] == "NOT_ESTABLISHED_BY_THIS_AUDIT"
+
+
+def test_untrusted_verdict_is_not_echoed_as_nested_json(scenario_job):
+    path = scenario_job / "result.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["verdict"] = {"unexpected": ["not a verdict"]}
+    path.write_text(json.dumps(data), encoding="utf-8")
+    report = audit_persisted_job(scenario_job, "scenario")
+    assert report["reported_verdict"] is None
+    assert report["checks"]["result_contract"]["status"] == "FAIL"
+
+
 def test_inventory_audit_never_claims_scientific_verification(tmp_path):
     document = {
         "total_elements": 1,
