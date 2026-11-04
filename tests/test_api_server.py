@@ -78,6 +78,21 @@ def test_api_convert_job(tiny_ifc):
     assert "_geometry_payloads" not in client.get("/api/jobs/" + jid).json()
     assert client.get(result["artifacts"]["geometry_archive"]["url"]).status_code == 200
 
+    # A direct artifact/geometry URL must not bypass result-evidence checks.
+    from ifc_to_fds.server import manager
+
+    stored_job = manager.repository.get(jid)
+    fds_path = Path(stored_job["directory"]) / "model.fds"
+    original = fds_path.read_bytes()
+    try:
+        fds_path.write_bytes(original + b"\nmodified after completion")
+        assert client.get(f"/api/jobs/{jid}/result").status_code == 409
+        assert client.get(f"/api/jobs/{jid}/artifacts/fds").status_code == 409
+        assert client.get(f"/api/jobs/{jid}/geometry/{ref['payload']}").status_code == 409
+    finally:
+        fds_path.write_bytes(original)
+    assert client.get(f"/api/jobs/{jid}/result").status_code == 200
+
 
 @pytest.mark.parametrize("cell", ["0", "-1", "nan", "inf"])
 def test_invalid_cell_size(cell):
