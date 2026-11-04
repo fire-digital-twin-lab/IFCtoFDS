@@ -207,15 +207,15 @@ def validate_job_result(mode: str, result: Any) -> dict[str, Any]:
     # e.g. a valid conversion result cannot add an unsanctioned
     # {"verdict": "SIMULATION_VERIFIED"} alongside its true status.
     claim_fields = {
-        "verdict", "verification", "mapping_status", "simulation_status",
-        "output_complete", "mapping_acceptance", "simulation_acceptance",
-        "acceptance_status", "verified", "is_verified",
-        "scientific_acceptance",
+        "status", "verdict", "verification", "mapping_status",
+        "simulation_status", "output_complete", "mapping_acceptance",
+        "simulation_acceptance", "acceptance_status", "verified",
+        "is_verified", "scientific_acceptance",
     }
     allowed_claims = {
-        "convert": {"mapping_status", "simulation_status", "output_complete"},
-        "scenario": {"verdict", "simulation_status"},
-        "preview": {"verification"},
+        "convert": {"status", "mapping_status", "simulation_status", "output_complete"},
+        "scenario": {"status", "verdict", "simulation_status"},
+        "preview": {"status", "verification"},
         "inventory": set(),
     }
     forbidden = (claim_fields - allowed_claims[mode]).intersection(result)
