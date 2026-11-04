@@ -184,8 +184,16 @@ def validate_job_result(mode: str, result: Any) -> dict[str, Any]:
         model_type.model_validate(result)
     except ValidationError as exc:
         # Avoid leaking arbitrary user-controlled content into error messages.
-        fields = sorted({str(err.get("loc", ("result",))[0]) for err in exc.errors()})
-        raise ValueError(f"Invalid {mode} result fields: {', '.join(fields)}") from exc
+        # A Pydantic model_validator raises with loc=(). Such a root-level
+        # contract error must be reported as a ValueError, never trigger an
+        # IndexError that kills the job supervisor thread.
+        fields = set()
+        for error in exc.errors():
+            loc = error.get("loc") or ()
+            fields.add(str(loc[0]) if loc else "result")
+        raise ValueError(
+            f"Invalid {mode} result fields: {', '.join(sorted(fields))}"
+        ) from exc
 
     if mode in ("convert", "scenario"):
         artifacts = result["artifacts"]
