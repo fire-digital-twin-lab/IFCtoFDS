@@ -20,3 +20,15 @@ entries remain in the canonical [CHANGELOG.md](CHANGELOG.md).
 - Frontend UI, other API errors, and solver logs are not fully localized yet.
 
 [Tiếng Việt](CHANGELOG.vi.md) · [Technical guide](docs/en/observability.md)
+
+## [Unreleased] — R10-03 (2026-11-04)
+
+### Refactored
+- Added a conversion workspace port and local filesystem factory to own draft FDS, MappingPlan, manifest, inventory and audit-state persistence.
+- Moved portable inventory projection out of `ConvertVerifiedUseCase`.
+- Kept on-disk FDS re-read and independent audit as mandatory steps; `NOT_RUN` is the pre-audit checkpoint state.
+- Preserved the legacy constructor through a clearly separated transitional bridge.
+
+### Verification
+- Added checkpoint state, exact draft format, fail-closed audit sealing, container wiring, and no-direct-I/O regression tests.
+- Original frozen baselines A–F and FDS solver regression remain required for merge.
