@@ -1,0 +1,74 @@
+name: Source quality and regression evidence
+
+on:
+  push:
+    branches:
+      - main
+      - 'refactor/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install application and quality analyzers
+        run: python -m pip install -e ".[test]" ruff pytest-cov
+      - name: Compile all Python modules
+        run: python -m compileall -q ifc_to_fds scripts/quality
+      - name: Ruff hard gate for new code and critical Python syntax rules
+        run: python -m ruff check --select E4,E7,E9,F63,F7,F82 scripts/quality/source_quality_budget.py ifc_to_fds/fire/scenario_verdict.py
+      - name: Python debt inventory (historical debt remains visible)
+        run: python scripts/quality/source_quality_budget.py --output quality-evidence/source-debt.json
+      - name: Reject newly introduced import/exception debt relative to PR base
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            base_sha="$(git merge-base HEAD "origin/$BASE_REF")"
+          else
+            base_sha="$(git rev-parse HEAD^)"
+          fi
+          python scripts/quality/source_quality_budget.py --git-base "$base_sha"
+      - name: Check source inventory regression scanner
+        run: python -m pytest -q tests/test_source_quality_budget.py
+      - name: Full Python coverage evidence (report only until baseline approval)
+        run: python -m pytest -q -m "not solver and not browser" --cov=ifc_to_fds --cov-report=xml:quality-evidence/coverage.xml --cov-report=term
+      - name: Publish review evidence (not a reason to invalidate passed tests)
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-quality-evidence
+          path: quality-evidence/
+          if-no-files-found: warn
+
+  types-and-javascript:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Targeted Pyright type-check (migration gate)
+        run: npx --yes pyright --project scripts/quality/pyrightconfig.json
+      - name: ESLint critical logical mistakes in EV status handling
+        run: npx --yes eslint@9 --no-config-lookup --rule 'no-unreachable:error' --rule 'no-dupe-args:error' --rule 'no-constant-condition:error' js/workbench/panels/ev-scenario-panel.js
+      - name: JavaScript syntax and scenario contract regression
+        run: |
+          node --check js/workbench/panels/ev-scenario-panel.js
+          node scripts/test-ev-scenario-panel.js

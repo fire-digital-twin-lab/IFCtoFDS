@@ -1,0 +1,12 @@
+{
+  "include": [
+    "source_quality_budget.py",
+    "../../ifc_to_fds/fire/scenario_verdict.py"
+  ],
+  "extraPaths": [
+    "../.."
+  ],
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.12",
+  "reportMissingImports": "none"
+}
