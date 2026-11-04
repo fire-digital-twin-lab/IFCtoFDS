@@ -11,6 +11,7 @@ from ifc_to_fds.domain.mapping import MappingManifest, build_mapping_plan
 from ifc_to_fds.domain.validation.model import GateResult, GateStatus
 from ifc_to_fds.geometry.storage import write_package
 from ifc_to_fds.mapping.exporter import serialize_fds
+from ..ports.conversion import (ModelPreparerPort, MappingPlannerPort, VerifiedFdsSerializerPort, GeometryPackageWriterPort)
 
 from ..dto.configuration import validate_configuration
 from .audit_conversion import AuditConversionUseCase, prepare_model
@@ -19,8 +20,21 @@ from .audit_conversion import AuditConversionUseCase, prepare_model
 class ConvertVerifiedUseCase:
     """Orchestrates verified conversion of IFC models to FDS input."""
 
-    def __init__(self, audit_use_case: Optional[AuditConversionUseCase] = None):
+    def __init__(
+        self,
+        audit_use_case: Optional[AuditConversionUseCase] = None,
+        *,
+        model_preparer: Optional[ModelPreparerPort] = None,
+        mapping_planner: Optional[MappingPlannerPort] = None,
+        fds_serializer: Optional[VerifiedFdsSerializerPort] = None,
+        geometry_writer: Optional[GeometryPackageWriterPort] = None,
+    ):
+        # Transitional fallback preserves direct legacy construction.
         self.audit_use_case = audit_use_case or AuditConversionUseCase()
+        self.model_preparer = model_preparer
+        self.mapping_planner = mapping_planner
+        self.fds_serializer = fds_serializer
+        self.geometry_writer = geometry_writer
 
     def execute(
         self,
@@ -30,15 +44,29 @@ class ConvertVerifiedUseCase:
     ) -> Dict[str, Any]:
         configuration = validate_configuration(configuration or {})
         start = perf_counter()
-        model = prepare_model(paths, configuration)
+        model = (
+            self.model_preparer.prepare(paths, configuration)
+            if self.model_preparer is not None
+            else prepare_model(paths, configuration)
+        )
         configuration["rebase_vector"] = model.source.rebase_vector
         prepared = perf_counter()
         cell_size = configuration.get("cell_size", 0.2)
-        from ifc_to_fds.mep.network import build_hvac_network
-        mapping_plan = build_mapping_plan(model, cell_size=cell_size, hvac_network=build_hvac_network(model))
-        fds, manifest = serialize_fds(
-            model, cell_size=cell_size, mapping_plan=mapping_plan
-        )
+        if self.mapping_planner is not None:
+            mapping_plan = self.mapping_planner.plan(model, cell_size=cell_size)
+        else:
+            from ifc_to_fds.mep.network import build_hvac_network
+            mapping_plan = build_mapping_plan(
+                model, cell_size=cell_size, hvac_network=build_hvac_network(model)
+            )
+        if self.fds_serializer is not None:
+            fds, manifest = self.fds_serializer.serialize(
+                model, cell_size=cell_size, mapping_plan=mapping_plan
+            )
+        else:
+            fds, manifest = serialize_fds(
+                model, cell_size=cell_size, mapping_plan=mapping_plan
+            )
         serialized = perf_counter()
 
         owner = (
@@ -48,9 +76,14 @@ class ConvertVerifiedUseCase:
         )
         workspace = Path(owner.name if owner is not None else (output_directory or "."))
         workspace.mkdir(parents=True, exist_ok=True)
-        geometry_package = write_package(
-            model, workspace / "model_geometry.json", owner
-        )
+        if self.geometry_writer is not None:
+            geometry_package = self.geometry_writer.write(
+                model, workspace / "model_geometry.json", owner
+            )
+        else:
+            geometry_package = write_package(
+                model, workspace / "model_geometry.json", owner
+            )
         (workspace / "model.fds").write_bytes(fds.encode("utf-8"))
         (workspace / "mapping_plan.json").write_text(mapping_plan.model_dump_json(), encoding="utf-8")
         packaged = perf_counter()
