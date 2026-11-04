@@ -234,6 +234,33 @@
     }
 
     /**
+     * Fail-closed EV scenario verdict. Job transport success, HTTP 200,
+     * COMPLETED and a mesh PASS do not imply independent CFD verification.
+     * This workflow has no SIMULATION_VERIFIED evidence contract yet.
+     */
+    function classifyScenarioResult(res) {
+        if (!res || typeof res !== 'object') return 'INCONCLUSIVE';
+        var state = String(res.state || '').toUpperCase();
+        var verdict = String(res.verdict || '').toUpperCase();
+        var mesh = String(res.mesh_status || '').toUpperCase();
+        var physics = String(res.physics_status || '').toUpperCase();
+        var simulation = String(res.simulation_status || '').toUpperCase();
+        if (state === 'FAILED' || state === 'CANCELLED' || state === 'TIMED_OUT' ||
+            verdict === 'FAIL' || verdict === 'FAILED' || verdict === 'REJECTED' ||
+            verdict === 'TIMED_OUT' || mesh === 'FAIL' || physics === 'FAIL' ||
+            simulation === 'REJECTED' || (typeof res.status === 'number' && res.status >= 400 && res.status !== 429)) {
+            return 'REJECTED';
+        }
+        if (state === 'QUEUED_WAITING' || verdict === 'QUEUED_WAITING' ||
+            state === 'QUEUED' || state === 'RUNNING' || verdict === 'QUEUED' || verdict === 'RUNNING' ||
+            res.status === 429) return 'QUEUED_WAITING';
+        // Even an incoming PASS or SIMULATION_VERIFIED label is insufficient
+        // without an independently specified and verified evidence contract.
+        // Do not silently promote mesh/energy checks to scientific acceptance.
+        return 'INCONCLUSIVE';
+    }
+
+    /**
      * Checks if a response or error represents HTTP 429 Too Many Requests.
      */
     function is429(val) {
@@ -474,30 +501,23 @@
                 res.scenario_id = scenario.scenario_id;
             }
 
+            var classification = classifyScenarioResult(res);
+            // Preserve received evidence but never display a legacy PASS as an
+            // acceptance verdict. Keep the original label for diagnostics.
+            res = Object.assign({}, res || {}, {
+                received_verdict: res && res.verdict ? res.verdict : null,
+                verdict: classification,
+                verdict_reason: (res && res.verdict_reason) ||
+                    (classification === 'INCONCLUSIVE'
+                        ? 'Simulation not independently verified; HTTP/job/mesh status is insufficient'
+                        : null)
+            });
             results.push(res);
 
-            var v = String((res && (res.verdict || res.state || res.status)) || '').toUpperCase();
-            if (res && res.status === 200 && !res.verdict && !res.state) {
-                v = 'PASS';
-            }
-
-            if (v === 'PASS' || v === 'PASSED') {
-                passed++;
-            } else if (v === 'INCONCLUSIVE' || (res && res.mesh_status && String(res.mesh_status).toUpperCase() === 'FAIL')) {
-                inconclusive++;
-            } else if (v === 'COMPLETED') {
-                if (res && res.mesh_status && String(res.mesh_status).toUpperCase() === 'FAIL') {
-                    inconclusive++;
-                } else {
-                    passed++;
-                }
-            } else if (v === 'QUEUED_WAITING' || v === 'QUEUED' || v === 'RUNNING') {
-                queuedWaiting++;
-            } else if (v === 'REJECTED' || v === 'FAIL' || v === 'FAILED' || v === 'TIMED_OUT' || v === 'CANCELLED') {
-                rejected++;
-            } else {
-                rejected++;
-            }
+            if (classification === 'REJECTED') rejected++;
+            else if (classification === 'QUEUED_WAITING') queuedWaiting++;
+            else if (classification === 'INCONCLUSIVE') inconclusive++;
+            else passed++; // reserved for a future explicit simulation-evidence contract
         }
 
         var summary = {
@@ -738,7 +758,7 @@
                 sumHeader.style.fontWeight = 'bold';
                 sumHeader.style.marginBottom = '4px';
                 var statusParts = [
-                    batchOutput.summary.passed + ' Passed',
+                    batchOutput.summary.passed + ' Simulation verified',
                     batchOutput.summary.inconclusive + ' Inconclusive',
                     batchOutput.summary.rejected + ' Rejected'
                 ];
