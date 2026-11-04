@@ -182,8 +182,11 @@ class JobRepository:
             snapshot["diagnostics_url"] = f"/api/jobs/{jid}/diagnostics"
         return snapshot
 
-    def read_result(self, jid: str) -> Dict[str, Any]:
-        job = self._jobs[jid]
+    def read_result(self, jid: str, *, job: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        # JobService supplies a snapshot so file hashing can run without
+        # blocking the job scheduler lock. Direct repository users still work.
+        if job is None:
+            job = self._jobs[jid]
         if job["state"] != "COMPLETED":
             raise ValueError("Job has no completed result")
         try:
