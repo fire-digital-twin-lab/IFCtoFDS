@@ -61,33 +61,51 @@ def _selected_files(mode: str, result: dict[str, Any]) -> set[str]:
     return names
 
 
-def _validate_linked_content(directory: Path, mode: str, result: dict[str, Any]) -> None:
+def _validate_linked_content(
+    directory: Path, mode: str, result: dict[str, Any], digests: dict[str, str]
+) -> None:
     """Check evidence consistency without modifying scientific gate decisions."""
     if mode == "scenario":
-        actual = _sha256(directory / "scenario.fds")
+        actual = digests["scenario.fds"]
         if actual != result["evidence"]["fds_sha256"]:
             raise ValueError("Scenario FDS bytes differ from declared evidence SHA-256")
         return
 
-    if mode != "convert" or result["status"] != "MAPPING_VERIFIED":
+    if mode != "convert":
         return
 
-    manifest = _read_object(directory / "model_manifest.json")
-    report = _read_object(directory / "model_acceptance_report.json")
+    # Check available report/manifest verdicts even when the final verdict
+    # is INCONCLUSIVE or REJECTED. A non-PASS result is not an exemption from
+    # cross-file consistency checks.
+    artifacts = result["artifacts"]
+    manifest = (
+        _read_object(directory / "model_manifest.json")
+        if "manifest" in artifacts else None
+    )
+    report = (
+        _read_object(directory / "model_acceptance_report.json")
+        if "report" in artifacts else None
+    )
+    if manifest is not None:
+        for field, expected in (
+            ("acceptance_status", result["status"]),
+            ("mapping_acceptance", result["mapping_status"]),
+            ("simulation_acceptance", result["simulation_status"]),
+            ("output_complete", result["output_complete"]),
+        ):
+            if manifest.get(field) != expected:
+                raise ValueError(f"Manifest {field} contradicts result.json")
+    if report is not None:
+        for field in ("status", "mapping_status", "simulation_status"):
+            if report.get(field) != result[field]:
+                raise ValueError(f"Acceptance report {field} contradicts result.json")
+    if result["status"] != "MAPPING_VERIFIED":
+        return
+
+    if manifest is None or report is None:
+        raise ValueError("Verified mapping is missing report or manifest")
     checkpoint = _read_object(directory / "audit-state.json")
     geometry = _read_object(directory / "model_geometry.json")
-
-    for field, expected in (
-        ("acceptance_status", result["status"]),
-        ("mapping_acceptance", result["mapping_status"]),
-        ("simulation_acceptance", result["simulation_status"]),
-        ("output_complete", result["output_complete"]),
-    ):
-        if manifest.get(field) != expected:
-            raise ValueError(f"Manifest {field} contradicts result.json")
-    for field in ("status", "mapping_status", "simulation_status"):
-        if report.get(field) != result[field]:
-            raise ValueError(f"Acceptance report {field} contradicts result.json")
     if (
         checkpoint.get("status") != "MAPPING_VERIFIED"
         or checkpoint.get("checkpoint_status") != "VERIFIED_SEALED"
@@ -95,7 +113,7 @@ def _validate_linked_content(directory: Path, mode: str, result: dict[str, Any])
         or checkpoint.get("bundle_sha256") != manifest.get("bundle_sha256")
     ):
         raise ValueError("Verified checkpoint is missing or contradictory")
-    if _sha256(directory / "model.fds") != manifest.get("fds_sha256"):
+    if digests["model.fds"] != manifest.get("fds_sha256"):
         raise ValueError("FDS bytes differ from the verified manifest digest")
     if geometry.get("sha256") != manifest.get("geometry_package_sha256"):
         raise ValueError("Geometry index differs from the verified manifest")
@@ -111,13 +129,13 @@ def build_evidence_index(
     if mode not in ("convert", "scenario"):
         raise ValueError("Evidence indexing is currently defined for convert/scenario")
     directory = Path(directory)
-    _validate_linked_content(directory, mode, result)
     files = {}
     for filename in sorted(_selected_files(mode, result)):
         path = directory / filename
         if not path.is_file():
             raise ValueError(f"Missing required job evidence file: {filename}")
         files[filename] = _sha256(path)
+    _validate_linked_content(directory, mode, result, files)
     return {"schema_version": SCHEMA_VERSION, "mode": mode, "files": files}
 
 
@@ -142,6 +160,11 @@ def verify_evidence_index(
     if mode not in ("convert", "scenario"):
         return
     directory = Path(directory)
+    if not (directory / EVIDENCE_FILENAME).is_file():
+        raise ValueError(
+            "Missing evidence index: historical or incomplete job; "
+            "read-only provenance review required before recovery"
+        )
     index = _read_object(directory / EVIDENCE_FILENAME)
     if index.get("schema_version") != SCHEMA_VERSION or index.get("mode") != mode:
         raise ValueError("Evidence index schema or job mode mismatch")
@@ -158,4 +181,4 @@ def verify_evidence_index(
         path = directory / filename
         if not path.is_file() or _sha256(path) != digest:
             raise ValueError(f"Evidence file changed or missing: {filename}")
-    _validate_linked_content(directory, mode, result)
+    _validate_linked_content(directory, mode, result, files)
