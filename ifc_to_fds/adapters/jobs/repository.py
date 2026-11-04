@@ -92,7 +92,7 @@ class JobRepository:
         for attempt in range(4):
             try:
                 with self._get_connection() as conn:
-                    conn.execute("""
+                    cursor = conn.execute("""
                         INSERT INTO jobs (id, state, directory, mode, created, started, finished, last_accessed, error, retention_s, durable, peak_rss_bytes)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(id) DO UPDATE SET
@@ -105,7 +105,8 @@ class JobRepository:
                             error=excluded.error,
                             retention_s=excluded.retention_s,
                             durable=excluded.durable,
-                            peak_rss_bytes=excluded.peak_rss_bytes;
+                            peak_rss_bytes=excluded.peak_rss_bytes
+                        WHERE ? = 0;
                     """, (
                         jid,
                         job.get("state", "QUEUED"),
@@ -119,7 +120,12 @@ class JobRepository:
                         job.get("retention_s"),
                         1 if job.get("durable") else 0,
                         job.get("peak_rss_bytes"),
+                        1 if require_durable else 0,
                     ))
+                    if require_durable and cursor.rowcount != 1:
+                        raise JobPersistenceError(
+                            "Job ID is already registered in SQLite"
+                        )
                 return
             except sqlite3.OperationalError as exc:
                 if ("locked" in str(exc).lower() or "busy" in str(exc).lower()) and attempt < 3:
