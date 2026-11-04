@@ -30,7 +30,7 @@ or claim scientific acceptance without the necessary status fields.
 
 | Mode | Required result | Forbidden acceptance |
 |---|---|---|
-| convert | schema version, status, mapping_status, simulation_status, output_complete, gates, findings, coverage, artifacts | \`SIMULATION_VERIFIED\`; mismatched mapping/output_complete; bare status-only \`MAPPING_VERIFIED\` |
+| convert | schema version, status, mapping_status, simulation_status, output_complete, gates, findings, coverage, artifacts, mandatory mapping gates and exact blocker count | \`SIMULATION_VERIFIED\`; mismatched mapping/output_complete; missing/failing required mapping gates; bare status-only \`MAPPING_VERIFIED\` |
 | scenario | \`status=COMPLETED\`, mesh, physics, \`simulation_status=NOT_RUN\`, verdict reason, evidence, scenario FDS | \`verdict=PASS\`, \`SIMULATION_VERIFIED\`, verdict inconsistent with failed gates |
 | preview | \`status=PREVIEW_ONLY\`, \`verification=NOT_RUN\`, counts, bounds, source, display artifacts | Mapping or simulation verification |
 | inventory | Element counts, storeys, sources, research metadata | Any overall scientific \`status\` |
