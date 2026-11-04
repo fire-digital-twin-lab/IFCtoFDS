@@ -1,6 +1,7 @@
 """R10-08: test persisted evidence against post-completion tampering."""
 
 import hashlib
+import threading
 import json
 
 import pytest
@@ -218,3 +219,42 @@ def test_inconclusive_conversion_report_must_match_result(tmp_path):
     report_path.write_text(json.dumps(report), encoding="utf-8")
     with pytest.raises(ValueError, match="Acceptance report mapping_status contradicts"):
         build_evidence_index(tmp_path, "convert", result)
+
+
+def test_service_result_does_not_hold_scheduler_lock_during_file_io(
+    tmp_path, monkeypatch
+):
+    from ifc_to_fds.adapters.jobs.service import JobService
+
+    service = JobService(root=tmp_path)
+    service.repository.set("snapshot-job", {
+        "id": "snapshot-job",
+        "state": "COMPLETED",
+        "directory": str(tmp_path),
+        "mode": "scenario",
+        "created": 0,
+    })
+    observed = []
+
+    def inspect_read(jid, *, job=None):
+        assert jid == "snapshot-job"
+        assert job is not None and job["state"] == "COMPLETED"
+
+        def probe():
+            acquired = service.lock.acquire(timeout=1.0)
+            observed.append(acquired)
+            if acquired:
+                service.lock.release()
+
+        probe_thread = threading.Thread(target=probe)
+        probe_thread.start()
+        probe_thread.join(timeout=2)
+        assert not probe_thread.is_alive()
+        return {"verified": False}
+
+    monkeypatch.setattr(service.repository, "read_result", inspect_read)
+    try:
+        assert service.result("snapshot-job") == {"verified": False}
+        assert observed == [True]
+    finally:
+        service.close()
