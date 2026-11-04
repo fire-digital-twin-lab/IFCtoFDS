@@ -202,7 +202,26 @@ def validate_job_result(mode: str, result: Any) -> dict[str, Any]:
             if filename is None or artifact["filename"] != filename:
                 raise ValueError(f"Invalid {mode} artifact descriptor: {name!r}")
 
-    if mode == "inventory" and "status" in result:
-        raise ValueError("Inventory cannot claim a mapping or simulation status")
+    # Unverified outputs must not smuggle an acceptance assertion through
+    # ResultShape's additive extension fields, even when its main status is
+    # PREVIEW_ONLY or inventory has no top-level status at all.
+    forbidden_claims = {
+        "verdict", "mapping_status", "simulation_status",
+        "output_complete", "mapping_acceptance", "simulation_acceptance",
+    }
+    if mode == "preview":
+        forbidden = forbidden_claims.intersection(result)
+        if forbidden:
+            raise ValueError(
+                "Preview cannot declare scientific acceptance fields: "
+                + ", ".join(sorted(forbidden))
+            )
+    if mode == "inventory":
+        forbidden = (forbidden_claims | {"status", "verification", "artifacts"}).intersection(result)
+        if forbidden:
+            raise ValueError(
+                "Inventory cannot declare acceptance or downloadable artifacts: "
+                + ", ".join(sorted(forbidden))
+            )
 
     return result

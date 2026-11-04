@@ -80,3 +80,14 @@ Chi tiết tại `docs/architecture/17-r10-06-quality-gates.md`.
 - Giữ tương thích URL tải hình học/MEP ở chế độ preview.
 
 Chi tiết tại `docs/architecture/18-r10-07-result-contracts.md`.
+
+## [Chưa phát hành] — R10-08 (04/11/2026)
+
+### Tính toàn vẹn bằng chứng lưu trữ
+- Thêm chỉ mục SHA-256 đọc theo luồng cho tệp kết quả và bằng chứng của job chuyển đổi/kịch bản mới.
+- Worker ghi index trước khi thoát thành công; service và API xác thực lại trước khi công bố COMPLETED, durable và trả kết quả.
+- Bản đồ được xác minh phải đối chiếu report, manifest, checkpoint, byte FDS, geometry index và bundle digest.
+- Thêm test phát hiện file bị sửa/xóa và kiểm tra trên ca IFC nhỏ thật.
+- Các job convert/scenario cũ thiếu index được xử lý fail-closed; cần migration có review độc lập để đọc lại.
+
+Chi tiết tại `docs/architecture/19-r10-08-evidence-index.md`.

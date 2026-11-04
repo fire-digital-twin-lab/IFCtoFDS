@@ -78,3 +78,14 @@ See `docs/architecture/17-r10-06-quality-gates.md`.
 - Existing preview download URLs remain supported.
 
 See `docs/architecture/18-r10-07-result-contracts.md`.
+
+## [Unreleased] — R10-08 (2026-11-04)
+
+### Artifact evidence integrity
+- Added streamed SHA-256 evidence index for new conversion and scenario job result files.
+- Worker publishes index before successful exit; service and result API verify it before COMPLETED, durable or read access.
+- Verified mapping results cross-check acceptance report, manifest, audit checkpoint, FDS bytes, geometry index and bundle digest.
+- Added regression tests for modified/deleted files and real tiny-IFC artifact consistency.
+- Historical convert/scenario jobs without an index now fail closed pending an explicitly reviewed migration.
+
+See `docs/architecture/19-r10-08-evidence-index.md`.

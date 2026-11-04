@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ifc_to_fds.adapters.jobs.evidence_index import write_evidence_index
+
 
 class WorkerRunner:
     """Executes background jobs by invoking application use cases."""
@@ -119,6 +121,8 @@ class WorkerRunner:
 
                 result["research"] = research_context(result["sources"], {})
             (directory / "result.json").write_text(json.dumps(result), encoding="utf-8")
+            if request.get("mode", "convert") in ("convert", "scenario"):
+                write_evidence_index(directory, request.get("mode", "convert"), result)
             return 0
         except Exception as exc:
             from ifc_to_fds.diagnostics import failure_diagnostic

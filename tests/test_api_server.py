@@ -61,6 +61,32 @@ def test_api_convert_job(tiny_ifc):
     )
     assert batch.status_code == 200
     assert batch.content == payload.content * 2
+
+    # One batch validates the large result bundle once, not once per mesh.
+    from unittest.mock import patch
+    from ifc_to_fds.server import manager
+
+    from ifc_to_fds import server as server_module
+
+    with (
+        patch.object(manager, "result", wraps=manager.result) as checked_result,
+        patch.object(server_module, "_geometry_file", wraps=server_module._geometry_file)
+        as checked_payload,
+    ):
+        checked_batch = client.get(
+            "/api/jobs/" + jid + "/geometry-batch",
+            params=[("payloads", ref["payload"])] * 3,
+        )
+        assert checked_batch.status_code == 200
+        assert checked_batch.content == payload.content * 3
+        assert checked_result.call_count == 1
+        assert checked_payload.call_count == 1
+
+    # A read error during content hashing is a controlled integrity failure.
+    with patch.object(server_module, "geometry_file_hash", side_effect=OSError("I/O failure")):
+        unreadable = client.get(f"/api/jobs/{jid}/geometry/{ref['payload']}")
+        assert unreadable.status_code == 409
+        assert "cannot be read" in unreadable.json()["detail"]
     assert (
         client.get(
             "/api/jobs/" + jid + "/geometry-batch",
@@ -77,6 +103,32 @@ def test_api_convert_job(tiny_ifc):
     assert client.get("/api/jobs/" + jid + "/geometry/" + "0" * 64).status_code == 404
     assert "_geometry_payloads" not in client.get("/api/jobs/" + jid).json()
     assert client.get(result["artifacts"]["geometry_archive"]["url"]).status_code == 200
+
+    # A direct artifact/geometry URL must not bypass result-evidence checks.
+    from ifc_to_fds.server import manager
+
+    stored_job = manager.repository.get(jid)
+    fds_path = Path(stored_job["directory"]) / "model.fds"
+    original = fds_path.read_bytes()
+    try:
+        fds_path.write_bytes(original + b"\nmodified after completion")
+        assert client.get(f"/api/jobs/{jid}/result").status_code == 409
+        assert client.get(f"/api/jobs/{jid}/artifacts/fds").status_code == 409
+        assert client.get(f"/api/jobs/{jid}/geometry/{ref['payload']}").status_code == 409
+    finally:
+        fds_path.write_bytes(original)
+    assert client.get(f"/api/jobs/{jid}/result").status_code == 200
+
+    # Content-addressed geometry payloads also need byte validation, not
+    # just a trusted, unchanged geometry index or result.json.
+    payload_path = Path(stored_job["directory"]) / "model_geometry.payloads" / (ref["payload"] + ".bin")
+    payload_original = payload_path.read_bytes()
+    try:
+        payload_path.write_bytes(payload_original + b"corrupt")
+        assert client.get(f"/api/jobs/{jid}/geometry/{ref['payload']}").status_code == 409
+    finally:
+        payload_path.write_bytes(payload_original)
+    assert client.get(f"/api/jobs/{jid}/geometry/{ref['payload']}").status_code == 200
 
 
 @pytest.mark.parametrize("cell", ["0", "-1", "nan", "inf"])
@@ -467,6 +519,16 @@ def test_submit_scenario_job_executes_mesh_gate(monkeypatch, tiny_ifc):
     art_res = client.get(f"/api/jobs/{jid}/artifacts/scenario_fds")
     assert art_res.status_code == 200
     assert "&RAMP" in art_res.text
+
+    # A known catalogue name is not permission to download a file created
+    # after the result/evidence index was sealed.
+    undeclared = job_dir / "model_manifest.json"
+    assert "manifest" not in res["artifacts"]
+    try:
+        undeclared.write_text('{"forged": true}', encoding="utf-8")
+        assert client.get(f"/api/jobs/{jid}/artifacts/manifest").status_code == 404
+    finally:
+        undeclared.unlink(missing_ok=True)
 
     # Verify pagination on /api/jobs/{jid}/result (M-8b)
     res_paged = client.get(f"/api/jobs/{jid}/result?offset=0&limit=1").json()

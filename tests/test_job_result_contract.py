@@ -156,6 +156,33 @@ def test_inventory_must_have_structural_fields_and_no_scientific_status():
         validate_job_result("inventory", {"total_elements": 2})
 
 
+@pytest.mark.parametrize("field,value", [
+    ("verdict", "PASS"),
+    ("mapping_status", "MAPPING_VERIFIED"),
+    ("simulation_status", "SIMULATION_VERIFIED"),
+    ("output_complete", True),
+    ("artifacts", {"fds": {"filename": "model.fds"}}),
+])
+def test_inventory_cannot_smuggle_scientific_claim_or_artifact(field, value):
+    doc = valid_inventory()
+    doc[field] = value
+    with pytest.raises(ValueError, match="Inventory cannot declare"):
+        validate_job_result("inventory", doc)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("verdict", "PASS"),
+    ("mapping_status", "MAPPING_VERIFIED"),
+    ("simulation_status", "SIMULATION_VERIFIED"),
+    ("output_complete", True),
+])
+def test_preview_cannot_smuggle_scientific_claim(field, value):
+    doc = valid_preview()
+    doc[field] = value
+    with pytest.raises(ValueError, match="Preview cannot declare"):
+        validate_job_result("preview", doc)
+
+
 @pytest.mark.parametrize("mode", ["unknown", "", "solver"])
 def test_unknown_mode_fails_closed(mode):
     with pytest.raises(ValueError, match="Unsupported result mode"):
@@ -186,19 +213,26 @@ def test_artifact_names_cannot_be_redirected_or_renamed():
 
 
 def test_read_result_revalidates_tampered_persisted_result(tmp_path):
+    from hashlib import sha256
+    from ifc_to_fds.adapters.jobs.evidence_index import write_evidence_index
+
     repository = JobRepository(root=tmp_path)
     directory = tmp_path / "job-1"
     directory.mkdir()
-    doc = valid_convert()
+    data = b"scenario bytes"
+    (directory / "scenario.fds").write_bytes(data)
+    doc = valid_scenario()
+    doc["evidence"]["fds_sha256"] = sha256(data).hexdigest()
     (directory / "result.json").write_text(json.dumps(doc), encoding="utf-8")
+    write_evidence_index(directory, "scenario", doc)
     repository.set("job-1", {
         "id": "job-1", "directory": str(directory),
-        "state": "COMPLETED", "mode": "convert", "created": 0.0
+        "state": "COMPLETED", "mode": "scenario", "created": 0.0
     })
     response = repository.read_result("job-1")
-    assert response["artifacts"]["fds"]["url"] == "/api/jobs/job-1/artifacts/fds"
-    assert "url" not in doc["artifacts"]["fds"]
-    doc["status"] = "SIMULATION_VERIFIED"
+    assert response["artifacts"]["scenario_fds"]["url"] == "/api/jobs/job-1/artifacts/scenario_fds"
+    assert "url" not in doc["artifacts"]["scenario_fds"]
+    doc["verdict"] = "PASS"
     (directory / "result.json").write_text(json.dumps(doc), encoding="utf-8")
     with pytest.raises(ValueError):
         repository.read_result("job-1")
