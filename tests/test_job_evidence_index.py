@@ -122,6 +122,25 @@ def test_real_verified_conversion_evidence_is_consistent(tiny_ifc, tmp_path):
     with pytest.raises(ValueError, match="Evidence file changed"):
         verify_evidence_index(directory, "convert", public)
 
+    # Recomputing the index must not hide a report that contradicts the
+    # independently sealed mapping status in the manifest and checkpoint.
+    report = json.loads(report_path.read_text("utf-8"))
+    report["status"] = "REJECTED"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    with pytest.raises(ValueError, match="Acceptance report status contradicts"):
+        build_evidence_index(directory, "convert", public)
+
+    # Geometry bytes and the original manifest package digest must agree
+    # even if a new index is requested after the geometry file was changed.
+    report["status"] = public["status"]
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    geometry_path = directory / "model_geometry.json"
+    geometry = json.loads(geometry_path.read_text("utf-8"))
+    geometry["sha256"] = "0" * 64
+    geometry_path.write_text(json.dumps(geometry), encoding="utf-8")
+    with pytest.raises(ValueError, match="Geometry index differs"):
+        build_evidence_index(directory, "convert", public)
+
 
 def test_unverified_simulation_profile_is_not_falsely_sealed(tmp_path):
     # This contract tests the distinction between mapping_status and the
