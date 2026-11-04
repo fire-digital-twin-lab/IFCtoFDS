@@ -464,7 +464,11 @@ def _geometry_file(index_path: Path, linked: set[str], payload: str) -> Path:
     path = index_path.with_suffix(".payloads") / (payload + ".bin")
     if not path.is_file():
         raise HTTPException(404, "Missing geometry payload")
-    if geometry_file_hash(path) != payload:
+    try:
+        matches = geometry_file_hash(path) == payload
+    except OSError as exc:
+        raise HTTPException(409, "Geometry payload cannot be read") from exc
+    if not matches:
         raise HTTPException(409, "Geometry payload bytes differ from content hash")
     return path
 
@@ -476,8 +480,16 @@ def geometry_batch(jid: str, payloads: list[str] = Query(...)):
     # A batch must not hash the whole result + bundle once for every payload.
     # The payload content hash itself is still verified for every member.
     index_path, linked = _geometry_access(jid)
-    paths = [_geometry_file(index_path, linked, key) for key in payloads]
-    length = sum(path.stat().st_size for path in paths)
+    # A repeated content identifier contributes multiple parts to the
+    # response, but needs only one integrity check per batch.
+    verified = {
+        key: _geometry_file(index_path, linked, key) for key in dict.fromkeys(payloads)
+    }
+    paths = [verified[key] for key in payloads]
+    try:
+        length = sum(path.stat().st_size for path in paths)
+    except OSError as exc:
+        raise HTTPException(409, "Geometry payload disappeared during batch preparation") from exc
     if length > 16 * 1024**2:
         raise HTTPException(
             413, "Geometry batch exceeds 16 MiB; fetch large payloads individually"
