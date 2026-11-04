@@ -71,10 +71,13 @@ def _verify_geometry_payloads(directory: Path) -> int:
             ):
                 raise ValueError("Geometry payload dimensions are invalid")
             expected = vertices * 24 + faces * 12
+            offsets = (
+                ref.get("vertices_offset"), ref.get("faces_offset"),
+                ref.get("byte_length"),
+            )
             if (
-                ref.get("vertices_offset") != 0
-                or ref.get("faces_offset") != vertices * 24
-                or ref.get("byte_length") != expected
+                any(type(value) is not int for value in offsets)
+                or offsets != (0, vertices * 24, expected)
             ):
                 raise ValueError("Geometry payload offsets are inconsistent")
             payload = index_path.with_suffix(".payloads") / (identity + ".bin")
