@@ -35,8 +35,22 @@ class Container:
         return AuditConversionUseCase()
 
     def get_convert_verified_use_case(self):
+        """Wire the verified converter through explicit application ports."""
         from ifc_to_fds.application.use_cases.convert_verified import ConvertVerifiedUseCase
-        return ConvertVerifiedUseCase()
+        from ifc_to_fds.adapters.conversion import (
+            DefaultModelPreparer,
+            DefaultMappingPlanner,
+            DefaultFdsSerializer,
+            DefaultGeometryPackageWriter,
+        )
+
+        return ConvertVerifiedUseCase(
+            audit_use_case=self.get_audit_conversion_use_case(),
+            model_preparer=DefaultModelPreparer(),
+            mapping_planner=DefaultMappingPlanner(),
+            fds_serializer=DefaultFdsSerializer(),
+            geometry_writer=DefaultGeometryPackageWriter(),
+        )
 
 
 def create_container(config: Optional[dict[str, Any]] = None) -> Container:
