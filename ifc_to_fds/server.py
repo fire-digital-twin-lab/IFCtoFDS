@@ -17,6 +17,7 @@ from .http_limits import BodyLimitMiddleware
 from .mapping.scope import SpatialScope
 from .validation.acceptance import AuditConfig
 from .fire.scenario_request import ScenarioRequest
+from .geometry.storage import file_hash as geometry_file_hash
 
 manager = JobManager(
     max_waiting=int(os.getenv("IFCFDS_MAX_WAITING", "2")),
@@ -470,6 +471,10 @@ def geometry_payload(jid: str, payload: str):
         path = index_path.with_suffix(".payloads") / (payload + ".bin")
         if not path.is_file():
             raise HTTPException(404, "Missing geometry payload")
+        # Payload filenames are SHA-256 content IDs; enforce the digest
+        # before serving even when the geometry index itself is unchanged.
+        if geometry_file_hash(path) != payload:
+            raise HTTPException(409, "Geometry payload bytes differ from content hash")
         return FileResponse(path, media_type="application/octet-stream")
 
 
