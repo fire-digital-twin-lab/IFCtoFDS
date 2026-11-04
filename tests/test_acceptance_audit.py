@@ -73,6 +73,20 @@ def test_audit_detects_changed_persisted_evidence(scenario_job, broken):
         assert audit["checks"]["evidence_integrity"]["status"] == "FAIL"
 
 
+def test_valid_json_tampering_reaches_integrity_gate(scenario_job):
+    result_file = scenario_job / "result.json"
+    result = json.loads(result_file.read_text(encoding="utf-8"))
+    result["verdict_reason"] = "Modified after index was sealed"
+    result_file.write_text(json.dumps(result), encoding="utf-8")
+
+    audit = audit_persisted_job(scenario_job, "scenario")
+    assert audit["audit_outcome"] == "INTEGRITY_INVALID"
+    assert audit["checks"]["result_json"]["status"] == "PASS"
+    assert audit["checks"]["result_contract"]["status"] == "PASS"
+    assert audit["checks"]["evidence_integrity"]["status"] == "FAIL"
+    assert audit["checks"]["solver_verification"]["status"] == "NOT_RUN"
+
+
 def test_audit_missing_historical_index_is_not_resealed(scenario_job):
     evidence = scenario_job / "result_evidence.json"
     evidence.unlink()
@@ -184,6 +198,13 @@ def test_geometry_payload_duplicate_and_offset_consistency(tmp_path, monkeypatch
     # Re-sealing a damaged index is not sufficient: reference offsets
     # must still be internally consistent before a payload can be trusted.
     model["elements"]["first"]["mesh"] = dict(ref, faces_offset=12)
+    geometry.write_text(json.dumps(seal(model)), encoding="utf-8")
+    with pytest.raises(ValueError, match="offsets are inconsistent"):
+        acceptance_audit._verify_geometry_payloads(tmp_path)
+
+    # A boolean compares equal to integer zero in Python but is not a valid
+    # byte offset in a geometry evidence contract.
+    model["elements"]["first"]["mesh"] = dict(ref, vertices_offset=False)
     geometry.write_text(json.dumps(seal(model)), encoding="utf-8")
     with pytest.raises(ValueError, match="offsets are inconsistent"):
         acceptance_audit._verify_geometry_payloads(tmp_path)
