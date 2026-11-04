@@ -1,6 +1,5 @@
 """Hồi quy: không tiếp nhận công việc nếu SQLite không lưu được metadata."""
 
-import json
 import logging
 import sqlite3
 
