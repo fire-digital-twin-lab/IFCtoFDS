@@ -69,3 +69,14 @@ Lịch sử phát hành trước đây vẫn nằm trong
 - Giữ nguyên CI Python matrix, browser và solver FDS đã được ghim phiên bản.
 
 Chi tiết tại `docs/architecture/17-r10-06-quality-gates.md`.
+
+## [Chưa phát hành] — R10-07 (04/11/2026)
+
+### Chuẩn hóa đầu vào/đầu ra
+- Bổ sung hợp đồng JSON riêng cho job chuyển đổi, kịch bản EV, preview và inventory.
+- Job supervisor xác thực schema và tính nhất quán trạng thái trước khi công bố COMPLETED hoặc đánh dấu durable.
+- Đọc lại result.json tiếp tục xác thực hợp đồng; URL artifact chỉ do backend tạo từ whitelist.
+- Bổ sung test chặn MAPPING_VERIFIED giả, SIMULATION_VERIFIED chưa có bằng chứng, artifact sai định dạng, JSON bị thay đổi và vòng đời worker.
+- Giữ tương thích URL tải hình học/MEP ở chế độ preview.
+
+Chi tiết tại `docs/architecture/18-r10-07-result-contracts.md`.

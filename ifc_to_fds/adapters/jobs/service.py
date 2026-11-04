@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 import psutil
 
 from .repository import JobRepository
+from .result_contract import validate_job_result
 
 logger = logging.getLogger(__name__)
 
@@ -462,11 +463,8 @@ class JobService:
                             is_durable = running.get("durable", False)
                             try:
                                 res_data = json.loads((directory / "result.json").read_text(encoding="utf-8"))
-                                if not isinstance(res_data, dict):
-                                    raise ValueError("result.json is not a JSON object")
-                                if running.get("mode") != "inventory" and not isinstance(res_data.get("status"), str):
-                                    raise ValueError("result.json is missing a string 'status' field")
-                                if res_data.get("status") == "MAPPING_VERIFIED":
+                                validate_job_result(running.get("mode", "convert"), res_data)
+                                if running.get("mode", "convert") == "convert" and res_data["status"] == "MAPPING_VERIFIED":
                                     # NOTE (M1): SIMULATION_VERIFIED is never issued today
                                     # (ADR-0004 / AcceptanceReport.finalize dead code), so
                                     # narrowing to MAPPING_VERIFIED only is behavior-neutral.
@@ -475,13 +473,17 @@ class JobService:
                                     is_durable = True
                             except (OSError, ValueError) as exc:
                                 result_error = f"Invalid result.json: {exc}"
+                                # Publish terminal state only *after* the
+                                # diagnostic is persisted: repository readers
+                                # otherwise observe FAILED before evidence
+                                # exists (reproduced on Windows CI).
+                                self._terminal_diagnostic(
+                                    running, "ValidationError", result_error
+                                )
                                 running.update(
                                     state="FAILED",
                                     error=result_error[:2000],
                                     finished=time.time(),
-                                )
-                                self._terminal_diagnostic(
-                                    running, "ValidationError", result_error
                                 )
                             else:
                                 running.update(state="COMPLETED", finished=time.time(), durable=is_durable)

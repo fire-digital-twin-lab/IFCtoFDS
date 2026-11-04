@@ -67,3 +67,14 @@ entries remain in the canonical [CHANGELOG.md](CHANGELOG.md).
 - Existing Python matrix, browser and pinned FDS solver verification remain unchanged.
 
 See `docs/architecture/17-r10-06-quality-gates.md`.
+
+## [Unreleased] — R10-07 (2026-11-04)
+
+### Input/output correctness
+- Added per-mode JSON result contracts for conversion, scenario, preview and inventory jobs.
+- The job supervisor now validates result schema and verdict coherence before publishing COMPLETED or promoting to durable.
+- Reading persisted result.json validates the same contract again; artifact URLs remain server-owned and whitelisted.
+- Added negative tests for forged MAPPING_VERIFIED, unsupported simulation PASS, malformed artifacts, changed result files and worker lifecycle.
+- Existing preview download URLs remain supported.
+
+See `docs/architecture/18-r10-07-result-contracts.md`.
