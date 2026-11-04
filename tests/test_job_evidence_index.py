@@ -112,6 +112,16 @@ def test_real_verified_conversion_evidence_is_consistent(tiny_ifc, tmp_path):
     write_evidence_index(directory, "convert", public)
     verify_evidence_index(directory, "convert", public)
 
+    # The read-only audit also works on an actual tiny IFC conversion, but
+    # reports only data integrity, not independent CFD verification.
+    from ifc_to_fds.adapters.jobs.acceptance_audit import audit_persisted_job
+
+    audit = audit_persisted_job(directory, "convert")
+    assert audit["audit_outcome"] == "EVIDENCE_VALID"
+    assert audit["reported_verdict"] == "MAPPING_VERIFIED"
+    assert audit["checks"]["solver_verification"]["status"] == "NOT_RUN"
+    assert audit["scientific_acceptance"] == "NOT_ESTABLISHED_BY_THIS_AUDIT"
+
     # Hashes include the persisted independent acceptance report and manifest.
     index = json.loads((directory / "result_evidence.json").read_text("utf-8"))
     assert "model_acceptance_report.json" in index["files"]
