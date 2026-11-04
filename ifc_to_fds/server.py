@@ -378,14 +378,20 @@ def artifact(jid: str, artifact: str):
         job = manager.jobs[jid]
         if job["state"] != "COMPLETED":
             raise HTTPException(409, "Job is not complete")
-        if job.get("mode") in ("convert", "scenario"):
-            try:
-                manager.result(jid)
-            except ValueError as exc:
-                raise HTTPException(409, str(exc)) from exc
+        if job.get("mode") not in ("convert", "scenario", "preview", "inventory"):
+            raise HTTPException(409, "Job mode is missing or unsupported")
+        try:
+            published = manager.result(jid)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        # The global artifact catalogue only defines known filenames. It
+        # does not authorize a completed job to expose every catalogue file.
+        # Require explicit declaration in this job's validated result.
+        if artifact not in published.get("artifacts", {}):
+            raise HTTPException(404, "Artifact is not declared by this job")
         manager.touch(jid)
         path = Path(job["directory"]) / ARTIFACTS[artifact]
-        if not path.exists():
+        if not path.is_file():
             raise HTTPException(404, "Artifact not produced by this job")
         return FileResponse(path, filename=ARTIFACTS[artifact])
 
