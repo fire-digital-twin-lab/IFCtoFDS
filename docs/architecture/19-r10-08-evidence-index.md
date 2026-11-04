@@ -20,6 +20,9 @@ result JSON and declared files. Files are hashed in streaming 1 MiB blocks.
   before making a verified mapping result durable.
 - `JobRepository.read_result` rechecks hashes on each API read and rejects
   modified/missing files with a controlled `ValueError` (HTTP 409 in API).
+- Direct completed-job artifact and geometry URLs cannot bypass the result
+  evidence check. Content-addressed geometry payload bytes are verified against
+  their SHA-256 filenames before individual or batch downloads.
 - For a conversion with **overall** `status=MAPPING_VERIFIED`, the index
   requires FDS, mapping manifest, independent acceptance report, geometry
   index and audit checkpoint. It checks status coherence across report,
