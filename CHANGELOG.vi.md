@@ -22,3 +22,15 @@ Lịch sử phát hành trước đây vẫn nằm trong
 - Chưa dịch đầy đủ giao diện, mọi lỗi API hoặc log FDS solver.
 
 [English](CHANGELOG.en.md) · [Hướng dẫn kỹ thuật](docs/vi/observability.md)
+
+## [Chưa phát hành] — R10-03 (04/11/2026)
+
+### Tái cấu trúc
+- Tạo cổng ConversionWorkspace và factory lưu trữ cục bộ quản lý bản nháp FDS, MappingPlan, manifest, kiểm kê và trạng thái audit.
+- Tách logic tạo inventory gọn và bỏ đường dẫn máy cục bộ khỏi `ConvertVerifiedUseCase`.
+- Giữ nguyên việc đọc FDS từ ổ đĩa và kiểm định nguồn IFC độc lập, với checkpoint `NOT_RUN` trước kiểm định.
+- Giữ tương thích hàm khởi tạo cũ qua cầu nối chuyển tiếp độc lập.
+
+### Kiểm thử
+- Thêm test định dạng checkpoint, điều kiện niêm phong fail-closed, DI, và cấm I/O trực tiếp trong use case.
+- Baseline A–F và kiểm thử solver FDS vẫn là điều kiện bắt buộc trước khi merge.
