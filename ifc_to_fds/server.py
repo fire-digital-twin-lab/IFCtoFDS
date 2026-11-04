@@ -377,6 +377,11 @@ def artifact(jid: str, artifact: str):
         job = manager.jobs[jid]
         if job["state"] != "COMPLETED":
             raise HTTPException(409, "Job is not complete")
+        if job.get("mode") in ("convert", "scenario"):
+            try:
+                manager.result(jid)
+            except ValueError as exc:
+                raise HTTPException(409, str(exc)) from exc
         manager.touch(jid)
         path = Path(job["directory"]) / ARTIFACTS[artifact]
         if not path.exists():
@@ -442,6 +447,11 @@ def geometry_payload(jid: str, payload: str):
             raise HTTPException(404, "Unknown job")
         if job["state"] != "COMPLETED":
             raise HTTPException(409, "Job is not complete")
+        if job.get("mode") == "convert":
+            try:
+                manager.result(jid)
+            except ValueError as exc:
+                raise HTTPException(409, str(exc)) from exc
         manager.touch(jid)
         index_path = Path(job["directory"]) / "model_geometry.json"
         if not index_path.is_file():
