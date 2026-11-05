@@ -75,6 +75,48 @@ class ConversionResult(ResultShape):
             raise ValueError(
                 "Overall acceptance status contradicts the requested verification profile"
             )
+        # Public research metadata is a scientific claim surface too. It
+        # must never contradict the finalized outer verdict or the approved
+        # reference gate, even when its JSON shape is otherwise valid.
+        nested_claims = {
+            "status", "verdict", "verification", "mapping_status",
+            "simulation_status", "simulation_acceptance",
+            "scientific_acceptance", "acceptance_status",
+            "verified", "is_verified",
+        }
+        if nested_claims.intersection(self.research):
+            raise ValueError("Research metadata contains unsupported acceptance claims")
+        if "profile" in self.research and self.research["profile"] != self.profile:
+            raise ValueError("Research metadata profile contradicts result profile")
+        if "research_acceptance" in self.research:
+            expected_research = (
+                self.mapping_status
+                if self.profile == "research-basement" else "NOT_RUN"
+            )
+            if self.research["research_acceptance"] != expected_research:
+                raise ValueError("Research acceptance contradicts final mapping verdict")
+        if "parity_status" in self.research:
+            parity = self.research["parity_status"]
+            golden = self.gates.get("golden_reference_parity")
+            if parity not in ("PASS", "FAIL", "INCONCLUSIVE", "NOT_RUN"):
+                raise ValueError("Unsupported research reference parity status")
+            if golden is None and parity != "NOT_RUN":
+                raise ValueError("Research parity claims a missing golden gate")
+            if golden is not None:
+                expected_parity = (
+                    "NOT_RUN" if golden.status in ("NOT_APPLICABLE", "NOT_RUN")
+                    else golden.status
+                )
+                # An absent research case yields golden=INCONCLUSIVE but
+                # parity=NOT_RUN. This is not permission to hide a failure.
+                if parity != expected_parity and not (
+                    golden.status == "INCONCLUSIVE" and parity == "NOT_RUN"
+                ):
+                    raise ValueError("Research parity contradicts golden reference gate")
+        if self.profile == "research-basement" and self.mapping_status == "MAPPING_VERIFIED":
+            golden = self.gates.get("golden_reference_parity")
+            if golden is None or not golden.required or golden.status != "PASS":
+                raise ValueError("Research mapping cannot be verified without approved golden parity")
         if self.mapping_status == "MAPPING_VERIFIED":
             missing_gates = REQUIRED_MAPPING_GATES - self.gates.keys()
             if missing_gates:
