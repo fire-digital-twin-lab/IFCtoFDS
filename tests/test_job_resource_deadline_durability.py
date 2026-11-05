@@ -40,7 +40,9 @@ class LiveProcess:
     returncode = None
 
     def poll(self):
-        return None
+        # A real child has exited after _stop(), which must not overwrite the
+        # original resource/deadline reason when SQLite recovers.
+        return self.returncode
 
 
 class HighMemoryProcess:
@@ -96,7 +98,11 @@ def test_worker_limit_failure_preserves_source_until_sqlite_commits(
     started = time.time() - 120 if failure == "deadline" else time.time()
     source = _seed(service, jid, started=started)
     stopped = []
-    monkeypatch.setattr(service, "_stop", lambda process: stopped.append(process))
+    def stop_process(process):
+        stopped.append(process)
+        process.returncode = -9
+
+    monkeypatch.setattr(service, "_stop", stop_process)
 
     if failure == "memory":
         monkeypatch.setattr(
@@ -115,10 +121,27 @@ def test_worker_limit_failure_preserves_source_until_sqlite_commits(
     assert JobRepository(root=tmp_path).get(jid)["state"] == "RUNNING"
     assert source.read_text(encoding="utf-8") == "retain after failed commit"
 
+    # The child is now exited (poll() == -9), but a repeated SQLite outage
+    # still must not publish FAILED with generic "Worker exited -9".
+    with monkeypatch.context() as patch:
+        patch.setattr(service.repository, "_get_connection", BrokenConnection)
+        _step(service)
+    assert service.repository.get(jid)["state"] == "RUNNING"
+    assert JobRepository(root=tmp_path).get(jid)["state"] == "RUNNING"
+    assert source.exists()
+    assert len(stopped) == 1
+
     _step(service)
     expected = "TIMED_OUT" if failure == "deadline" else "FAILED"
     assert service.repository.get(jid)["state"] == expected
-    assert JobRepository(root=tmp_path).get(jid)["state"] == expected
+    durable = JobRepository(root=tmp_path).get(jid)
+    assert durable["state"] == expected
+    assert service.repository.get(jid)["error"] == durable["error"]
+    if failure == "deadline":
+        assert durable["error"] == "Job deadline exceeded"
+    else:
+        assert durable["error"].startswith("RESOURCE_EXHAUSTED:")
+    assert len(stopped) == 1
     assert not source.exists()
     assert (source.parent / "diagnostics.json").is_file()
     service.close()
