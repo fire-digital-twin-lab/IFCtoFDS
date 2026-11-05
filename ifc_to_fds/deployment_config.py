@@ -26,7 +26,7 @@ def validate_deployment_config(environ: Mapping[str, str] | None = None) -> str:
         )
     if mode in _NETWORK_MODES:
         key = env.get("IFCFDS_API_KEY", "")
-        if len(key) < 32 or not key.strip() or key != key.strip():
+        if len(key) < 32 or any(char.isspace() for char in key):
             raise RuntimeError(
                 "Staging/production requires IFCFDS_API_KEY of at least 32 "
                 "non-whitespace characters, without leading/trailing spaces"
