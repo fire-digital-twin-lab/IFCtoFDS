@@ -34,7 +34,8 @@ def valid_convert():
             }
             for name in (
                 "syntax", "source_inventory", "traceability", "scope",
-                "geometry", "representation", "domain",
+                "geometry", "structural_completeness", "air_path", "openings",
+                "mep", "representation", "boundary", "domain",
             )
         },
         "findings": [],
