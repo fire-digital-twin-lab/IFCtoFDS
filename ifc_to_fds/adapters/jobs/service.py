@@ -350,10 +350,30 @@ class JobService:
 
     @staticmethod
     def _cleanup(job):
+        """Best-effort input cleanup; a locked file must not stop the scheduler.
+
+        The job transition has already committed to SQLite. Keep the error
+        visible for operator remediation, but never convert a terminal job to
+        an API 500 or terminate the supervisor thread due to PermissionError.
+        """
         directory = Path(job["directory"])
-        for path in directory.glob("source-*.ifc"):
-            path.unlink(missing_ok=True)
-        (directory / "request.json").unlink(missing_ok=True)
+        try:
+            inputs = list(directory.glob("source-*.ifc"))
+        except OSError:
+            logger.exception(
+                "Cannot enumerate inputs for terminal job %s; retaining directory",
+                job.get("id"),
+            )
+            inputs = []
+        for path in [*inputs, directory / "request.json"]:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                logger.exception(
+                    "Cannot delete terminal input %s for job %s; manual cleanup may be required",
+                    path.name,
+                    job.get("id"),
+                )
 
     @staticmethod
     def _terminal_diagnostic(job, name, message):
