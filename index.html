@@ -259,6 +259,12 @@
                             </select>
                             <small>Geometry Fidelity exports equipment as passive shapes. To export an airflow network, supply reviewed HVAC parameters and endpoint boundaries in the Decisions file.</small>
                         </div>
+                        <div class="form-group">
+                            <label class="form-label" for="verified-api-key">Backend API key (current tab only)</label>
+                            <input id="verified-api-key" class="form-input" type="password" autocomplete="off" spellcheck="false" aria-describedby="verified-api-key-help">
+                            <small id="verified-api-key-help">Optional when the server has no API key. The key remains in this tab's memory and is never saved to browser storage.</small>
+                        </div>
+
                         <details id="verified-advanced" class="config-section" style="cursor:pointer">
                             <summary class="section-title" style="user-select:none"><i data-lucide="settings-2" style="width:14px;height:14px"></i> Advanced / Diagnostic Controls</summary>
                             <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
