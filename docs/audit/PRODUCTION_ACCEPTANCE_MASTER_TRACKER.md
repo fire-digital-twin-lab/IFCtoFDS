@@ -1,5 +1,19 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+
+## Snapshot hiện hành bổ sung — 05/11/2026
+
+**Main đã xác minh:** `e6b7ef04296d660d0713a79e813a1207dfa5cc84` (merge #39). CI trên merge SHA mới **chưa kết luận** khi ghi snapshot này. `main` cũ `d04771db` đã PASS hai workflow.
+
+- **PR #40:** MERGED `d04771db` (CI concurrency).
+- **PR #39:** MERGED `e6b7ef0` (worker terminal persistence; chỉ đường kết thúc worker đã bảo vệ commit-first).
+- **PR #38:** OPEN; cập nhật bảng và đồng bộ `main`; yêu cầu CI HEAD sau đồng bộ trước merge.
+- **PR #41:** DRAFT, HEAD `8eb33eb483408377ed0ba3458a51dca07d706a30`; test/CI trên head cũ PASS. Chưa retarget `main` và nghiệm thu lại.
+- **Trạng thái các gate:** G01 IN_PROGRESS; G02 NOT_RUN cho release SHA; G05 FAIL; G06 INCONCLUSIVE; G09/G10 INCONCLUSIVE; G11–G13/G15 NOT_RUN. Không đổi kết luận khoa học hoặc production.
+
+**Chú ý:** các mục “PR #39 OPEN” và “main `d04771db`” bên dưới là snapshot tại thời điểm tạo tracker, không phải trạng thái mới nhất. Sau khi PR #38 và #41 merge, tiếp tục bổ sung checkpoint thực tế.
+
+
 > **Checkpoint kiểm tra GitHub: 05/11/2026 (phiên nghiệm thu đang thực hiện).**
 > Mọi SHA/run/status dưới đây là ảnh chụp tại thời điểm ghi, không thay thế truy vấn GitHub mới nhất trước khi merge hoặc release.
 > **Release verdict: NOT_PRODUCTION_READY.** Chưa có staging, production smoke, V&V khoa học độc lập hay diễn tập backup/restore/rollback được nghiệm thu trong phiên này.
