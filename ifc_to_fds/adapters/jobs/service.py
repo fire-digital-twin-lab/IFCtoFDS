@@ -117,12 +117,17 @@ class JobService:
             return self.repository.count_pending() < (self.max_waiting + 1)
 
     def touch(self, jid: str) -> None:
-        """Updates last_accessed timestamp to protect active downloads from retention deletion."""
+        """Commit access time before publishing an extension to job retention.
+
+        A failed SQLite write must not leave a newer RAM timestamp that masks
+        an old durable value and allows artifacts to disappear after restart.
+        """
         with self.lock:
             job = self.repository.get(jid)
             if job:
-                job["last_accessed"] = time.time()
-                self.repository.set(jid, job)
+                touched = dict(job)
+                touched["last_accessed"] = time.time()
+                self.repository.set_durable(jid, touched)
 
     def cleanup_orphaned_directories(
         self, max_age_s: Optional[int] = None,
