@@ -55,6 +55,11 @@ def _validated_path(relative: str) -> PurePosixPath:
     return path
 
 
+def _validated_directory(relative: str) -> PurePosixPath:
+    """Validate directories using the same traversal rules as artifact files."""
+    return _validated_path(relative + "/.directory-placeholder").parent
+
+
 def _require_regular_no_links(path: Path, root: Path) -> None:
     if not path.is_file() or path.is_symlink():
         raise OfflineBackupError(f"Missing, non-file or symbolic link: {path.name}")
@@ -119,19 +124,29 @@ def create_offline_backup(job_root: Path | str, destination: Path | str) -> dict
     count = _validate_terminal_rows(db, root)
 
     artifacts = []
+    directories = []
     for directory in sorted(root.glob("job-*")):
         if directory.is_symlink() or not directory.is_dir():
             raise OfflineBackupError("Unexpected symbolic link or non-directory job entry")
+        directories.append(directory)
         for item in sorted(directory.rglob("*")):
             if item.is_symlink():
                 raise OfflineBackupError("Symbolic links are not permitted in job artifacts")
             if item.is_file():
                 _require_regular_no_links(item, root)
                 artifacts.append(item)
-            elif not item.is_dir():
+            elif item.is_dir():
+                directories.append(item)
+            else:
                 raise OfflineBackupError("Unsupported filesystem object in job artifacts")
 
     target.mkdir(parents=True, exist_ok=False)
+    directory_paths = []
+    for directory in sorted(directories):
+        relative = directory.relative_to(root).as_posix()
+        rel = _validated_directory(relative)
+        (target / relative).mkdir(parents=True, exist_ok=False)
+        directory_paths.append(str(rel))
     entries = []
     # sqlite3.backup reads committed WAL data rather than blindly copying
     # jobs.sqlite3 while a WAL file may still exist.
@@ -142,6 +157,8 @@ def create_offline_backup(job_root: Path | str, destination: Path | str) -> dict
                 source.backup(dest)
                 dest.commit()
         _sqlite_integrity(snapshot)
+        if _validate_terminal_rows(snapshot, root) != count:
+            raise OfflineBackupError("SQLite rows changed during offline snapshot")
     except sqlite3.Error as exc:
         raise OfflineBackupError("SQLite snapshot failed; partial backup has no manifest") from exc
 
@@ -157,10 +174,11 @@ def create_offline_backup(job_root: Path | str, destination: Path | str) -> dict
         entries.append({"path": relative, **metadata})
 
     manifest = {
-        "schema": 1,
+        "schema": 2,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "original_job_root": str(root),
         "job_count": count,
+        "directories": sorted(directory_paths),
         "files": sorted(entries, key=lambda item: item["path"]),
         "status": "OFFLINE_SNAPSHOT_ONLY",
     }
@@ -175,8 +193,25 @@ def create_offline_backup(job_root: Path | str, destination: Path | str) -> dict
 
 
 def _check_backup_files(source: Path, manifest: dict) -> list[dict]:
-    if manifest.get("schema") != 1 or not isinstance(manifest.get("files"), list):
+    if (
+        manifest.get("schema") != 2
+        or not isinstance(manifest.get("files"), list)
+        or not isinstance(manifest.get("directories"), list)
+    ):
         raise OfflineBackupError("Unsupported backup manifest format")
+    directories = manifest["directories"]
+    seen_dirs = set()
+    for raw in directories:
+        rel = _validated_directory(raw)
+        if raw in seen_dirs:
+            raise OfflineBackupError("Duplicate directory in backup manifest")
+        seen_dirs.add(raw)
+        path = source.joinpath(*rel.parts)
+        current = path
+        while current != source:
+            if current.is_symlink() or not current.is_dir():
+                raise OfflineBackupError("Backup directory is missing or unsafe")
+            current = current.parent
     files = manifest["files"]
     if not files:
         raise OfflineBackupError("Empty backup manifest")
@@ -201,8 +236,11 @@ def _check_backup_files(source: Path, manifest: dict) -> list[dict]:
     for path in source.rglob("*"):
         if path.is_symlink():
             raise OfflineBackupError("Backup contains a symbolic link")
-        if path.is_file() and path.relative_to(source).as_posix() not in seen | {"manifest.json"}:
+        relative = path.relative_to(source).as_posix()
+        if path.is_file() and relative not in seen | {"manifest.json"}:
             raise OfflineBackupError("Unexpected unmanifested backup file")
+        if path.is_dir() and relative not in seen_dirs:
+            raise OfflineBackupError("Unexpected unmanifested backup directory")
     _sqlite_integrity(source / "jobs.sqlite3")
     return files
 
@@ -226,6 +264,9 @@ def restore_offline_backup(source_dir: Path | str, target_root: Path | str) -> d
         raise OfflineBackupError("Invalid backup manifest") from exc
     files = _check_backup_files(source, manifest)
     target.mkdir(parents=True, exist_ok=False)
+    for raw in manifest["directories"]:
+        rel = _validated_directory(raw)
+        target.joinpath(*rel.parts).mkdir(parents=True, exist_ok=False)
     for item in files:
         rel = _validated_path(item["path"])
         copy = _copy_checked(source.joinpath(*rel.parts), target.joinpath(*rel.parts))
