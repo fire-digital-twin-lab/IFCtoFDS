@@ -45,3 +45,48 @@ const parser = new ctx.IfcFds.fds.FdsNamelistParser();
 const parsed = parser.parse('! IFC_SOURCE {"entity_key":"source:1","source_id":"source","global_id":"GUID","step_id":1,"ifc_type":"IfcWall"}\n&OBST ID=\'wall\', XB=0,1,0,1,0,1 /');
 assert.strictEqual(parsed.obsts[0].ifcSource.entityKey,'source:1');
 console.log('Canonical export completeness, opening rays and JSON provenance passed.');
+
+
+// Regression: mapping equivalence is not CFD simulation verification.
+// Exercise the actual controller badge function in a minimal DOM environment
+// without initializing the whole browser application.
+const controllerSource = fs.readFileSync(path.join(root, 'js/app-controller.js'), 'utf8');
+const badgeBegin = controllerSource.indexOf('    function updateGlobalStatusBadge(status) {');
+const badgeEnd = controllerSource.indexOf('\n    function updateColorModeLegend(', badgeBegin);
+assert(badgeBegin >= 0 && badgeEnd > badgeBegin, 'Expected status badge function');
+const badgeFunction = controllerSource.slice(badgeBegin, badgeEnd);
+function displayAcceptance(status) {
+    const badge = {
+        className: '',
+        classList: {add(value) {badge.cssClass = value;}}
+    };
+    const label = {textContent: ''};
+    const document = {
+        getElementById(id) {
+            return id === 'global-run-status' ? badge :
+                id === 'global-status-label' ? label : null;
+        }
+    };
+    vm.runInNewContext(
+        badgeFunction + '\nupdateGlobalStatusBadge(' + JSON.stringify(status) + ');',
+        {document}
+    );
+    return {label: label.textContent, className: badge.cssClass};
+}
+assert.deepStrictEqual(displayAcceptance('MAPPING_VERIFIED'), {
+    label: 'MAPPING VERIFIED', className: 'verified'
+});
+assert.deepStrictEqual(displayAcceptance('SIMULATION_VERIFIED'), {
+    label: 'CFD NOT VERIFIED', className: 'inconclusive'
+});
+assert.deepStrictEqual(displayAcceptance('INCONCLUSIVE'), {
+    label: 'INCONCLUSIVE', className: 'inconclusive'
+});
+assert.deepStrictEqual(displayAcceptance('REJECTED'), {
+    label: 'REJECTED', className: 'rejected'
+});
+assert(
+    controllerSource.includes("'INCONCLUSIVE (unsupported simulation claim)'"),
+    'Audit drawer must not echo an unsupported CFD claim as acceptance'
+);
+console.log('Scientific mapping/CFD distinction in status badge passed.');
