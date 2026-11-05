@@ -18,6 +18,7 @@ from .mapping.scope import SpatialScope
 from .validation.acceptance import AuditConfig
 from .fire.scenario_request import ScenarioRequest
 from .geometry.storage import file_hash as geometry_file_hash
+from .adapters.jobs.result_views import make_findings_page
 
 manager = JobManager(
     max_waiting=int(os.getenv("IFCFDS_MAX_WAITING", "2")),
@@ -338,19 +339,23 @@ def result(
     try:
         manager.touch(jid)
         data = manager.result(jid)
-        if (offset > 0 or limit is not None) and isinstance(data, dict):
-            all_f = data.get("findings", [])
-            end = (offset + limit) if limit is not None else len(all_f)
-            paged = dict(data)
-            paged["findings"] = all_f[offset:end]
-            paged["findings_offset"] = offset
-            paged["findings_limit"] = limit
-            return paged
+        if offset > 0 or limit is not None:
+            # A paginated response is only a VIEW of an already-validated
+            # conversion result, not a replacement for a complete report.
+            with manager.lock:
+                job = manager.repository.get(jid)
+                if job is None:
+                    raise HTTPException(404, "Unknown job")
+                mode = job.get("mode", "convert")
+            try:
+                return make_findings_page(data, mode=mode, offset=offset, limit=limit)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
         return data
     except KeyError:
         raise HTTPException(404, "Unknown job")
     except ValueError as exc:
-        raise HTTPException(409, str(exc))
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.get("/api/jobs/{jid}/diagnostics")

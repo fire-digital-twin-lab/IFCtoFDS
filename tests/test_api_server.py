@@ -46,6 +46,18 @@ def test_api_convert_job(tiny_ifc):
     assert result["gates"]["source_inventory"]["status"] == "PASS"
     assert result["gates"]["geometry"]["status"] == "PASS"
     assert "geometry_package" not in result and "fds_text" not in result
+    assert "result_view" not in result  # Unpaged JSON is the canonical result.
+    response_page = client.get(f"/api/jobs/{jid}/result?offset=0&limit=1")
+    assert response_page.status_code == 200
+    page = response_page.json()
+    assert page["result_view"] == "FINDINGS_PAGE"
+    assert page["findings_page"]["total"] == len(result["findings"])
+    assert page["findings_page"]["canonical_result_complete"] is False
+    assert page["findings_page"]["returned"] == min(1, len(result["findings"]))
+    assert page["findings_count"] == result["findings_count"]
+    assert page["status"] == result["status"]
+    assert page["simulation_status"] == result["simulation_status"]
+    assert result["findings"] == client.get(f"/api/jobs/{jid}/result").json()["findings"]
     manifest = client.get(result["artifacts"]["manifest"]["url"]).json()
     assert manifest["acceptance_status"] == result["status"]
     assert client.get("/api/jobs/" + jid + "/artifacts/fds").status_code == 200
@@ -530,10 +542,11 @@ def test_submit_scenario_job_executes_mesh_gate(monkeypatch, tiny_ifc):
     finally:
         undeclared.unlink(missing_ok=True)
 
-    # Verify pagination on /api/jobs/{jid}/result (M-8b)
-    res_paged = client.get(f"/api/jobs/{jid}/result?offset=0&limit=1").json()
-    assert res_paged["findings_offset"] == 0
-    assert res_paged["findings_limit"] == 1
+    # Scenario does not publish conversion findings; pagination must not
+    # fabricate `findings=[]` or an apparently complete acceptance report.
+    unsupported = client.get(f"/api/jobs/{jid}/result?offset=0&limit=1")
+    assert unsupported.status_code == 422
+    assert "only supported for conversion" in unsupported.json()["detail"]
 
 
 
