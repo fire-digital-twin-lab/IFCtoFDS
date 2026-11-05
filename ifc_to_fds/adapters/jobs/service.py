@@ -451,8 +451,21 @@ class JobService:
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             pass
 
+                    # A persisted RUNNING row may have no live Popen handle
+                    # after restart or a failed scheduler transition. Never
+                    # crash the supervisor thread by calling None.poll().
+                    if proc is None or running.get("started") is None:
+                        reason = "Running job has no worker handle or start timestamp"
+                        self._terminal_diagnostic(
+                            running, "WorkerProcessMissingError", reason
+                        )
+                        running.update(
+                            state="FAILED", error=reason, finished=time.time()
+                        )
+                        self._cleanup(running)
+                        self.repository.set(running["id"], running)
                     # Process deadline timeout
-                    if time.time() - running["started"] > self.timeout_s:
+                    elif time.time() - running["started"] > self.timeout_s:
                         self._stop(proc)
                         running.update(
                             state="TIMED_OUT",
