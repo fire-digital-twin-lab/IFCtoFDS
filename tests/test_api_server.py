@@ -407,9 +407,17 @@ def test_cancel_unknown_job_returns_404():
     assert response.status_code == 404
 
 
-def test_delete_running_job_with_purge_returns_cancelled_and_preserves_dir():
-    """P2: DELETE?purge=true on RUNNING safely downgrades to cancel; dir survives."""
+def test_delete_running_job_with_purge_returns_cancelled_and_preserves_dir(monkeypatch):
+    """P2: DELETE?purge=true on a LIVE RUNNING worker must only cancel."""
     from ifc_to_fds.server import manager
+
+    class LiveWorker:
+        # A RUNNING job without a process is intentionally marked FAILED by
+        # the scheduler's P1 recovery guard; use a genuinely live test stub.
+        pid = None
+
+        def poll(self):
+            return None
 
     jid = "test-running-" + uuid.uuid4().hex[:8]
     job_dir = manager.root / ("job-" + jid)
@@ -421,10 +429,13 @@ def test_delete_running_job_with_purge_returns_cancelled_and_preserves_dir():
         "created": time.time(),
         "started": time.time(),
         "mode": "convert",
-        "process": None,
+        "process": LiveWorker(),
     })
     try:
-        response = client.delete(f"/api/jobs/{jid}", params={"purge": "true"})
+        # Do not invoke a real OS kill for a deterministic fake worker.
+        with monkeypatch.context() as patch:
+            patch.setattr(manager, "_stop", lambda _proc: None)
+            response = client.delete(f"/api/jobs/{jid}", params={"purge": "true"})
         assert response.status_code == 200, response.text
         assert response.json()["state"] == "CANCELLED"
         assert job_dir.exists(), "safe downgrade must preserve the job directory"
