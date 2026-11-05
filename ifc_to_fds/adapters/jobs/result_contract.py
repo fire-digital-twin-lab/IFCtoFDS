@@ -12,6 +12,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, model_validator
 
 from ifc_to_fds.core.canonical import SCHEMA_VERSION
+from ifc_to_fds.domain.validation.model import REQUIRED_MAPPING_GATES
 from ifc_to_fds.results import ARTIFACTS
 
 
@@ -63,16 +64,28 @@ class ConversionResult(ResultShape):
         )
         if self.blocker_count != actual_blockers:
             raise ValueError("Conversion blocker_count contradicts gate statuses")
-        if self.status not in (self.mapping_status, self.simulation_status):
-            raise ValueError("Overall acceptance status contradicts mapping/simulation")
+        expected_status = (
+            self.simulation_status if self.profile == "simulation"
+            else self.mapping_status
+        )
+        if self.status != expected_status:
+            raise ValueError(
+                "Overall acceptance status contradicts the requested verification profile"
+            )
         if self.mapping_status == "MAPPING_VERIFIED":
-            mandatory = {
-                "syntax", "source_inventory", "traceability", "scope",
-                "geometry", "representation", "domain",
-            }
-            missing_gates = mandatory - self.gates.keys()
+            missing_gates = REQUIRED_MAPPING_GATES - self.gates.keys()
             if missing_gates:
                 raise ValueError(f"Verified mapping is missing gates: {sorted(missing_gates)}")
+            if any(
+                not self.gates[name].required
+                or self.gates[name].status not in ("PASS", "NOT_APPLICABLE")
+                or (
+                    self.gates[name].status == "NOT_APPLICABLE"
+                    and not self.gates[name].reason.strip()
+                )
+                for name in REQUIRED_MAPPING_GATES
+            ):
+                raise ValueError("Verified mapping has incomplete mandatory gate evidence")
             simulation_gates = {
                 "solver", "effective_geometry", "physics",
                 "scenario", "mesh_resolution", "operational_model",
@@ -120,8 +133,16 @@ class ScenarioResult(ResultShape):
             raise ValueError("Scenario verdict contradicts mesh/physics gates")
         if "scenario_fds" not in self.artifacts:
             raise ValueError("Scenario result is missing scenario_fds")
-        if not isinstance(self.evidence.get("physics"), dict):
+        physics_evidence = self.evidence.get("physics")
+        if not isinstance(physics_evidence, dict):
             raise ValueError("Scenario physics evidence is missing")
+        if (
+            physics_evidence.get("status") not in ("FAIL", "INCONCLUSIVE")
+            or physics_evidence["status"] != self.physics_status
+        ):
+            raise ValueError(
+                "Scenario physics status contradicts the actual assessment evidence"
+            )
         digest = self.evidence.get("fds_sha256")
         if not isinstance(digest, str) or len(digest) != 64 or any(
             c not in "0123456789abcdef" for c in digest
