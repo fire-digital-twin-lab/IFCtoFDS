@@ -79,11 +79,14 @@ class AuditConversionUseCase:
                 )
         from ifc_to_fds.results import research_context
 
+        # Re-finalize after independent source integrity, MEP and golden
+        # reference gates. A research label derived from an earlier verdict
+        # must not outlive a later INCONCLUSIVE/REJECTED golden-reference gate.
+        report.finalize()
         report.configuration["research"] = research_context(
             [s.model_dump(mode="json") for s in model.sources],
             configuration,
             report.model_dump(mode="json"),
         )
-        report.finalize()
         final = build_manifest(model, fds_text, configuration, report)
         return model, final, report
