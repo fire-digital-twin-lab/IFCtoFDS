@@ -13,6 +13,10 @@ from .evidence_index import verify_evidence_index
 logger = logging.getLogger(__name__)
 
 
+class JobPersistenceError(RuntimeError):
+    """A queued job could not be registered durably in SQLite."""
+
+
 class JobRepository:
     """Thread-safe persistent storage for job state tracking using SQLite."""
 
@@ -80,13 +84,15 @@ class JobRepository:
                     process=None,
                 )
 
-    def _persist_job(self, jid: str, job: Dict[str, Any]) -> None:
+    def _persist_job(
+        self, jid: str, job: Dict[str, Any], *, require_durable: bool = False
+    ) -> None:
         if not self._db_path:
             return
         for attempt in range(4):
             try:
                 with self._get_connection() as conn:
-                    conn.execute("""
+                    cursor = conn.execute("""
                         INSERT INTO jobs (id, state, directory, mode, created, started, finished, last_accessed, error, retention_s, durable, peak_rss_bytes)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(id) DO UPDATE SET
@@ -99,7 +105,8 @@ class JobRepository:
                             error=excluded.error,
                             retention_s=excluded.retention_s,
                             durable=excluded.durable,
-                            peak_rss_bytes=excluded.peak_rss_bytes;
+                            peak_rss_bytes=excluded.peak_rss_bytes
+                        WHERE ? = 0;
                     """, (
                         jid,
                         job.get("state", "QUEUED"),
@@ -113,16 +120,25 @@ class JobRepository:
                         job.get("retention_s"),
                         1 if job.get("durable") else 0,
                         job.get("peak_rss_bytes"),
+                        1 if require_durable else 0,
                     ))
+                    if require_durable and cursor.rowcount != 1:
+                        raise JobPersistenceError(
+                            "Job ID is already registered in SQLite"
+                        )
                 return
             except sqlite3.OperationalError as exc:
                 if ("locked" in str(exc).lower() or "busy" in str(exc).lower()) and attempt < 3:
                     time.sleep(0.05 * (2 ** attempt))
                     continue
                 logger.error("Failed to persist job %s to SQLite: %s", jid, exc, exc_info=True)
+                if require_durable:
+                    raise JobPersistenceError("Could not persist queued job metadata") from exc
                 return
             except sqlite3.Error as exc:
                 logger.error("Failed to persist job %s to SQLite: %s", jid, exc, exc_info=True)
+                if require_durable:
+                    raise JobPersistenceError("Could not persist queued job metadata") from exc
                 return
 
     def get(self, jid: str) -> Optional[Dict[str, Any]]:
@@ -131,6 +147,18 @@ class JobRepository:
     def set(self, jid: str, job: Dict[str, Any]) -> None:
         self._jobs[jid] = job
         self._persist_job(jid, job)
+
+    def register(self, jid: str, job: Dict[str, Any]) -> None:
+        """Publish a new job only after its SQLite insert has committed.
+
+        Unlike historical best-effort status updates, admission must not report
+        success for work that will disappear from the queue after a restart.
+        A failed registration leaves no in-memory job and cannot start a worker.
+        """
+        if jid in self._jobs:
+            raise ValueError("Job ID is already registered")
+        self._persist_job(jid, job, require_durable=True)
+        self._jobs[jid] = job
 
     def delete(self, jid: str) -> None:
         self._jobs.pop(jid, None)

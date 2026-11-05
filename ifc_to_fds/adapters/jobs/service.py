@@ -247,7 +247,9 @@ class JobService:
                 ),
                 encoding="utf-8",
             )
-            self.repository.set(jid, job)
+            # Admission must fail closed if SQLite cannot retain this job.
+            # Do not start the worker or expose the job until persistence commits.
+            self.repository.register(jid, job)
             if self.thread is None:
                 self.thread = threading.Thread(target=self._loop, daemon=True)
                 self.thread.start()
