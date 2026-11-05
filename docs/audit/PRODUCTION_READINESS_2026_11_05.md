@@ -1,5 +1,17 @@
 # IFCtoFDS — Ma trận cổng nghiệm thu và trạng thái sẵn sàng production
 
+
+## Cập nhật checkpoint tích hợp — 05/11/2026 (vòng tiếp tục)
+
+- PR #40 đã merge tại `d04771db4f9f584b98a1bab1d9d03a028cd769ab`; CI main [#41979799490](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41979799490) và [#41979799570](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41979799570) thành công.
+- PR #39 đã merge tại `e6b7ef04296d660d0713a79e813a1207dfa5cc84`, sau khi cả ba workflow trên HEAD `9a73fdf4e66c96fcd4a083739f9e259840d5cd7c` thành công: [#41981569812](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41981569812), [#41981569818](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41981569818), [#41981561525](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41981561525).
+- PR #38 được đồng bộ với `main` theo phép merge không chồng lấn file; chỉ thêm hai báo cáo audit. CI trên HEAD đồng bộ chưa kết thúc tại thời điểm ghi.
+- PR #41 có hồi quy recovery/queue-timeout; HEAD `8eb33eb483408377ed0ba3458a51dca07d706a30` đã đạt CI [#41981397856](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41981397856), [#41981397852](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41981397852), [#41981390992](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41981390992). Chưa merge; cần retarget/sync với `main` sau #39 và chạy lại.
+- `IO-PERSISTENCE` vẫn mở: execution timeout, memory exhaustion, startup/spawn, multi-process coordination, filesystem/SQLite crash windows. Kết quả khoa học không thay đổi. `NOT_PRODUCTION_READY`.
+
+**Lưu ý:** Các bảng và mô tả SHA phía dưới là checkpoint lịch sử đã ghi trong từng vòng. Không sử dụng các dòng “cần CI” cũ để suy ra trạng thái hiện hành; kiểm tra GitHub lại trước quyết định merge/release.
+
+
 **Thời điểm chốt bản kiểm tra:** 05/11/2026. **Baseline tích hợp khi khởi tạo:** `2e4115ee752ff843db4ef67854f2f6db89f95cf4`.
 **HEAD đã xác minh tiếp:** `cf2e185d779f48b098d48de6879b8a00ea6de13a` (PR #37 đã merge).
 **Kết luận:** `NOT_PRODUCTION_READY`. Đây là sổ kiểm soát phát hành, không
