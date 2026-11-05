@@ -89,3 +89,21 @@ G05 được đánh dấu FAIL vì đã xác định nhiều đường cập nh�
 - Không điều chỉnh tolerance hoặc verdict khoa học, không đổi branch protection, không triển khai production.
 
 **Next safe action:** kiểm tra #39 sau rerun workflow #41980652295, sau đó kiểm tra mergeability và merge bằng API GitHub nếu đủ điều kiện; cập nhật sổ này theo merge SHA thực tế.
+
+
+## Checkpoint nghiệm thu mới — 05/11/2026, sau PR #38 và #41
+
+**Nguồn trạng thái:** truy vấn GitHub tại phiên hiện hành; đây là snapshot lịch sử, không tự thay cho lần kiểm tra HEAD sau cùng.
+
+| Đối tượng | SHA / run | Quyết định tại checkpoint |
+|---|---|---|
+| `main` | `4435800147396d31c7e92568be96eb82f0a029f7` | Đã merge #38 và #41. Hai workflow main tại [#41991091356](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41991091356) và [#41991091625](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41991091625) vẫn đang thực hiện ở lần kiểm tra |
+| PR #38 | merge `82e825978dd51988461c19840ce4f5f1b5785fae` | MERGED, CI HEAD trước merge PASS |
+| PR #41 | merge `4435800147396d31c7e92568be96eb82f0a029f7` | MERGED, required checks HEAD trước merge PASS |
+| PR #42 | `93a37059b213e2df9e0929fc86802366948abb05` | DRAFT, đã retarget main, CI mới chưa hoàn thành; kiểm tra retry nguyên nhân timeout/RSS khi SQLite lỗi |
+| PR #43 | `0c5f81bfcd4450f5bf22916a51cf7b04eed4f023` | DRAFT, đã đồng bộ main, CI mới chưa hoàn thành; bảo vệ staging/production thiếu API key |
+| PR #44 | [#44](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/44) | DRAFT, scheduler health probe, CI chưa hoàn thành |
+
+**Vấn đề cần quyết định tiếp:** xử lý và nghiệm thu #42, #43, #44; JobService spawn transition vẫn dùng cập nhật best-effort, nhiều process/replica chưa được chứng minh an toàn. Các gate G05 (FAIL), G06 (INCONCLUSIVE), G07 (IN_PROGRESS), G14 (IN_PROGRESS) chưa đạt. G09/G10 chưa có đủ kiểm định khoa học độc lập; G11–G13/G15 NOT_RUN. Release verdict vẫn là `NOT_PRODUCTION_READY`.
+
+**Next safe action:** kiểm tra `main` CI trên SHA `4435800`, sau đó CI từng PR trên HEAD cuối. Chỉ đánh dấu VERIFIED/merge khi required checks thực sự PASS. Không đổi branch protection, không cấp `SIMULATION_VERIFIED`, không triển khai production hoặc staging khi chưa có gate/hạ tầng hợp lệ.
