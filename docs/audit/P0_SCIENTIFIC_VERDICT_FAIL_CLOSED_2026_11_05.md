@@ -23,7 +23,7 @@
 
 **Trước sửa:** `AcceptanceReport.finalize()` lấy danh sách các gate được truyền vào và yêu cầu tất cả gate hiện diện PASS. Một đối tượng chỉ khai báo `syntax=PASS` có thể trả `MAPPING_VERIFIED` dù không có source inventory, geometry hay traceability.
 
-**Sửa:** Dùng hằng `REQUIRED_MAPPING_GATES` gồm 12 gate; mọi gate phải có mặt, `required=true`, trạng thái PASS hoặc NOT_APPLICABLE có lý do. Các gate bắt buộc vắng mặt, NOT_RUN, INCONCLUSIVE hoặc bị hạ thành optional đều ngăn MAPPING_VERIFIED. FAIL trên gate required hay blocker mapping tiếp tục trả REJECTED.
+**Sửa:** Dùng hằng `REQUIRED_MAPPING_GATES` gồm 12 gate; mọi gate phải có mặt, `required=true`. Bảy gate cốt lõi (`syntax`, `source_inventory`, `traceability`, `scope`, `geometry`, `representation`, `domain`) **bắt buộc PASS và không được miễn bằng NOT_APPLICABLE**, kể cả có lý do. Năm gate còn lại PASS hoặc NOT_APPLICABLE có lý do dựa trên đúng phạm vi nguồn. Gate vắng mặt, NOT_RUN, INCONCLUSIVE hoặc bị hạ thành optional đều ngăn MAPPING_VERIFIED. FAIL trên required gate hay blocker mapping tiếp tục trả REJECTED.
 
 **Regression:** Mỗi gate bị xóa, bỏ required hoặc NOT_RUN riêng đều trả INCONCLUSIVE, không có positive verdict do thiếu evidence.
 
