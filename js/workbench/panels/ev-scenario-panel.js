@@ -245,18 +245,20 @@
         var mesh = String(res.mesh_status || '').toUpperCase();
         var physics = String(res.physics_status || '').toUpperCase();
         var simulation = String(res.simulation_status || '').toUpperCase();
-        if (state === 'FAILED' || state === 'CANCELLED' || state === 'TIMED_OUT' ||
-            verdict === 'FAIL' || verdict === 'FAILED' || verdict === 'REJECTED' ||
-            verdict === 'TIMED_OUT' || mesh === 'FAIL' || mesh === 'REJECTED' ||
-            physics === 'FAIL' || physics === 'REJECTED' ||
-            simulation === 'FAIL' || simulation === 'REJECTED' ||
-            (typeof res.status === 'number' && res.status >= 400 && res.status !== 429)) {
-            return 'REJECTED';
-        }
         if (state === 'QUEUED_WAITING' || verdict === 'QUEUED_WAITING' ||
             state === 'QUEUED' || state === 'RUNNING' || verdict === 'QUEUED' || verdict === 'RUNNING' ||
             res.status === 429) return 'QUEUED_WAITING';
-        if (state === 'RESULT_UNAVAILABLE') return 'INCONCLUSIVE';
+        // Transport or worker failure is missing scientific evidence, not a
+        // physical/geometry negative result. Never count HTTP errors, failed
+        // subprocesses or timeout as a proven rejected fire scenario.
+        if (state === 'FAILED' || state === 'CANCELLED' || state === 'TIMED_OUT' ||
+            state === 'RESULT_UNAVAILABLE' ||
+            (typeof res.status === 'number' && res.status >= 400)) return 'INCONCLUSIVE';
+        // The current scenario contract only has a confirmed negative verdict
+        // through mesh or physics plausibility. Other claimed verdict strings
+        // (even FAIL/SIMULATION_VERIFIED) cannot independently prove anything.
+        if ((state === 'COMPLETED' || state === '') &&
+            (mesh === 'FAIL' || physics === 'FAIL')) return 'REJECTED';
         // Even an incoming PASS or SIMULATION_VERIFIED label is insufficient
         // without an independently specified and verified evidence contract.
         // Do not silently promote mesh/energy checks to scientific acceptance.
