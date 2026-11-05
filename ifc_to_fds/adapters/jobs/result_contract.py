@@ -12,7 +12,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, model_validator
 
 from ifc_to_fds.core.canonical import SCHEMA_VERSION
-from ifc_to_fds.domain.validation.model import REQUIRED_MAPPING_GATES
+from ifc_to_fds.domain.validation.model import (
+    NON_WAIVABLE_MAPPING_GATES,
+    REQUIRED_MAPPING_GATES,
+)
 from ifc_to_fds.results import ARTIFACTS
 
 
@@ -81,7 +84,10 @@ class ConversionResult(ResultShape):
                 or self.gates[name].status not in ("PASS", "NOT_APPLICABLE")
                 or (
                     self.gates[name].status == "NOT_APPLICABLE"
-                    and not self.gates[name].reason.strip()
+                    and (
+                        name in NON_WAIVABLE_MAPPING_GATES
+                        or not self.gates[name].reason.strip()
+                    )
                 )
                 for name in REQUIRED_MAPPING_GATES
             ):
