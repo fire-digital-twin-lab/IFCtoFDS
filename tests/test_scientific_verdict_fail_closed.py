@@ -221,3 +221,21 @@ def test_no_openings_may_be_not_applicable_with_a_specific_reason():
     result["gates"]["openings"]["status"] = "NOT_APPLICABLE"
     result["gates"]["openings"]["reason"] = "No in-scope IFC wall has a source opening"
     assert validate_job_result("convert", result) is result
+
+
+def test_research_acceptance_uses_finalized_independent_audit_verdict(tiny_ifc):
+    """A missing approved golden case cannot retain an earlier mapping PASS."""
+    from ifc_to_fds.pipeline import convert
+
+    source_path, _, _ = tiny_ifc
+    control = convert([str(source_path)], {"profile": "mapping"})
+    assert control["mapping_status"] == "MAPPING_VERIFIED"
+    assert control["report"]["configuration"]["research"]["research_acceptance"] == "NOT_RUN"
+
+    research = convert([str(source_path)], {"profile": "research-basement"})
+    report = research["report"]
+    assert report["gates"]["golden_reference_parity"]["status"] == "INCONCLUSIVE"
+    assert research["mapping_status"] == research["status"] == "INCONCLUSIVE"
+    assert research["output_complete"] is False
+    assert report["configuration"]["research"]["research_acceptance"] == "INCONCLUSIVE"
+    assert report["configuration"]["research"]["parity_status"] == "NOT_RUN"
