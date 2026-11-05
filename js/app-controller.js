@@ -1543,8 +1543,14 @@
             (parent || els.auditBody).appendChild(node);
             return node;
         }
-        line('h3', 'Acceptance: ' + report.status);
-        line('p', 'Mapping: ' + report.mapping_status + '; simulation: ' + report.simulation_status);
+        // This release has no independent CFD acceptance contract. A forged
+        // SIMULATION_VERIFIED label must not be rendered as scientific proof.
+        var statusLabel = report.status === 'SIMULATION_VERIFIED'
+            ? 'INCONCLUSIVE (unsupported simulation claim)' : report.status;
+        var simulationLabel = report.simulation_status === 'SIMULATION_VERIFIED'
+            ? 'INCONCLUSIVE (unsupported simulation claim)' : report.simulation_status;
+        line('h3', 'Acceptance: ' + statusLabel);
+        line('p', 'Mapping: ' + report.mapping_status + '; simulation: ' + simulationLabel);
         var roles = (report.coverage || {}).representation || {};
         line('p', 'Reference objects: ' + (roles.REFERENCE_GEOMETRY || 0) + '; passive obstacles: ' + (roles.PASSIVE_OBSTACLE || 0) + '; operational objects: ' + (roles.OPERATIONAL_MEP || 0));
         var pending = (report.coverage || {}).boundary_pending || 0;
@@ -1757,9 +1763,14 @@
         var label = document.getElementById('global-status-label');
         if (!badge || !label) return;
         badge.className = 'global-status-badge';
-        if (status === 'MAPPING_VERIFIED' || status === 'SIMULATION_VERIFIED') {
+        if (status === 'MAPPING_VERIFIED') {
             badge.classList.add('verified');
-            label.textContent = 'VERIFIED';
+            label.textContent = 'MAPPING VERIFIED';
+        } else if (status === 'SIMULATION_VERIFIED') {
+            // The current solver workflow verifies setup/geometry, not CFD
+            // physical validity. Never render a spoofed CFD acceptance as green.
+            badge.classList.add('inconclusive');
+            label.textContent = 'CFD NOT VERIFIED';
         } else if (status === 'INCONCLUSIVE') {
             badge.classList.add('inconclusive');
             label.textContent = 'INCONCLUSIVE';
