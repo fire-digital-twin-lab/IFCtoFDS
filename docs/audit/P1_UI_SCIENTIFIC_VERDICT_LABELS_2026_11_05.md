@@ -36,3 +36,25 @@ The Python scientific contract review is tracked separately in PR #49.
 G09/G10 remain INCONCLUSIVE until independent reference measurements,
 solver convergence, uncertainty, validation of field quantities and
 expert approval are documented. Release remains NOT_PRODUCTION_READY.
+
+
+## P1-SCI-EV — Lỗi vận hành không phải từ chối khoa học
+
+`classifyScenarioResult()` ở EV scenario panel trước đây trả `REJECTED`
+cho HTTP 500, job FAILED, CANCELLED, TIMED_OUT hoặc một trường
+`verdict=FAIL` được truyền vào mà không kèm evidence mesh/physics.
+
+Chính sách mới:
+- Job QUEUED/RUNNING/429: `QUEUED_WAITING` — chưa có scientific verdict.
+- HTTP error, job FAILED/CANCELLED/TIMED_OUT, không lấy được result:
+  `INCONCLUSIVE` — hệ thống **không biết** mô phỏng đạt hay không.
+- Chỉ `mesh_status=FAIL` hoặc `physics_status=FAIL` trong trạng thái
+  kết quả hoàn tất mới phân loại `REJECTED` của kịch bản.
+- Chuỗi `verdict=FAIL` hay `SIMULATION_VERIFIED` đơn độc không cấp
+  kết luận khoa học. `energy_budget_status=PASS` cũng không phải CFD.
+- `scripts/test-ev-scenario-panel.js` bổ sung ca lỗi vận hành và
+  verdict giả, đồng thời giữ test thất bại mesh/physics thật.
+
+Giới hạn: UI không tự kiểm chứng chứng cứ CFD hoặc source IFC; API/persisted
+result contract và evidence index tiếp tục là lớp tin cậy chính. Chưa có
+scientific validation trên dữ liệu công trình thật. Không nâng G09/G10.
