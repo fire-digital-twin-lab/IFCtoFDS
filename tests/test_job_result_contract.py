@@ -322,3 +322,92 @@ def test_preview_urls_remain_available_after_validation(tmp_path):
     res = repository.read_result("job-preview")
     assert res["artifacts"]["geometry"]["url"] == "/api/jobs/job-preview/artifacts/geometry"
     assert res["artifacts"]["mep"]["url"] == "/api/jobs/job-preview/artifacts/mep"
+
+
+@pytest.mark.parametrize(
+    "research",
+    [
+        {"profile": "research-basement"},
+        {"research_acceptance": "SIMULATION_VERIFIED"},
+        {"research_acceptance": "MAPPING_VERIFIED"},
+        {"parity_status": "PASS"},
+        {"scientific_acceptance": "SIMULATION_VERIFIED"},
+        {"simulation_status": "SIMULATION_VERIFIED"},
+        {"verified": True},
+    ],
+)
+def test_mapping_result_rejects_forged_nested_research_claims(research):
+    doc = valid_convert()
+    doc["research"] = research
+    with pytest.raises(ValueError, match="Invalid convert result fields"):
+        validate_job_result("convert", doc)
+
+
+def test_research_profile_cannot_claim_mapping_verified_without_golden_gate():
+    doc = valid_convert()
+    doc["profile"] = "research-basement"
+    doc["research"] = {
+        "profile": "research-basement",
+        "research_acceptance": "MAPPING_VERIFIED",
+        "parity_status": "NOT_RUN",
+    }
+    with pytest.raises(ValueError, match="Invalid convert result fields"):
+        validate_job_result("convert", doc)
+
+
+def test_approved_golden_parity_permits_mapping_verdict_but_not_simulation():
+    doc = valid_convert()
+    doc["profile"] = "research-basement"
+    doc["gates"]["golden_reference_parity"] = {
+        "status": "PASS",
+        "required": True,
+        "reason": "Independent approved golden comparison",
+    }
+    doc["research"] = {
+        "profile": "research-basement",
+        "research_acceptance": "MAPPING_VERIFIED",
+        "parity_status": "PASS",
+    }
+    assert validate_job_result("convert", doc) is doc
+    assert doc["simulation_status"] == "INCONCLUSIVE"
+
+
+def test_missing_approved_research_case_is_explicitly_inconclusive():
+    doc = valid_convert()
+    doc.update(
+        profile="research-basement",
+        status="INCONCLUSIVE",
+        mapping_status="INCONCLUSIVE",
+        output_complete=False,
+        blocker_count=1,
+    )
+    doc["gates"]["golden_reference_parity"] = {
+        "status": "INCONCLUSIVE",
+        "required": True,
+        "reason": "Required research reference missing",
+    }
+    doc["research"] = {
+        "profile": "research-basement",
+        "research_acceptance": "INCONCLUSIVE",
+        "parity_status": "NOT_RUN",
+    }
+    assert validate_job_result("convert", doc) is doc
+    assert doc["simulation_status"] == "INCONCLUSIVE"
+
+
+def test_research_parity_cannot_hide_golden_reference_failure():
+    doc = valid_convert()
+    doc.update(
+        status="REJECTED",
+        mapping_status="REJECTED",
+        output_complete=False,
+        blocker_count=1,
+    )
+    doc["gates"]["golden_reference_parity"] = {
+        "status": "FAIL",
+        "required": True,
+        "reason": "Reference source changed",
+    }
+    doc["research"] = {"profile": "mapping", "parity_status": "NOT_RUN"}
+    with pytest.raises(ValueError, match="Invalid convert result fields"):
+        validate_job_result("convert", doc)
