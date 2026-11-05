@@ -4,6 +4,7 @@ from ifc_to_fds.mapping.exporter import serialize_fds
 from ifc_to_fds.mapping.manifest import build_manifest
 from ifc_to_fds.validation.engine import run_independent_validation
 from ifc_to_fds.validation.acceptance import AcceptanceReport, GateResult
+from ifc_to_fds.domain.validation.model import REQUIRED_MAPPING_GATES
 from ifc_to_fds.validation.parser import parse_fds
 
 
@@ -91,7 +92,11 @@ def test_gate_truth_table():
         ("INCONCLUSIVE", "INCONCLUSIVE"),
         ("FAIL", "REJECTED"),
     ]:
-        report = AcceptanceReport(gates={"required": GateResult(status=status)})
+        gates = {
+            name: GateResult(status="PASS") for name in REQUIRED_MAPPING_GATES
+        }
+        gates["syntax"] = GateResult(status=status)
+        report = AcceptanceReport(gates=gates)
         assert report.finalize().status == verdict
     report = AcceptanceReport(
         gates={"a": GateResult(status="FAIL"), "b": GateResult(status="NOT_RUN")}
@@ -121,7 +126,10 @@ def test_finalize_never_issues_simulation_verified():
         )
     }
     report = AcceptanceReport(
-        gates={"required": GateResult(status="PASS"), **sim_gates}
+        gates={
+            **{name: GateResult(status="PASS") for name in REQUIRED_MAPPING_GATES},
+            **sim_gates,
+        }
     )
     finalized = report.finalize()
     assert finalized.mapping_status == AcceptanceStatus.MAPPING_VERIFIED
@@ -130,7 +138,7 @@ def test_finalize_never_issues_simulation_verified():
 
     failing = AcceptanceReport(
         gates={
-            "required": GateResult(status="PASS"),
+            **{name: GateResult(status="PASS") for name in REQUIRED_MAPPING_GATES},
             **{**sim_gates, "solver": GateResult(status="FAIL")},
         }
     ).finalize()
