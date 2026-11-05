@@ -45,6 +45,7 @@ class WorkerRunner:
             elif request.get("mode") == "scenario":
                 import hashlib
                 from ifc_to_fds.application.services.scenario_base import load_verified_base
+                from ifc_to_fds.adapters.jobs.base_integrity import verify_accepted_mapping_base
                 from ifc_to_fds.fire.scenario_composer import compose_scenario, configure_scenario_time
                 from ifc_to_fds.fire.scenario_emitter import emit_fire_scenario
                 from ifc_to_fds.fire.scenario_request import ScenarioRequest
@@ -57,7 +58,11 @@ class WorkerRunner:
                 if not scenario_payload and (directory / "scenario.json").is_file():
                     scenario_payload = json.loads((directory / "scenario.json").read_text(encoding="utf-8"))
                 scenario = ScenarioRequest.model_validate(scenario_payload)
-                base_text, mapping_plan, base_manifest = load_verified_base(directory.parent, scenario.bundle_sha256)
+                base_text, mapping_plan, base_manifest = load_verified_base(
+                    directory.parent,
+                    scenario.bundle_sha256,
+                    verify_candidate=verify_accepted_mapping_base,
+                )
                 bundle = emit_fire_scenario(
                     mapping_plan=mapping_plan,
                     bundle_sha256=base_manifest.bundle_sha256,
