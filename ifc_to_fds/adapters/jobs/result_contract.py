@@ -202,26 +202,32 @@ def validate_job_result(mode: str, result: Any) -> dict[str, Any]:
             if filename is None or artifact["filename"] != filename:
                 raise ValueError(f"Invalid {mode} artifact descriptor: {name!r}")
 
-    # Unverified outputs must not smuggle an acceptance assertion through
-    # ResultShape's additive extension fields, even when its main status is
-    # PREVIEW_ONLY or inventory has no top-level status at all.
-    forbidden_claims = {
-        "verdict", "mapping_status", "simulation_status",
-        "output_complete", "mapping_acceptance", "simulation_acceptance",
+    # Extension fields are allowed for non-scientific metadata only.
+    # Enforce a single vocabulary for scientific verdicts across ALL modes:
+    # e.g. a valid conversion result cannot add an unsanctioned
+    # {"verdict": "SIMULATION_VERIFIED"} alongside its true status.
+    claim_fields = {
+        "status", "verdict", "verification", "mapping_status",
+        "simulation_status", "output_complete", "mapping_acceptance",
+        "simulation_acceptance", "acceptance_status", "verified",
+        "is_verified", "scientific_acceptance",
     }
-    if mode == "preview":
-        forbidden = forbidden_claims.intersection(result)
-        if forbidden:
-            raise ValueError(
-                "Preview cannot declare scientific acceptance fields: "
-                + ", ".join(sorted(forbidden))
-            )
-    if mode == "inventory":
-        forbidden = (forbidden_claims | {"status", "verification", "artifacts"}).intersection(result)
-        if forbidden:
-            raise ValueError(
-                "Inventory cannot declare acceptance or downloadable artifacts: "
-                + ", ".join(sorted(forbidden))
-            )
+    allowed_claims = {
+        "convert": {"status", "mapping_status", "simulation_status", "output_complete"},
+        "scenario": {"status", "verdict", "simulation_status"},
+        "preview": {"status", "verification"},
+        "inventory": set(),
+    }
+    forbidden = (claim_fields - allowed_claims[mode]).intersection(result)
+    if forbidden:
+        descriptions = {
+            "convert": "Conversion cannot declare extra scientific acceptance fields",
+            "scenario": "Scenario cannot declare extra scientific acceptance fields",
+            "preview": "Preview cannot declare scientific acceptance fields",
+            "inventory": "Inventory cannot declare acceptance or downloadable artifacts",
+        }
+        raise ValueError(descriptions[mode] + ": " + ", ".join(sorted(forbidden)))
+    if mode == "inventory" and "artifacts" in result:
+        raise ValueError("Inventory cannot declare acceptance or downloadable artifacts")
 
     return result

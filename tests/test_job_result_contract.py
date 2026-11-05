@@ -183,6 +183,23 @@ def test_preview_cannot_smuggle_scientific_claim(field, value):
         validate_job_result("preview", doc)
 
 
+@pytest.mark.parametrize("mode,factory,field,value", [
+    ("convert", valid_convert, "verdict", "SIMULATION_VERIFIED"),
+    ("convert", valid_convert, "verification", "PASS"),
+    ("convert", valid_convert, "scientific_acceptance", "APPROVED"),
+    ("scenario", valid_scenario, "mapping_status", "MAPPING_VERIFIED"),
+    ("scenario", valid_scenario, "acceptance_status", "SIMULATION_VERIFIED"),
+    ("scenario", valid_scenario, "verified", True),
+    ("preview", valid_preview, "acceptance_status", "MAPPING_VERIFIED"),
+    ("inventory", valid_inventory, "scientific_acceptance", "PASS"),
+])
+def test_modes_reject_additional_scientific_verdict_fields(mode, factory, field, value):
+    data = factory()
+    data[field] = value
+    with pytest.raises(ValueError, match="cannot declare"):
+        validate_job_result(mode, data)
+
+
 @pytest.mark.parametrize("mode", ["unknown", "", "solver"])
 def test_unknown_mode_fails_closed(mode):
     with pytest.raises(ValueError, match="Unsupported result mode"):
