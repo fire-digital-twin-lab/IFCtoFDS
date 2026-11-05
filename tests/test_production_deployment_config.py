@@ -25,6 +25,14 @@ def test_network_mode_rejects_missing_and_short_key(mode):
         validate_deployment_config(
             {"IFCFDS_ENV": mode, "IFCFDS_API_KEY": "weak", "IFCFDS_ALLOWED_HOSTS": "api.example.org"}
         )
+    with pytest.raises(RuntimeError, match="IFCFDS_API_KEY"):
+        validate_deployment_config(
+            {
+                "IFCFDS_ENV": mode,
+                "IFCFDS_API_KEY": "a" * 20 + " " + "b" * 20,
+                "IFCFDS_ALLOWED_HOSTS": "api.example.org",
+            }
+        )
 
 
 @pytest.mark.parametrize(
