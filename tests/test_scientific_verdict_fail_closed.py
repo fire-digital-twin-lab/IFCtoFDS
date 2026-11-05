@@ -10,6 +10,7 @@ from ifc_to_fds.adapters.jobs.result_contract import validate_job_result
 from ifc_to_fds.domain.validation.model import (
     AcceptanceReport,
     GateResult,
+    NON_WAIVABLE_MAPPING_GATES,
     REQUIRED_MAPPING_GATES,
 )
 from ifc_to_fds.core.canonical import SCHEMA_VERSION
@@ -191,3 +192,32 @@ def test_mapping_pass_does_not_promote_simulation_even_if_all_simulation_gates_p
     ).finalize()
     assert report.mapping_status == "MAPPING_VERIFIED"
     assert report.simulation_status == report.status == "INCONCLUSIVE"
+
+
+@pytest.mark.parametrize("name", sorted(NON_WAIVABLE_MAPPING_GATES))
+def test_core_mapping_science_cannot_be_waived_by_explanation(name):
+    gates = complete_mapping_gates()
+    gates[name] = GateResult(
+        status="NOT_APPLICABLE", required=True,
+        reason="Operator claims this mandatory comparison is unnecessary",
+    )
+    assert AcceptanceReport(gates=gates).finalize().mapping_status == "INCONCLUSIVE"
+
+    result = valid_convert()
+    result["gates"][name]["status"] = "NOT_APPLICABLE"
+    result["gates"][name]["reason"] = "Operator waiver"
+    with pytest.raises(ValueError, match="Invalid convert result fields"):
+        validate_job_result("convert", result)
+
+
+def test_no_openings_may_be_not_applicable_with_a_specific_reason():
+    gates = complete_mapping_gates()
+    gates["openings"] = GateResult(
+        status="NOT_APPLICABLE", required=True,
+        reason="No in-scope IFC wall has a source opening",
+    )
+    assert AcceptanceReport(gates=gates).finalize().mapping_status == "MAPPING_VERIFIED"
+    result = valid_convert()
+    result["gates"]["openings"]["status"] = "NOT_APPLICABLE"
+    result["gates"]["openings"]["reason"] = "No in-scope IFC wall has a source opening"
+    assert validate_job_result("convert", result) is result
