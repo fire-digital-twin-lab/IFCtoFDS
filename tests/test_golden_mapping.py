@@ -13,6 +13,7 @@ from ifc_to_fds.mapping.manifest import build_manifest, MappingManifest
 from ifc_to_fds.geometry.package import build_package, seal, audit_package
 from ifc_to_fds.validation.engine import run_independent_validation
 from ifc_to_fds.validation.acceptance import AuditConfig, AcceptanceReport, GateResult
+from ifc_to_fds.domain.validation.model import REQUIRED_MAPPING_GATES
 from ifc_to_fds.validation.golden import (
     create_candidate,
     golden_gate as evaluate_golden_gate,
@@ -316,7 +317,10 @@ def test_required_golden_missing_and_optional_na(box_model):
 def test_mapping_and_simulation_levels():
     report = AcceptanceReport(
         gates={
-            "geometry": GateResult(status="PASS"),
+            **{
+                name: GateResult(status="PASS")
+                for name in REQUIRED_MAPPING_GATES
+            },
             "solver": GateResult(status="INCONCLUSIVE"),
         }
     )

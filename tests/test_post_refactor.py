@@ -196,6 +196,15 @@ def test_evaluator_finalizes_and_detaches_outcomes(box_model):
     outcomes[0].result.status = GateStatus.NOT_APPLICABLE
     assert evaluator.evaluate(context, outcomes).status == "INCONCLUSIVE"
     outcomes[0].result.reason = "Not applicable to fixture"
+    # Core syntax evidence cannot be waived, even with an explanation.
+    assert evaluator.evaluate(context, outcomes).status == "INCONCLUSIVE"
+    outcomes[0].result.status = GateStatus.PASS
+    outcomes[0].result.reason = ""
+    # No in-scope openings is a genuinely non-applicable mapping check.
+    opening = next(outcome for outcome in outcomes if outcome.gate_name == "openings")
+    opening.result.status = GateStatus.NOT_APPLICABLE
+    assert evaluator.evaluate(context, outcomes).status == "INCONCLUSIVE"
+    opening.result.reason = "No in-scope source openings"
     assert evaluator.evaluate(context, outcomes).status == "MAPPING_VERIFIED"
 
 

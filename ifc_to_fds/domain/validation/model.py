@@ -24,6 +24,37 @@ class AcceptanceStatus(str, Enum):
 # Backward compatibility alias
 AcceptanceVerdict = AcceptanceStatus
 
+# A mapping verdict is a positive scientific claim about ALL core IFC-to-FDS
+# comparisons, not merely the gates the caller happened to supply. Keep this
+# list shared with the persisted/public result contract.
+REQUIRED_MAPPING_GATES = frozenset({
+    "syntax",
+    "source_inventory",
+    "traceability",
+    "scope",
+    "geometry",
+    "structural_completeness",
+    "air_path",
+    "openings",
+    "mep",
+    "representation",
+    "boundary",
+    "domain",
+})
+
+# These core checks always have something to verify. An operator-supplied
+# NOT_APPLICABLE explanation cannot waive source re-reading, syntax, provenance,
+# scope, geometry or the declared simulation domain.
+NON_WAIVABLE_MAPPING_GATES = frozenset({
+    "syntax",
+    "source_inventory",
+    "traceability",
+    "scope",
+    "geometry",
+    "representation",
+    "domain",
+})
+
 
 class GateStatus(str, Enum):
     PASS = "PASS"
@@ -173,11 +204,27 @@ class AcceptanceReport(BaseModel):
             and f.verification_level == "mapping"
             for f in self.findings
         )
+        mandatory_complete = all(
+            name in self.gates
+            and self.gates[name].required
+            and (
+                self.gates[name].status == GateStatus.PASS
+                if name in NON_WAIVABLE_MAPPING_GATES
+                else (
+                    self.gates[name].status == GateStatus.PASS
+                    or (
+                        self.gates[name].status == GateStatus.NOT_APPLICABLE
+                        and bool(self.gates[name].reason.strip())
+                    )
+                )
+            )
+            for name in REQUIRED_MAPPING_GATES
+        )
         if failed:
             self.mapping_status = AcceptanceStatus.REJECTED
-        elif required and all(
+        elif mandatory_complete and required and all(
             g.status in (GateStatus.PASS, GateStatus.NOT_APPLICABLE)
-            and (g.status != GateStatus.NOT_APPLICABLE or g.reason)
+            and (g.status != GateStatus.NOT_APPLICABLE or g.reason.strip())
             for g in required
         ):
             self.mapping_status = AcceptanceStatus.MAPPING_VERIFIED
