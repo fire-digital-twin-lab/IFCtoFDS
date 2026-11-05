@@ -87,6 +87,10 @@ class JobService:
         self.wake = threading.Event()
         self.closed = False
         self.thread: Optional[threading.Thread] = None
+        # Private retry intents: never publish a terminal status in RAM until
+        # its SQLite transition commits. Preserve the original failure reason
+        # even if the killed process has exited before the next scheduler tick.
+        self._pending_terminal: Dict[str, Dict[str, Any]] = {}
 
         # Clean up stale directories and reconcile interrupted jobs on startup.
         # NOTE: unregistered-dir sweep is NEVER run implicitly at boot -- the
@@ -354,6 +358,7 @@ class JobService:
                 cancelled["state"] = "CANCELLED"
                 cancelled["finished"] = time.time()
                 self.repository.set_durable(jid, cancelled)
+                self._pending_terminal.pop(jid, None)
                 proc_to_stop = job.get("process")
                 was_active = True
                 self._terminal_diagnostic(
@@ -401,8 +406,40 @@ class JobService:
         if self.thread:
             self.thread.join(timeout=5)
 
+    def _retry_pending_terminals(self) -> bool:
+        """Retry a stopped worker's original terminal verdict after SQLite failure.
+
+        Returns True if any pending intent existed, so dispatch can be deferred
+        for one scheduler turn even after storage recovers. The pending data is
+        private to this process; after a server crash startup reconciliation
+        marks interrupted jobs FAILED without falsely claiming a prior verdict.
+        """
+        with self.lock:
+            if not self._pending_terminal:
+                return False
+            for jid, terminal in list(self._pending_terminal.items()):
+                current = self.repository.get(jid)
+                if not current or current.get("state") not in ("QUEUED", "RUNNING"):
+                    self._pending_terminal.pop(jid, None)
+                    continue
+                try:
+                    self.repository.set_durable(jid, terminal)
+                except JobPersistenceError:
+                    logger.exception(
+                        "Retry of original terminal verdict for job %s failed", jid
+                    )
+                else:
+                    self._pending_terminal.pop(jid, None)
+                    self._cleanup(terminal)
+            return True
+
     def _loop(self):
         while not self.closed:
+            if self._retry_pending_terminals():
+                # Do not spin on locked/full storage or dispatch another job
+                # while an already-stopped worker has an uncommitted verdict.
+                self.wake.wait(0.1)
+                continue
             has_running = False
             has_queued = False
             dirs_to_delete = []
@@ -490,6 +527,7 @@ class JobService:
                                 try:
                                     self.repository.set_durable(exhausted["id"], exhausted)
                                 except JobPersistenceError:
+                                    self._pending_terminal[exhausted["id"]] = exhausted
                                     logger.exception(
                                         "Keeping job %s RUNNING after resource limit persistence failure",
                                         exhausted["id"],
@@ -539,6 +577,7 @@ class JobService:
                         try:
                             self.repository.set_durable(expired["id"], expired)
                         except JobPersistenceError:
+                            self._pending_terminal[expired["id"]] = expired
                             logger.exception(
                                 "Keeping job %s RUNNING after deadline persistence failure",
                                 expired["id"],
