@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import os
 import shutil
 import sqlite3
@@ -192,11 +193,12 @@ class JobService:
         max_age = max_age_s if max_age_s is not None else self.retention_s
         now = time.time()
         root_resolved = self.root.resolve()
-        known_dirs = {
-            Path(j["directory"]).resolve()
+        known_by_dir = {
+            Path(j["directory"]).resolve(): j
             for j in self.repository.all_jobs()
             if j.get("directory")
         }
+        known_dirs = set(known_by_dir)
         try:
             for entry in self.root.glob("job-*"):
                 if entry.is_dir():
@@ -211,23 +213,38 @@ class JobService:
                         # before init can carry a newer mtime than boot_time on
                         # coarse-grained filesystems.)
                         _rmtree_logged(resolved)
-                    elif max_age > 0 and (now - entry.stat().st_mtime) > max_age:
-                        job_entry = next(
-                            (j for j in self.repository.all_jobs() if Path(j.get("directory", "")).resolve() == resolved),
-                            None
-                        )
-                        if job_entry and not job_entry.get("durable"):
-                            if resolved.parent != root_resolved:
-                                continue
-                            try:
-                                self.repository.delete(job_entry["id"])
-                            except JobPersistenceError:
-                                logger.exception(
-                                    "Preserving retained job %s because SQLite deletion failed",
-                                    job_entry["id"],
-                                )
-                                continue
-                            _rmtree_logged(resolved)
+                    elif max_age > 0:
+                        job_entry = known_by_dir.get(resolved)
+                        if (
+                            job_entry is None
+                            or job_entry.get("durable")
+                            or job_entry.get("state") in ("QUEUED", "RUNNING")
+                        ):
+                            continue
+                        # Access timestamps are committed to SQLite; reading
+                        # an artifact does not update directory mtime.
+                        # A restarted process must use the same retention clock
+                        # as the live scheduler, never filesystem heuristics.
+                        timestamps = [
+                            float(value)
+                            for value in (
+                                job_entry.get("created"),
+                                job_entry.get("finished"),
+                                job_entry.get("last_accessed"),
+                            )
+                            if type(value) in (int, float) and math.isfinite(value)
+                        ]
+                        if not timestamps or now - max(timestamps) <= max_age:
+                            continue
+                        try:
+                            self.repository.delete(job_entry["id"])
+                        except JobPersistenceError:
+                            logger.exception(
+                                "Preserving retained job %s because SQLite deletion failed",
+                                job_entry["id"],
+                            )
+                            continue
+                        _rmtree_logged(resolved)
         except OSError:
             pass
 
