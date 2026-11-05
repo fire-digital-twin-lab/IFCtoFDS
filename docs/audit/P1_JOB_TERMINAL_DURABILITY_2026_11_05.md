@@ -30,3 +30,14 @@ Không kết luận đã xử lý queue-timeout, resource-exhaustion, process
 spawn failure, startup-recovery, multi-instance writers, hoặc crash
 trong khoảng giữa SQLite commit và filesystem cleanup.
 Không cấp `MAPPING_VERIFIED` hay `SIMULATION_VERIFIED` từ job status.
+
+
+## Bổ sung nghiệm thu GitHub — 05/11/2026
+
+- PR #40 đã merge vào `main` tại `d04771db4f9f584b98a1bab1d9d03a028cd769ab`.
+- Nhánh PR #39 đã đồng bộ bằng merge commit `39caa95749467b11eaff4060bc403c58cdb6f6db`.
+- Hai workflow `pull_request` trên commit đồng bộ PASS: [Conversion #41980077859](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41980077859) và [Quality #41980077747](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/41980077747).
+- Một `push` run khác từ lúc tạo nhánh phụ thuộc #41 dùng chính SHA này bị hủy do các commit tiếp theo trên nhánh mới. GitHub có thể gộp required check contexts của các run cùng SHA, nên vẫn phải kiểm tra trạng thái merge trên **HEAD cuối**. Không nới lỏng required checks.
+- Công việc này chỉ bảo đảm nhánh worker đã kết thúc; các đường queue/startup/missing worker có PR #41 riêng, và các đường execution-timeout, resource-exhaustion, spawn vẫn mở.
+
+**Ghi chú:** cập nhật tài liệu này tạo HEAD mới nhằm lưu lại provenance và đối chiếu CI. Trạng thái PR chỉ được nâng lên VERIFIED khi GitHub Actions trên HEAD mới đạt và nhánh được merge bình thường.
