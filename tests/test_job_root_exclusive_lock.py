@@ -1,5 +1,8 @@
 """P1: one local production scheduler must own each writable job root."""
 
+import subprocess
+import sys
+
 import pytest
 
 from ifc_to_fds.adapters.jobs.exclusive_lock import (
@@ -73,3 +76,30 @@ def test_sqlite_initialization_failure_releases_process_lock(
 
     lock = ExclusiveJobRootLock(tmp_path)
     lock.release()
+
+
+def test_exclusive_lock_blocks_another_operating_system_process(tmp_path):
+    first = ExclusiveJobRootLock(tmp_path)
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import sys; "
+            "from ifc_to_fds.adapters.jobs.exclusive_lock import ExclusiveJobRootLock; "
+            "lock = ExclusiveJobRootLock(sys.argv[1]); lock.release()"
+        ),
+        str(tmp_path),
+    ]
+    try:
+        blocked = subprocess.run(
+            command, capture_output=True, text=True, timeout=20, check=False
+        )
+        assert blocked.returncode != 0
+        assert "JobRootInUseError" in blocked.stderr
+    finally:
+        first.release()
+
+    allowed = subprocess.run(
+        command, capture_output=True, text=True, timeout=20, check=False
+    )
+    assert allowed.returncode == 0, allowed.stderr
