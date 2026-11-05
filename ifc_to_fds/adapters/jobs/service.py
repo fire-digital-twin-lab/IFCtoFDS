@@ -496,6 +496,7 @@ class JobService:
                         self._cleanup(running)
                         self.repository.set(running["id"], running)
                     elif proc.poll() is not None:
+                        terminal = dict(running)
                         directory = Path(running["directory"])
                         if (
                             proc.returncode == 0
@@ -521,26 +522,36 @@ class JobService:
                                 # otherwise observe FAILED before evidence
                                 # exists (reproduced on Windows CI).
                                 self._terminal_diagnostic(
-                                    running, "ValidationError", result_error
+                                    terminal, "ValidationError", result_error
                                 )
-                                running.update(
+                                terminal.update(
                                     state="FAILED",
                                     error=result_error[:2000],
                                     finished=time.time(),
                                 )
                             else:
-                                running.update(state="COMPLETED", finished=time.time(), durable=is_durable)
+                                terminal.update(state="COMPLETED", finished=time.time(), durable=is_durable)
                         else:
                             error = (
                                 (directory / "error.txt").read_text(encoding="utf-8")
                                 if (directory / "error.txt").exists()
                                 else f"Worker exited {proc.returncode}"
                             )
-                            running.update(
+                            terminal.update(
                                 state="FAILED", error=error[:2000], finished=time.time()
                             )
-                        self._cleanup(running)
-                        self.repository.set(running["id"], running)
+                        # Preserve source and the original cached RUNNING state
+                        # until SQLite has committed the terminal transition.
+                        # A failed update will be retried on the next loop.
+                        try:
+                            self.repository.set_durable(terminal["id"], terminal)
+                        except JobPersistenceError:
+                            logger.exception(
+                                "Keeping job %s RUNNING after terminal state storage failed",
+                                terminal["id"],
+                            )
+                        else:
+                            self._cleanup(terminal)
                     else:
                         pass
                 else:
