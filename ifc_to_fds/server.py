@@ -20,6 +20,11 @@ from .fire.scenario_request import ScenarioRequest
 from .geometry.storage import file_hash as geometry_file_hash
 from .adapters.jobs.result_views import make_findings_page
 from .adapters.jobs.repository import JobPersistenceError
+from .deployment_config import validate_deployment_config
+
+# Fail fast instead of accidentally running an anonymous internet-facing API.
+# Local/test mode remains unchanged for the desktop workbench and CI.
+validate_deployment_config()
 
 manager = JobManager(
     max_waiting=int(os.getenv("IFCFDS_MAX_WAITING", "2")),
