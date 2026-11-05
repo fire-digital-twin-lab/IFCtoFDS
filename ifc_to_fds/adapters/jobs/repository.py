@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -11,6 +12,16 @@ from .result_contract import validate_job_result
 from .evidence_index import verify_evidence_index
 
 logger = logging.getLogger(__name__)
+
+
+def _synchronous_mode() -> str:
+    """Sync each WAL commit before ACK in staging/production.
+
+    NORMAL favors throughput but SQLite documents that committed WAL
+    transactions may be rolled back following power loss or OS crash.
+    """
+    mode = os.getenv("IFCFDS_ENV", "local").strip().lower()
+    return "FULL" if mode in ("staging", "production") else "NORMAL"
 
 
 class JobPersistenceError(RuntimeError):
@@ -33,7 +44,7 @@ class JobRepository:
             raise RuntimeError("Database not initialized")
         conn = sqlite3.connect(str(self._db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute(f"PRAGMA synchronous={_synchronous_mode()};")
         return conn
 
     def _init_db(self) -> None:
@@ -41,7 +52,7 @@ class JobRepository:
             return
         with self._get_connection() as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA synchronous=NORMAL;")
+            conn.execute(f"PRAGMA synchronous={_synchronous_mode()};")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
