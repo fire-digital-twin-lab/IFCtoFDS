@@ -21,6 +21,11 @@ from .geometry.storage import file_hash as geometry_file_hash
 from .adapters.jobs.result_views import make_findings_page
 from .adapters.jobs.repository import JobPersistenceError
 from .adapters.jobs.readiness import is_scheduler_healthy
+from .deployment_config import validate_deployment_config
+
+# Fail fast instead of accidentally running an anonymous internet-facing API.
+# Local/test mode remains unchanged for the desktop workbench and CI.
+validate_deployment_config()
 
 manager = JobManager(
     max_waiting=int(os.getenv("IFCFDS_MAX_WAITING", "2")),
@@ -111,11 +116,9 @@ def reference_cases():
 def health():
     return {"status": "ok", "service": "ifc_to_fds", "version": "0.5.0"}
 
-
 @app.get("/api/scheduler-health")
 def scheduler_health():
-    # Liveness is separate: /api/health can remain healthy while the
-    # background supervisor has stopped and queued work cannot progress.
+    # A live HTTP process is not evidence that the scheduler can dispatch jobs.
     if not is_scheduler_healthy(manager):
         raise HTTPException(503, "Job scheduler unavailable")
     return {"status": "ok", "component": "job_scheduler"}
