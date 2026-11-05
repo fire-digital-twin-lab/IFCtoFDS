@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -93,7 +94,7 @@ class JobService:
         )
         try:
             self.repository = JobRepository(root=self.root)
-        except BaseException:
+        except (OSError, sqlite3.Error, RuntimeError, ValueError, KeyError, TypeError):
             if self._root_lock is not None:
                 self._root_lock.release()
             raise
@@ -115,7 +116,7 @@ class JobService:
         try:
             self.cleanup_orphaned_directories()
             self._reconcile_startup_jobs()
-        except BaseException:
+        except (OSError, sqlite3.Error, RuntimeError, ValueError, KeyError, TypeError):
             if self._root_lock is not None:
                 self._root_lock.release()
             raise
