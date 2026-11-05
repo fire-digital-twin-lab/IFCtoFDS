@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ifc_to_fds.adapters.jobs.evidence_index import write_evidence_index
+from ifc_to_fds.adapters.jobs.base_integrity import verify_accepted_mapping_base
 
 
 class WorkerRunner:
@@ -57,7 +58,11 @@ class WorkerRunner:
                 if not scenario_payload and (directory / "scenario.json").is_file():
                     scenario_payload = json.loads((directory / "scenario.json").read_text(encoding="utf-8"))
                 scenario = ScenarioRequest.model_validate(scenario_payload)
-                base_text, mapping_plan, base_manifest = load_verified_base(directory.parent, scenario.bundle_sha256)
+                base_text, mapping_plan, base_manifest = load_verified_base(
+                    directory.parent,
+                    scenario.bundle_sha256,
+                    verify_candidate=verify_accepted_mapping_base,
+                )
                 bundle = emit_fire_scenario(
                     mapping_plan=mapping_plan,
                     bundle_sha256=base_manifest.bundle_sha256,
