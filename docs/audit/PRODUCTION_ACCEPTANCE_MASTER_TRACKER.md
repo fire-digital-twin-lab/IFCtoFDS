@@ -107,3 +107,22 @@ G05 được đánh dấu FAIL vì đã xác định nhiều đường cập nh�
 **Vấn đề cần quyết định tiếp:** xử lý và nghiệm thu #42, #43, #44; JobService spawn transition vẫn dùng cập nhật best-effort, nhiều process/replica chưa được chứng minh an toàn. Các gate G05 (FAIL), G06 (INCONCLUSIVE), G07 (IN_PROGRESS), G14 (IN_PROGRESS) chưa đạt. G09/G10 chưa có đủ kiểm định khoa học độc lập; G11–G13/G15 NOT_RUN. Release verdict vẫn là `NOT_PRODUCTION_READY`.
 
 **Next safe action:** kiểm tra `main` CI trên SHA `4435800`, sau đó CI từng PR trên HEAD cuối. Chỉ đánh dấu VERIFIED/merge khi required checks thực sự PASS. Không đổi branch protection, không cấp `SIMULATION_VERIFIED`, không triển khai production hoặc staging khi chưa có gate/hạ tầng hợp lệ.
+
+
+## Checkpoint 05/11/2026 — Sau PR #42, #43, #44
+
+**Baseline được truy vấn:** `main` HEAD `9f849075ca893db3bd636d4cee01c9ce7213a7da`. Hai workflow trên HEAD main này đang chạy tại lúc ghi (không tự đánh dấu PASS).
+
+| Đối tượng | SHA/bằng chứng | Trạng thái |
+|---|---|---|
+| PR #42 | [#42](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/42), merge `59c55700d81ae36fefb4551fb4175507f0330493` | MERGED; timeout/RSS terminal persist được xử lý theo commit-first và regression tests; G05 chưa PASS |
+| PR #43 | [#43](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/43), merge `62246d99d820b649aa7a6cd2eb4078477dc31eff` | MERGED; staging/production startup fail-closed nếu thiếu API key/Host allowlist; G07 chưa PASS |
+| PR #44 | [#44](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/44), merge `9f849075ca893db3bd636d4cee01c9ce7213a7da` | MERGED; /api/scheduler-health có test; G14 chưa PASS |
+| PR #45 | [#45](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/45), HEAD `495c24e436a2215bf6d6b2a8586be0b9ba970925` | DRAFT; worker spawn phải ghi RUNNING bền vững trước Popen; CI mới đang chạy |
+| PR #46 | [#46](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/46), HEAD sẽ thay đổi khi cập nhật tracker | DRAFT; offline backup/restore, SHA-256 manifest, test khôi phục; CI mới đang chạy |
+
+**Gate decision:** `NOT_PRODUCTION_READY`. G01 IN_PROGRESS (#45/#46 còn mở); G02 NOT_RUN (release candidate chưa chọn); G05 FAIL, G06 INCONCLUSIVE; G07 IN_PROGRESS; G09/G10 INCONCLUSIVE; G11 NOT_RUN; G12 NOT_RUN (chưa có staging restore drill); G13 NOT_RUN; G14 IN_PROGRESS; G15 NOT_RUN; G16 IN_PROGRESS.
+
+**Phạm vi backup:** công cụ mới chỉ dành cho trạng thái API/worker đã dừng, không được gọi là live consistent backup; SQLite snapshot và checksum chưa thay thế offsite encryption, RPO/RTO, signed provenance hay diễn tập DR. Các verdict khoa học vẫn không được nâng trạng thái.
+
+**Next safe action:** nghiệm thu required checks trên HEAD thực tế PR #45/#46, merge tuần tự qua branch protection khi đủ điều kiện; tiếp tục giải quyết multi-process scheduler coordination, durable terminal outbox, retention/touch persistence, resource limits. Chưa deploy staging/production hoặc thực hiện thao tác mất dữ liệu khi chưa được cấp hạ tầng/phê duyệt.

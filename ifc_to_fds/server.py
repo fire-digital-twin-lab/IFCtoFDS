@@ -9,7 +9,7 @@ from pathlib import Path
 import shutil
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query, Body
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from .jobs import JobManager
 from .results import ARTIFACTS
@@ -46,6 +46,16 @@ app = FastAPI(
 )
 
 app.add_middleware(BodyLimitMiddleware, maximum=MAX_TOTAL + 1024**2)
+
+
+@app.exception_handler(JobPersistenceError)
+async def job_storage_unavailable(_request: Request, _exc: JobPersistenceError):
+    # A missing metadata commit must never turn into a successful download
+    # or leak internal database diagnostics to the HTTP client.
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Job metadata storage unavailable; retry later"},
+    )
 
 
 @app.middleware("http")

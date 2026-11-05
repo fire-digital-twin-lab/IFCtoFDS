@@ -245,28 +245,53 @@ def test_geometry_payload_returns_404_when_index_file_missing(tmp_path):
     assert "Geometry index not available" in response.json()["detail"]
 
 
-def test_checkpoint_artifacts_accessible_on_failed_or_incomplete_jobs(tmp_path):
-    from ifc_to_fds.server import manager
+def test_checkpoint_artifacts_accessible_on_failed_or_incomplete_jobs(
+    tmp_path, monkeypatch
+):
+    from ifc_to_fds import server as server_module
+    from ifc_to_fds.adapters.jobs.service import JobService
 
+    # An API checkpoint fixture must exist in SQLite, not only in the
+    # in-memory registry; GET now extends retention through set_durable().
+    service = JobService(root=tmp_path, retention_s=3600)
     job_id = "test-job-failed-audit"
-    (tmp_path / "model.fds").write_text("&HEAD CHID='test' /", encoding="utf-8")
-    manager.jobs[job_id] = {
-        "job_id": job_id,
-        "state": "FAILED",
-        "directory": str(tmp_path),
-    }
-    # Regular /artifacts requires COMPLETED
-    res_reg = client.get(f"/api/jobs/{job_id}/artifacts/fds")
-    assert res_reg.status_code == 409
-
-    # /checkpoints allows access with unaccepted header
-    res_chk = client.get(f"/api/jobs/{job_id}/checkpoints/fds")
-    assert res_chk.status_code == 200
-    assert "&HEAD" in res_chk.text
-    assert (
-        res_chk.headers.get("X-Verification-Status")
-        == "UNACCEPTED-AUDIT_INCOMPLETE-DO_NOT_USE_AS_VERIFIED_OUTPUT"
+    directory = tmp_path / ("job-" + job_id)
+    directory.mkdir()
+    (directory / "model.fds").write_text(
+        "&HEAD CHID='test' /", encoding="utf-8"
     )
+    now = time.time()
+    service.repository.register(
+        job_id,
+        {
+            "id": job_id,
+            "state": "FAILED",
+            "mode": "convert",
+            "directory": str(directory),
+            "created": now - 120,
+            "started": now - 100,
+            "finished": now - 60,
+            "last_accessed": now - 60,
+            "process": None,
+        },
+    )
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(server_module, "manager", service)
+            # Regular /artifacts requires COMPLETED.
+            res_reg = client.get(f"/api/jobs/{job_id}/artifacts/fds")
+            assert res_reg.status_code == 409
+
+            # /checkpoints allows access, but labels evidence unaccepted.
+            res_chk = client.get(f"/api/jobs/{job_id}/checkpoints/fds")
+            assert res_chk.status_code == 200
+            assert "&HEAD" in res_chk.text
+            assert (
+                res_chk.headers.get("X-Verification-Status")
+                == "UNACCEPTED-AUDIT_INCOMPLETE-DO_NOT_USE_AS_VERIFIED_OUTPUT"
+            )
+    finally:
+        service.close()
 
 
 def _register_completed_job():
