@@ -42,6 +42,19 @@ REQUIRED_MAPPING_GATES = frozenset({
     "domain",
 })
 
+# These core checks always have something to verify. An operator-supplied
+# NOT_APPLICABLE explanation cannot waive source re-reading, syntax, provenance,
+# scope, geometry or the declared simulation domain.
+NON_WAIVABLE_MAPPING_GATES = frozenset({
+    "syntax",
+    "source_inventory",
+    "traceability",
+    "scope",
+    "geometry",
+    "representation",
+    "domain",
+})
+
 
 class GateStatus(str, Enum):
     PASS = "PASS"
@@ -194,12 +207,16 @@ class AcceptanceReport(BaseModel):
         mandatory_complete = all(
             name in self.gates
             and self.gates[name].required
-            and self.gates[name].status in (
-                GateStatus.PASS, GateStatus.NOT_APPLICABLE
-            )
             and (
-                self.gates[name].status != GateStatus.NOT_APPLICABLE
-                or self.gates[name].reason.strip()
+                self.gates[name].status == GateStatus.PASS
+                if name in NON_WAIVABLE_MAPPING_GATES
+                else (
+                    self.gates[name].status == GateStatus.PASS
+                    or (
+                        self.gates[name].status == GateStatus.NOT_APPLICABLE
+                        and bool(self.gates[name].reason.strip())
+                    )
+                )
             )
             for name in REQUIRED_MAPPING_GATES
         )
