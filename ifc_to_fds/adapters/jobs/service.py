@@ -87,6 +87,10 @@ class JobService:
         self.wake = threading.Event()
         self.closed = False
         self.thread: Optional[threading.Thread] = None
+        # Private retry intents: never publish a terminal status in RAM until
+        # its SQLite transition commits. Preserve the original failure reason
+        # even if the killed process has exited before the next scheduler tick.
+        self._pending_terminal: Dict[str, Dict[str, Any]] = {}
 
         # Clean up stale directories and reconcile interrupted jobs on startup.
         # NOTE: unregistered-dir sweep is NEVER run implicitly at boot -- the
@@ -354,6 +358,7 @@ class JobService:
                 cancelled["state"] = "CANCELLED"
                 cancelled["finished"] = time.time()
                 self.repository.set_durable(jid, cancelled)
+                self._pending_terminal.pop(jid, None)
                 proc_to_stop = job.get("process")
                 was_active = True
                 self._terminal_diagnostic(
@@ -401,8 +406,40 @@ class JobService:
         if self.thread:
             self.thread.join(timeout=5)
 
+    def _retry_pending_terminals(self) -> bool:
+        """Retry a stopped worker's original terminal verdict after SQLite failure.
+
+        Returns True if any pending intent existed, so dispatch can be deferred
+        for one scheduler turn even after storage recovers. The pending data is
+        private to this process; after a server crash startup reconciliation
+        marks interrupted jobs FAILED without falsely claiming a prior verdict.
+        """
+        with self.lock:
+            if not self._pending_terminal:
+                return False
+            for jid, terminal in list(self._pending_terminal.items()):
+                current = self.repository.get(jid)
+                if not current or current.get("state") not in ("QUEUED", "RUNNING"):
+                    self._pending_terminal.pop(jid, None)
+                    continue
+                try:
+                    self.repository.set_durable(jid, terminal)
+                except JobPersistenceError:
+                    logger.exception(
+                        "Retry of original terminal verdict for job %s failed", jid
+                    )
+                else:
+                    self._pending_terminal.pop(jid, None)
+                    self._cleanup(terminal)
+            return True
+
     def _loop(self):
         while not self.closed:
+            if self._retry_pending_terminals():
+                # Do not spin on locked/full storage or dispatch another job
+                # while an already-stopped worker has an uncommitted verdict.
+                self.wake.wait(0.1)
+                continue
             has_running = False
             has_queued = False
             dirs_to_delete = []
@@ -471,22 +508,36 @@ class JobService:
                                     total_rss += child.memory_info().rss
                                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                                     pass
-                            running["peak_rss_bytes"] = max(running.get("peak_rss_bytes") or 0, total_rss)
+                            peak_rss = max(running.get("peak_rss_bytes") or 0, total_rss)
                             if total_rss > self.max_memory_bytes:
                                 self._stop(proc)
                                 limit_mb = self.max_memory_bytes // (1024 * 1024)
                                 used_mb = total_rss // (1024 * 1024)
-                                running.update(
+                                exhausted = dict(running)
+                                exhausted.update(
                                     state="FAILED",
                                     error=f"RESOURCE_EXHAUSTED: Memory limit exceeded ({used_mb} MiB > {limit_mb} MiB)",
                                     finished=now,
+                                    peak_rss_bytes=peak_rss,
                                 )
                                 self._terminal_diagnostic(
-                                    running, "ResourceExhaustedError", f"Memory limit exceeded: {used_mb} MiB > {limit_mb} MiB"
+                                    exhausted, "ResourceExhaustedError",
+                                    f"Memory limit exceeded: {used_mb} MiB > {limit_mb} MiB",
                                 )
-                                self._cleanup(running)
-                                self.repository.set(running["id"], running)
+                                try:
+                                    self.repository.set_durable(exhausted["id"], exhausted)
+                                except JobPersistenceError:
+                                    self._pending_terminal[exhausted["id"]] = exhausted
+                                    logger.exception(
+                                        "Keeping job %s RUNNING after resource limit persistence failure",
+                                        exhausted["id"],
+                                    )
+                                else:
+                                    self._cleanup(exhausted)
                                 continue
+                            # The peak is monitoring metadata, not a terminal verdict.
+                            # Cache may reflect it immediately, without changing job state.
+                            running["peak_rss_bytes"] = peak_rss
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             pass
 
@@ -514,16 +565,25 @@ class JobService:
                     # Process deadline timeout
                     elif time.time() - running["started"] > self.timeout_s:
                         self._stop(proc)
-                        running.update(
+                        expired = dict(running)
+                        expired.update(
                             state="TIMED_OUT",
                             error="Job deadline exceeded",
                             finished=time.time(),
                         )
                         self._terminal_diagnostic(
-                            running, "TimeoutError", "Job deadline exceeded"
+                            expired, "TimeoutError", "Job deadline exceeded"
                         )
-                        self._cleanup(running)
-                        self.repository.set(running["id"], running)
+                        try:
+                            self.repository.set_durable(expired["id"], expired)
+                        except JobPersistenceError:
+                            self._pending_terminal[expired["id"]] = expired
+                            logger.exception(
+                                "Keeping job %s RUNNING after deadline persistence failure",
+                                expired["id"],
+                            )
+                        else:
+                            self._cleanup(expired)
                     elif proc.poll() is not None:
                         terminal = dict(running)
                         directory = Path(running["directory"])
