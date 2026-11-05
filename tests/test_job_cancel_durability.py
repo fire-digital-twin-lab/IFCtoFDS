@@ -1,5 +1,6 @@
 """P1 regression: cancellation must commit to SQLite before publishing state."""
 
+import shutil
 import sqlite3
 import time
 import uuid
@@ -79,5 +80,9 @@ def test_cancel_http_returns_503_on_disk_error_and_preserves_queued(tmp_path, mo
         assert manager.repository.get(jid)["state"] == "QUEUED"
         assert JobRepository(root=manager.root).get(jid)["state"] == "QUEUED"
     finally:
-        manager.repository.delete(jid)
-        directory.rmdir()
+        # The scheduler can write diagnostics/error.txt between the HTTP
+        # assertion and test teardown. Remove the fixture under its lock,
+        # without weakening the QUEUED/SQLite assertions above.
+        with manager.lock:
+            manager.repository.delete(jid)
+            shutil.rmtree(directory)
