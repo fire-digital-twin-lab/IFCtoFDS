@@ -208,16 +208,25 @@ class JobService:
         with self.lock:
             for jid, job in self.repository.items():
                 if job.get("state") in ("QUEUED", "RUNNING"):
-                    job.update(
+                    # Crash reconciliation must not mutate the cached state or
+                    # delete inputs before SQLite acknowledges the transition.
+                    recovered = dict(job)
+                    recovered.update(
                         state="FAILED",
                         error="Process terminated unexpectedly during server restart",
                         finished=now,
                     )
                     self._terminal_diagnostic(
-                        job, "AbortError", "Process terminated unexpectedly during server restart"
+                        recovered, "AbortError", "Process terminated unexpectedly during server restart"
                     )
-                    self._cleanup(job)
-                    self.repository.set(jid, job)
+                    try:
+                        self.repository.set_durable(jid, recovered)
+                    except JobPersistenceError:
+                        logger.exception(
+                            "Preserving input for job %s: startup reconciliation not durable", jid
+                        )
+                    else:
+                        self._cleanup(recovered)
 
     def submit(self, paths, configuration, directory, mode="convert"):
         with self.lock:
@@ -397,6 +406,9 @@ class JobService:
             has_running = False
             has_queued = False
             dirs_to_delete = []
+            # An expired QUEUED row whose SQLite transition failed must not be
+            # dispatched during this turn; it is retried at the next wakeup.
+            blocked_dispatch_ids = set()
             with self.lock:
                 self.wake.clear()
                 now = time.time()
@@ -421,16 +433,25 @@ class JobService:
                 # 2. Queue wait timeout sweep
                 for queued in [j for j in self.repository.all_jobs() if j["state"] == "QUEUED"]:
                     if now - queued.get("created", now) > self.queue_timeout_s:
-                        queued.update(
+                        timed_out = dict(queued)
+                        timed_out.update(
                             state="TIMED_OUT",
                             error="Job queue wait timeout exceeded",
                             finished=now,
                         )
                         self._terminal_diagnostic(
-                            queued, "TimeoutError", "Job queue wait timeout exceeded"
+                            timed_out, "TimeoutError", "Job queue wait timeout exceeded"
                         )
-                        self._cleanup(queued)
-                        self.repository.set(queued["id"], queued)
+                        try:
+                            self.repository.set_durable(timed_out["id"], timed_out)
+                        except JobPersistenceError:
+                            blocked_dispatch_ids.add(queued["id"])
+                            logger.exception(
+                                "Keeping job %s QUEUED after queue timeout persistence failure",
+                                queued["id"],
+                            )
+                        else:
+                            self._cleanup(timed_out)
 
                 # 3. Active running worker supervision
                 running = next(
@@ -474,14 +495,22 @@ class JobService:
                     # crash the supervisor thread by calling None.poll().
                     if proc is None or running.get("started") is None:
                         reason = "Running job has no worker handle or start timestamp"
+                        missing = dict(running)
                         self._terminal_diagnostic(
-                            running, "WorkerProcessMissingError", reason
+                            missing, "WorkerProcessMissingError", reason
                         )
-                        running.update(
+                        missing.update(
                             state="FAILED", error=reason, finished=time.time()
                         )
-                        self._cleanup(running)
-                        self.repository.set(running["id"], running)
+                        try:
+                            self.repository.set_durable(missing["id"], missing)
+                        except JobPersistenceError:
+                            logger.exception(
+                                "Keeping job %s RUNNING after missing worker persistence failure",
+                                missing["id"],
+                            )
+                        else:
+                            self._cleanup(missing)
                     # Process deadline timeout
                     elif time.time() - running["started"] > self.timeout_s:
                         self._stop(proc)
@@ -561,6 +590,7 @@ class JobService:
                             j
                             for j in self.repository.all_jobs()
                             if j["state"] == "QUEUED"
+                            and j["id"] not in blocked_dispatch_ids
                         ),
                         None,
                     )

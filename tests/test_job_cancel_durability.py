@@ -1,5 +1,6 @@
 """P1 regression: cancellation must commit to SQLite before publishing state."""
 
+import shutil
 import sqlite3
 import time
 import uuid
@@ -9,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from ifc_to_fds.adapters.jobs.repository import JobPersistenceError, JobRepository
 from ifc_to_fds.adapters.jobs.service import JobService
-from ifc_to_fds.server import app, manager
+from ifc_to_fds.server import app
 
 
 def _queued(jid, directory):
@@ -66,18 +67,24 @@ def test_successful_cancel_is_durable_and_has_diagnostic(tmp_path):
 
 
 def test_cancel_http_returns_503_on_disk_error_and_preserves_queued(tmp_path, monkeypatch):
+    # Isolate this API test from the global server scheduler. A live scheduler
+    # can dispatch QUEUED before the HTTP request, racing the injected failure
+    # with an INSERT and invalidating the intended UPDATE-only fixture.
+    service = JobService(root=tmp_path)
     jid = "test-cancel-" + uuid.uuid4().hex
-    directory = manager.root / ("job-" + jid)
-    directory.mkdir(parents=True)
-    manager.repository.register(jid, _queued(jid, directory))
+    directory = tmp_path / ("job-" + jid)
+    directory.mkdir()
+    service.repository.register(jid, _queued(jid, directory))
     try:
         with monkeypatch.context() as patch:
-            patch.setattr(manager.repository, "_get_connection", BrokenUpdateConnection)
+            patch.setattr("ifc_to_fds.server.manager", service)
+            patch.setattr(service.repository, "_get_connection", BrokenUpdateConnection)
             response = TestClient(app).post(f"/api/jobs/{jid}/cancel")
         assert response.status_code == 503, response.text
         assert response.json()["detail"] == "Job metadata storage unavailable; retry later"
-        assert manager.repository.get(jid)["state"] == "QUEUED"
-        assert JobRepository(root=manager.root).get(jid)["state"] == "QUEUED"
+        assert service.repository.get(jid)["state"] == "QUEUED"
+        assert JobRepository(root=tmp_path).get(jid)["state"] == "QUEUED"
     finally:
-        manager.repository.delete(jid)
-        directory.rmdir()
+        service.repository.delete(jid)
+        shutil.rmtree(directory)
+        service.close()
