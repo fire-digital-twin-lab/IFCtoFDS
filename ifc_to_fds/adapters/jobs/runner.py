@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ifc_to_fds.adapters.jobs.evidence_index import write_evidence_index
+from ifc_to_fds.adapters.jobs.base_integrity import verify_accepted_mapping_base
 
 
 class WorkerRunner:
@@ -45,7 +46,6 @@ class WorkerRunner:
             elif request.get("mode") == "scenario":
                 import hashlib
                 from ifc_to_fds.application.services.scenario_base import load_verified_base
-                from ifc_to_fds.adapters.jobs.base_integrity import verify_accepted_mapping_base
                 from ifc_to_fds.fire.scenario_composer import compose_scenario, configure_scenario_time
                 from ifc_to_fds.fire.scenario_emitter import emit_fire_scenario
                 from ifc_to_fds.fire.scenario_request import ScenarioRequest
