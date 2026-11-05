@@ -5,7 +5,7 @@
 ## Phạm vi
 
 - Sao lưu SQLite `jobs.sqlite3` bằng SQLite backup API (bao gồm dữ liệu đã commit trong WAL).
-- Sao lưu toàn bộ tệp nằm trong các thư mục `job-*`, gồm artifact/evidence hiện hữu, không theo symbolic link.
+- Sao lưu toàn bộ tệp **và thư mục rỗng** nằm trong các thư mục `job-*`, gồm artifact/evidence hiện hữu, không theo symbolic link. Manifest schema 2 bắt buộc có danh sách `directories` để khôi phục job ngay cả khi thư mục artifact không chứa tệp.
 - Xuất `manifest.json` cuối cùng với SHA-256 và kích thước từng tệp.
 - Khôi phục vào **thư mục đích chưa tồn tại**; kiểm tra toàn bộ checksum trước khi tạo đích, xác minh SQLite, cập nhật đường dẫn tuyệt đối `jobs.directory` sang thư mục mới.
 - Không sửa, dọn hoặc ghi đè job store gốc.
@@ -36,7 +36,7 @@ python -m ifc_to_fds.operations.offline_backup restore \
   --destination /srv/ifctofds-restore-test/jobs
 ```
 
-Đích phải chưa tồn tại. Công cụ không có `--force`, không xóa dữ liệu và từ chối checksum không khớp, thiếu tệp, symlink, đường dẫn traversal, SQLite integrity lỗi hoặc metadata thư mục không hợp lệ.
+Đích phải chưa tồn tại. Công cụ không có `--force`, không xóa dữ liệu và từ chối checksum không khớp, thiếu tệp/thư mục (kể cả thư mục rỗng), thư mục không được manifest khai báo, symlink, đường dẫn traversal, SQLite integrity lỗi hoặc metadata thư mục không hợp lệ. Manifest v1 cũ không còn được chấp nhận để tránh bỏ sót các thư mục rỗng.
 
 Sau khi restore: xác minh `jobs.sqlite3`, các bản ghi job đã kết thúc và artifact/evidence, chạy ứng dụng trong môi trường cô lập bằng cấu hình riêng, kiểm tra restore khi API/worker không dùng root production. Không đổi DNS hoặc root đang phục vụ lưu lượng nếu chưa phê duyệt chuyển đổi.
 
