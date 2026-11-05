@@ -126,3 +126,43 @@ G05 được đánh dấu FAIL vì đã xác định nhiều đường cập nh�
 **Phạm vi backup:** công cụ mới chỉ dành cho trạng thái API/worker đã dừng, không được gọi là live consistent backup; SQLite snapshot và checksum chưa thay thế offsite encryption, RPO/RTO, signed provenance hay diễn tập DR. Các verdict khoa học vẫn không được nâng trạng thái.
 
 **Next safe action:** nghiệm thu required checks trên HEAD thực tế PR #45/#46, merge tuần tự qua branch protection khi đủ điều kiện; tiếp tục giải quyết multi-process scheduler coordination, durable terminal outbox, retention/touch persistence, resource limits. Chưa deploy staging/production hoặc thực hiện thao tác mất dữ liệu khi chưa được cấp hạ tầng/phê duyệt.
+
+
+## Checkpoint 05/11/2026 — Sau nghiệm thu logic verdict khoa học và UI
+
+**Truy vấn GitHub tại checkpoint:** `main` = `68474c16d07baafde25868292a4973211e14efa7`. Hai workflow trên main sau merge #50: `42031907686` (Conversion correctness) và `42031907920` (Source quality), **đang chạy khi checkpoint được lập**; không ghi PASS trước khi có conclusion từ GitHub.
+
+| PR | Nội dung / SHA merge | Trạng thái có bằng chứng |
+|---|---|---|
+| [#45](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/45) | Durable RUNNING trước spawn | MERGED |
+| [#46](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/46) | Backup/restore SQLite + artifact **offline** | MERGED; chưa có production DR drill |
+| [#47](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/47) | Durable retention touch | MERGED |
+| [#48](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/48) | Single-host scheduler lock, merge `f6773f5` | MERGED, CI HEAD PASS |
+| [#49](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/49) | 12 mapping gates, cấm waivers cốt lõi, profile & physics evidence, merge `15580acf` | MERGED, 24 checks success/2 skipped trên HEAD PR; CI main sau merge PASS |
+| [#50](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/50) | UI phân biệt mapping/CFD, HTTP/worker error = inconclusive, merge `68474c16` | MERGED, 24 checks success/2 skipped trên HEAD PR; main CI chưa kết luận lúc checkpoint |
+| Nhánh research verdict hiện hành | `fix/p0-research-verdict-consistency-20261105` | Chờ PR và CI HEAD sau test; không gọi PASS |
+
+### Tổng hợp lại 16 acceptance gates
+
+| Gate | Verdict theo bằng chứng hiện có | Thiếu để có thể nâng verdict |
+|---|---|---|
+| G01 — Git & integration | IN_PROGRESS | CI/merge research verdict trên HEAD cuối |
+| G02 — Release candidate CI | NOT_RUN | Chưa chọn và ký release candidate, chưa có acceptance đầy đủ |
+| G03 — Kiến trúc | INCONCLUSIVE | Review boundary & ownership + API contract trên deploy thật |
+| G04 — Functional & regression QA | IN_PROGRESS | CI matrix tốt nhưng thiếu scenario end-to-end tại staging |
+| G05 — Persistence/durability | IN_PROGRESS | Đã bảo vệ nhiều transition; chưa có crash/power-loss/corruption test đầy đủ |
+| G06 — Concurrency | INCONCLUSIVE | Single-host scheduler lock có; multi-instance/leader fencing chưa xác thực |
+| G07 — Security | IN_PROGRESS | Production startup fail-closed có; thiếu penetration/threat model và sandbox evidence |
+| G08 — Performance | NOT_RUN | Benchmark cold/warm, peak RSS, quy mô IFC thực, latency và throughput |
+| G09 — Scientific IFC/Mapping | INCONCLUSIVE | Contract verdict fail-closed có; thiếu golden IFC thực được duyệt và độc lập V&V |
+| G10 — FDS/CFD | INCONCLUSIVE | Solver pinned CI chạy setup/boundary; thiếu mesh convergence, calibration, uncertainty, validation thực nghiệm |
+| G11 — Staging | NOT_RUN | Chưa có staging environment hoặc smoke evidence được cung cấp |
+| G12 — Backup/restore DR | NOT_RUN | CLI offline đã merge nhưng chưa có recovery drill trên staging, RPO/RTO |
+| G13 — Rollback | NOT_RUN | Chưa diễn tập rollback sản phẩm và dữ liệu |
+| G14 — Observability | INCONCLUSIVE | Scheduler-health có; thiếu metrics, alerting, trace và diễn tập mất worker |
+| G15 — Production deploy | NOT_RUN | Không có production authorization, smoke/soak hoặc gate approval |
+| G16 — Documentation & sign-off | IN_PROGRESS | Audit có nhưng thiếu independent science sign-off và release dossier |
+
+**Quyết định phát hành:** `NOT_PRODUCTION_READY`. Không đánh đồng `MAPPING_VERIFIED` với kiểm định an toàn cháy; `SIMULATION_VERIFIED` chưa được phát hành. Lệnh/CI setup FDS không chứng minh kết quả CFD có giá trị khoa học. Không tự tạo dữ liệu IFC, phê duyệt golden, kết quả solver hay evidence.
+
+**Hành động ưu tiên:** (1) sửa research acceptance theo verdict đã finalize; (2) full CI trên HEAD thực tế; (3) khóa semantic parity chi tiết giữa validator legacy và modular; (4) chuẩn bị bộ independent golden IFC/FDS/CFD với provenance để nghiệm thu G09/G10; (5) chỉ sau đó mới xem xét staging và production.
