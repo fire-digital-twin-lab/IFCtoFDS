@@ -12,7 +12,59 @@ from ifc_to_fds.domain.validation.model import (
     GateResult,
     REQUIRED_MAPPING_GATES,
 )
-from tests.test_job_result_contract import valid_convert, valid_scenario
+from ifc_to_fds.core.canonical import SCHEMA_VERSION
+
+
+def valid_convert():
+    """Minimal structurally valid, independently reported mapping result."""
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": "MAPPING_VERIFIED",
+        "mapping_status": "MAPPING_VERIFIED",
+        "simulation_status": "INCONCLUSIVE",
+        "output_complete": True,
+        "source_filename": "fixture.ifc",
+        "profile": "mapping",
+        "coverage": {},
+        "timings": {},
+        "gates": {
+            name: {
+                "status": "PASS", "required": True,
+                "reason": "Independently checked: " + name,
+            }
+            for name in REQUIRED_MAPPING_GATES
+        },
+        "findings": [],
+        "findings_count": 0,
+        "blocker_count": 0,
+        "research": {},
+        "artifacts": {
+            "fds": {"filename": "model.fds"},
+            "manifest": {"filename": "model_manifest.json"},
+            "report": {"filename": "model_acceptance_report.json"},
+            "geometry": {"filename": "model_geometry.json"},
+        },
+    }
+
+
+def valid_scenario():
+    return {
+        "status": "COMPLETED",
+        "verdict": "INCONCLUSIVE",
+        "verdict_reason": "Independent CFD verification has not been performed",
+        "mesh_status": "PASS",
+        "physics_status": "INCONCLUSIVE",
+        "simulation_status": "NOT_RUN",
+        "peak_hrr_mw": 4.5,
+        "evidence": {
+            "fds_sha256": "a" * 64,
+            "physics": {"status": "INCONCLUSIVE"},
+        },
+        "artifacts": {"scenario_fds": {"filename": "scenario.fds"}},
+        "scenario_id": "ev-1",
+        "bundle_sha256": "b" * 64,
+        "fds_file": "scenario.fds",
+    }
 
 
 def complete_mapping_gates():
