@@ -339,12 +339,17 @@ class JobService:
         with self.lock:
             job = self.repository.get(jid)
             if job and job["state"] in ("QUEUED", "RUNNING"):
-                job["state"] = "CANCELLED"
-                job["finished"] = time.time()
+                # Do not mutate the cached dictionary: a failed database write
+                # must leave both cache and SQLite in the original state.
+                cancelled = dict(job)
+                cancelled["state"] = "CANCELLED"
+                cancelled["finished"] = time.time()
+                self.repository.set_durable(jid, cancelled)
                 proc_to_stop = job.get("process")
                 was_active = True
-                self._terminal_diagnostic(job, "AbortError", "Job cancelled by user")
-                self.repository.set(jid, job)
+                self._terminal_diagnostic(
+                    cancelled, "AbortError", "Job cancelled by user"
+                )
             self.wake.set()
         if proc_to_stop:
             self._stop(proc_to_stop)

@@ -160,6 +160,54 @@ class JobRepository:
         self._persist_job(jid, job, require_durable=True)
         self._jobs[jid] = job
 
+    def set_durable(self, jid: str, job: Dict[str, Any]) -> None:
+        """Update an existing job only after SQLite confirms the transition.
+
+        This is deliberately distinct from historical best-effort set().
+        Failure must not publish the new state to the in-memory cache.
+        """
+        if not self._db_path:
+            self._jobs[jid] = job
+            return
+        for attempt in range(4):
+            try:
+                with self._get_connection() as conn:
+                    cursor = conn.execute(
+                        """UPDATE jobs SET state = ?, started = ?, finished = ?,
+                           last_accessed = ?, error = ?, retention_s = ?,
+                           durable = ?, peak_rss_bytes = ? WHERE id = ?""",
+                        (
+                            job.get("state", "QUEUED"),
+                            job.get("started"),
+                            job.get("finished"),
+                            job.get("last_accessed"),
+                            job.get("error"),
+                            job.get("retention_s"),
+                            1 if job.get("durable") else 0,
+                            job.get("peak_rss_bytes"),
+                            jid,
+                        ),
+                    )
+                    if cursor.rowcount != 1:
+                        raise JobPersistenceError(
+                            "Could not update missing job metadata"
+                        )
+                self._jobs[jid] = job
+                return
+            except sqlite3.OperationalError as exc:
+                if ("locked" in str(exc).lower() or "busy" in str(exc).lower()) and attempt < 3:
+                    time.sleep(0.05 * (2 ** attempt))
+                    continue
+                logger.error(
+                    "Failed to update job %s durably: %s", jid, exc, exc_info=True
+                )
+                raise JobPersistenceError("Could not update job metadata") from exc
+            except sqlite3.Error as exc:
+                logger.error(
+                    "Failed to update job %s durably: %s", jid, exc, exc_info=True
+                )
+                raise JobPersistenceError("Could not update job metadata") from exc
+
     def delete(self, jid: str) -> None:
         """Remove memory state only after SQLite has committed deletion.
 

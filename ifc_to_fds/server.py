@@ -321,6 +321,10 @@ def cancel_job(jid: str):
         return manager.cancel(jid)
     except KeyError:
         raise HTTPException(404, "Unknown job")
+    except JobPersistenceError as exc:
+        raise HTTPException(
+            503, "Job metadata storage unavailable; retry later"
+        ) from exc
 
 
 @app.delete("/api/jobs/{jid}")
