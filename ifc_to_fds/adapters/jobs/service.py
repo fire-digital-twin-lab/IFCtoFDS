@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -14,6 +15,7 @@ from typing import Any, Dict, List, Optional
 import psutil
 
 from .repository import JobPersistenceError, JobRepository
+from .exclusive_lock import ExclusiveJobRootLock
 from .result_contract import validate_job_result
 from .evidence_index import verify_evidence_index
 
@@ -82,7 +84,20 @@ class JobService:
         self.queue_timeout_s = int(os.environ.get("IFCFDS_QUEUE_TIMEOUT_S", str(queue_timeout_s)))
 
         self.boot_time = time.time()  # informational; sweep guards no longer use it
-        self.repository = JobRepository(root=self.root)
+        # One OS-level scheduler owner per local SQLite root in network modes.
+        # Local/test keeps historical independent fixture behavior.
+        self._root_lock = (
+            ExclusiveJobRootLock(self.root)
+            if os.getenv("IFCFDS_ENV", "local").strip().lower()
+            in ("staging", "production")
+            else None
+        )
+        try:
+            self.repository = JobRepository(root=self.root)
+        except (OSError, sqlite3.Error, RuntimeError, ValueError, KeyError, TypeError):
+            if self._root_lock is not None:
+                self._root_lock.release()
+            raise
         self.lock = threading.RLock()
         self.wake = threading.Event()
         self.closed = False
@@ -98,8 +113,13 @@ class JobService:
         # and mtime heuristics proved unreliable (repository WAL activity bumps
         # mtime during init itself). Pass prune_unregistered=True explicitly
         # (e.g. a future admin/maintenance endpoint) to sweep unregistered dirs.
-        self.cleanup_orphaned_directories()
-        self._reconcile_startup_jobs()
+        try:
+            self.cleanup_orphaned_directories()
+            self._reconcile_startup_jobs()
+        except (OSError, sqlite3.Error, RuntimeError, ValueError, KeyError, TypeError):
+            if self._root_lock is not None:
+                self._root_lock.release()
+            raise
 
     @property
     def jobs(self):
@@ -410,6 +430,12 @@ class JobService:
             self.cancel(jid)
         if self.thread:
             self.thread.join(timeout=5)
+        if self._root_lock is not None:
+            if self.thread is not None and self.thread.is_alive():
+                # Never release exclusivity while a supervisor can still
+                # mutate SQLite, even after the close timeout.
+                raise RuntimeError("Scheduler still active; exclusive lock retained")
+            self._root_lock.release()
 
     def _retry_pending_terminals(self) -> bool:
         """Retry a stopped worker's original terminal verdict after SQLite failure.
