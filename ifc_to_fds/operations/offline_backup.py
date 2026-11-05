@@ -5,6 +5,7 @@ Operators MUST stop the API and workers before invoking either command.
 """
 
 import argparse
+from contextlib import closing
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -29,7 +30,7 @@ def _hash_file(path: Path) -> str:
 
 def _sqlite_integrity(path: Path) -> None:
     try:
-        with sqlite3.connect(str(path)) as connection:
+        with closing(sqlite3.connect(str(path))) as connection:
             results = [row[0] for row in connection.execute("PRAGMA integrity_check")]
             if results != ["ok"]:
                 raise OfflineBackupError("SQLite integrity_check failed")
@@ -80,7 +81,7 @@ def _copy_checked(source: Path, destination: Path) -> dict:
 
 def _validate_terminal_rows(db: Path, root: Path) -> int:
     try:
-        with sqlite3.connect(str(db)) as connection:
+        with closing(sqlite3.connect(str(db))) as connection:
             rows = connection.execute("SELECT id, state, directory FROM jobs").fetchall()
     except sqlite3.DatabaseError as exc:
         raise OfflineBackupError("Cannot read job metadata") from exc
@@ -107,7 +108,7 @@ def create_offline_backup(job_root: Path | str, destination: Path | str) -> dict
     if supplied.is_symlink():
         raise OfflineBackupError("Job root cannot be a symbolic link")
     root = supplied.resolve(strict=True)
-    target = Path(destination).absolute()
+    target = Path(destination).resolve()
     if not root.is_dir() or not (root / "jobs.sqlite3").is_file():
         raise OfflineBackupError("Expected job root with jobs.sqlite3")
     if target.exists() or target == root or root in target.parents:
@@ -136,9 +137,10 @@ def create_offline_backup(job_root: Path | str, destination: Path | str) -> dict
     # jobs.sqlite3 while a WAL file may still exist.
     snapshot = target / "jobs.sqlite3"
     try:
-        with sqlite3.connect(str(db), timeout=10.0) as source:
-            with sqlite3.connect(str(snapshot)) as dest:
+        with closing(sqlite3.connect(str(db), timeout=10.0)) as source:
+            with closing(sqlite3.connect(str(snapshot))) as dest:
                 source.backup(dest)
+                dest.commit()
         _sqlite_integrity(snapshot)
     except sqlite3.Error as exc:
         raise OfflineBackupError("SQLite snapshot failed; partial backup has no manifest") from exc
@@ -211,7 +213,7 @@ def restore_offline_backup(source_dir: Path | str, target_root: Path | str) -> d
     if supplied.is_symlink():
         raise OfflineBackupError("Backup root cannot be a symbolic link")
     source = supplied.resolve(strict=True)
-    target = Path(target_root).absolute()
+    target = Path(target_root).resolve()
     if not source.is_dir() or not (source / "manifest.json").is_file():
         raise OfflineBackupError("Missing backup manifest")
     if target.exists() or target == source or source in target.parents:
@@ -236,7 +238,7 @@ def restore_offline_backup(source_dir: Path | str, target_root: Path | str) -> d
     if not original_root:
         raise OfflineBackupError("Backup lacks original job-root provenance")
     db = target / "jobs.sqlite3"
-    with sqlite3.connect(str(db)) as connection:
+    with closing(sqlite3.connect(str(db))) as connection:
         rows = connection.execute("SELECT id, state, directory FROM jobs").fetchall()
         for jid, state, directory in rows:
             if state in ("QUEUED", "RUNNING"):
@@ -254,6 +256,7 @@ def restore_offline_backup(source_dir: Path | str, target_root: Path | str) -> d
                 "UPDATE jobs SET directory = ? WHERE id = ?",
                 (str(target / dirname), jid),
             )
+        connection.commit()
     _sqlite_integrity(db)
     return {"job_count": len(rows), "restored_to": str(target), "verified": True}
 
