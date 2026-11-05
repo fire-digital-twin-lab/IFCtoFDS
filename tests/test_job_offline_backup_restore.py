@@ -47,7 +47,8 @@ def test_offline_backup_restores_sqlite_and_artifacts_with_relocated_paths(tmp_p
     restore = tmp_path / "restored"
 
     manifest = create_offline_backup(root, backup)
-    assert manifest["schema"] == 1
+    assert manifest["schema"] == 2
+    assert "job-reference" in manifest["directories"]
     assert manifest["job_count"] == 1
     assert (backup / "manifest.json").is_file()
     assert (backup / "jobs.sqlite3").is_file()
@@ -130,3 +131,47 @@ def test_backup_refuses_symbolic_links_inside_artifacts(tmp_path):
     with pytest.raises(OfflineBackupError, match="Symbolic links"):
         create_offline_backup(root, backup)
     assert not backup.exists()
+
+
+def test_empty_job_directory_and_empty_nested_folders_are_restored(tmp_path):
+    root, artifact = _store(tmp_path)
+    artifact.unlink()
+    (root / "job-reference" / "source-reference.ifc").unlink()
+    (root / "job-reference" / "empty-inner").mkdir()
+    backup = tmp_path / "backup"
+    manifest = create_offline_backup(root, backup)
+
+    assert "job-reference" in manifest["directories"]
+    assert "job-reference/empty-inner" in manifest["directories"]
+    restored = tmp_path / "restored"
+    result = restore_offline_backup(backup, restored)
+    assert result["job_count"] == 1
+    assert (restored / "job-reference" / "empty-inner").is_dir()
+    assert JobRepository(root=restored).get("reference")["directory"] == str(
+        restored / "job-reference"
+    )
+
+
+def test_restore_rejects_unmanifested_directory_before_creating_target(tmp_path):
+    root, _ = _store(tmp_path)
+    backup = tmp_path / "backup"
+    create_offline_backup(root, backup)
+    (backup / "job-injected").mkdir()
+    restored = tmp_path / "restored"
+    with pytest.raises(OfflineBackupError, match="unmanifested backup directory"):
+        restore_offline_backup(backup, restored)
+    assert not restored.exists()
+
+
+def test_restore_rejects_traversal_in_directory_manifest(tmp_path):
+    root, _ = _store(tmp_path)
+    backup = tmp_path / "backup"
+    create_offline_backup(root, backup)
+    manifest_path = backup / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["directories"][0] = "../outside"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    restored = tmp_path / "restored"
+    with pytest.raises(OfflineBackupError, match="Unsafe backup path"):
+        restore_offline_backup(backup, restored)
+    assert not restored.exists()
