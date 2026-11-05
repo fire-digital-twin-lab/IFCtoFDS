@@ -7,6 +7,11 @@ Do not delete the lock file: only the OS-held lock is authoritative.
 import os
 from pathlib import Path
 
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
 
 class JobRootInUseError(RuntimeError):
     """A second production scheduler cannot use the same local job store."""
@@ -24,8 +29,6 @@ class ExclusiveJobRootLock:
         try:
             fd = os.open(path, flags, 0o600)
             if os.name == "nt":
-                import msvcrt
-
                 # msvcrt.locking locks a byte range starting at the current
                 # file position. Keep one persistent byte in the lock file.
                 if os.fstat(fd).st_size == 0:
@@ -33,8 +36,6 @@ class ExclusiveJobRootLock:
                 os.lseek(fd, 0, os.SEEK_SET)
                 msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
             else:
-                import fcntl
-
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
             if fd is not None:
@@ -51,13 +52,9 @@ class ExclusiveJobRootLock:
             return
         try:
             if os.name == "nt":
-                import msvcrt
-
                 os.lseek(fd, 0, os.SEEK_SET)
                 msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
             else:
-                import fcntl
-
                 fcntl.flock(fd, fcntl.LOCK_UN)
         finally:
             # The file stays on disk; removing it allows separate inodes and
