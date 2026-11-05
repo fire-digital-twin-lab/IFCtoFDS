@@ -3,6 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
+from typing import Callable
 from ifc_to_fds.domain.bim import BoundingBox
 from ifc_to_fds.domain.mapping import MappingDecision, MappingManifest, MappingPlan
 from ifc_to_fds.domain.validation import AcceptanceReport
@@ -11,7 +12,17 @@ from ifc_to_fds.geometry.storage import DiskPackage
 from ifc_to_fds.validation.parser import parse_fds
 
 
-def load_verified_base(job_root, bundle_sha):
+def load_verified_base(
+    job_root, bundle_sha, *, verify_candidate: Callable[[Path], None]
+):
+    """Load a sealed mapping only after an adapter checks persisted evidence.
+
+    The application layer owns the mapping contract, while the adapter owns
+    the evidence-index storage format and result schema. The verifier is
+    intentionally required: no direct caller may silently skip the seal.
+    """
+    if not callable(verify_candidate):
+        raise ValueError("A persisted mapping evidence verifier is required")
     if not isinstance(bundle_sha, str) or len(bundle_sha) != 64 or any(c not in "0123456789abcdef" for c in bundle_sha):
         raise ValueError("A valid verified base bundle hash is required")
     for directory in sorted(Path(job_root).iterdir()):
@@ -25,6 +36,9 @@ def load_verified_base(job_root, bundle_sha):
         if (manifest.compute_bundle_sha256() != bundle_sha or not manifest.output_complete
                 or manifest.mapping_acceptance != "MAPPING_VERIFIED"):
             raise ValueError("Base artifact is unsealed or not MAPPING_VERIFIED")
+        # Verify the entire worker-produced result, index and sealed checkpoint
+        # before accepting this directory as input for a new fire scenario.
+        verify_candidate(directory)
         report = AcceptanceReport.model_validate_json((directory / "model_acceptance_report.json").read_text(encoding="utf-8"))
         if report.finalize().mapping_status.value != "MAPPING_VERIFIED":
             raise ValueError("Base acceptance report does not verify the mapping")

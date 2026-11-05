@@ -3,6 +3,8 @@ from unittest.mock import patch
 import pytest
 
 from ifc_to_fds.adapters.jobs.runner import WorkerRunner
+from ifc_to_fds.adapters.jobs.base_integrity import verify_accepted_mapping_base
+from ifc_to_fds.adapters.jobs.evidence_index import write_evidence_index
 from ifc_to_fds.application.services.scenario_base import load_verified_base
 from ifc_to_fds.domain.mapping import MappingPlan, build_mapping_plan
 from ifc_to_fds.domain.validation import GateResult, GateStatus
@@ -10,6 +12,7 @@ from ifc_to_fds.fire.scenario_composer import compose_scenario, configure_scenar
 from ifc_to_fds.fire.scenario_emitter import emit_fire_scenario
 from ifc_to_fds.mapping.exporter import serialize_fds
 from ifc_to_fds.pipeline import convert, save_artifacts
+from ifc_to_fds.results import public_result
 from ifc_to_fds.validation.engine import run_independent_validation
 from ifc_to_fds.validation.parser import parse_fds
 from ifc_to_fds.validation.runner import ValidationRunner
@@ -26,22 +29,71 @@ def test_scenario_worker_rejects_a_hash_without_a_verified_base(tmp_path):
     assert 'Verified base bundle not found' in (directory / 'error.txt').read_text()
 
 
-def test_verified_base_rejects_changed_fds_and_acceptance(tiny_ifc, tmp_path):
-    base = tmp_path / 'base'
+def _verified_bundle_for_scenario(tiny_ifc, tmp_path):
+    base = tmp_path / "base"
     result = convert([str(tiny_ifc[0])], output_directory=base)
-    save_artifacts(result, base / 'model.fds')
-    digest = result['manifest']['bundle_sha256']
-    load_verified_base(tmp_path, digest)
-    (base / 'model.fds').write_text(result['fds_text'] + '\n! changed')
-    with pytest.raises(ValueError, match='FDS hash'):
-        load_verified_base(tmp_path, digest)
-    (base / 'model.fds').write_bytes(result['fds_text'].encode())
-    path = base / 'model_manifest.json'
-    raw = json.loads(path.read_text())
-    raw['output_complete'] = False
-    path.write_text(json.dumps(raw))
-    with pytest.raises(ValueError, match='not MAPPING_VERIFIED'):
-        load_verified_base(tmp_path, digest)
+    assert result["mapping_status"] == "MAPPING_VERIFIED"
+    save_artifacts(result, base / "model.fds")
+    public = public_result(result, directory=base)
+    (base / "result.json").write_text(json.dumps(public), encoding="utf-8")
+    write_evidence_index(base, "convert", public)
+    return base, result["manifest"]["bundle_sha256"]
+
+
+def _load_sealed_base(root, digest):
+    return load_verified_base(
+        root, digest, verify_candidate=verify_accepted_mapping_base
+    )
+
+
+def test_verified_base_rejects_changed_fds_and_acceptance(tiny_ifc, tmp_path):
+    base, digest = _verified_bundle_for_scenario(tiny_ifc, tmp_path)
+    _load_sealed_base(tmp_path, digest)
+
+    fds = base / "model.fds"
+    original = fds.read_bytes()
+    fds.write_bytes(original + b"\\n! changed")
+    with pytest.raises(ValueError, match="Evidence file changed"):
+        _load_sealed_base(tmp_path, digest)
+    fds.write_bytes(original)
+
+    manifest_path = base / "model_manifest.json"
+    original_manifest = manifest_path.read_bytes()
+    raw = json.loads(original_manifest.decode("utf-8"))
+    raw["output_complete"] = False
+    manifest_path.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match="not MAPPING_VERIFIED"):
+        _load_sealed_base(tmp_path, digest)
+    manifest_path.write_bytes(original_manifest)
+
+
+def test_scenario_base_cannot_use_modified_report_or_missing_evidence_index(
+    tiny_ifc, tmp_path
+):
+    base, digest = _verified_bundle_for_scenario(tiny_ifc, tmp_path)
+    report = base / "model_acceptance_report.json"
+    original = report.read_bytes()
+    # A harmless JSON whitespace change is sufficient to violate the
+    # sealed content-addressed evidence; prior code silently accepted it.
+    report.write_bytes(original + b"\\n")
+    with pytest.raises(ValueError, match="Evidence file changed"):
+        _load_sealed_base(tmp_path, digest)
+    report.write_bytes(original)
+
+    index = base / "result_evidence.json"
+    index.rename(base / "result_evidence.json.bak")
+    with pytest.raises(ValueError, match="Missing evidence index"):
+        _load_sealed_base(tmp_path, digest)
+
+
+def test_scenario_base_rejects_missing_indexed_checkpoint(tiny_ifc, tmp_path):
+    base, digest = _verified_bundle_for_scenario(tiny_ifc, tmp_path)
+    index_path = base / "result_evidence.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["files"].pop("audit-state.json")
+    index_path.write_text(json.dumps(index), encoding="utf-8")
+    with pytest.raises(ValueError, match="Evidence file-set differs|indexed sealed"):
+        _load_sealed_base(tmp_path, digest)
 
 
 def test_door_event_replaces_fixed_base_fill(box_model):

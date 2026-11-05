@@ -504,6 +504,14 @@ def test_submit_scenario_job_executes_mesh_gate(monkeypatch, tiny_ifc):
     }, base_dir)
     assert base_result["status"] == "MAPPING_VERIFIED"
     save_artifacts(base_result, base_dir / "model.fds")
+    from ifc_to_fds.results import public_result
+    from ifc_to_fds.adapters.jobs.evidence_index import write_evidence_index
+
+    public = public_result(base_result, directory=base_dir)
+    (base_dir / "result.json").write_text(
+        json.dumps(public), encoding="utf-8"
+    )
+    write_evidence_index(base_dir, "convert", public)
     payload["bundle_sha256"] = base_result["manifest"]["bundle_sha256"]
     payload["scenario_data"]["bundle_sha256"] = payload["bundle_sha256"]
     payload["scenario_data"]["ev_selections"][0]["position"] = [5, 5, .75]
