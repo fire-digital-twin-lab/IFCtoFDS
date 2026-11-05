@@ -471,22 +471,35 @@ class JobService:
                                     total_rss += child.memory_info().rss
                                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                                     pass
-                            running["peak_rss_bytes"] = max(running.get("peak_rss_bytes") or 0, total_rss)
+                            peak_rss = max(running.get("peak_rss_bytes") or 0, total_rss)
                             if total_rss > self.max_memory_bytes:
                                 self._stop(proc)
                                 limit_mb = self.max_memory_bytes // (1024 * 1024)
                                 used_mb = total_rss // (1024 * 1024)
-                                running.update(
+                                exhausted = dict(running)
+                                exhausted.update(
                                     state="FAILED",
                                     error=f"RESOURCE_EXHAUSTED: Memory limit exceeded ({used_mb} MiB > {limit_mb} MiB)",
                                     finished=now,
+                                    peak_rss_bytes=peak_rss,
                                 )
                                 self._terminal_diagnostic(
-                                    running, "ResourceExhaustedError", f"Memory limit exceeded: {used_mb} MiB > {limit_mb} MiB"
+                                    exhausted, "ResourceExhaustedError",
+                                    f"Memory limit exceeded: {used_mb} MiB > {limit_mb} MiB",
                                 )
-                                self._cleanup(running)
-                                self.repository.set(running["id"], running)
+                                try:
+                                    self.repository.set_durable(exhausted["id"], exhausted)
+                                except JobPersistenceError:
+                                    logger.exception(
+                                        "Keeping job %s RUNNING after resource limit persistence failure",
+                                        exhausted["id"],
+                                    )
+                                else:
+                                    self._cleanup(exhausted)
                                 continue
+                            # The peak is monitoring metadata, not a terminal verdict.
+                            # Cache may reflect it immediately, without changing job state.
+                            running["peak_rss_bytes"] = peak_rss
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             pass
 
@@ -514,16 +527,24 @@ class JobService:
                     # Process deadline timeout
                     elif time.time() - running["started"] > self.timeout_s:
                         self._stop(proc)
-                        running.update(
+                        expired = dict(running)
+                        expired.update(
                             state="TIMED_OUT",
                             error="Job deadline exceeded",
                             finished=time.time(),
                         )
                         self._terminal_diagnostic(
-                            running, "TimeoutError", "Job deadline exceeded"
+                            expired, "TimeoutError", "Job deadline exceeded"
                         )
-                        self._cleanup(running)
-                        self.repository.set(running["id"], running)
+                        try:
+                            self.repository.set_durable(expired["id"], expired)
+                        except JobPersistenceError:
+                            logger.exception(
+                                "Keeping job %s RUNNING after deadline persistence failure",
+                                expired["id"],
+                            )
+                        else:
+                            self._cleanup(expired)
                     elif proc.poll() is not None:
                         terminal = dict(running)
                         directory = Path(running["directory"])
