@@ -519,7 +519,7 @@ async function runTests() {
     assert.equal(malformedFinalResult.results[0].state, 'RESULT_UNAVAILABLE');
     assert.match(malformedFinalResult.results[0].verdict_reason, /missing required status or evidence/);
 
-    // 7.2 Async job polls until FAILED -> mapped to rejected
+    // 7.2 FAILED job is an operational failure, not a proven rejected CFD scenario
     pollIndex = 0;
     const failPollStates = ['QUEUED', 'FAILED'];
     const mockFailPollFn = async (jobId) => {
@@ -532,9 +532,10 @@ async function runTests() {
         { pollJobFn: mockFailPollFn, pollIntervalMs: 10 }
     );
     assert.equal(failedBatchOutput.results[0].state, 'FAILED');
-    assert.equal(failedBatchOutput.summary.rejected, 1);
+    assert.equal(failedBatchOutput.summary.inconclusive, 1);
+    assert.equal(failedBatchOutput.summary.rejected, 0);
 
-    // 7.3 Async job polls until TIMED_OUT -> mapped to rejected
+    // 7.3 TIMED_OUT means missing solver evidence: INCONCLUSIVE
     pollIndex = 0;
     const timeoutPollStates = ['QUEUED', 'TIMED_OUT'];
     const mockTimeoutPollFn = async (jobId) => {
@@ -547,12 +548,13 @@ async function runTests() {
         { pollJobFn: mockTimeoutPollFn, pollIntervalMs: 10 }
     );
     assert.equal(timeoutBatchOutput.results[0].state, 'TIMED_OUT');
-    assert.equal(timeoutBatchOutput.summary.rejected, 1);
+    assert.equal(timeoutBatchOutput.summary.inconclusive, 1);
+    assert.equal(timeoutBatchOutput.summary.rejected, 0);
 
     // 7.4 H-13 defense: Default dispatch fails cleanly when backend is unavailable, never mock PASS
     const defaultBatchOutput = await panel.queueScenarioBatch([socScenarios[0]]);
     assert.equal(defaultBatchOutput.results[0].state, 'FAILED');
-    assert.equal(defaultBatchOutput.results[0].verdict, 'REJECTED');
+    assert.equal(defaultBatchOutput.results[0].verdict, 'INCONCLUSIVE');
     assert.equal(defaultBatchOutput.summary.passed, 0);
 
     // -------------------------------------------------------------
@@ -571,8 +573,12 @@ async function runTests() {
           physics_status: 'PASS', simulation_status: 'SIMULATION_VERIFIED'}, 'INCONCLUSIVE'],
         [{state: 'COMPLETED', mesh_status: 'FAIL', physics_status: 'INCONCLUSIVE'}, 'REJECTED'],
         [{state: 'COMPLETED', verdict: 'PASS', physics_status: 'FAIL'}, 'REJECTED'],
-        [{state: 'FAILED', verdict: 'PASS'}, 'REJECTED'],
-        [{status: 500}, 'REJECTED']
+        [{state: 'FAILED', verdict: 'PASS'}, 'INCONCLUSIVE'],
+        [{state: 'TIMED_OUT', verdict: 'FAIL'}, 'INCONCLUSIVE'],
+        [{state: 'CANCELLED', mesh_status: 'FAIL'}, 'INCONCLUSIVE'],
+        [{state: 'COMPLETED', verdict: 'FAIL', mesh_status: 'PASS',
+          physics_status: 'INCONCLUSIVE'}, 'INCONCLUSIVE'],
+        [{status: 500}, 'INCONCLUSIVE']
     ];
     for (const [reply, expected] of unsafeResponses) {
         const check = await panel.queueScenarioBatch([scenarioToCheck], async () => reply);
