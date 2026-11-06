@@ -516,31 +516,36 @@ def _geometry_access(jid: str):
             raise HTTPException(409, "Job is not complete")
         directory = Path(job["directory"])
         mode = job.get("mode")
-    index_path = directory / "model_geometry.json"
-    if not index_path.is_file():
-        raise HTTPException(404, "Geometry index not available for this job")
-    if mode not in ("convert", "preview"):
-        raise HTTPException(409, "Job mode does not publish geometry")
+        manager.acquire_artifact_lease(jid)
     try:
-        published = manager.result(jid)
-    except KeyError as exc:
-        raise HTTPException(404, "Unknown job") from exc
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    if "geometry" not in published.get("artifacts", {}):
-        raise HTTPException(404, "Geometry is not declared by this job")
-    try:
-        index = json.loads(index_path.read_text(encoding="utf-8"))
-        linked = {
-            ref["payload"]
-            for entry in index["elements"].values()
-            for ref in [entry.get("mesh"), *entry.get("openings", {}).values()]
-            if ref
-        }
-    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
-        raise HTTPException(409, "Invalid geometry index") from exc
-    manager.touch(jid)
-    return index_path, linked
+        index_path = directory / "model_geometry.json"
+        if not index_path.is_file():
+            raise HTTPException(404, "Geometry index not available for this job")
+        if mode not in ("convert", "preview"):
+            raise HTTPException(409, "Job mode does not publish geometry")
+        try:
+            published = manager.result(jid)
+        except KeyError as exc:
+            raise HTTPException(404, "Unknown job") from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if "geometry" not in published.get("artifacts", {}):
+            raise HTTPException(404, "Geometry is not declared by this job")
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            linked = {
+                ref["payload"]
+                for entry in index["elements"].values()
+                for ref in [entry.get("mesh"), *entry.get("openings", {}).values()]
+                if ref
+            }
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            raise HTTPException(409, "Invalid geometry index") from exc
+        manager.touch(jid)
+        return index_path, linked
+    except BaseException:
+        manager.release_artifact_lease(jid)
+        raise
 
 
 def _geometry_file(index_path: Path, linked: set[str], payload: str) -> Path:
@@ -569,30 +574,39 @@ def geometry_batch(jid: str, payloads: list[str] = Query(...)):
     index_path, linked = _geometry_access(jid)
     # A repeated content identifier contributes multiple parts to the
     # response, but needs only one integrity check per batch.
-    verified = {
-        key: _geometry_file(index_path, linked, key) for key in dict.fromkeys(payloads)
-    }
-    paths = [verified[key] for key in payloads]
     try:
-        length = sum(path.stat().st_size for path in paths)
-    except OSError as exc:
-        raise HTTPException(409, "Geometry payload disappeared during batch preparation") from exc
-    if length > 16 * 1024**2:
-        raise HTTPException(
-            413, "Geometry batch exceeds 16 MiB; fetch large payloads individually"
+        verified = {
+            key: _geometry_file(index_path, linked, key)
+            for key in dict.fromkeys(payloads)
+        }
+        paths = [verified[key] for key in payloads]
+        try:
+            length = sum(path.stat().st_size for path in paths)
+        except OSError as exc:
+            raise HTTPException(
+                409, "Geometry payload disappeared during batch preparation"
+            ) from exc
+        if length > 16 * 1024**2:
+            raise HTTPException(
+                413, "Geometry batch exceeds 16 MiB; fetch large payloads individually"
+            )
+
+        def chunks():
+            for path in paths:
+                with path.open("rb") as stream:
+                    for block in iter(lambda: stream.read(1024**2), b""):
+                        yield block
+
+        return LeasedStreamingResponse(
+            chunks(),
+            job_id=jid,
+            lease_acquired=True,
+            media_type="application/octet-stream",
+            headers={"Content-Length": str(length)},
         )
-
-    def chunks():
-        for path in paths:
-            with path.open("rb") as stream:
-                for block in iter(lambda: stream.read(1024**2), b""):
-                    yield block
-
-    return StreamingResponse(
-        chunks(),
-        media_type="application/octet-stream",
-        headers={"Content-Length": str(length)},
-    )
+    except BaseException:
+        manager.release_artifact_lease(jid)
+        raise
 
 
 @app.get("/api/jobs/{jid}/geometry/{payload}")
@@ -600,8 +614,15 @@ def geometry_payload(jid: str, payload: str):
     if len(payload) != 64 or any(c not in "0123456789abcdef" for c in payload):
         raise HTTPException(404, "Unknown geometry payload")
     index_path, linked = _geometry_access(jid)
-    path = _geometry_file(index_path, linked, payload)
-    return FileResponse(path, media_type="application/octet-stream")
+    try:
+        path = _geometry_file(index_path, linked, payload)
+        return LeasedFileResponse(
+            path, job_id=jid, lease_acquired=True,
+            media_type="application/octet-stream"
+        )
+    except BaseException:
+        manager.release_artifact_lease(jid)
+        raise
 
 
 @app.post("/api/convert")
