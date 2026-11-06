@@ -1,5 +1,22 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+
+## Checkpoint tiếp tục — 07/11/2026 (trước khi tích hợp PR #58)
+
+**HEAD `main` tại lần truy vấn GitHub:** `5d3b1f4d31eb00e501e7a335bf7568b18056ae17` (merge PR #57). Đây là commit mới hơn checkpoint #55 bên dưới; mọi snapshot cũ chỉ để truy vết.
+
+- [PR #57](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/57) **MERGED** tại `5d3b1f4`; các workflow push/PR trên HEAD `ef9604b` SUCCESS, đủ 9 required checks trước merge. Hai workflow mới trên merge SHA `5d3b1f4` còn `IN_PROGRESS` khi ghi checkpoint; không tuyên bố đã PASS.
+- [PR #58](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/58) **OPEN, Ready for review**, base `main`, đã ghép kết quả #57 và bảo toàn regression `tests/test_job_cleanup_nonfatal.py`. HEAD trước bản cập nhật tracker này: `7a96155dcf23c863a287b5291b791e2f015f713e`. Bắt buộc dùng HEAD mới nhất tại thời điểm merge; workflow CI đang được chạy lại.
+- Lỗi trả HTTP thất bại sau `CANCELLED` durable mà không ghi được `diagnostics.json` có bản sửa và `tests/test_job_cancel_diagnostic_io.py`; trạng thái `FIXED_PENDING_VERIFICATION` cho đến khi có CI PASS/merge.
+- GitHub branch protection vẫn giữ nguyên 9 required contexts. Không tự kết luận #57 G05/G06 đã PASS vì chỉ kiểm thử cleanup; trường hợp OSError tại các đường diagnostic scheduler khác còn cần sửa riêng.
+- `CI-DUPLICATE-SHA-01` tiếp tục mở cho tình huống nhiều check runs có cùng SHA và trạng thái cancelled trong lịch sử. Quyết định merge phải dựa trên trạng thái mới nhất do GitHub thực thi.
+
+**Ma trận gate tiếp tục giữ:** G01 `IN_PROGRESS`; G02 `NOT_RUN` (release SHA); G03 `INCONCLUSIVE`; G04/G05/G07/G14/G16 `IN_PROGRESS`; G06/G09/G10 `INCONCLUSIVE`; G08/G11/G12/G13/G15 `NOT_RUN`. `NOT_PRODUCTION_READY`. Chưa có staging, benchmark production, bài thử mất điện, nghiệm thu IFC công trình thực, independent CFD V&V hoặc GitHub Release.
+
+**Next safe action:** Chỉ merge #58 sau khi CI PASS trên HEAD thực tế; kiểm tra CI `main` sau merge. Sau đó ưu tiên fault-injection đối với `JobService._terminal_diagnostic` tại scheduler, SQLite/filesystem crash windows và race download/retention.
+
+---
+
 ## Checkpoint kỹ thuật cập nhật — 05/11/2026 (sau tích hợp PR #55)
 
 > **Nguồn dữ liệu:** GitHub API: nhánh chính, chi tiết PR, workflow runs và check-runs; kiểm toán static source. **Không phải** staging evidence, production evidence hoặc scientific V&V. Các mục phía dưới tiêu đề "snapshot lịch sử" giữ nguyên để truy vết, không được dùng như trạng thái hiện tại.
