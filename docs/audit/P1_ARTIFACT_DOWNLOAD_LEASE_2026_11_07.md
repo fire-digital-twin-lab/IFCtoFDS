@@ -21,3 +21,11 @@ Server công bố `FileResponse` cho `diagnostics`, `artifacts`, `checkpoints`, 
 ## Giới hạn nghiệm thu
 
 Cơ chế chỉ có hiệu lực trong **một process**. Staging/production hiện đòi exclusive job root, nhưng chưa chứng minh mọi external process/restore tool tôn trọng nó. Không bảo đảm trước xóa trực tiếp ngoài service, network filesystem không tương thích, crash OS, disk-full, hoặc shutdown cắt ngang streaming. Không thay đổi trạng thái G06 khỏi `INCONCLUSIVE` trước khi test matrix, staging fault-injection, race soak và sign-off. Solver CI PASS không phải chứng nhận CFD.
+
+## CI fault-injection checkpoint (07/11/2026)
+
+- [Source quality #42272700738](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42272700738) chạm 25 phút ở 42% của full coverage; root cause **chưa rõ** ở checkpoint đầu.
+- [CI diagnostic #42291707092](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42291707092) chạy preflight riêng 6 tests với `pytest -vv`, timeout 150s và faulthandler 45s. Traceback xác nhận `tests/test_job_artifact_download_lease.py::deliver.receive()` trả `http.request` liên tục, Starlette chờ disconnect và vòng lặp bất tận. **Đây là lỗi test harness**, không chứng minh scheduler bị deadlock.
+- Sửa test harness: trả `http.request` một lần, sau đó await `response_finished` và trả `http.disconnect`; có cancellation/finish signal trong `send()`.
+- Test bổ sung: nếu constructor response lỗi với pre-acquired lease, route chỉ được release lease của mình; không release reader khác lần thứ hai.
+- CI đã bổ sung preflight riêng và timeout matrix, nhưng **chưa coi test PASS/verified** cho đến khi full matrix chạy xong trên HEAD mới nhất và main merge SHA.
