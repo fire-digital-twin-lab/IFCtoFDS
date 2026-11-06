@@ -29,7 +29,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e ".[test]"
       - run: python -m pip check
-      - run: python -m pytest -q -m "not solver and not browser"
+      - run: python -m pytest -vv -m "not solver and not browser" -o faulthandler_timeout=90
       - run: python -m ifc_to_fds --help
   javascript:
     runs-on: ubuntu-latest
