@@ -17,6 +17,8 @@ on:
 
 jobs:
   python:
+    # Fail a hung matrix job explicitly instead of occupying a runner indefinitely.
+    timeout-minutes: 20
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
