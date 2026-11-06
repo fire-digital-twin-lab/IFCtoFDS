@@ -20,6 +20,7 @@ from .fire.scenario_request import ScenarioRequest
 from .geometry.storage import file_hash as geometry_file_hash
 from .adapters.jobs.result_views import make_findings_page
 from .adapters.jobs.repository import JobPersistenceError
+from .adapters.jobs.service import ArtifactLeaseConflict
 from .adapters.jobs.readiness import is_scheduler_healthy
 from .deployment_config import validate_deployment_config
 
@@ -33,6 +34,34 @@ manager = JobManager(
 )
 MAX_FILE = int(os.getenv("IFCFDS_MAX_FILE_BYTES", str(200 * 1024**2)))
 MAX_TOTAL = int(os.getenv("IFCFDS_MAX_JOB_BYTES", str(500 * 1024**2)))
+
+
+class _JobArtifactLeaseResponse:
+    """Pin the job directory until the final ASGI response has been sent."""
+
+    def __init__(self, *args, job_id: str, lease_acquired=False, **kwargs):
+        self._lease_job_id = job_id
+        if not lease_acquired:
+            manager.acquire_artifact_lease(job_id)
+        try:
+            super().__init__(*args, **kwargs)
+        except BaseException:
+            manager.release_artifact_lease(job_id)
+            raise
+
+    async def __call__(self, scope, receive, send):
+        try:
+            return await super().__call__(scope, receive, send)
+        finally:
+            manager.release_artifact_lease(self._lease_job_id)
+
+
+class LeasedFileResponse(_JobArtifactLeaseResponse, FileResponse):
+    """A FileResponse that blocks concurrent purge until stream completion."""
+
+
+class LeasedStreamingResponse(_JobArtifactLeaseResponse, StreamingResponse):
+    """A StreamingResponse that blocks concurrent purge until completion."""
 
 
 @asynccontextmanager
@@ -372,6 +401,8 @@ def delete_job(jid: str, purge: bool = False):
         raise HTTPException(
             503, "Job metadata storage unavailable; retry later"
         ) from exc
+    except ArtifactLeaseConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.get("/api/jobs/{jid}/result")
@@ -412,8 +443,8 @@ def diagnostics(jid: str):
         path = Path(job["directory"]) / "diagnostics.json"
         if not path.is_file():
             raise HTTPException(404, "No diagnostic produced")
-        return FileResponse(
-            path, filename="diagnostics.json", media_type="application/json"
+        return LeasedFileResponse(
+            path, job_id=jid, filename="diagnostics.json", media_type="application/json"
         )
 
 
@@ -430,21 +461,28 @@ def artifact(jid: str, artifact: str):
         if job.get("mode") not in ("convert", "scenario", "preview", "inventory"):
             raise HTTPException(409, "Job mode is missing or unsupported")
         directory = Path(job["directory"])
-    # Hash all declared evidence outside the shared scheduler lock.
+        # Lease before validating outside the lock; purge may otherwise
+        # remove files between hash verification and FileResponse opening.
+        manager.acquire_artifact_lease(jid)
     try:
-        published = manager.result(jid)
-    except KeyError as exc:
-        raise HTTPException(404, "Unknown job") from exc
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    # A global catalogue key alone cannot authorize an undeclared artifact.
-    if artifact not in published.get("artifacts", {}):
-        raise HTTPException(404, "Artifact is not declared by this job")
-    manager.touch(jid)
-    path = directory / ARTIFACTS[artifact]
-    if not path.is_file():
-        raise HTTPException(404, "Artifact not produced by this job")
-    return FileResponse(path, filename=ARTIFACTS[artifact])
+        try:
+            published = manager.result(jid)
+        except KeyError as exc:
+            raise HTTPException(404, "Unknown job") from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if artifact not in published.get("artifacts", {}):
+            raise HTTPException(404, "Artifact is not declared by this job")
+        manager.touch(jid)
+        path = directory / ARTIFACTS[artifact]
+        if not path.is_file():
+            raise HTTPException(404, "Artifact not produced by this job")
+        return LeasedFileResponse(
+            path, job_id=jid, lease_acquired=True, filename=ARTIFACTS[artifact]
+        )
+    except BaseException:
+        manager.release_artifact_lease(jid)
+        raise
 
 
 @app.get("/api/jobs/{jid}/checkpoints/{artifact}")
@@ -459,7 +497,7 @@ def checkpoint_artifact(jid: str, artifact: str):
         path = Path(job["directory"]) / ARTIFACTS[artifact]
         if not path.is_file():
             raise HTTPException(404, "Checkpoint artifact not available")
-        response = FileResponse(path, filename=ARTIFACTS[artifact])
+        response = LeasedFileResponse(path, job_id=jid, filename=ARTIFACTS[artifact])
         response.headers["X-Verification-Status"] = (
             "UNACCEPTED-AUDIT_INCOMPLETE-DO_NOT_USE_AS_VERIFIED_OUTPUT"
         )
