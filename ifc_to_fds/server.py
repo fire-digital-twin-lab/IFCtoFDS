@@ -43,11 +43,13 @@ class _JobArtifactLeaseResponse:
         self._lease_job_id = job_id
         if not lease_acquired:
             manager.acquire_artifact_lease(job_id)
+        constructed = False
         try:
             super().__init__(*args, **kwargs)
-        except BaseException:
-            manager.release_artifact_lease(job_id)
-            raise
+            constructed = True
+        finally:
+            if not constructed:
+                manager.release_artifact_lease(job_id)
 
     async def __call__(self, scope, receive, send):
         try:
@@ -464,6 +466,7 @@ def artifact(jid: str, artifact: str):
         # Lease before validating outside the lock; purge may otherwise
         # remove files between hash verification and FileResponse opening.
         manager.acquire_artifact_lease(jid)
+    response_ready = False
     try:
         try:
             published = manager.result(jid)
@@ -477,12 +480,14 @@ def artifact(jid: str, artifact: str):
         path = directory / ARTIFACTS[artifact]
         if not path.is_file():
             raise HTTPException(404, "Artifact not produced by this job")
-        return LeasedFileResponse(
+        response = LeasedFileResponse(
             path, job_id=jid, lease_acquired=True, filename=ARTIFACTS[artifact]
         )
-    except BaseException:
-        manager.release_artifact_lease(jid)
-        raise
+        response_ready = True
+        return response
+    finally:
+        if not response_ready:
+            manager.release_artifact_lease(jid)
 
 
 @app.get("/api/jobs/{jid}/checkpoints/{artifact}")
@@ -517,6 +522,7 @@ def _geometry_access(jid: str):
         directory = Path(job["directory"])
         mode = job.get("mode")
         manager.acquire_artifact_lease(jid)
+    access_ready = False
     try:
         index_path = directory / "model_geometry.json"
         if not index_path.is_file():
@@ -542,10 +548,11 @@ def _geometry_access(jid: str):
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             raise HTTPException(409, "Invalid geometry index") from exc
         manager.touch(jid)
+        access_ready = True
         return index_path, linked
-    except BaseException:
-        manager.release_artifact_lease(jid)
-        raise
+    finally:
+        if not access_ready:
+            manager.release_artifact_lease(jid)
 
 
 def _geometry_file(index_path: Path, linked: set[str], payload: str) -> Path:
@@ -574,6 +581,7 @@ def geometry_batch(jid: str, payloads: list[str] = Query(...)):
     index_path, linked = _geometry_access(jid)
     # A repeated content identifier contributes multiple parts to the
     # response, but needs only one integrity check per batch.
+    response_ready = False
     try:
         verified = {
             key: _geometry_file(index_path, linked, key)
@@ -597,16 +605,18 @@ def geometry_batch(jid: str, payloads: list[str] = Query(...)):
                     for block in iter(lambda: stream.read(1024**2), b""):
                         yield block
 
-        return LeasedStreamingResponse(
+        response = LeasedStreamingResponse(
             chunks(),
             job_id=jid,
             lease_acquired=True,
             media_type="application/octet-stream",
             headers={"Content-Length": str(length)},
         )
-    except BaseException:
-        manager.release_artifact_lease(jid)
-        raise
+        response_ready = True
+        return response
+    finally:
+        if not response_ready:
+            manager.release_artifact_lease(jid)
 
 
 @app.get("/api/jobs/{jid}/geometry/{payload}")
@@ -614,15 +624,18 @@ def geometry_payload(jid: str, payload: str):
     if len(payload) != 64 or any(c not in "0123456789abcdef" for c in payload):
         raise HTTPException(404, "Unknown geometry payload")
     index_path, linked = _geometry_access(jid)
+    response_ready = False
     try:
         path = _geometry_file(index_path, linked, payload)
-        return LeasedFileResponse(
+        response = LeasedFileResponse(
             path, job_id=jid, lease_acquired=True,
             media_type="application/octet-stream"
         )
-    except BaseException:
-        manager.release_artifact_lease(jid)
-        raise
+        response_ready = True
+        return response
+    finally:
+        if not response_ready:
+            manager.release_artifact_lease(jid)
 
 
 @app.post("/api/convert")
