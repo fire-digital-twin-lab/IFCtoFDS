@@ -212,8 +212,21 @@ def main():
                                 reason=failure,
                             )
                         )
+                    # A previous FDS display can already contain OBST before
+                    # the verified async workflow has cleared exportBusy.
+                    # Clicking the quick action while it is still busy is a
+                    # legitimate no-op; it does not create a worker request.
+                    # Wait for the verified workflow to finish before testing
+                    # stale-worker cancellation, not just for old scene counts.
+                    page.wait_for_function("""() => {
+                        const quick = document.getElementById('convert-ifc');
+                        const verified = document.getElementById('convert-verified');
+                        return quick && !quick.disabled && verified &&
+                            verified.getAttribute('aria-busy') !== 'true';
+                    }""")
                     # An old worker may still deliver a queued message after termination.
                     page.evaluate("""() => {
+                        window.oldRequest = null; window.oldMessage = null;
                         IfcFds.viewer.SceneViewer.prototype.loadFdsModel = window.originalFdsLoader;
                         IfcFds.workers.createExportWorker = () => ({url: null, worker: {
                             addEventListener(type, handler) { if (type === 'message') window.oldMessage = handler; },
@@ -221,7 +234,22 @@ def main():
                         }});
                     }""")
                     page.locator("#convert-ifc").click(force=True)
-                    page.wait_for_function("window.oldRequest")
+                    try:
+                        page.wait_for_function("window.oldRequest")
+                    except Exception:
+                        # Preserve the page state to distinguish UI busy race
+                        # from worker creation, parser errors, or renderer hangs.
+                        state = page.evaluate("""() => ({
+                            quickDisabled: document.getElementById('convert-ifc').disabled,
+                            verifiedBusy: document.getElementById('convert-verified').getAttribute('aria-busy'),
+                            oldMessageReady: !!window.oldMessage,
+                            pageErrors: document.getElementById('diagnostics').innerText,
+                        })""")
+                        (args.output / "stale-worker-handshake.json").write_text(
+                            json.dumps(state, indent=2), encoding="utf-8"
+                        )
+                        page.screenshot(path=str(args.output / "stale-worker-handshake.png"))
+                        raise
                     page.set_input_files(
                         "#ifc-file",
                         {
