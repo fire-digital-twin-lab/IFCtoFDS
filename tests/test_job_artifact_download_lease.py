@@ -31,14 +31,28 @@ def completed(jid, directory, finished):
 
 async def deliver(response, abort=False):
     messages = []
+    body_delivered = False
+    response_finished = asyncio.Event()
 
     async def send(message):
         messages.append(message)
-        if abort and message["type"] == "http.response.body":
-            raise asyncio.CancelledError()
+        if message["type"] == "http.response.body":
+            if not message.get("more_body", False):
+                response_finished.set()
+            if abort:
+                response_finished.set()
+                raise asyncio.CancelledError()
 
     async def receive():
-        return {"type": "http.request", "body": b"", "more_body": False}
+        nonlocal body_delivered
+        # ASGI receive must not emit http.request forever. Newer Starlette
+        # listens for http.disconnect in a loop; an always-ready fake receive
+        # starves the event loop and makes tests hang indefinitely.
+        if not body_delivered:
+            body_delivered = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+        await response_finished.wait()
+        return {"type": "http.disconnect"}
 
     scope = {
         "type": "http",
