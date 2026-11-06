@@ -1,5 +1,23 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint tích hợp mới — 07/11/2026 (sau merge PR #58)
+
+**HEAD main đã đối chiếu:** `ff7f32933421f9984dd0eb50677c6b2fe07ba7e0` — merge [PR #58](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/58). **Không suy ra workflow trên merge SHA đã PASS** cho đến khi kiểm tra GitHub Actions.
+
+- [PR #57](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/57) đã MERGED tại `5d3b1f4`, hai workflow main `#42262907385` và `#42262907437` SUCCESS.
+- [PR #58](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/58) đã MERGED tại `ff7f329` sau khi hai workflow pull_request `#42263377779` và `#42263377785` SUCCESS trên HEAD `eb0913e`; các check bắt buộc đủ 9/9.
+- [PR #59](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/59) đang OPEN, sửa `IO-SCHEDULER-DIAGNOSTIC-01`: supervisor không chết do `OSError` khi ghi diagnostic, bảo toàn SQLite cho retry. Nhánh cần đồng bộ cả logic `cancel()` từ #58 và CI trên HEAD mới; không merge khi có check pending/failed.
+- Các checkpoint trước dòng này là **lịch sử**, không được diễn giải là main hiện tại.
+- **Các gate G05/G06 chưa PASS.** Lỗi diagnostic đã có regression không thay thế crash-consistency filesystem/SQLite, nhiều process, backup/restore thực tế hay thử nghiệm server OS crash.
+- **Scientific:** `SIMULATION_VERIFIED` chưa được cấp; reference B1/B2 `DRAFT`. G09/G10 `INCONCLUSIVE`; staging/production `NOT_RUN`.
+- **Release:** `NOT_PRODUCTION_READY`.
+
+**Bước an toàn tiếp theo:** xác minh CI merge `ff7f329`; xác minh PR #59 trên HEAD mới và reviewer; chỉ merge sau required checks; tiếp tục fault injection và lập evidence độc lập.
+
+---
+
+
+
 
 ## Checkpoint tiếp tục — 07/11/2026 (trước khi tích hợp PR #58)
 

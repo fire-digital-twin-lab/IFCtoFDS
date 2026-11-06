@@ -511,6 +511,27 @@ class JobService:
             return True
 
     def _loop(self):
+        """Retry recoverable scheduler filesystem errors without losing job state.
+
+        A diagnostics.json write may fail with OSError before SQLite is
+        updated. Letting it escape would terminate the daemon thread and
+        strand queued jobs indefinitely. The next pass retries against the
+        original durable state; no terminal verdict is fabricated.
+        """
+        retry_delay_s = 0.1
+        while not self.closed:
+            try:
+                self._run_loop_until_io_failure()
+            except OSError:
+                logger.exception(
+                    "Scheduler I/O failure; preserving durable job state and retrying"
+                )
+                # Back off even when a wakeup was left set by another path.
+                self.wake.clear()
+                self.wake.wait(retry_delay_s)
+                retry_delay_s = min(retry_delay_s * 2, 5.0)
+
+    def _run_loop_until_io_failure(self):
         while not self.closed:
             if self._retry_pending_terminals():
                 # Do not spin on locked/full storage or dispatch another job
