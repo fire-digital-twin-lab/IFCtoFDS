@@ -48,7 +48,10 @@ class _JobArtifactLeaseResponse:
             super().__init__(*args, **kwargs)
             constructed = True
         finally:
-            if not constructed:
+            # When the caller acquired the lease before validation, the
+            # route owns constructor-failure cleanup. Releasing here as well
+            # would decrement another concurrent reader's lease.
+            if not constructed and not lease_acquired:
                 manager.release_artifact_lease(job_id)
 
     async def __call__(self, scope, receive, send):
