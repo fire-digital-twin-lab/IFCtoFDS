@@ -423,9 +423,18 @@ class JobService:
                 self._pending_terminal.pop(jid, None)
                 proc_to_stop = job.get("process")
                 was_active = True
-                self._terminal_diagnostic(
-                    cancelled, "AbortError", "Job cancelled by user"
-                )
+                try:
+                    self._terminal_diagnostic(
+                        cancelled, "AbortError", "Job cancelled by user"
+                    )
+                except OSError:
+                    # Cancellation has already committed. An unavailable disk
+                    # must not turn a successful cancellation into HTTP 500.
+                    logger.exception(
+                        "Could not write cancellation diagnostic for job %s "
+                        "after SQLite committed CANCELLED",
+                        jid,
+                    )
             self.wake.set()
         if proc_to_stop:
             self._stop(proc_to_stop)

@@ -1,6 +1,76 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
 
+## Checkpoint tiếp tục — 07/11/2026 (trước khi tích hợp PR #58)
+
+**HEAD `main` tại lần truy vấn GitHub:** `5d3b1f4d31eb00e501e7a335bf7568b18056ae17` (merge PR #57). Đây là commit mới hơn checkpoint #55 bên dưới; mọi snapshot cũ chỉ để truy vết.
+
+- [PR #57](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/57) **MERGED** tại `5d3b1f4`; các workflow push/PR trên HEAD `ef9604b` SUCCESS, đủ 9 required checks trước merge. Hai workflow mới trên merge SHA `5d3b1f4` còn `IN_PROGRESS` khi ghi checkpoint; không tuyên bố đã PASS.
+- [PR #58](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/58) **OPEN, Ready for review**, base `main`, đã ghép kết quả #57 và bảo toàn regression `tests/test_job_cleanup_nonfatal.py`. HEAD trước bản cập nhật tracker này: `7a96155dcf23c863a287b5291b791e2f015f713e`. Bắt buộc dùng HEAD mới nhất tại thời điểm merge; workflow CI đang được chạy lại.
+- Lỗi trả HTTP thất bại sau `CANCELLED` durable mà không ghi được `diagnostics.json` có bản sửa và `tests/test_job_cancel_diagnostic_io.py`; trạng thái `FIXED_PENDING_VERIFICATION` cho đến khi có CI PASS/merge.
+- GitHub branch protection vẫn giữ nguyên 9 required contexts. Không tự kết luận #57 G05/G06 đã PASS vì chỉ kiểm thử cleanup; trường hợp OSError tại các đường diagnostic scheduler khác còn cần sửa riêng.
+- `CI-DUPLICATE-SHA-01` tiếp tục mở cho tình huống nhiều check runs có cùng SHA và trạng thái cancelled trong lịch sử. Quyết định merge phải dựa trên trạng thái mới nhất do GitHub thực thi.
+
+**Ma trận gate tiếp tục giữ:** G01 `IN_PROGRESS`; G02 `NOT_RUN` (release SHA); G03 `INCONCLUSIVE`; G04/G05/G07/G14/G16 `IN_PROGRESS`; G06/G09/G10 `INCONCLUSIVE`; G08/G11/G12/G13/G15 `NOT_RUN`. `NOT_PRODUCTION_READY`. Chưa có staging, benchmark production, bài thử mất điện, nghiệm thu IFC công trình thực, independent CFD V&V hoặc GitHub Release.
+
+**Next safe action:** Chỉ merge #58 sau khi CI PASS trên HEAD thực tế; kiểm tra CI `main` sau merge. Sau đó ưu tiên fault-injection đối với `JobService._terminal_diagnostic` tại scheduler, SQLite/filesystem crash windows và race download/retention.
+
+---
+
+## Checkpoint kỹ thuật cập nhật — 05/11/2026 (sau tích hợp PR #55)
+
+> **Nguồn dữ liệu:** GitHub API: nhánh chính, chi tiết PR, workflow runs và check-runs; kiểm toán static source. **Không phải** staging evidence, production evidence hoặc scientific V&V. Các mục phía dưới tiêu đề "snapshot lịch sử" giữ nguyên để truy vết, không được dùng như trạng thái hiện tại.
+
+### GitHub baseline và vòng đang mở
+
+- **main HEAD đã đối chiếu:** `283daef1b010bdd41e6548048090c3e17a97163d` (merge [PR #55](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/55), startup retention theo SQLite).
+- **CI main HEAD:** [Conversion correctness #42062713877](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42062713877) = SUCCESS và [Source quality #42062713934](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42062713934) = SUCCESS.
+- **PR #38, #39, #40** đã merge; **PR #41–#54 và #56** đã merge. Các SHA/công việc này chỉ đại diện cho regression scope, không đóng toàn bộ JobService/security/science.
+- **[PR #57](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/57)**: sửa lỗi cleanup làm scheduler chết sau khi SQLite commit; HEAD `ef9604b80324b340b007c3b987c2f85e8c0e056b` sau bổ sung kiểm thử lỗi `glob()`. **IN_PROGRESS**, phải xác minh toàn bộ required checks trên HEAD rồi merge thường.
+- **[PR #58](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/58)**: tránh trả lỗi 500 khi hủy đã commit nhưng ghi diagnostic thất bại; **DRAFT / FIXED_PENDING_VERIFICATION**, đang phụ thuộc #57. Đối chiếu HEAD và CI mới nhất trước khi review/merge.
+- **CI-DUPLICATE-SHA-01** (P2, OPEN): từng gặp GitHub merge HTTP 405 `9 of 9 required status checks are cancelled` cho #57 HEAD `d5418165` dù workflow PR đã SUCCESS. Một nhánh phụ thuộc từng push cùng commit SHA và có check-runs bị hủy; **chưa kết luận nguyên nhân gốc**. Đã tạo HEAD mới có regression thật, không tắt checks hay bypass protection. GitHub Issues của repository bị tắt (API 410), do đó lưu finding tại tracker này.
+
+### Ma trận 16 gate theo bằng chứng hiện hữu
+
+| Gate | Trạng thái | Căn cứ hoặc thiếu sót |
+|---|---|---|
+| G01 Git integration | IN_PROGRESS | #55 merged; #57/#58 đang chờ CI/merge |
+| G02 Required CI trên release SHA | NOT_RUN | main #55 PASS nhưng chưa có release candidate được nghiệm thu |
+| G03 Architecture | INCONCLUSIVE | Application/Interfaces transitional; chưa có strict full parity |
+| G04 Functional QA | IN_PROGRESS | Regression CI đa hệ điều hành, thiếu staging E2E |
+| G05 Job persistence | IN_PROGRESS | SQLite WAL FULL và durable transitions có; crash-window/diagnostic/retention còn mở |
+| G06 Concurrency | INCONCLUSIVE | Một scheduler production bị khóa; chưa có full race/fault tests và stream-download safety |
+| G07 Security | IN_PROGRESS | Fail-closed network config có, thiếu deployment threat-model/tenant auth/TLS evidence |
+| G08 Performance | NOT_RUN | Chưa đo lại FZK-Haus và benchmark cold/warm cùng hardware |
+| G09 IFC geometry | INCONCLUSIVE | Basement approval DRAFT, golden công trình thực chưa được reviewer duyệt |
+| G10 FDS integration / CFD V&V | INCONCLUSIVE | Solver fixture PASS không phải independent physics/convergence V&V |
+| G11 Staging | NOT_RUN | Chưa có môi trường và báo cáo E2E staging |
+| G12 Backup/restore | NOT_RUN | Script backup tồn tại, chưa có staged DR drill xác minh |
+| G13 Rollback | NOT_RUN | Chưa có rehearsal/khả năng rollback dữ liệu đã nghiệm thu |
+| G14 Observability | IN_PROGRESS | Scheduler readiness có, thiếu metrics/alert/drill đầy đủ |
+| G15 Production | NOT_RUN | Chưa deploy và không có production smoke/soak |
+| G16 Documentation | IN_PROGRESS | Tracker và audit có, chưa đủ release notes/evidence/sign-off |
+
+**Scientific semantics:** `COMPLETED` không đồng nghĩa `MAPPING_VERIFIED`; `MAPPING_VERIFIED` không đồng nghĩa `SIMULATION_VERIFIED`. `reference-cases/basement-b1-b2/approval.json` còn `DRAFT`, reviewer/evidence rỗng. Không có GitHub Release đã công bố khi đối chiếu.
+
+**Security/license:** `LICENSE` và `pyproject.toml` ghi `AGPL-3.0-or-later`. Trước khi vận hành bản sửa đổi qua mạng phải rà soát nghĩa vụ cung cấp mã nguồn tương ứng, cùng với giấy phép của dependencies.
+
+**Release verdict: NOT_PRODUCTION_READY.** Không thay đổi bằng CI PASS hay tạo tài liệu.
+
+### Hành động an toàn kế tiếp
+
+1. Kiểm tra PR #57 trên HEAD mới, không merge khi required checks còn cancelled/pending; sau merge phải kiểm tra CI main.
+2. Đồng bộ PR #58 với main, mở review, chạy lại CI trên HEAD hợp nhất, merge khi branch protection cho phép.
+3. Xác minh fault-injection `_terminal_diagnostic()` ở scheduler, SQLite/filesystem crash windows và race download/retention.
+4. Bổ sung golden IFC có bản quyền, SHA-256 và phê duyệt người có chuyên môn; FDS/PyroSim V&V độc lập.
+5. Chuẩn bị security, benchmark, staging, DR/rollback và release gates; không dùng hạ tầng production khi chưa được cấp phép.
+
+---
+
+## Các checkpoint lịch sử (chỉ để truy vết)
+
+
+
 ## Snapshot hiện hành bổ sung — 05/11/2026
 
 **Main đã xác minh:** `e6b7ef04296d660d0713a79e813a1207dfa5cc84` (merge #39). CI trên merge SHA mới **chưa kết luận** khi ghi snapshot này. `main` cũ `d04771db` đã PASS hai workflow.
