@@ -1,5 +1,45 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint Git và production acceptance — 07/11/2026, sau PR #59
+
+**HEAD main đã truy vấn:** `3f90132abae94a2efcd7ba4a73b12dbd786948c4` (merge #59). Các mục có ngày cũ bên dưới là snapshot lịch sử.
+
+- **Không còn PR mở** tại lần truy vấn GitHub ở checkpoint này. PR #38–#59 đã được đối chiếu trong phạm vi chuỗi nghiệm thu, các PR phát sinh mới phải truy vấn tiếp.
+- **PR #57:** [merge `5d3b1f4`](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/57). [Main Conversion #42262907385](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42262907385) và [Main Quality #42262907437](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42262907437) **SUCCESS**.
+- **PR #58:** [merge `ff7f329`](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/58). [Main Conversion #42264208457](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42264208457) và [Main Quality #42264208452](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42264208452) **SUCCESS**.
+- **PR #59:** [merge `3f90132`](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/59). PR HEAD `b53eaf11`: [Conversion #42264341863](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42264341863), [Quality #42264341872](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42264341872) **SUCCESS**, 9/9 required contexts. **CI main merge SHA #42265343333/#42265343492 đang IN_PROGRESS tại thời điểm checkpoint; không gán PASS.**
+- Quy tắc branch protection được giữ nguyên, không force merge, không force push. Finding `CI-DUPLICATE-SHA-01` tiếp tục được lưu để phân tích check-run cancellation lịch sử; GitHub Issues bị tắt.
+- `IO-RETENTION-01`, `IO-CLEANUP-01`, `IO-CANCEL-DIAGNOSTIC-01` và `IO-SCHEDULER-DIAGNOSTIC-01` có code/test đã merge, nhưng **chỉ nghiệm thu các đường hồi quy tương ứng**; G05/G06 vẫn cần crash/power-loss, race, retention/delete/download và multi-process fault injection.
+
+### Production gates (không nâng verdict thiếu chứng cứ)
+
+| Gate | Status | Điều kiện còn thiếu |
+|---|---|---|
+| G01 Git Integration | IN_PROGRESS | Chờ nghiệm thu CI final main SHA sau #59 và cập nhật tracker qua CI |
+| G02 Release CI | NOT_RUN | Chưa có release candidate SHA/release artifacts |
+| G03 Architecture | INCONCLUSIVE | Architecture migration, detailed parity còn thiếu |
+| G04 Functional QA | IN_PROGRESS | CI regression rộng có; chưa có staging E2E |
+| G05 Job Persistence | IN_PROGRESS | Filesystem/SQLite crash windows, cold restart/power loss cần nghiệm thu |
+| G06 Concurrency | INCONCLUSIVE | Race download/delete, multi-process tests rộng chưa đủ |
+| G07 Security | IN_PROGRESS | Threat model internet, authz nhiều người, sandbox, TLS deployment |
+| G08 Performance | NOT_RUN | Baseline/candidate cold/warm và resource benchmark |
+| G09 IFC Geometry | INCONCLUSIVE | Real IFC provenance và reference B1/B2 `approval.json=DRAFT` |
+| G10 FDS/CFD | INCONCLUSIVE | Independent physical V&V và solver experiment |
+| G11 Staging | NOT_RUN | Chưa có staging environment/smoke/soak được nghiệm thu |
+| G12 Backup/Restore | NOT_RUN | Script không thay thế staged restore drill |
+| G13 Rollback | NOT_RUN | Chưa rehearsal rollback |
+| G14 Observability | IN_PROGRESS | Cần telemetry, alerting và disaster drills |
+| G15 Production | NOT_RUN | Chưa production deployment/smoke |
+| G16 Documentation | IN_PROGRESS | Tracker/báo cáo có, thiếu release package và sign-off |
+
+**Verdict:** `NOT_PRODUCTION_READY`; `MAPPING_VERIFIED` chỉ hợp lệ cho đúng model/evidence kiểm tra, không đồng nghĩa `SIMULATION_VERIFIED`. Không có bằng chứng phê duyệt khoa học độc lập cho công trình B1/B2 hoặc khả năng dùng trong thiết kế PCCC thực tế.
+
+**Next safe action:** (1) xác minh CI `main@3f90132`; (2) tiếp tục G05/G06 fault injection SQLite/filesystem/queue và giới hạn tài nguyên; (3) security/threat model và recovery drills; (4) scientific verification có provenance/solver thực; (5) staging trước production. Không dùng dự án trên internet cho dữ liệu nhạy cảm khi G07/G11 chưa đạt.
+
+---
+
+
+
 ## Checkpoint tích hợp mới — 07/11/2026 (sau merge PR #58)
 
 **HEAD main đã đối chiếu:** `ff7f32933421f9984dd0eb50677c6b2fe07ba7e0` — merge [PR #58](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/58). **Không suy ra workflow trên merge SHA đã PASS** cho đến khi kiểm tra GitHub Actions.
