@@ -80,3 +80,29 @@ def test_cancel_commits_terminal_state_even_if_input_cleanup_is_denied(
         assert "Cannot delete terminal input" in caplog.text
     finally:
         service.close()
+
+
+def test_cleanup_continues_request_removal_when_source_enumeration_fails(
+    tmp_path, monkeypatch, caplog
+):
+    directory = tmp_path / "job-enumeration-denied"
+    directory.mkdir()
+    source = directory / "source-0.ifc"
+    source.write_bytes(b"IFC")
+    request = directory / "request.json"
+    request.write_text("{}", encoding="utf-8")
+    original_glob = Path.glob
+
+    def denied_glob(path, pattern):
+        if path == directory and pattern == "source-*.ifc":
+            raise PermissionError("Unable to enumerate directory")
+        return original_glob(path, pattern)
+
+    monkeypatch.setattr(Path, "glob", denied_glob)
+    with caplog.at_level(logging.ERROR):
+        JobService._cleanup({"id": "enumeration-denied", "directory": str(directory)})
+
+    assert source.exists()  # Conservatively retain inputs when listing fails.
+    assert not request.exists()
+    assert "Cannot enumerate inputs" in caplog.text
+    assert "enumeration-denied" in caplog.text
