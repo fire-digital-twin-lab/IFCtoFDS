@@ -8,11 +8,12 @@ import uuid
 
 import pytest
 from fastapi import HTTPException
+from fastapi.responses import FileResponse
 from fastapi.testclient import TestClient
 
 from ifc_to_fds.adapters.jobs.repository import JobRepository
 from ifc_to_fds.adapters.jobs.service import ArtifactLeaseConflict, JobService
-from ifc_to_fds.server import app, diagnostics, geometry_payload, manager
+from ifc_to_fds.server import LeasedFileResponse, app, diagnostics, geometry_payload, manager
 
 
 def completed(jid, directory, finished):
@@ -145,4 +146,39 @@ def test_geometry_access_failure_releases_lease(tmp_path):
         assert not manager._artifact_leases.get(jid)
     finally:
         manager.repository.delete(jid)
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+def test_failed_response_constructor_does_not_release_other_reader(monkeypatch):
+    """Pre-acquired lease cleanup belongs to the route, not the response too."""
+    jid = "lease-init-" + uuid.uuid4().hex
+    directory = manager.root / ("job-" + jid)
+    directory.mkdir()
+    diagnostic = directory / "diagnostics.json"
+    diagnostic.write_text("{}", encoding="utf-8")
+    manager.repository.register(jid, completed(jid, directory, time.time()))
+    try:
+        manager.acquire_artifact_lease(jid)  # another active reader
+        manager.acquire_artifact_lease(jid)  # caller owns this lease
+        def reject_file_response(self, *args, **kwargs):
+            raise OSError("Response constructor rejected the file")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(FileResponse, "__init__", reject_file_response)
+            try:
+                with pytest.raises(OSError, match="constructor rejected"):
+                    LeasedFileResponse(diagnostic, job_id=jid, lease_acquired=True)
+            finally:
+                manager.release_artifact_lease(jid)  # caller's finally
+        assert manager._artifact_leases.get(jid) == 1
+        with pytest.raises(ArtifactLeaseConflict):
+            manager.delete_job(jid, purge=True)
+        assert diagnostic.is_file()
+        manager.release_artifact_lease(jid)
+        assert manager.delete_job(jid, purge=True)["state"] == "DELETED"
+    finally:
+        while manager._artifact_leases.get(jid):
+            manager.release_artifact_lease(jid)
+        if manager.repository.contains(jid):
+            manager.repository.delete(jid)
         shutil.rmtree(directory, ignore_errors=True)
