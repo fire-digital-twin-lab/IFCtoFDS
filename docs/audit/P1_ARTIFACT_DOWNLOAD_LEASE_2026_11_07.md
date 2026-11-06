@@ -29,3 +29,5 @@ Cơ chế chỉ có hiệu lực trong **một process**. Staging/production hi�
 - Sửa test harness: trả `http.request` một lần, sau đó await `response_finished` và trả `http.disconnect`; có cancellation/finish signal trong `send()`.
 - Test bổ sung: nếu constructor response lỗi với pre-acquired lease, route chỉ được release lease của mình; không release reader khác lần thứ hai.
 - CI đã bổ sung preflight riêng và timeout matrix, nhưng **chưa coi test PASS/verified** cho đến khi full matrix chạy xong trên HEAD mới nhất và main merge SHA.
+
+- [Preflight #42292375072](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42292375072): 5/6 PASS; 1 test abort FAIL vì giả định Starlette phải propagate `CancelledError`. Newer Starlette được phép tự nuốt cancellation trong task group. Đã thay assertion: đảm bảo `send(http.response.body)` thực sự được gọi và bị tiêm cancellation; chấp nhận cả propagate/consume nhưng vẫn kiểm tra release/SQLite/artifact. Chưa gán PASS trước CI trên HEAD mới.
