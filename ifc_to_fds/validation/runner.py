@@ -117,6 +117,7 @@ class ValidationRunner:
             outcomes.append(outcome)
         report = self.evaluator.evaluate(context, outcomes)
         if blockers:
-            report.metrics["source_topology_preflight_rejected"] = sorted(blockers)
             report.metrics["source_topology_preflight_evidence"] = blockers
+        if blocked:
+            report.metrics["source_topology_preflight_rejected"] = sorted(blockers)
         return report
