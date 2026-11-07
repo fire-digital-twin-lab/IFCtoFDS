@@ -52,6 +52,9 @@ class MappingDecision(BaseModel):
     )
     representation_bounds: Optional[BoundingBox] = None
     element_bounds: Optional[BoundingBox] = None
+    source_ifc_type: Optional[str] = None
+    source_type_class: Optional[str] = None
+    placement: Dict[str, Any] = Field(default_factory=dict)
     rationale: Optional[str] = None
     boundary_treatment: str = "NOT_APPLICABLE"
     scope_decision: ScopeDecision = ScopeDecision.IN_SCOPE

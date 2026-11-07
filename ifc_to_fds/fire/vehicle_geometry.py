@@ -27,6 +27,126 @@ __all__ = [
 
 _GEOMETRY_TOLERANCE_M = 1e-4
 
+_ORIENTATION_TOLERANCE = 1e-6
+
+
+def _confirmed_axis_aligned_yaw(placement: Any, body_bounds: BoundingBox) -> float:
+    """Resolve reviewed IFC yaw only when provenance proves a world-axis-aligned frame."""
+
+    if not isinstance(placement, dict) or placement.get("status") != "CONFIRMED":
+        raise ValueError(
+            "IFC_BOUND vehicle requires CONFIRMED source placement provenance"
+        )
+    if placement.get("mapped_items"):
+        raise ValueError(
+            "IFC_BOUND vehicle orientation with mapped-item transforms is not yet supported"
+        )
+    expected_convention = {
+        "units": "METRE",
+        "matrix_order": "ROW_MAJOR",
+        "vector_convention": "COLUMN",
+    }
+    for field, expected in expected_convention.items():
+        if placement.get(field) != expected:
+            raise ValueError(
+                f"IFC_BOUND vehicle placement requires {field}={expected}"
+            )
+
+    values = placement.get("effective_world")
+    if (
+        not isinstance(values, (list, tuple))
+        or len(values) != 16
+        or any(not isinstance(value, (int, float)) or not math.isfinite(float(value)) for value in values)
+    ):
+        raise ValueError(
+            "IFC_BOUND vehicle requires a finite 4x4 effective_world placement matrix"
+        )
+
+    matrix = [[float(values[row * 4 + col]) for col in range(4)] for row in range(4)]
+    if any(
+        abs(actual - expected) > _ORIENTATION_TOLERANCE
+        for actual, expected in zip(matrix[3], (0.0, 0.0, 0.0, 1.0))
+    ):
+        raise ValueError("IFC_BOUND vehicle placement is not a rigid homogeneous transform")
+
+    rotation = [row[:3] for row in matrix[:3]]
+    columns = [[rotation[row][col] for row in range(3)] for col in range(3)]
+    for index, column in enumerate(columns):
+        norm = math.sqrt(sum(value * value for value in column))
+        if abs(norm - 1.0) > _ORIENTATION_TOLERANCE:
+            raise ValueError(
+                f"IFC_BOUND vehicle placement axis {index} is not unit length"
+            )
+    for left in range(3):
+        for right in range(left + 1, 3):
+            dot = sum(columns[left][axis] * columns[right][axis] for axis in range(3))
+            if abs(dot) > _ORIENTATION_TOLERANCE:
+                raise ValueError("IFC_BOUND vehicle placement axes are not orthogonal")
+
+    determinant = (
+        rotation[0][0] * (rotation[1][1] * rotation[2][2] - rotation[1][2] * rotation[2][1])
+        - rotation[0][1] * (rotation[1][0] * rotation[2][2] - rotation[1][2] * rotation[2][0])
+        + rotation[0][2] * (rotation[1][0] * rotation[2][1] - rotation[1][1] * rotation[2][0])
+    )
+    if abs(determinant - 1.0) > _ORIENTATION_TOLERANCE:
+        raise ValueError("IFC_BOUND vehicle placement must be a proper rotation")
+
+    if any(
+        abs(actual - expected) > _ORIENTATION_TOLERANCE
+        for actual, expected in (
+            (rotation[0][2], 0.0),
+            (rotation[1][2], 0.0),
+            (rotation[2][0], 0.0),
+            (rotation[2][1], 0.0),
+            (rotation[2][2], 1.0),
+        )
+    ):
+        raise ValueError(
+            "IFC_BOUND vehicle tilt is unsupported; oriented GEOM evidence is required"
+        )
+
+    yaw = math.atan2(rotation[1][0], rotation[0][0])
+    quarter_turn = round(yaw / (math.pi / 2.0))
+    expected_yaw = quarter_turn * (math.pi / 2.0)
+    cos_yaw = math.cos(expected_yaw)
+    sin_yaw = math.sin(expected_yaw)
+    expected_rotation = (
+        (cos_yaw, -sin_yaw, 0.0),
+        (sin_yaw, cos_yaw, 0.0),
+        (0.0, 0.0, 1.0),
+    )
+    if any(
+        abs(rotation[row][col] - expected_rotation[row][col]) > _ORIENTATION_TOLERANCE
+        for row in range(3)
+        for col in range(3)
+    ):
+        raise ValueError(
+            "IFC_BOUND vehicle yaw is not world-axis-aligned; GEOM vehicle support is required"
+        )
+
+    yaw_degrees = float((quarter_turn % 4) * 90)
+
+    # ObjectPlacement alone is not sufficient IFC evidence for a body's longitudinal
+    # direction: representation items such as IfcSweptAreaSolid may carry their own
+    # Position relative to the object coordinate system. For the current OBST-only
+    # vehicle contract, cross-check the placement X axis against the verified world's
+    # major horizontal box axis. A square/near-square footprint cannot prove yaw.
+    dx, dy = float(body_bounds.dx), float(body_bounds.dy)
+    if abs(dx - dy) <= _GEOMETRY_TOLERANCE_M:
+        raise ValueError(
+            "IFC_BOUND vehicle longitudinal axis is ambiguous from verified OBST bounds"
+        )
+    bounds_axis = "X" if dx > dy else "Y"
+    placement_x_axis = "X" if yaw_degrees in (0.0, 180.0) else "Y"
+    if bounds_axis != placement_x_axis:
+        raise ValueError(
+            "IFC_BOUND vehicle object placement disagrees with verified OBST longitudinal axis; "
+            "representation-item orientation is not proven"
+        )
+
+    return yaw_degrees
+
+
 def _centered_bounds(
     position: Tuple[float, float, float],
     dimensions: Tuple[float, float, float],
@@ -149,6 +269,7 @@ def resolve_vehicle_geometry(
             battery_bounds=battery_bounds,
             battery_source_entity_key=battery_source,
             body_from_verified_base=False,
+            orientation_status="UNVERIFIED",
             provenance={"geometry_semantics": "LEGACY_CENTERED_BOX"},
         )
 
@@ -186,6 +307,8 @@ def resolve_vehicle_geometry(
             battery_bounds=battery_bounds,
             battery_source_entity_key=battery_source,
             body_from_verified_base=False,
+            orientation_status="PARAMETRIC_WORLD_ALIGNED",
+            yaw_degrees=0.0,
             provenance={"geometry_semantics": "EXPLICIT_PARAMETRIC"},
         )
 
@@ -214,6 +337,8 @@ def resolve_vehicle_geometry(
     body_bounds = decision.representation_bounds or decision.element_bounds
     if body_bounds is None:
         raise ValueError(f"Vehicle source entity has no verified bounds: {source_entity_key}")
+
+    yaw_degrees = _confirmed_axis_aligned_yaw(decision.placement, body_bounds)
 
     body_center = (
         (body_bounds.xmin + body_bounds.xmax) / 2.0,
@@ -254,6 +379,10 @@ def resolve_vehicle_geometry(
         battery_bounds=battery_bounds,
         battery_source_entity_key=battery_source,
         body_from_verified_base=True,
+        orientation_status="IFC_AXIS_ALIGNED_CONFIRMED",
+        yaw_degrees=yaw_degrees,
+        source_ifc_type=decision.source_ifc_type,
+        source_type_class=decision.source_type_class,
         provenance={
             "geometry_semantics": "VERIFIED_MAPPING_BASE",
             "mapping_strategy": getattr(decision.strategy, "value", str(decision.strategy)),
@@ -261,5 +390,7 @@ def resolve_vehicle_geometry(
             "semantic_role": semantic_role,
             "review_status": decision.review_status,
             "fds_representation": decision.fds_representation,
+            "placement_status": decision.placement.get("status"),
+            "orientation_method": "CONFIRMED_EFFECTIVE_WORLD_QUARTER_TURN_WITH_OBST_AXIS_CROSSCHECK",
         },
     )

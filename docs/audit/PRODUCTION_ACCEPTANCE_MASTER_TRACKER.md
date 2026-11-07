@@ -25,6 +25,34 @@
 
 ---
 
+## Checkpoint P3c orientation/provenance IFC-bound — 07/11/2026
+
+**PR:** #72  
+**Code candidate đã nghiệm thu:** `7866d0f341779cef2f2c5e44d5e5c5f948d9b3d6`  
+**Roadmap:** P3 tiếp tục `IN_PROGRESS`; scoped `EV-GEO-P3C-001 = PASS / E2`, broad `EV-GEO-001 = FAIL`.
+
+- Bảo toàn `source_ifc_type`, `source_type_class` và placement provenance từ canonical model qua MappingPlan, sealed manifest và verified-base reload.
+- Serializer reject source type/type-class/placement provenance nếu dữ liệu được cung cấp nhưng khác canonical source.
+- IFC_BOUND orientation bắt buộc placement `CONFIRMED`, metre/row-major/column-vector convention, finite rigid homogeneous transform, orthonormal rotation, determinant +1 và không tilt.
+- Mapped-item transforms vẫn bị reject fail-closed.
+- Current OBST contract chỉ chấp nhận quarter-turn world-axis 0/90/180/270°.
+- Review khoa học phát hiện candidate ban đầu chỉ dùng ObjectPlacement nên có thể overclaim: IFC cho phép `IfcSweptAreaSolid.Position` xoay solid so với object coordinate system.
+- Remediation thêm cross-check: placement X axis phải trùng major horizontal axis của verified OBST; footprint gần vuông bị reject vì longitudinal axis ambiguous.
+- Regression real IFC có ObjectPlacement 0° nhưng `IfcSweptAreaSolid.Position` xoay body 90° và xác nhận P3c reject orientation claim.
+- Real IFC ObjectPlacement 90° round-trip qua convert → sealed manifest → verified-base reload → scenario vẫn PASS khi verified OBST long axis khớp.
+- Source quality #42389022580: **SUCCESS**, `912 passed, 14 deselected, 113 warnings`, coverage **87%**; artifact `13580833047`, digest `sha256:2a1842350cfa6e3417a4c03e47dfca80c1f7c442d902d0730fee9fa6e6c43e42`.
+- Conversion #42389022590: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver artifact `13581090420`, digest `sha256:5339b3cd20fc60d6f4a0de2a7a6b4d660af67c9b342559f46e989afb8f743e83`.
+- Browser artifact `13580847198`, digest `sha256:0b2bb244a0632159e3e67d209e40460ab15c34312b6a79d64d487a0fd5f38389`.
+- Technical note: `docs/science/P3C_ORIENTATION_PROVENANCE_CONTRACT.md`.
+
+**Giới hạn khoa học:** verified OBST AABB chỉ chứng minh longitudinal axis modulo 180°, không chứng minh front/rear heading. P3c không hỗ trợ arbitrary rotated GEOM, directional jet/outlet, general representation-item/mapped-item composition, native automatic IfcVehicle classification, exact GEOM collision, post-snap/local MeshPlan, EV physics hoặc application validation.
+
+**Scientific verdict:** scoped P3c `PASS / E2`; full `EV-GEO-001 = FAIL`; overall scientific/application verdict `INCONCLUSIVE`.  
+**Release verdict:** `NOT_PRODUCTION_READY`. Không cấp `SIMULATION_VERIFIED`.
+
+---
+
 ## Checkpoint P3b collision gate với verified base geometry — 07/11/2026
 
 **PR:** #71  

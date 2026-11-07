@@ -1,5 +1,6 @@
 """P3a regression tests for vehicle identity and ground-clearance geometry."""
 
+import math
 import re
 
 import pytest
@@ -39,6 +40,25 @@ def _reviewed_vehicle_policy() -> dict:
     return _reviewed_policy("VEHICLE")
 
 
+def _confirmed_placement(yaw_degrees: float = 0.0) -> dict:
+    yaw = math.radians(yaw_degrees)
+    cosine, sine = math.cos(yaw), math.sin(yaw)
+    matrix = [
+        cosine, -sine, 0.0, 0.0,
+        sine, cosine, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ]
+    return {
+        "status": "CONFIRMED",
+        "units": "METRE",
+        "matrix_order": "ROW_MAJOR",
+        "vector_convention": "COLUMN",
+        "effective_world": matrix,
+        "mapped_items": [],
+    }
+
+
 def _vehicle_decision(
     entity_key: str,
     bounds: BoundingBox,
@@ -51,6 +71,8 @@ def _vehicle_decision(
         simulation_role="PASSIVE_OBSTACLE",
         fds_representation=representation,
         representation_bounds=bounds,
+        source_ifc_type="IfcBuildingElementProxy",
+        placement=_confirmed_placement(),
         review_status="APPROVED",
         decision=_reviewed_vehicle_policy(),
     )

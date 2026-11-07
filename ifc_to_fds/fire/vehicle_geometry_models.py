@@ -73,4 +73,12 @@ class VehicleGeometry(BaseModel):
     battery_bounds: Optional[BoundingBox] = None
     battery_source_entity_key: Optional[str] = None
     body_from_verified_base: bool = False
+    orientation_status: Literal[
+        "UNVERIFIED",
+        "PARAMETRIC_WORLD_ALIGNED",
+        "IFC_AXIS_ALIGNED_CONFIRMED",
+    ] = "UNVERIFIED"
+    yaw_degrees: Optional[float] = None
+    source_ifc_type: Optional[str] = None
+    source_type_class: Optional[str] = None
     provenance: Dict[str, Any] = Field(default_factory=dict)

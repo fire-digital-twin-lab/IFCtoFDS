@@ -93,13 +93,24 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 - **status**: PASS
 - **reviewer**: REPOSITORY_CI_PINNED_SOLVER_AND_DIFF_REVIEW
 
+## Claim `EV-GEO-P3C-001`
+- **statement**: For the scoped P3c axis-aligned OBST contract, reviewed `IFC_BOUND` vehicle source identity and CONFIRMED placement provenance survive verified-base reload; accepted orientation requires a finite proper rigid quarter-turn ObjectPlacement with no tilt/mapped-item transforms and an independent cross-check that the placement X axis agrees with the major horizontal axis of the verified OBST. Ambiguous square footprints and ObjectPlacement/body-axis mismatch, including real IFC `IfcSweptAreaSolid.Position` rotation, fail closed.
+- **intended_use**: Software-level orientation/provenance verification for reviewed IFC-bound EV obstacle geometry before arbitrary GEOM orientation, directional outlets and local-mesh work.
+- **affected_modules**: `ifc_to_fds/domain/mapping/model.py`, `ifc_to_fds/domain/mapping/plan.py`, `ifc_to_fds/mapping/plan_validation.py`, `ifc_to_fds/application/services/scenario_base.py`, `ifc_to_fds/fire/vehicle_geometry.py`, vehicle geometry evidence and P3c regression tests.
+- **evidence_level**: E2
+- **supporting_evidence**: PR #72 code candidate `7866d0f341779cef2f2c5e44d5e5c5f948d9b3d6`; Source quality #42389022580 PASS with 912 passed, 14 deselected, 113 warnings and 87% coverage; source-quality artifact `13580833047` digest sha256:2a1842350cfa6e3417a4c03e47dfca80c1f7c442d902d0730fee9fa6e6c43e42; Conversion #42389022590 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; solver artifact `13581090420` digest sha256:5339b3cd20fc60d6f4a0de2a7a6b4d660af67c9b342559f46e989afb8f743e83. Regression includes a real IFC whose `IfcSweptAreaSolid.Position` rotates the body relative to ObjectPlacement and verifies that the orientation claim is rejected. Contract note: `docs/science/P3C_ORIENTATION_PROVENANCE_CONTRACT.md`.
+- **known_limitations**: Verified OBST bounds establish the longitudinal axis only modulo 180° and do not prove front/rear heading. This claim does not authorize directional jet outlets, asymmetric front/rear source placement, arbitrary rotated GEOM vehicles, general representation-item or mapped-item composition, automatic native `IfcVehicle` classification, exact GEOM collision, post-snap/local MeshPlan clearance, grid sensitivity, EV physics, numerical verification, experimental validation or application validation.
+- **validation_domain**: Reviewed `IFC_BOUND` vehicle sources represented as verified axis-aligned rectangular OBSTs with a distinct major horizontal axis and CONFIRMED quarter-turn placement provenance.
+- **status**: PASS
+- **reviewer**: REPOSITORY_CI_PINNED_SOLVER_IFC_STANDARD_AND_DIFF_REVIEW
+
 ## Claim `EV-GEO-001`
 - **statement**: EV scenario geometry preserves IFC vehicle identity, battery location, orientation, and ground clearance through IFC-to-FDS emission.
 - **intended_use**: EV underbody fire geometry and local-mesh scientific analysis.
 - **affected_modules**: `ifc_to_fds/fire/scenario_request.py`, `ifc_to_fds/fire/scenario_emitter.py`, vehicle geometry/collision domain, mapping policy and future P3c orientation/exact-GEOM work.
 - **evidence_level**: E2
-- **supporting_evidence**: Scoped claims `EV-GEO-P3A-001` and `EV-GEO-P3B-001` verify explicit source binding, axis-aligned body/battery bounds, positive pre-snap ground clearance and fail-closed separation from verified base geometry for supported cases. The full statement still lacks rotated orientation preservation, exact collision resolution for overlapping GEOM AABBs, jet-outlet geometry, production post-snap/local-mesh clearance evidence and real IFC application evidence.
-- **known_limitations**: Automatic native IFC vehicle classification, rotated/non-axis-aligned orientation fidelity, exact GEOM collision when AABBs overlap, jet outlets, post-snap clearance metrics, local MeshPlan sensitivity and application-specific geometry evidence remain incomplete.
+- **supporting_evidence**: Scoped claims `EV-GEO-P3A-001`, `EV-GEO-P3B-001` and `EV-GEO-P3C-001` verify explicit source binding, axis-aligned body/battery bounds, positive pre-snap ground clearance, fail-closed separation from verified base geometry, and longitudinal-axis orientation/provenance for reviewed quarter-turn IFC-bound OBSTs. The full statement still lacks arbitrary/non-axis-aligned GEOM orientation, directed front/rear heading, exact collision resolution for overlapping GEOM AABBs, jet-outlet geometry, production post-snap/local-mesh clearance evidence and real IFC application evidence.
+- **known_limitations**: Automatic native IFC vehicle classification, arbitrary/non-axis-aligned GEOM orientation fidelity, front/rear directed heading, exact GEOM collision when AABBs overlap, jet outlets, post-snap clearance metrics, local MeshPlan sensitivity and application-specific geometry evidence remain incomplete.
 - **validation_domain**: Full P3 vehicle-geometry claim remains broader than the scoped P3a fixtures and is therefore not accepted.
 - **status**: FAIL
 - **reviewer**: PENDING_INDEPENDENT_REVIEW
