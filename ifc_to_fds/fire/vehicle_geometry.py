@@ -25,6 +25,8 @@ __all__ = [
     "resolve_vehicle_geometry",
 ]
 
+_GEOMETRY_TOLERANCE_M = 1e-4
+
 def _centered_bounds(
     position: Tuple[float, float, float],
     dimensions: Tuple[float, float, float],
