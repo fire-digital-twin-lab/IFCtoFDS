@@ -71,11 +71,11 @@ def parse_value(token):
         return token.upper() == ".TRUE."
     try:
         value = float(token.replace("D", "E").replace("d", "e"))
-        if not np.isfinite(value):
-            raise ValueError("Non-finite numeric value")
-        return value
     except ValueError:
         raise ValueError(f"Unsupported or invalid value: {token[:80]}")
+    if not np.isfinite(value):
+        raise ValueError("Non-finite numeric value")
+    return value
 
 
 def _split_fds_tokens(body: str) -> list[str]:
