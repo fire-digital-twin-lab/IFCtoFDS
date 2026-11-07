@@ -81,6 +81,7 @@ def test_legacy_vehicle_geometry_keeps_historical_box_and_roof_burner():
     assert geometry.ground_clearance_m is None
     assert "Vehicle geometry mode:" not in bundle.fds_fragment
     assert "Ground clearance:" not in bundle.fds_fragment
+    assert "FUEL_ID=" in bundle.fds_fragment
     assert re.search(
         r"&OBST ID='OBST_EV_1', XB=2\.75,7\.25,4\.1,5\.9,0,1\.5, SURF_ID='INERT' /",
         bundle.fds_fragment,
@@ -108,6 +109,7 @@ def test_parametric_vehicle_requires_explicit_positive_ground_clearance():
     assert geometry.body_bounds.zmax == pytest.approx(1.65)
     assert geometry.ground_clearance_m == pytest.approx(0.15)
     assert "Ground clearance: 0.1500 m above floor z=0.0000 m" in bundle.fds_fragment
+    assert "FUEL_ID=" not in bundle.fds_fragment
     assert re.search(
         r"&VENT ID='VENT_BURNER_1', XB=2\.75,7\.25,4\.1,5\.9,0\.15,0\.15,",
         bundle.fds_fragment,
@@ -149,6 +151,7 @@ def test_ifc_bound_vehicle_reuses_verified_base_and_does_not_duplicate_body():
     assert geometry.body_bounds == bounds
     assert geometry.ground_clearance_m == pytest.approx(0.2)
     assert "Vehicle source entity_key: VEHICLE_1" in bundle.fds_fragment
+    assert "FUEL_ID=" not in bundle.fds_fragment
     assert "scenario fragment does not duplicate its OBST" in bundle.fds_fragment
     assert "ID='OBST_EV_1'" not in bundle.fds_fragment
     assert re.search(
