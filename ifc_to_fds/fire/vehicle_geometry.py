@@ -41,6 +41,16 @@ def _confirmed_axis_aligned_yaw(placement: Any) -> float:
         raise ValueError(
             "IFC_BOUND vehicle orientation with mapped-item transforms is not yet supported"
         )
+    expected_convention = {
+        "units": "METRE",
+        "matrix_order": "ROW_MAJOR",
+        "vector_convention": "COLUMN",
+    }
+    for field, expected in expected_convention.items():
+        if placement.get(field) != expected:
+            raise ValueError(
+                f"IFC_BOUND vehicle placement requires {field}={expected}"
+            )
 
     values = placement.get("effective_world")
     if (
