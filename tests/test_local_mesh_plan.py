@@ -20,6 +20,8 @@ from ifc_to_fds.fire.mesh_plan import (
 )
 from ifc_to_fds.fire.scenario_emitter import EVSelection
 from ifc_to_fds.fire.vehicle_geometry_models import VehicleGeometry
+from ifc_to_fds.domain.validation import AuditConfig, ValidationContext
+from ifc_to_fds.validation.checkers.mesh_resolution import MeshResolutionChecker
 from ifc_to_fds.validation.parser import parse_fds
 
 
@@ -163,6 +165,45 @@ def test_apply_local_mesh_plan_replaces_base_mesh_by_source_spans():
     assert [record.id for record in meshes] == [mesh.id for mesh in plan.meshes]
     assert result.count("&HEAD") == 1
     assert result.count("&TAIL") == 1
+
+
+def test_mesh_checker_resolves_burner_to_refined_local_mesh():
+    plan = resolve_local_mesh_plan(
+        _base_text(),
+        _bundle(),
+        _domain(),
+        1.0,
+        _request(),
+    )
+    text = apply_local_mesh_plan(_base_text(), plan)
+    text = text.replace(
+        "&TAIL /",
+        (
+            "&SURF ID='LOCAL_FIRE', HRRPUA=1000.0 /\n"
+            "&VENT ID='LOCAL_BURNER', XB=4.5,5.5,4.5,5.5,1.5,1.5, "
+            "SURF_ID='LOCAL_FIRE' /\n"
+            "&TAIL /"
+        ),
+    )
+    parsed = parse_fds(text)
+    outcome = MeshResolutionChecker().check(
+        ValidationContext(
+            model=None,
+            fds_text=text,
+            manifest=None,
+            config=AuditConfig(),
+            parsed=parsed,
+        )
+    )
+
+    assert outcome.result.status.value == "INCONCLUSIVE"
+    assert outcome.result.evidence["local_source_mesh_resolved"] is True
+    assert outcome.result.evidence["cell_size_basis"] == "PER_BURNER_UNIQUE_MESH"
+    burner = outcome.result.evidence["burner_evaluations"][0]
+    assert burner["local_mesh_id"] == "P4B_LOCAL_V0"
+    assert burner["cell_size_m"] == pytest.approx(0.5)
+    assert burner["local_cell_size_xyz_m"] == pytest.approx([0.5, 0.5, 0.5])
+    assert burner["mesh_match_count"] == 1
 
 
 def test_local_mesh_evidence_reports_source_local_metrics_without_pass():
