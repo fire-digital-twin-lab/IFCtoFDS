@@ -318,13 +318,24 @@ def test_p4b_adjacent_coarse_fine_mesh_layout_is_accepted_by_pinned_fds(tmp_path
 
     evidence_dir = Path("scripts/out/solver-evidence")
     evidence_dir.mkdir(parents=True, exist_ok=True)
+    stdout_path = evidence_dir / "p4b-local-mesh-plan.stdout.log"
+    stderr_path = evidence_dir / "p4b-local-mesh-plan.stderr.log"
+    stdout_path.write_text(run.stdout, encoding="utf-8")
+    stderr_path.write_text(run.stderr, encoding="utf-8")
+    warning_lines = [
+        line for line in log.splitlines() if "WARNING:" in line.upper()
+    ]
     evidence = {
         "schema_version": "1.0",
         "claim_id": "MESH-LOCAL-P4B1-001",
         "solver_target": "FDS 6.11.1",
         "input_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
+        "stdout_log": stdout_path.name,
+        "stderr_log": stderr_path.name,
         "stdout_sha256": hashlib.sha256(run.stdout.encode("utf-8")).hexdigest(),
         "stderr_sha256": hashlib.sha256(run.stderr.encode("utf-8")).hexdigest(),
+        "warning_count": len(warning_lines),
+        "warning_lines": warning_lines,
         "returncode": run.returncode,
         "completed_successfully": "completed successfully" in log.lower(),
         "fatal_error_present": "ERROR:" in log,
