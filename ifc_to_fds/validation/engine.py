@@ -686,7 +686,7 @@ def run_independent_validation(
     if model.mep_graph.isolated_element_ids:
         unknown("mep", "Isolated MEP elements require source connectivity review")
     summary, export_coverage = comparison_summary(
-        parsed, primitives, invalid_source_meshes,
+        parsed, primitives, confirmed_invalid,
         mode="FAIL_FAST" if skip_local_comparisons else "PARTIAL" if stop_solid_checks else "FULL",
         verified=report.matched_count,
         attempted=comparison_attempts, completed=completed_comparisons,
@@ -736,7 +736,7 @@ def run_independent_validation(
     if stop_solid_checks:
         report.gates["solver"] = GateResult(
             status=GateStatus.NOT_RUN,
-            reason="Source topology preflight rejected; solver not run",
+            reason="Source topology preflight did not authorize solver execution",
         )
         report.gates["effective_geometry"] = GateResult(
             status=GateStatus.NOT_RUN,
