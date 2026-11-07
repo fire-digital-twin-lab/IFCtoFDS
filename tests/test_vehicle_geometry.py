@@ -351,6 +351,50 @@ def test_vehicle_semantic_review_is_validated_and_survives_mapping_plan(box_mode
     with pytest.raises(ValueError, match="requires action=PASSIVE_OBSTACLE"):
         validate_decisions({entity.entity_key: invalid_action})
 
+
+def test_scenario_composer_checks_resolved_ifc_bounds_not_legacy_dimensions():
+    from types import SimpleNamespace
+
+    from ifc_to_fds.fire.scenario_composer import compose_scenario
+
+    body = BoundingBox(
+        xmin=1.0, xmax=3.0, ymin=1.0, ymax=2.0, zmin=0.2, zmax=1.4
+    )
+    plan = MappingPlan(decisions=[_vehicle_decision("VEHICLE_COMPACT", body)])
+    selection = EVSelection(
+        preset_id="auto-nmc",
+        position=(2.0, 1.5, 0.8),
+        geometry_mode="IFC_BOUND",
+        source_entity_key="VEHICLE_COMPACT",
+        floor_z_m=0.0,
+    )
+    bundle = emit_fire_scenario(plan, _hash(), [selection])
+
+    base = (
+        "&HEAD CHID='resolved_domain' /\n"
+        "&TIME T_END=0.0 /\n"
+        "&MESH IJK=20,20,15, XB=0,4,0,4,0,3 /\n"
+        "&OBST ID='BASE_VEHICLE', XB=1,3,1,2,0.2,1.4, SURF_ID='INERT' /\n"
+        "&TAIL /\n"
+    )
+    manifest = SimpleNamespace(
+        simulation_domain={
+            "xmin": 0.0,
+            "xmax": 4.0,
+            "ymin": 0.0,
+            "ymax": 4.0,
+            "zmin": 0.0,
+            "zmax": 3.0,
+        },
+        records=[],
+    )
+
+    composed = compose_scenario(base, bundle, manifest)
+    assert "VENT_BURNER_1" in composed
+    # The old composer would reconstruct a 4.5 m auto box around x=2 and
+    # incorrectly reject it as extending to x=-0.25.
+    assert bundle.vehicle_geometries[0].body_bounds == body
+
 @pytest.mark.solver
 def test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds(tmp_path):
     import os
