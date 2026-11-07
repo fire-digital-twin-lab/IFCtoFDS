@@ -56,6 +56,7 @@ def load_verified_base(
             entity_key=r.entity_key, strategy=r.mapping_strategy, simulation_role=r.simulation_role,
             fds_representation=r.fds_representation, fds_primitive_ids=r.fds_primitive_ids,
             representation_bounds=r.representation_bounds, element_bounds=r.source_bounds,
+            source_ifc_type=r.ifc_type, source_type_class=r.type_class, placement=r.placement,
             scope_decision=r.scope_decision, decision=r.decision, review_status=r.review_status,
         ) for r in manifest.records]
         plan = MappingPlan(decisions=decisions,
