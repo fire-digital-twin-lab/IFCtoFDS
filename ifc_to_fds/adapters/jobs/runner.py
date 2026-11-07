@@ -72,7 +72,15 @@ class WorkerRunner:
                     verification_status="MAPPING_VERIFIED",
                 )
                 composed = compose_scenario(base_text, bundle, base_manifest)
-                final_text, end = configure_scenario_time(composed, bundle.opening_events, scenario.t_end_s)
+                legacy_surface_compatibility = bool(bundle.ev_selections) and all(
+                    ev.geometry_mode == "LEGACY" for ev in bundle.ev_selections
+                )
+                final_text, end = configure_scenario_time(
+                    composed,
+                    bundle.opening_events,
+                    scenario.t_end_s,
+                    allow_legacy_surf_fuel_id=legacy_surface_compatibility,
+                )
                 mesh_gate = MeshResolutionChecker().check(ValidationContext(
                     model=None, fds_text=final_text, manifest=base_manifest, config=AuditConfig()
                 )).result
@@ -89,6 +97,9 @@ class WorkerRunner:
                     scenario_id=bundle.scenario_id,
                     bundle_sha256=bundle.bundle_sha256,
                     ev_evaluations=[ev.model_dump() for ev in bundle.ev_selections],
+                    vehicle_geometries=[
+                        geometry.model_dump() for geometry in bundle.vehicle_geometries
+                    ],
                     physics=physics,
                 )
                 mesh_status = mesh_gate.status.value

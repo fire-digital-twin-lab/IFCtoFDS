@@ -42,6 +42,7 @@ PROMOTION_FACTORS = {
     "future_operational_role",
     "golden_policy",
 }
+SEMANTIC_ROLES = {"VEHICLE", "BATTERY_PACK"}
 
 
 def validate_decisions(decisions):
@@ -56,6 +57,7 @@ def validate_decisions(decisions):
             "evidence",
             "factors",
             "hvac",
+            "semantic_role",
         }:
             raise ValueError(f"Invalid decision: {key}")
         if decision.get("action") not in (
@@ -72,6 +74,16 @@ def validate_decisions(decisions):
             raise ValueError(
                 f"Decision requires policy version, rationale, reviewer and evidence: {key}"
             )
+        semantic_role = decision.get("semantic_role")
+        if semantic_role is not None:
+            if semantic_role not in SEMANTIC_ROLES:
+                raise ValueError(
+                    f"Unsupported semantic role {semantic_role!r}: {key}"
+                )
+            if decision.get("action") != "PASSIVE_OBSTACLE":
+                raise ValueError(
+                    f"semantic_role={semantic_role} requires action=PASSIVE_OBSTACLE: {key}"
+                )
         if "hvac" in decision:
             if decision["action"] != "HVAC":
                 raise ValueError("hvac parameters require action=HVAC")

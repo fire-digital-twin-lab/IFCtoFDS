@@ -1,5 +1,32 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint P3a vehicle identity / ground-clearance contract — 07/11/2026
+
+**PR:** #69  
+**Code candidate đã nghiệm thu:** `6169b55321d6c7404d7b1a39d3633f3aef2733a9`  
+**Roadmap:** P3 đang `IN_PROGRESS`; scoped `EV-GEO-P3A-001 = PASS / E2`, broad `EV-GEO-001 = FAIL`.
+
+- Thêm typed `VehicleGeometry` / `BatteryPack` và ba mode `LEGACY | PARAMETRIC | IFC_BOUND`.
+- `LEGACY` tiếp tục là default và giữ serialization lịch sử; không tự cấp scientific claim.
+- `PARAMETRIC` bắt buộc `floor_z_m` + positive `ground_clearance_m`; source đặt ở underbody plane.
+- `IFC_BOUND` bắt buộc canonical `entity_key`, reviewed `semantic_role=VEHICLE`, `PASSIVE_OBSTACLE` authorization và verified OBST bounds; không emit duplicate vehicle body.
+- Battery binding bắt buộc reviewed `semantic_role=BATTERY_PACK` hoặc explicit parametric geometry; bounds phải nằm trong vehicle envelope.
+- Scenario evidence lưu resolved vehicle geometry; composer kiểm domain bằng resolved bounds thay vì suy lại legacy dimensions.
+- Mixed LEGACY/scientific vehicle modes bị reject fail-closed.
+- P3a phát hiện parser drift từ P2: `SURF.FUEL_ID` từng được parser chấp nhận nhưng pinned FDS 6.11.1 từ chối. Scientific parser mặc định nay reject field này; compatibility chỉ được bật tường minh cho LEGACY.
+- Source quality #42380373024: **SUCCESS**, `879 passed, 14 deselected`, coverage **87%**; artifact `13577831468`, digest `sha256:37b0be1cc4c529a94cb5eaf2b96ff09727798c654598d3651c099b114eec23a9`.
+- Conversion #42380373058: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver P3a: **9 passed, 884 deselected**; artifact `13577781396`, digest `sha256:686ada474718c4261eeac039d4548c1ce75453b50cdf5a3aa042c44701861c9c`.
+- Solver fixture chạy FDS 6.11.1 thực trong 0.1 s với `dz=0.05 m`: 0.15 m parametric clearance = 3 cells; 0.20 m IFC-bound clearance = 4 cells. Đây **không** phải P4 grid-sensitivity evidence.
+- FDS vẫn cảnh báo nên dùng SPEC cho REAC fuel chemistry và OFFGAS generated species không nằm trong built-in table. Hai warning này được giữ như finding P6; không nâng solver syntax/geometry evidence thành physics validation.
+
+**P3 chưa đạt exit criteria** vì còn thiếu: automatic/native IFC vehicle semantic binding, orientation cho rotated/non-axis-aligned vehicle, vehicle↔wall/column acceptance, jet outlets, post-snap/local-mesh clearance và real IFC application evidence.
+
+**Scientific verdict:** scoped P3a `PASS / E2`; full `EV-GEO-001 = FAIL`; overall scientific/application verdict `INCONCLUSIVE`.  
+**Release verdict:** `NOT_PRODUCTION_READY`. Không cấp `SIMULATION_VERIFIED`.
+
+---
+
 ## Checkpoint P2 parser/physics contract hoàn tất — 07/11/2026
 
 **Candidate đã nghiệm thu:** `125d3175066a4b12e96d23b06a99801293dcf5e5` trên PR #68.

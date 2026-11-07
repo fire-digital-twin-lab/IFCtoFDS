@@ -6,9 +6,18 @@ from ifc_to_fds.validation.parser import parse_fds
 from .scenario_emitter import opening_timer_id, opening_control_id
 
 
-def configure_scenario_time(text, opening_events, requested_end_s=None):
+def configure_scenario_time(
+    text,
+    opening_events,
+    requested_end_s=None,
+    *,
+    allow_legacy_surf_fuel_id=False,
+):
     """Keep the verified base duration and include the full scenario schedule."""
-    parsed = parse_fds(text)
+    parsed = parse_fds(
+        text,
+        allow_legacy_surf_fuel_id=allow_legacy_surf_fuel_id,
+    )
     if parsed.errors or parsed.unsupported:
         raise ValueError(f"Cannot set scenario time: {parsed.errors + parsed.unsupported}")
     time_records = [r for r in parsed.records if r.kind == "TIME"]
@@ -53,13 +62,19 @@ def configure_scenario_time(text, opening_events, requested_end_s=None):
         final_text = text[:start] + new_time + text[stop:]
     else:
         final_text = text[:start] + f"&TIME T_END={end!r} /" + text[stop:]
-    final = parse_fds(final_text)
+    final = parse_fds(
+        final_text,
+        allow_legacy_surf_fuel_id=allow_legacy_surf_fuel_id,
+    )
     if final.errors or final.unsupported:
         raise ValueError(f"Invalid final scenario: {final.errors + final.unsupported}")
     return final_text, end
 
 
 def compose_scenario(base_text, bundle, manifest):
+    legacy_surface_compatibility = bool(bundle.ev_selections) and all(
+        ev.geometry_mode == "LEGACY" for ev in bundle.ev_selections
+    )
     base = parse_fds(base_text)
     domain = manifest.simulation_domain
     if not domain:
@@ -73,12 +88,49 @@ def compose_scenario(base_text, bundle, manifest):
                 "zmin": min(xb[4] for xb in meshes),
                 "zmax": max(xb[5] for xb in meshes),
             }
-    for ev in bundle.ev_selections:
-        dimensions = ev.dimensions or ((4.5, 1.8, 1.5) if ev.preset_id.lower().startswith("auto-") else (1.8, 0.6, 1.1))
-        for axis, name in enumerate(("x", "y", "z")):
-            lo, hi = ev.position[axis] - dimensions[axis]/2, ev.position[axis] + dimensions[axis]/2
-            if not math.isfinite(lo) or not math.isfinite(hi) or not domain or lo < domain[name + "min"] - 1e-8 or hi > domain[name + "max"] + 1e-8:
-                raise ValueError("Vehicle must lie inside the verified simulation domain")
+    if bundle.vehicle_geometries:
+        if len(bundle.vehicle_geometries) != len(bundle.ev_selections):
+            raise ValueError(
+                "Resolved vehicle geometry count must match EV selections"
+            )
+        vehicle_bounds = [geometry.body_bounds for geometry in bundle.vehicle_geometries]
+        for bounds in vehicle_bounds:
+            for name, lo, hi in (
+                ("x", bounds.xmin, bounds.xmax),
+                ("y", bounds.ymin, bounds.ymax),
+                ("z", bounds.zmin, bounds.zmax),
+            ):
+                if (
+                    not math.isfinite(lo)
+                    or not math.isfinite(hi)
+                    or not domain
+                    or lo < domain[name + "min"] - 1e-8
+                    or hi > domain[name + "max"] + 1e-8
+                ):
+                    raise ValueError(
+                        "Vehicle must lie inside the verified simulation domain"
+                    )
+    else:
+        # Backward-compatible path for manually constructed legacy bundles.
+        for ev in bundle.ev_selections:
+            dimensions = ev.dimensions or (
+                (4.5, 1.8, 1.5)
+                if ev.preset_id.lower().startswith("auto-")
+                else (1.8, 0.6, 1.1)
+            )
+            for axis, name in enumerate(("x", "y", "z")):
+                lo = ev.position[axis] - dimensions[axis] / 2
+                hi = ev.position[axis] + dimensions[axis] / 2
+                if (
+                    not math.isfinite(lo)
+                    or not math.isfinite(hi)
+                    or not domain
+                    or lo < domain[name + "min"] - 1e-8
+                    or hi > domain[name + "max"] + 1e-8
+                ):
+                    raise ValueError(
+                        "Vehicle must lie inside the verified simulation domain"
+                    )
     records = {r.entity_key: r for r in manifest.records}
     controls = {}
     seen = set()
@@ -133,7 +185,10 @@ def compose_scenario(base_text, bundle, manifest):
     tail_start, _ = tail_span
     text = base_text[:tail_start] + fragment + "\n" + base_text[tail_start:]
 
-    parsed = parse_fds(text)
+    parsed = parse_fds(
+        text,
+        allow_legacy_surf_fuel_id=legacy_surface_compatibility,
+    )
     if parsed.errors or parsed.unsupported:
         raise ValueError(f"Composed scenario failed validation: {parsed.errors + parsed.unsupported}")
     meshes = [r.values["XB"] for r in parsed.records if r.kind == "MESH"]
