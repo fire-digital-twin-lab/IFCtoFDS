@@ -570,9 +570,18 @@ def emit_fire_scenario(
     # Validate emitted fragment syntax against FDS parser grammar
     from ifc_to_fds.validation.parser import parse_fds
     scaffold = f"&HEAD CHID='TEST' /\n&TIME T_END=1.0 /\n&MESH IJK=1,1,1, XB=0,1,0,1,0,1 /\n{fds_fragment}\n&TAIL /\n"
-    parsed_check = parse_fds(scaffold)
-    if parsed_check.errors:
-        raise ValueError(f"FDS syntax error in emitted scenario fragment: {parsed_check.errors}")
+    legacy_surface_compatibility = all(
+        ev.geometry_mode == "LEGACY" for ev in normalized_evs
+    )
+    parsed_check = parse_fds(
+        scaffold,
+        allow_legacy_surf_fuel_id=legacy_surface_compatibility,
+    )
+    if parsed_check.errors or parsed_check.unsupported:
+        raise ValueError(
+            "FDS syntax error in emitted scenario fragment: "
+            f"errors={parsed_check.errors}, unsupported={parsed_check.unsupported}"
+        )
 
     # Deterministic scenario ID based on full scenario fragment
     scenario_hash = hashlib.sha256(fds_fragment.encode("utf-8")).hexdigest()[:12]
