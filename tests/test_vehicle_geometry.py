@@ -92,6 +92,23 @@ def test_legacy_vehicle_geometry_keeps_historical_box_and_roof_burner():
     )
 
 
+
+def test_scenario_rejects_mixed_legacy_and_scientific_vehicle_modes():
+    legacy = EVSelection(
+        preset_id="e-bike-lfp",
+        position=(1.0, 1.0, 0.55),
+    )
+    scientific = EVSelection(
+        preset_id="auto-nmc",
+        position=(5.0, 5.0, 0.9),
+        dimensions=(4.5, 1.8, 1.5),
+        geometry_mode="PARAMETRIC",
+        floor_z_m=0.0,
+        ground_clearance_m=0.15,
+    )
+    with pytest.raises(ValueError, match="cannot be mixed"):
+        emit_fire_scenario(MappingPlan(), _hash(), [legacy, scientific])
+
 def test_parametric_vehicle_requires_explicit_positive_ground_clearance():
     selection = EVSelection(
         preset_id="auto-nmc",
