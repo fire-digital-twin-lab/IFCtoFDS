@@ -51,8 +51,10 @@ jobs:
         run: python -m pytest -q tests/test_source_quality_budget.py
       - name: Read-only acceptance audit — contracts, integrity and real tiny IFC
         run: python -m pytest -q tests/test_acceptance_audit.py tests/test_job_evidence_index.py
+      - name: Artifact lease fault-injection preflight
+        run: timeout 150s python -m pytest -vv -o faulthandler_timeout=45 tests/test_job_artifact_download_lease.py
       - name: Full Python coverage evidence (report only until baseline approval)
-        run: python -m pytest -q -m "not solver and not browser" --cov=ifc_to_fds --cov-report=xml:quality-evidence/coverage.xml --cov-report=term
+        run: python -m pytest -q -m "not solver and not browser" -o faulthandler_timeout=90 --cov=ifc_to_fds --cov-report=xml:quality-evidence/coverage.xml --cov-report=term
       - name: Publish review evidence (not a reason to invalidate passed tests)
         if: always()
         continue-on-error: true

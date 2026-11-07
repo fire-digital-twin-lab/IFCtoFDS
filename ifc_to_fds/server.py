@@ -20,6 +20,7 @@ from .fire.scenario_request import ScenarioRequest
 from .geometry.storage import file_hash as geometry_file_hash
 from .adapters.jobs.result_views import make_findings_page
 from .adapters.jobs.repository import JobPersistenceError
+from .adapters.jobs.service import ArtifactLeaseConflict
 from .adapters.jobs.readiness import is_scheduler_healthy
 from .deployment_config import validate_deployment_config
 
@@ -33,6 +34,39 @@ manager = JobManager(
 )
 MAX_FILE = int(os.getenv("IFCFDS_MAX_FILE_BYTES", str(200 * 1024**2)))
 MAX_TOTAL = int(os.getenv("IFCFDS_MAX_JOB_BYTES", str(500 * 1024**2)))
+
+
+class _JobArtifactLeaseResponse:
+    """Pin the job directory until the final ASGI response has been sent."""
+
+    def __init__(self, *args, job_id: str, lease_acquired=False, **kwargs):
+        self._lease_job_id = job_id
+        if not lease_acquired:
+            manager.acquire_artifact_lease(job_id)
+        constructed = False
+        try:
+            super().__init__(*args, **kwargs)
+            constructed = True
+        finally:
+            # When the caller acquired the lease before validation, the
+            # route owns constructor-failure cleanup. Releasing here as well
+            # would decrement another concurrent reader's lease.
+            if not constructed and not lease_acquired:
+                manager.release_artifact_lease(job_id)
+
+    async def __call__(self, scope, receive, send):
+        try:
+            return await super().__call__(scope, receive, send)
+        finally:
+            manager.release_artifact_lease(self._lease_job_id)
+
+
+class LeasedFileResponse(_JobArtifactLeaseResponse, FileResponse):
+    """A FileResponse that blocks concurrent purge until stream completion."""
+
+
+class LeasedStreamingResponse(_JobArtifactLeaseResponse, StreamingResponse):
+    """A StreamingResponse that blocks concurrent purge until completion."""
 
 
 @asynccontextmanager
@@ -372,6 +406,8 @@ def delete_job(jid: str, purge: bool = False):
         raise HTTPException(
             503, "Job metadata storage unavailable; retry later"
         ) from exc
+    except ArtifactLeaseConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.get("/api/jobs/{jid}/result")
@@ -412,8 +448,8 @@ def diagnostics(jid: str):
         path = Path(job["directory"]) / "diagnostics.json"
         if not path.is_file():
             raise HTTPException(404, "No diagnostic produced")
-        return FileResponse(
-            path, filename="diagnostics.json", media_type="application/json"
+        return LeasedFileResponse(
+            path, job_id=jid, filename="diagnostics.json", media_type="application/json"
         )
 
 
@@ -430,21 +466,31 @@ def artifact(jid: str, artifact: str):
         if job.get("mode") not in ("convert", "scenario", "preview", "inventory"):
             raise HTTPException(409, "Job mode is missing or unsupported")
         directory = Path(job["directory"])
-    # Hash all declared evidence outside the shared scheduler lock.
+        # Lease before validating outside the lock; purge may otherwise
+        # remove files between hash verification and FileResponse opening.
+        manager.acquire_artifact_lease(jid)
+    response_ready = False
     try:
-        published = manager.result(jid)
-    except KeyError as exc:
-        raise HTTPException(404, "Unknown job") from exc
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    # A global catalogue key alone cannot authorize an undeclared artifact.
-    if artifact not in published.get("artifacts", {}):
-        raise HTTPException(404, "Artifact is not declared by this job")
-    manager.touch(jid)
-    path = directory / ARTIFACTS[artifact]
-    if not path.is_file():
-        raise HTTPException(404, "Artifact not produced by this job")
-    return FileResponse(path, filename=ARTIFACTS[artifact])
+        try:
+            published = manager.result(jid)
+        except KeyError as exc:
+            raise HTTPException(404, "Unknown job") from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if artifact not in published.get("artifacts", {}):
+            raise HTTPException(404, "Artifact is not declared by this job")
+        manager.touch(jid)
+        path = directory / ARTIFACTS[artifact]
+        if not path.is_file():
+            raise HTTPException(404, "Artifact not produced by this job")
+        response = LeasedFileResponse(
+            path, job_id=jid, lease_acquired=True, filename=ARTIFACTS[artifact]
+        )
+        response_ready = True
+        return response
+    finally:
+        if not response_ready:
+            manager.release_artifact_lease(jid)
 
 
 @app.get("/api/jobs/{jid}/checkpoints/{artifact}")
@@ -459,7 +505,7 @@ def checkpoint_artifact(jid: str, artifact: str):
         path = Path(job["directory"]) / ARTIFACTS[artifact]
         if not path.is_file():
             raise HTTPException(404, "Checkpoint artifact not available")
-        response = FileResponse(path, filename=ARTIFACTS[artifact])
+        response = LeasedFileResponse(path, job_id=jid, filename=ARTIFACTS[artifact])
         response.headers["X-Verification-Status"] = (
             "UNACCEPTED-AUDIT_INCOMPLETE-DO_NOT_USE_AS_VERIFIED_OUTPUT"
         )
@@ -478,31 +524,38 @@ def _geometry_access(jid: str):
             raise HTTPException(409, "Job is not complete")
         directory = Path(job["directory"])
         mode = job.get("mode")
-    index_path = directory / "model_geometry.json"
-    if not index_path.is_file():
-        raise HTTPException(404, "Geometry index not available for this job")
-    if mode not in ("convert", "preview"):
-        raise HTTPException(409, "Job mode does not publish geometry")
+        manager.acquire_artifact_lease(jid)
+    access_ready = False
     try:
-        published = manager.result(jid)
-    except KeyError as exc:
-        raise HTTPException(404, "Unknown job") from exc
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    if "geometry" not in published.get("artifacts", {}):
-        raise HTTPException(404, "Geometry is not declared by this job")
-    try:
-        index = json.loads(index_path.read_text(encoding="utf-8"))
-        linked = {
-            ref["payload"]
-            for entry in index["elements"].values()
-            for ref in [entry.get("mesh"), *entry.get("openings", {}).values()]
-            if ref
-        }
-    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
-        raise HTTPException(409, "Invalid geometry index") from exc
-    manager.touch(jid)
-    return index_path, linked
+        index_path = directory / "model_geometry.json"
+        if not index_path.is_file():
+            raise HTTPException(404, "Geometry index not available for this job")
+        if mode not in ("convert", "preview"):
+            raise HTTPException(409, "Job mode does not publish geometry")
+        try:
+            published = manager.result(jid)
+        except KeyError as exc:
+            raise HTTPException(404, "Unknown job") from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if "geometry" not in published.get("artifacts", {}):
+            raise HTTPException(404, "Geometry is not declared by this job")
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            linked = {
+                ref["payload"]
+                for entry in index["elements"].values()
+                for ref in [entry.get("mesh"), *entry.get("openings", {}).values()]
+                if ref
+            }
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            raise HTTPException(409, "Invalid geometry index") from exc
+        manager.touch(jid)
+        access_ready = True
+        return index_path, linked
+    finally:
+        if not access_ready:
+            manager.release_artifact_lease(jid)
 
 
 def _geometry_file(index_path: Path, linked: set[str], payload: str) -> Path:
@@ -531,30 +584,42 @@ def geometry_batch(jid: str, payloads: list[str] = Query(...)):
     index_path, linked = _geometry_access(jid)
     # A repeated content identifier contributes multiple parts to the
     # response, but needs only one integrity check per batch.
-    verified = {
-        key: _geometry_file(index_path, linked, key) for key in dict.fromkeys(payloads)
-    }
-    paths = [verified[key] for key in payloads]
+    response_ready = False
     try:
-        length = sum(path.stat().st_size for path in paths)
-    except OSError as exc:
-        raise HTTPException(409, "Geometry payload disappeared during batch preparation") from exc
-    if length > 16 * 1024**2:
-        raise HTTPException(
-            413, "Geometry batch exceeds 16 MiB; fetch large payloads individually"
+        verified = {
+            key: _geometry_file(index_path, linked, key)
+            for key in dict.fromkeys(payloads)
+        }
+        paths = [verified[key] for key in payloads]
+        try:
+            length = sum(path.stat().st_size for path in paths)
+        except OSError as exc:
+            raise HTTPException(
+                409, "Geometry payload disappeared during batch preparation"
+            ) from exc
+        if length > 16 * 1024**2:
+            raise HTTPException(
+                413, "Geometry batch exceeds 16 MiB; fetch large payloads individually"
+            )
+
+        def chunks():
+            for path in paths:
+                with path.open("rb") as stream:
+                    for block in iter(lambda: stream.read(1024**2), b""):
+                        yield block
+
+        response = LeasedStreamingResponse(
+            chunks(),
+            job_id=jid,
+            lease_acquired=True,
+            media_type="application/octet-stream",
+            headers={"Content-Length": str(length)},
         )
-
-    def chunks():
-        for path in paths:
-            with path.open("rb") as stream:
-                for block in iter(lambda: stream.read(1024**2), b""):
-                    yield block
-
-    return StreamingResponse(
-        chunks(),
-        media_type="application/octet-stream",
-        headers={"Content-Length": str(length)},
-    )
+        response_ready = True
+        return response
+    finally:
+        if not response_ready:
+            manager.release_artifact_lease(jid)
 
 
 @app.get("/api/jobs/{jid}/geometry/{payload}")
@@ -562,8 +627,18 @@ def geometry_payload(jid: str, payload: str):
     if len(payload) != 64 or any(c not in "0123456789abcdef" for c in payload):
         raise HTTPException(404, "Unknown geometry payload")
     index_path, linked = _geometry_access(jid)
-    path = _geometry_file(index_path, linked, payload)
-    return FileResponse(path, media_type="application/octet-stream")
+    response_ready = False
+    try:
+        path = _geometry_file(index_path, linked, payload)
+        response = LeasedFileResponse(
+            path, job_id=jid, lease_acquired=True,
+            media_type="application/octet-stream"
+        )
+        response_ready = True
+        return response
+    finally:
+        if not response_ready:
+            manager.release_artifact_lease(jid)
 
 
 @app.post("/api/convert")

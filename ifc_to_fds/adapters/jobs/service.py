@@ -23,6 +23,10 @@ from .evidence_index import verify_evidence_index
 logger = logging.getLogger(__name__)
 
 
+class ArtifactLeaseConflict(RuntimeError):
+    """Job artifacts are currently being streamed and may not be purged."""
+
+
 def _rmtree_logged(path: Path) -> None:
     """Best-effort shutil.rmtree that logs failures and retries with backoff.
 
@@ -107,6 +111,8 @@ class JobService:
         # its SQLite transition commits. Preserve the original failure reason
         # even if the killed process has exited before the next scheduler tick.
         self._pending_terminal: Dict[str, Dict[str, Any]] = {}
+        # Protect file responses between route validation and final ASGI send.
+        self._artifact_leases: Dict[str, int] = {}
 
         # Clean up stale directories and reconcile interrupted jobs on startup.
         # NOTE: unregistered-dir sweep is NEVER run implicitly at boot -- the
@@ -149,6 +155,23 @@ class JobService:
                 touched = dict(job)
                 touched["last_accessed"] = time.time()
                 self.repository.set_durable(jid, touched)
+
+    def acquire_artifact_lease(self, jid: str) -> None:
+        """Pin a registered job until its artifact response completes."""
+        with self.lock:
+            if not self.repository.contains(jid):
+                raise KeyError(jid)
+            self._artifact_leases[jid] = self._artifact_leases.get(jid, 0) + 1
+
+    def release_artifact_lease(self, jid: str) -> None:
+        """Release a pin even if the client disconnects during streaming."""
+        with self.lock:
+            count = self._artifact_leases.get(jid, 0)
+            if count <= 1:
+                self._artifact_leases.pop(jid, None)
+            else:
+                self._artifact_leases[jid] = count - 1
+            self.wake.set()
 
     def cleanup_orphaned_directories(
         self, max_age_s: Optional[int] = None,
@@ -236,15 +259,18 @@ class JobService:
                         ]
                         if not timestamps or now - max(timestamps) <= max_age:
                             continue
-                        try:
-                            self.repository.delete(job_entry["id"])
-                        except JobPersistenceError:
-                            logger.exception(
-                                "Preserving retained job %s because SQLite deletion failed",
-                                job_entry["id"],
-                            )
-                            continue
-                        _rmtree_logged(resolved)
+                        with self.lock:
+                            if self._artifact_leases.get(job_entry["id"], 0):
+                                continue
+                            try:
+                                self.repository.delete(job_entry["id"])
+                            except JobPersistenceError:
+                                logger.exception(
+                                    "Preserving retained job %s because SQLite deletion failed",
+                                    job_entry["id"],
+                                )
+                                continue
+                            _rmtree_logged(resolved)
         except OSError:
             pass
 
@@ -459,6 +485,8 @@ class JobService:
                 return self.cancel(jid)
             if not purge:
                 return self.snapshot(jid)
+            if self._artifact_leases.get(jid, 0):
+                raise ArtifactLeaseConflict("Artifact download in progress; retry purge")
             directory = Path(job["directory"]).resolve()
             if directory.parent == self.root.resolve():
                 dir_to_purge = directory
@@ -549,7 +577,7 @@ class JobService:
                 now = time.time()
                 # 1. Retention sweep for non-durable jobs
                 for jid, job in self.repository.items():
-                    if job.get("durable"):
+                    if job.get("durable") or self._artifact_leases.get(jid, 0):
                         continue
                     if self.retention_s > 0:
                         last_active = max(job.get("finished") or now, job.get("last_accessed") or 0)

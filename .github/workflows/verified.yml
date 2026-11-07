@@ -17,6 +17,8 @@ on:
 
 jobs:
   python:
+    # Fail a hung matrix job explicitly instead of occupying a runner indefinitely.
+    timeout-minutes: 20
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -29,7 +31,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e ".[test]"
       - run: python -m pip check
-      - run: python -m pytest -q -m "not solver and not browser"
+      - run: python -m pytest -q -m "not solver and not browser" -o faulthandler_timeout=90
       - run: python -m ifc_to_fds --help
   javascript:
     runs-on: ubuntu-latest
