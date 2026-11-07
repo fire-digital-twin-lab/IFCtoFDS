@@ -102,6 +102,11 @@ class WorkerRunner:
                     ],
                     physics=physics,
                 )
+                if bundle.vehicle_collision_assessments:
+                    evidence["vehicle_collision_assessments"] = [
+                        assessment.model_dump()
+                        for assessment in bundle.vehicle_collision_assessments
+                    ]
                 mesh_status = mesh_gate.status.value
                 physics_status = physics.get("status", "INCONCLUSIVE")
                 verdict = scenario_verdict(mesh_status, physics_status)
