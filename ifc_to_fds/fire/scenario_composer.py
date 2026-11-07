@@ -6,9 +6,18 @@ from ifc_to_fds.validation.parser import parse_fds
 from .scenario_emitter import opening_timer_id, opening_control_id
 
 
-def configure_scenario_time(text, opening_events, requested_end_s=None):
+def configure_scenario_time(
+    text,
+    opening_events,
+    requested_end_s=None,
+    *,
+    allow_legacy_surf_fuel_id=False,
+):
     """Keep the verified base duration and include the full scenario schedule."""
-    parsed = parse_fds(text)
+    parsed = parse_fds(
+        text,
+        allow_legacy_surf_fuel_id=allow_legacy_surf_fuel_id,
+    )
     if parsed.errors or parsed.unsupported:
         raise ValueError(f"Cannot set scenario time: {parsed.errors + parsed.unsupported}")
     time_records = [r for r in parsed.records if r.kind == "TIME"]
@@ -53,13 +62,19 @@ def configure_scenario_time(text, opening_events, requested_end_s=None):
         final_text = text[:start] + new_time + text[stop:]
     else:
         final_text = text[:start] + f"&TIME T_END={end!r} /" + text[stop:]
-    final = parse_fds(final_text)
+    final = parse_fds(
+        final_text,
+        allow_legacy_surf_fuel_id=allow_legacy_surf_fuel_id,
+    )
     if final.errors or final.unsupported:
         raise ValueError(f"Invalid final scenario: {final.errors + final.unsupported}")
     return final_text, end
 
 
 def compose_scenario(base_text, bundle, manifest):
+    legacy_surface_compatibility = bool(bundle.ev_selections) and all(
+        ev.geometry_mode == "LEGACY" for ev in bundle.ev_selections
+    )
     base = parse_fds(base_text)
     domain = manifest.simulation_domain
     if not domain:
@@ -170,7 +185,10 @@ def compose_scenario(base_text, bundle, manifest):
     tail_start, _ = tail_span
     text = base_text[:tail_start] + fragment + "\n" + base_text[tail_start:]
 
-    parsed = parse_fds(text)
+    parsed = parse_fds(
+        text,
+        allow_legacy_surf_fuel_id=legacy_surface_compatibility,
+    )
     if parsed.errors or parsed.unsupported:
         raise ValueError(f"Composed scenario failed validation: {parsed.errors + parsed.unsupported}")
     meshes = [r.values["XB"] for r in parsed.records if r.kind == "MESH"]
