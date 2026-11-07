@@ -1,5 +1,30 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint P3b collision gate với verified base geometry — 07/11/2026
+
+**PR:** #71  
+**Code candidate đã nghiệm thu:** `6ad904c7b5fb975968e856fa8bbc686b4b6b4d85`  
+**Roadmap:** P3 tiếp tục `IN_PROGRESS`; scoped `EV-GEO-P3B-001 = PASS / E2`, broad `EV-GEO-001 = FAIL`.
+
+- Thêm `VehicleCollisionAssessment` và collision gate tách khỏi vehicle geometry resolver.
+- Gate chỉ bật cho `PARAMETRIC` / `IFC_BOUND`; `LEGACY` giữ nguyên behavior/serialization.
+- Mọi verified base entity phát `OBST|GEOM` đều được kiểm; IFC-bound chỉ loại trừ own vehicle source và own battery source.
+- Base `OBST`: AABB clearance <= `1e-4 m` bị reject như collision/contact.
+- Base `GEOM`: AABB disjoint được coi là proof of separation; AABB overlap/touch bị reject `INCONCLUSIVE` vì MappingPlan chưa có exact triangle-mesh collision oracle.
+- Evidence ghi số OBST/GEOM đã kiểm, nearest entity, minimum AABB clearance, exclusions, tolerance và method.
+- Worker E2E dựng verified base từ IFC thật với hai wall tách rời, chạy scientific parametric scenario và xác nhận collision evidence được persist.
+- Source quality #42382470834: **SUCCESS**, `889 passed, 14 deselected`, coverage **87%**; artifact `13578780011`, digest `sha256:43ea31cc163100cd89c61a7b711cac5ca597b84c4cdde44005871f62829c71f1`.
+- Conversion #42382470941: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver: **9 passed, 894 deselected**; artifact `13577534013`, digest `sha256:b1575008ebed1e2d3694e25b50dcf3cc1e930a839ba6d45013a614702f5eb6b4`.
+- P3b không thay đổi EV physics hoặc solver syntax; solver PASS ở đây là regression/integration evidence, không phải model validation.
+
+**P3 chưa đạt exit criteria** vì còn thiếu: automatic/native IFC vehicle semantic binding, rotated/non-axis-aligned orientation fidelity, exact collision khi GEOM AABB overlap, jet outlets, post-snap/local MeshPlan clearance và real IFC application evidence.
+
+**Scientific verdict:** scoped P3b `PASS / E2`; full `EV-GEO-001 = FAIL`; overall scientific/application verdict `INCONCLUSIVE`.  
+**Release verdict:** `NOT_PRODUCTION_READY`. Không cấp `SIMULATION_VERIFIED`.
+
+---
+
 ## Checkpoint P3a vehicle identity / ground-clearance contract — 07/11/2026
 
 **PR:** #69  
