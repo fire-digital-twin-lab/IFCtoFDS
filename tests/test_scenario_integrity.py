@@ -114,6 +114,22 @@ def _load_sealed_base(root, digest):
     )
 
 
+def test_verified_base_restores_source_identity_and_placement_provenance(
+    tiny_ifc, tmp_path
+):
+    _, digest = _verified_bundle_for_scenario(tiny_ifc, tmp_path)
+    _, plan, manifest = _load_sealed_base(tmp_path, digest)
+
+    record = next(record for record in manifest.records if record.ifc_type == "IfcWall")
+    decision = plan.get_decision(record.entity_key)
+    assert decision is not None
+    assert decision.source_ifc_type == record.ifc_type
+    assert decision.source_type_class == record.type_class
+    assert decision.placement == record.placement
+    assert decision.placement["status"] == "CONFIRMED"
+    assert len(decision.placement["effective_world"]) == 16
+
+
 def test_scenario_worker_persists_resolved_vehicle_geometry_evidence(tmp_path):
     _, digest = _verified_perimeter_bundle_for_scenario(tmp_path)
     directory = tmp_path / "job-scenario-geometry-evidence"
