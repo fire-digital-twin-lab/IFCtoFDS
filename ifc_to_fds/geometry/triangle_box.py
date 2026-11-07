@@ -209,7 +209,7 @@ def prove_mesh_clearance_from_box(
             [as_trimesh(mesh), as_trimesh(box_mesh(expanded))],
             "intersection",
         )
-    except Exception as exc:
+    except (ValueError, RuntimeError, TypeError) as exc:
         raise RuntimeError(
             "GEOM containment boolean unavailable after exact surface SAT"
         ) from exc
