@@ -245,6 +245,65 @@ def test_scenario_worker_persists_resolved_vehicle_geometry_evidence(tmp_path):
     assert collision["minimum_aabb_clearance_m"] > 4.0
 
 
+def test_scenario_worker_persists_local_mesh_plan_and_source_local_evidence(
+    tmp_path,
+):
+    _, digest = _verified_perimeter_bundle_for_scenario(tmp_path)
+    directory = tmp_path / "job-scenario-local-mesh"
+    directory.mkdir()
+    payload = {
+        "mode": "scenario",
+        "configuration": {
+            "bundle_sha256": digest,
+            "ev_selections": [
+                {
+                    "preset_id": "e-bike-lfp",
+                    "position": [5.0, 5.0, 0.65],
+                    "dimensions": [1.8, 0.6, 1.1],
+                    "geometry_mode": "PARAMETRIC",
+                    "floor_z_m": 0.0,
+                    "ground_clearance_m": 0.1,
+                }
+            ],
+            "mesh_plan": {
+                "source_vehicle_index": 0,
+                "local_region": {
+                    "xmin": 4.0,
+                    "xmax": 6.0,
+                    "ymin": 4.6,
+                    "ymax": 5.4,
+                    "zmin": 0.0,
+                    "zmax": 1.4,
+                },
+                "refinement_ratio": 2,
+            },
+        },
+    }
+    (directory / "request.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    assert WorkerRunner.run(directory) == 0
+    result = json.loads((directory / "result.json").read_text(encoding="utf-8"))
+    evidence = result["evidence"]
+    local = evidence["local_mesh_evidence"]
+    plan = evidence["local_mesh_plan"]
+
+    assert result["mesh_status"] == "INCONCLUSIVE"
+    assert local["status"] == "INCONCLUSIVE"
+    assert local["local_source_mesh_resolved"] is True
+    assert local["local_mesh_id"] == plan["local_mesh_id"] == "P4B_LOCAL_V0"
+    assert local["local_cell_size_xyz_m"] == pytest.approx([0.1, 0.1, 0.1])
+    assert local["ground_clearance_over_dz_local"] == pytest.approx(1.0)
+    assert local["grid_sensitivity_required"] is True
+    assert plan["layout_method"] == "ADJACENT_SHELL_REFINEMENT_V1"
+
+    scenario = parse_fds((directory / "scenario.fds").read_text(encoding="utf-8"))
+    assert not scenario.errors
+    assert not scenario.unsupported
+    mesh_ids = [record.id for record in scenario.records if record.kind == "MESH"]
+    assert "P4B_LOCAL_V0" in mesh_ids
+    assert all(mesh_id != "M1" for mesh_id in mesh_ids if mesh_id)
+
+
 def test_verified_base_rejects_changed_fds_and_acceptance(tiny_ifc, tmp_path):
     base, digest = _verified_bundle_for_scenario(tiny_ifc, tmp_path)
     _load_sealed_base(tmp_path, digest)
