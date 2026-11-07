@@ -1,5 +1,46 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint sau các PR #61–#64 — 07/11/2026
+
+**Main SHA tại thời điểm ghi checkpoint:** `3640d99d49017b93dd8ebf47417c0279aad82648` (merge [PR #64](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/64)). Mục này **thay thế thông tin trạng thái hiện hành** của các snapshot bên dưới; không xóa lịch sử để truy vết.
+
+- [PR #60](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/60) MERGED `e00624b1`; [main Conversion #42271306054](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42271306054) và [main Quality #42271306050](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42271306050) **SUCCESS**.
+- [PR #61](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/61) MERGED `a2428569`, chống purge/retention trong lượt tải artifact bằng lease; [main Conversion #42330708717](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42330708717) và [main Quality #42330708649](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42330708649) **SUCCESS**. PR HEAD `9c91ac03` đạt 9/9 contexts, full quality **840 passed, 12 deselected**. Root cause CI ban đầu: fake ASGI receive loop và expectation CancelledError phụ thuộc phiên bản Starlette; đã sửa bằng regression thật, không bỏ qua test.
+- [PR #62](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/62) MERGED `2404e3a2`, chờ verified UI idle trong stale-worker E2E; [main Conversion #42291965464](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42291965464) và [main Quality #42291965457](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42291965457) **SUCCESS**. Browser E2E flakiness chưa có repeated soak evidence.
+- [PR #63](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/63) MERGED `9faabc64`, bảo toàn stopped-worker terminal reason qua diagnostic/SQLite lỗi; [main Conversion #42331377851](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42331377851) và [main Quality #42331377866](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42331377866) **SUCCESS**; PR quality **844 passed, 12 deselected**.
+- [PR #64](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/64) MERGED `3640d99d`, atomic create-if-absent publication cho `diagnostics.json` (temp + flush/fsync + hard link), không ghi đè worker diagnostic. PR HEAD `342bb042` [Quality #42331440065](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42331440065) / [Conversion #42331440045](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42331440045) / [push #42331436353](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42331436353) **SUCCESS**, 9/9 required contexts, **848 passed, 12 deselected**. **Main merge SHA #3640d99 CI #42331896749/#42331896741 IN_PROGRESS khi ghi checkpoint; KHÔNG gán PASS**.
+- Chỉ có PR tài liệu của chính checkpoint này sẽ mở sau khi tạo; các PR #61–#64 đều merged. Không có GitHub Release tại lần truy vấn. Không có bằng chứng deploy production thực tế, staging E2E, cold backup/restore drill hoặc rollback rehearsal.
+
+### 16 gate: snapshot mới, không tự nâng khi thiếu bằng chứng
+
+| Gate | Trạng thái | Điều kiện nghiệm thu còn thiếu |
+|---|---|---|
+| G01 Git integration | IN_PROGRESS | CI trên main merge SHA #64 và release candidate còn thiếu |
+| G02 Release CI | NOT_RUN | Không có release candidate SHA và release package |
+| G03 Architecture | INCONCLUSIVE | Architectural full parity và migration evidence còn thiếu |
+| G04 Functional QA | IN_PROGRESS | CI regression có; staging E2E và soak chưa đạt |
+| G05 Job persistence | IN_PROGRESS | PR #63/#64 có fault injection; chưa chứng minh power loss, disk corruption, cross-process replay |
+| G06 Concurrency | INCONCLUSIVE | Download lease trong một process đã có; chưa có full multi-host/multi-process race và long streaming soak |
+| G07 Security | IN_PROGRESS | Internet threat model, authz, TLS và isolation deployment chưa nghiệm thu |
+| G08 Performance | NOT_RUN | Cold/warm benchmark với baseline/candidate đo đồng nhất |
+| G09 IFC Geometry | INCONCLUSIVE | Golden công trình thực B1/B2 vẫn DRAFT, reviewer null, evidence rỗng |
+| G10 FDS/CFD | INCONCLUSIVE | Solver CI không phải independent physical V&V |
+| G11 Staging | NOT_RUN | Chưa có staging smoke, negative test, soak |
+| G12 Backup/Restore | NOT_RUN | Có scripts/tests, chưa có staged recovery drill |
+| G13 Rollback | NOT_RUN | Chưa rollback rehearsal |
+| G14 Observability | IN_PROGRESS | Cần logs/metrics/alerts có chứng cứ quan sát vận hành |
+| G15 Production | NOT_RUN | Không có actual production deployment/smoke |
+| G16 Documentation | IN_PROGRESS | Tracker cập nhật; thiếu sign-off/release evidence |
+
+**Kết luận bắt buộc:** `NOT_PRODUCTION_READY`. Không được cấp `SIMULATION_VERIFIED` cho công trình B1/B2. `MAPPING_VERIFIED` (theo model/evidence giới hạn) không thay thế solver validation hoặc kiểm định PCCC độc lập. Chưa đủ chứng cứ để vận hành công khai với dữ liệu nhạy cảm.
+
+**Finding tồn đọng:** `IO-DIAGNOSTIC-LEGACY-CORRUPT` (file cũ tồn tại nhưng JSON hỏng), `CI-BROWSER-HANDSHAKE-01` (cần repeated soak), crash windows sau SQLite commit trước filesystem cleanup, network/unsupported hard-link mounts, multi-process lease, backup/restore rehearsal, `SCI-REAL-01` và `SCI-PARITY-01`.
+
+**Hành động tiếp theo:** xác minh CI `main@3640d99`, nghiệm thu PR tracker mới, chọn G05/G06 fault injection hoặc G07 staging security ưu tiên theo bằng chứng; nghiên cứu khoa học phải dựa trên IFC/FDS nguồn có provenance và chuyên gia ký duyệt.
+
+---
+
+
 ## Checkpoint Git và production acceptance — 07/11/2026, sau PR #59
 
 **HEAD main đã truy vấn:** `3f90132abae94a2efcd7ba4a73b12dbd786948c4` (merge #59). Các mục có ngày cũ bên dưới là snapshot lịch sử.
