@@ -89,6 +89,9 @@ class WorkerRunner:
                     scenario_id=bundle.scenario_id,
                     bundle_sha256=bundle.bundle_sha256,
                     ev_evaluations=[ev.model_dump() for ev in bundle.ev_selections],
+                    vehicle_geometries=[
+                        geometry.model_dump() for geometry in bundle.vehicle_geometries
+                    ],
                     physics=physics,
                 )
                 mesh_status = mesh_gate.status.value
