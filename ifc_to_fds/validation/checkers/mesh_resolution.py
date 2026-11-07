@@ -13,71 +13,7 @@ from ifc_to_fds.domain.validation.model import (
     ValidationContext,
 )
 
-# Reference constant: rho_inf * c_p * T_inf * sqrt(g)
-# 1.204 * 1.005 * 293.15 * sqrt(9.81) ~= 1111.4
-PLUME_COEFFICIENT = 1111.4
-
-
-def calculate_d_star(heat_release_rate_kw: float) -> float:
-    """Calculate characteristic fire diameter D* in meters.
-
-    D* = (Q / (rho_inf * c_p * T_inf * sqrt(g)))^(2/5)
-    where denominator is approximately 1111.4 (with Q in kW).
-    """
-    if heat_release_rate_kw <= 0.0:
-        return 0.0
-    return float((heat_release_rate_kw / PLUME_COEFFICIENT) ** 0.4)
-
-
-def _get_ev_peak_hrr_evidence(ev: Any) -> Dict[str, Any]:
-    """Resolve peak HRR with an explicit basis instead of hiding assumptions."""
-
-    if hasattr(ev, "peak_hrr_mw") and ev.peak_hrr_mw is not None:
-        value = float(ev.peak_hrr_mw) * 1000.0
-        return {
-            "peak_hrr_kw": value,
-            "peak_hrr_basis": "EXPLICIT_SELECTION",
-        }
-    if isinstance(ev, dict):
-        if "peak_hrr_kw" in ev and ev["peak_hrr_kw"] is not None:
-            return {
-                "peak_hrr_kw": float(ev["peak_hrr_kw"]),
-                "peak_hrr_basis": "EXPLICIT_SELECTION",
-            }
-        if "peak_hrr_mw" in ev and ev["peak_hrr_mw"] is not None:
-            return {
-                "peak_hrr_kw": float(ev["peak_hrr_mw"]) * 1000.0,
-                "peak_hrr_basis": "EXPLICIT_SELECTION",
-            }
-
-    preset_id = getattr(ev, "preset_id", None) or (
-        ev.get("preset_id") if isinstance(ev, dict) else None
-    )
-    if preset_id:
-        from ifc_to_fds.fire.ev_library import load_ev_preset
-
-        preset_key = str(preset_id).strip().lower()
-        if "-" in preset_key:
-            vclass, chem = preset_key.rsplit("-", 1)
-            preset = load_ev_preset(vclass, chem)
-            min_hrr, max_hrr = preset.peak_hrr_mw_range
-            midpoint_kw = ((min_hrr + max_hrr) / 2.0) * 1000.0
-            return {
-                "peak_hrr_kw": midpoint_kw,
-                "peak_hrr_basis": "PRESET_RANGE_MIDPOINT_ASSUMPTION",
-                "peak_hrr_range_kw": [min_hrr * 1000.0, max_hrr * 1000.0],
-                "preset_id": preset.preset_id,
-                "preset_confidence": preset.confidence,
-                "preset_citations": [
-                    citation.model_dump(mode="json") for citation in preset.citations
-                ],
-            }
-
-    return {
-        "peak_hrr_kw": 0.0,
-        "peak_hrr_basis": "UNAVAILABLE",
-    }
-
+from ifc_to_fds.fire.mesh_metrics import calculate_d_star, ev_peak_hrr_evidence
 
 def _indicator_band(ratio: float) -> str:
     """Describe D*/dx without turning historical validation values into acceptance limits."""
@@ -204,7 +140,7 @@ def check_mesh_resolution(
             if not ev_id:
                 ev_id = f"vehicle_{idx}"
 
-            hrr_evidence = _get_ev_peak_hrr_evidence(ev)
+            hrr_evidence = ev_peak_hrr_evidence(ev)
             hrr_kw = float(hrr_evidence["peak_hrr_kw"])
             if not math.isfinite(hrr_kw):
                 return GateResult(
