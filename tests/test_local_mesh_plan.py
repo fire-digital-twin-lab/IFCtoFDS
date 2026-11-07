@@ -108,6 +108,7 @@ def test_local_mesh_plan_covers_domain_without_overlap_and_resolves_local_dx():
     assert plan.local_region.zmax == pytest.approx(4.0)
     assert plan.boundary_adjustments == ["zmax coarse index expanded 3->4"]
     assert len(plan.meshes) == 5
+    assert all(min(mesh.ijk) >= 2 for mesh in plan.meshes)
 
     for index, mesh in enumerate(plan.meshes):
         for other in plan.meshes[index + 1 :]:
