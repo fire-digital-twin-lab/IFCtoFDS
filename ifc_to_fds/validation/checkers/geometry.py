@@ -8,13 +8,24 @@ from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, 
 from ifc_to_fds.geometry.mesh import bounds_for_vertices, valid_solid
 from ifc_to_fds.mapping.boundary import target_mesh
 from ifc_to_fds.validation.metrics import compare_solids
-from ifc_to_fds.validation.preflight import comparison_summary, invalid_source_solids
+from ifc_to_fds.validation.preflight import (
+    comparison_summary,
+    source_topology_blockers,
+    source_topology_preflight,
+)
 
 
 class GeometryChecker:
     name = "geometry"
 
-    def check(self, context: ValidationContext, parsed: Any = None, *, invalid_source=None) -> CheckerOutcome:
+    def check(
+        self,
+        context: ValidationContext,
+        parsed: Any = None,
+        *,
+        invalid_source=None,
+        source_topology=None,
+    ) -> CheckerOutcome:
         parsed = parsed if parsed is not None else context.parsed
         model = context.model
         if parsed is None or model is None:
@@ -30,11 +41,31 @@ class GeometryChecker:
         findings: List[Finding] = []
         element_statuses: Dict[str, str] = {}
         metrics_dict: Dict[str, Any] = {}
-        invalid = invalid_source_solids(model) if invalid_source is None else invalid_source
-        blocked = bool(config and config.fail_fast_on_source_errors and invalid)
+        topology = source_topology_preflight(model) if source_topology is None else source_topology
+        blockers = source_topology_blockers(topology)
+        confirmed_invalid = sorted(
+            key for key, item in blockers.items() if item.get("status") == "FAIL"
+        )
+        uncertain_source = sorted(
+            key for key, item in blockers.items() if item.get("status") == "INCONCLUSIVE"
+        )
+        if invalid_source is not None:
+            # Compatibility for direct legacy callers; the structured preflight is
+            # authoritative when available.
+            confirmed_invalid = sorted(set(confirmed_invalid) | set(invalid_source))
+        blocked = bool(config and config.fail_fast_on_source_errors and blockers)
         skip = blocked and not config.collect_partial_geometry_evidence
-        status = GateStatus.FAIL if blocked else GateStatus.PASS
-        reasons = ["Source topology preflight rejected"] if blocked else []
+        status = (
+            GateStatus.FAIL
+            if confirmed_invalid
+            else GateStatus.INCONCLUSIVE
+            if uncertain_source
+            else GateStatus.PASS
+        )
+        reasons = []
+        if blocked:
+            reasons.append("Source topology preflight did not authorize dependent checks")
+        metrics_dict["source_topology_preflight"] = blockers
         attempted, completed, skipped, failed, inconclusive, deviated = (set() for _ in range(6))
 
         domains = [r.values.get("XB") for r in parsed.records if r.kind == "MESH"]
@@ -84,9 +115,54 @@ class GeometryChecker:
                     status = GateStatus.INCONCLUSIVE
                 reasons.append(f"{p.kind} effective semantics not supported")
 
+        def topology_detail(element, issue):
+            reason = issue.get("reason", "SOURCE_TOPOLOGY_NOT_ACCEPTED")
+            if reason == "SELF_INTERSECTION":
+                witness = issue.get("self_intersection", {}).get("witness", {})
+                return (
+                    f"Source self-intersection confirmed: entity={element.entity_key}, "
+                    f"STEP={element.step_id}, GlobalId={element.global_id}, "
+                    f"IFC type={element.ifc_type}; witness={witness}"
+                )
+            if reason == "SELF_INTERSECTION_UNCERTAIN":
+                evidence = issue.get("self_intersection", {})
+                return (
+                    f"Source self-intersection could not be resolved: entity={element.entity_key}, "
+                    f"STEP={element.step_id}, GlobalId={element.global_id}, "
+                    f"IFC type={element.ifc_type}; evidence={evidence}"
+                )
+            return (
+                f"Unsupported source geometry: entity={element.entity_key}, STEP={element.step_id}, "
+                f"GlobalId={element.global_id}, IFC type={element.ifc_type}; "
+                f"source mesh quality={issue.get('mesh_quality', {})}; {element.mapping_rationale}"
+            )
+
         for e in model.elements:
             key = e.entity_key
             if e.scope_decision == ScopeDecision.OUT_OF_SCOPE:
+                continue
+
+            issue = blockers.get(key)
+            if issue is not None:
+                detail = topology_detail(e, issue)
+                if issue.get("status") == "FAIL":
+                    status = GateStatus.FAIL
+                    findings.append(
+                        Finding(
+                            id=f"FND-{len(findings) + 1:04}",
+                            severity=Severity.P1,
+                            category="geometry",
+                            title=detail[:100],
+                            detail=detail,
+                            element_id=key,
+                        )
+                    )
+                    element_statuses[key] = "UNSUPPORTED"
+                else:
+                    if status != GateStatus.FAIL:
+                        status = GateStatus.INCONCLUSIVE
+                    reasons.append(detail)
+                    element_statuses[key] = "INCONCLUSIVE"
                 continue
 
             strategy = e.mapping_strategy
@@ -208,7 +284,7 @@ class GeometryChecker:
 
         mode = "FAIL_FAST" if skip else "PARTIAL" if blocked else "FULL"
         summary, export_coverage = comparison_summary(
-            parsed, primitives, invalid, mode=mode,
+            parsed, primitives, confirmed_invalid, mode=mode,
             verified=sum(value == "MATCHED" for value in element_statuses.values()),
             attempted=attempted, completed=completed, skipped=skipped,
             failed=failed, inconclusive=inconclusive, deviated=deviated,
