@@ -241,33 +241,25 @@ def test_solver_integration_runs_even_when_mesh_adequacy_is_inconclusive(
         solver_called = True
         return GateResult(status=GateStatus.PASS), GateResult(status=GateStatus.PASS)
 
-    monkeypatch.setattr("ifc_to_fds.validation.checkers.solver.solver_gates", fake_solver_gates)
-
-    plan = getattr(box_model, "mapping_plan", None)
-    if plan is None:
-        from ifc_to_fds.domain.mapping import MappingPlan
-        plan = MappingPlan()
-
-    # e-bike-lfp produces ~100 kW -> D* ~ 0.38m -> D*/dx ~ 0.76.
-    ev = EVSelection(preset_id="e-bike-lfp", position=(1.0, 0.5, 0.5))
-    bundle = emit_fire_scenario(
-        mapping_plan=plan,
-        bundle_sha256="b" * 64,
-        ev_selections=[ev],
-        verification_status="MAPPING_VERIFIED",
+    monkeypatch.setattr(
+        "ifc_to_fds.validation.checkers.solver.solver_gates", fake_solver_gates
     )
 
     fds_text = (
-        "&HEAD CHID='EV_FIRE_COARSE', TITLE='EV Fire Coarse Mesh' /\n"
+        "&HEAD CHID='EV_FIRE_COARSE' /\n"
         "&TIME T_END=60.0 /\n"
         "&MESH ID='M1', IJK=4,4,4, XB=0.0,2.0,0.0,2.0,0.0,2.0 /\n"
-        f"{bundle.fds_fragment}\n"
+        "&REAC ID='REAC_TEST', FUEL='OFFGAS', C=2.0, H=4.0, O=1.0 /\n"
+        "&SURF ID='BURNER_EBIKE', HRRPUA=92.59 /\n"
+        "&VENT ID='VENT_EBIKE', XB=0.0,1.8,0.0,0.6,0.0,0.0, "
+        "SURF_ID='BURNER_EBIKE' /\n"
         "&TAIL /\n"
     )
 
     runner = ValidationRunner()
     report = runner.validate(box_model, fds_text)
 
+    assert report.gates["syntax"].status == GateStatus.PASS
     assert report.gates["mesh_resolution"].status == GateStatus.INCONCLUSIVE
     assert report.gates["solver"].status == GateStatus.PASS
     assert report.gates["solver"].evidence["mesh_adequacy_status"] == "INCONCLUSIVE"
