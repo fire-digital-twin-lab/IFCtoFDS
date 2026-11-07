@@ -5,7 +5,10 @@ import pytest
 from ifc_to_fds.adapters.jobs.runner import WorkerRunner
 from ifc_to_fds.adapters.jobs.base_integrity import verify_accepted_mapping_base
 from ifc_to_fds.adapters.jobs.evidence_index import write_evidence_index
-from ifc_to_fds.application.services.scenario_base import load_verified_base
+from ifc_to_fds.application.services.scenario_base import (
+    load_verified_base,
+    load_verified_scenario_base,
+)
 from ifc_to_fds.domain.mapping import MappingPlan, build_mapping_plan
 from ifc_to_fds.domain.validation import GateResult, GateStatus
 from ifc_to_fds.fire.scenario_composer import compose_scenario, configure_scenario_time
@@ -33,6 +36,25 @@ def _verified_bundle_for_scenario(tiny_ifc, tmp_path):
     base = tmp_path / "base"
     result = convert([str(tiny_ifc[0])], output_directory=base)
     assert result["mapping_status"] == "MAPPING_VERIFIED"
+    save_artifacts(result, base / "model.fds")
+    public = public_result(result, directory=base)
+    (base / "result.json").write_text(json.dumps(public), encoding="utf-8")
+    write_evidence_index(base, "convert", public)
+    return base, result["manifest"]["bundle_sha256"]
+
+
+def _verified_geom_bundle_for_scenario(tiny_ifc, tmp_path):
+    base = tmp_path / "base-geom"
+    result = convert(
+        [str(tiny_ifc[0])],
+        configuration={"all_geom": True},
+        output_directory=base,
+    )
+    assert result["mapping_status"] == "MAPPING_VERIFIED"
+    assert any(
+        record["fds_representation"] == "GEOM"
+        for record in result["manifest"]["records"]
+    )
     save_artifacts(result, base / "model.fds")
     public = public_result(result, directory=base)
     (base / "result.json").write_text(json.dumps(public), encoding="utf-8")
@@ -112,6 +134,60 @@ def _load_sealed_base(root, digest):
     return load_verified_base(
         root, digest, verify_candidate=verify_accepted_mapping_base
     )
+
+
+def test_verified_scenario_base_reconstructs_exact_emitted_geom(
+    tiny_ifc, tmp_path
+):
+    _, digest = _verified_geom_bundle_for_scenario(tiny_ifc, tmp_path)
+    base = load_verified_scenario_base(
+        tmp_path,
+        digest,
+        verify_candidate=verify_accepted_mapping_base,
+    )
+    geom_records = [
+        record
+        for record in base.manifest.records
+        if record.fds_representation == "GEOM"
+    ]
+    assert geom_records
+    for record in geom_records:
+        meshes = base.emitted_geometry.meshes_for(record.entity_key)
+        primitive_ids = base.emitted_geometry.geom_primitive_ids[record.entity_key]
+        assert len(meshes) == len(primitive_ids) == len(record.fds_primitive_ids)
+        assert list(primitive_ids) == sorted(record.fds_primitive_ids)
+        assert all(mesh.vertices and mesh.faces for mesh in meshes)
+
+
+def test_scenario_worker_uses_exact_sealed_geom_for_collision(
+    tiny_ifc, tmp_path
+):
+    _, digest = _verified_geom_bundle_for_scenario(tiny_ifc, tmp_path)
+    directory = tmp_path / "job-scenario-exact-geom-collision"
+    directory.mkdir()
+    payload = {
+        "mode": "scenario",
+        "configuration": {
+            "bundle_sha256": digest,
+            "ev_selections": [
+                {
+                    "preset_id": "e-bike-lfp",
+                    "position": [1.0, 0.5, 0.35],
+                    "dimensions": [0.5, 0.5, 0.5],
+                    "geometry_mode": "PARAMETRIC",
+                    "floor_z_m": 0.0,
+                    "ground_clearance_m": 0.1,
+                }
+            ],
+        },
+    }
+    (directory / "request.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    assert WorkerRunner.run(directory) == 1
+    error = (directory / "error.txt").read_text(encoding="utf-8")
+    assert "clearance violation with verified base GEOM" in error
+    assert "INCONCLUSIVE" not in error
+    assert not (directory / "scenario.fds").exists()
 
 
 def test_verified_base_restores_source_identity_and_placement_provenance(
