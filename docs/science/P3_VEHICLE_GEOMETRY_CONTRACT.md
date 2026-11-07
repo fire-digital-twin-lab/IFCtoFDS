@@ -41,6 +41,7 @@ Requires:
 
 - explicit `source_entity_key`;
 - a matching MappingPlan decision;
+- the decision must explicitly carry `simulation_role=VEHICLE`;
 - verified source bounds;
 - current P3a support requires the accepted base representation to be `OBST`;
 - explicit `floor_z_m`;
@@ -68,7 +69,7 @@ Authoritative buildingSMART reference:
 
 - https://standards.buildingsmart.org/IFC/RELEASE/IFC4_3/HTML/annex-a-express.html
 
-P3a binds by canonical `entity_key`, not fuzzy name matching. A source encoded in an older schema or as a generic proxy requires an explicit reviewed mapping decision; this work package does not auto-promote it to `IfcVehicle`.
+P3a binds by canonical `entity_key`, not fuzzy name matching. The bound decision must already be reviewed as `simulation_role=VEHICLE`; P3a does not infer that role from an object name. A source encoded in an older schema or as a generic proxy therefore requires an explicit reviewed mapping decision; this work package does not auto-promote it to `IfcVehicle`.
 
 ## Tests / scientific oracle
 
