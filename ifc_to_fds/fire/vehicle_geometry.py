@@ -30,7 +30,7 @@ _GEOMETRY_TOLERANCE_M = 1e-4
 _ORIENTATION_TOLERANCE = 1e-6
 
 
-def _confirmed_axis_aligned_yaw(placement: Any) -> float:
+def _confirmed_axis_aligned_yaw(placement: Any, body_bounds: BoundingBox) -> float:
     """Resolve reviewed IFC yaw only when provenance proves a world-axis-aligned frame."""
 
     if not isinstance(placement, dict) or placement.get("status") != "CONFIRMED":
@@ -124,7 +124,27 @@ def _confirmed_axis_aligned_yaw(placement: Any) -> float:
             "IFC_BOUND vehicle yaw is not world-axis-aligned; GEOM vehicle support is required"
         )
 
-    return float((quarter_turn % 4) * 90)
+    yaw_degrees = float((quarter_turn % 4) * 90)
+
+    # ObjectPlacement alone is not sufficient IFC evidence for a body's longitudinal
+    # direction: representation items such as IfcSweptAreaSolid may carry their own
+    # Position relative to the object coordinate system. For the current OBST-only
+    # vehicle contract, cross-check the placement X axis against the verified world's
+    # major horizontal box axis. A square/near-square footprint cannot prove yaw.
+    dx, dy = float(body_bounds.dx), float(body_bounds.dy)
+    if abs(dx - dy) <= _GEOMETRY_TOLERANCE_M:
+        raise ValueError(
+            "IFC_BOUND vehicle longitudinal axis is ambiguous from verified OBST bounds"
+        )
+    bounds_axis = "X" if dx > dy else "Y"
+    placement_x_axis = "X" if yaw_degrees in (0.0, 180.0) else "Y"
+    if bounds_axis != placement_x_axis:
+        raise ValueError(
+            "IFC_BOUND vehicle object placement disagrees with verified OBST longitudinal axis; "
+            "representation-item orientation is not proven"
+        )
+
+    return yaw_degrees
 
 
 def _centered_bounds(
@@ -318,7 +338,7 @@ def resolve_vehicle_geometry(
     if body_bounds is None:
         raise ValueError(f"Vehicle source entity has no verified bounds: {source_entity_key}")
 
-    yaw_degrees = _confirmed_axis_aligned_yaw(decision.placement)
+    yaw_degrees = _confirmed_axis_aligned_yaw(decision.placement, body_bounds)
 
     body_center = (
         (body_bounds.xmin + body_bounds.xmax) / 2.0,
@@ -371,6 +391,6 @@ def resolve_vehicle_geometry(
             "review_status": decision.review_status,
             "fds_representation": decision.fds_representation,
             "placement_status": decision.placement.get("status"),
-            "orientation_method": "CONFIRMED_EFFECTIVE_WORLD_QUARTER_TURN",
+            "orientation_method": "CONFIRMED_EFFECTIVE_WORLD_QUARTER_TURN_WITH_OBST_AXIS_CROSSCHECK",
         },
     )
