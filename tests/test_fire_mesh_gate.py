@@ -124,6 +124,11 @@ def test_mesh_resolution_checker_with_scenario_fds(box_model):
     assert mesh_gate.status == GateStatus.INCONCLUSIVE
     assert mesh_gate.evidence["cell_size_m"] == pytest.approx(0.2, rel=1e-3)
     assert mesh_gate.evidence["grid_sensitivity_required"] is True
+    assert (
+        mesh_gate.evidence["cell_size_basis"]
+        == "GLOBAL_MAX_MESH_SPACING_NOT_SOURCE_LOCAL"
+    )
+    assert mesh_gate.evidence["local_source_mesh_resolved"] is False
 
 
 def test_mesh_gate_reports_critical_geometry_cells_without_thresholds():
@@ -150,6 +155,8 @@ def test_mesh_gate_reports_critical_geometry_cells_without_thresholds():
     assert metric["ground_clearance_over_dx"] == pytest.approx(3.0)
     assert metric["battery_thickness_over_dx"] == pytest.approx(3.0)
     assert res.evidence["grid_sensitivity_required"] is True
+    assert res.evidence["cell_size_basis"] == "CALLER_SUPPLIED_UNVERIFIED_LOCALITY"
+    assert res.evidence["local_source_mesh_resolved"] is False
 
 
 def test_calculate_d_star_values():
