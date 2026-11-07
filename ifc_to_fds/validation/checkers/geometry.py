@@ -142,6 +142,16 @@ class GeometryChecker:
             if e.scope_decision == ScopeDecision.OUT_OF_SCOPE:
                 continue
 
+            strategy = e.mapping_strategy
+            if strategy in (MappingStrategy.EXCLUDED_SCOPE, MappingStrategy.EXCLUDED_APPROVED):
+                element_statuses[key] = strategy.value
+                continue
+            if strategy == MappingStrategy.SEMANTIC_ONLY:
+                element_statuses[key] = "SEMANTIC_ONLY"
+                continue
+            if strategy == MappingStrategy.HVAC:
+                element_statuses[key] = "OPERATIONAL_MAPPED"
+                continue
             issue = blockers.get(key)
             if issue is not None:
                 detail = topology_detail(e, issue)
@@ -163,17 +173,6 @@ class GeometryChecker:
                         status = GateStatus.INCONCLUSIVE
                     reasons.append(detail)
                     element_statuses[key] = "INCONCLUSIVE"
-                continue
-
-            strategy = e.mapping_strategy
-            if strategy in (MappingStrategy.EXCLUDED_SCOPE, MappingStrategy.EXCLUDED_APPROVED):
-                element_statuses[key] = strategy.value
-                continue
-            if strategy == MappingStrategy.SEMANTIC_ONLY:
-                element_statuses[key] = "SEMANTIC_ONLY"
-                continue
-            if strategy == MappingStrategy.HVAC:
-                element_statuses[key] = "OPERATIONAL_MAPPED"
                 continue
             if strategy == MappingStrategy.NONE:
                 if e.role == "PHYSICAL" and (not e.mesh or not valid_solid(e.mesh)):
