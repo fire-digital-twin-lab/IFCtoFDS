@@ -298,6 +298,147 @@ def test_mapping_plan_carries_source_identity_and_placement_and_rejects_spoofing
 
 
 
+def test_real_ifc_item_position_rotation_cannot_spoof_vehicle_yaw(tmp_path):
+    import ifcopenshell.api.aggregate
+    import ifcopenshell.api.context
+    import ifcopenshell.api.geometry
+    import ifcopenshell.api.project
+    import ifcopenshell.api.root
+    import ifcopenshell.api.spatial
+    import ifcopenshell.api.unit
+    import numpy as np
+
+    from ifc_to_fds.core.inventory import compute_file_sha256
+    from ifc_to_fds.pipeline import convert
+    from ifc_to_fds.fire.scenario_emitter import emit_fire_scenario
+
+    file = ifcopenshell.api.project.create_file(version="IFC4")
+    project = ifcopenshell.api.root.create_entity(
+        file, ifc_class="IfcProject", name="P3c Item Position"
+    )
+    ifcopenshell.api.unit.assign_unit(
+        file, units=[ifcopenshell.api.unit.add_si_unit(file, unit_type="LENGTHUNIT")]
+    )
+    context = ifcopenshell.api.context.add_context(file, context_type="Model")
+    body = ifcopenshell.api.context.add_context(
+        file,
+        context_type="Model",
+        context_identifier="Body",
+        target_view="MODEL_VIEW",
+        parent=context,
+    )
+    storey = ifcopenshell.api.root.create_entity(
+        file, ifc_class="IfcBuildingStorey", name="Ground"
+    )
+    storey.Elevation = 0.0
+    ifcopenshell.api.aggregate.assign_object(
+        file, products=[storey], relating_object=project
+    )
+    vehicle = ifcopenshell.api.root.create_entity(
+        file, ifc_class="IfcBuildingElementProxy", name="Item-rotated EV"
+    )
+    ifcopenshell.api.spatial.assign_container(
+        file, products=[vehicle], relating_structure=storey
+    )
+    representation = ifcopenshell.api.geometry.add_wall_representation(
+        file, context=body, length=4.0, height=1.5, thickness=2.0
+    )
+    ifcopenshell.api.geometry.assign_representation(
+        file, product=vehicle, representation=representation
+    )
+
+    # Rotate the swept solid relative to the object coordinate system while
+    # keeping ObjectPlacement world yaw at 0 degrees. IFC explicitly permits
+    # IfcSweptAreaSolid.Position to reposition the resulting solid.
+    solid = representation.Items[0]
+    solid.Position = file.create_entity(
+        "IfcAxis2Placement3D",
+        Location=file.create_entity(
+            "IfcCartesianPoint", Coordinates=(0.0, 0.0, 0.0)
+        ),
+        Axis=file.create_entity(
+            "IfcDirection", DirectionRatios=(0.0, 0.0, 1.0)
+        ),
+        RefDirection=file.create_entity(
+            "IfcDirection", DirectionRatios=(0.0, 1.0, 0.0)
+        ),
+    )
+    placement = np.eye(4)
+    placement[:3, 3] = np.array([6.0, 4.0, 0.2])
+    ifcopenshell.api.geometry.edit_object_placement(
+        file, product=vehicle, matrix=placement
+    )
+
+    path = tmp_path / "p3c-item-rotated.ifc"
+    file.write(str(path))
+    source_hash = compute_file_sha256(str(path))
+    entity_key = f"{source_hash}:{vehicle.id()}"
+    policy = {
+        "action": "PASSIVE_OBSTACLE",
+        "policy_version": "p3c-item-position-v1",
+        "rationale": "Reviewed proxy used to test representation-item orientation",
+        "reviewer": "TEST_REVIEWER",
+        "evidence": "tests/test_vehicle_orientation_provenance.py",
+        "semantic_role": "VEHICLE",
+        "factors": {
+            "ifc_type": "IfcBuildingElementProxy reviewed explicitly",
+            "mesh_scale": "source solid retained",
+            "domain_position": "full-model domain",
+            "airflow_clearance": "checked by scenario geometry contract",
+            "system": "not an MEP network member",
+            "future_operational_role": "EV fire scenario source",
+            "golden_policy": "P3c representation-item spoof regression",
+        },
+    }
+    result = convert(
+        [str(path)],
+        configuration={"decisions": {entity_key: policy}},
+        output_directory=tmp_path / "converted-item-rotated",
+    )
+    assert result["mapping_status"] == "MAPPING_VERIFIED"
+
+    record = next(r for r in result["manifest"]["records"] if r["entity_key"] == entity_key)
+    bounds = BoundingBox.model_validate(
+        record["representation_bounds"] or record["source_bounds"]
+    )
+    assert bounds.dy > bounds.dx
+    decision = MappingDecision(
+        entity_key=entity_key,
+        strategy=record["mapping_strategy"],
+        simulation_role=record["simulation_role"],
+        fds_representation=record["fds_representation"],
+        representation_bounds=record["representation_bounds"],
+        element_bounds=record["source_bounds"],
+        source_ifc_type=record["ifc_type"],
+        source_type_class=record["type_class"],
+        placement=record["placement"],
+        scope_decision=record["scope_decision"],
+        decision=record["decision"],
+        review_status=record["review_status"],
+    )
+    plan = MappingPlan(
+        decisions=[decision],
+        simulation_domain=BoundingBox.model_validate(result["manifest"]["simulation_domain"]),
+    )
+    selection = EVSelection(
+        preset_id="auto-nmc",
+        position=(
+            (bounds.xmin + bounds.xmax) / 2.0,
+            (bounds.ymin + bounds.ymax) / 2.0,
+            (bounds.zmin + bounds.zmax) / 2.0,
+        ),
+        geometry_mode="IFC_BOUND",
+        source_entity_key=entity_key,
+        floor_z_m=0.0,
+        ground_clearance_m=bounds.zmin,
+    )
+    with pytest.raises(
+        ValueError,
+        match="object placement disagrees with verified OBST longitudinal axis",
+    ):
+        emit_fire_scenario(plan, result["manifest"]["bundle_sha256"], [selection])
+
+
 def test_real_ifc_quarter_turn_orientation_survives_verified_base_round_trip(
     tmp_path,
 ):
