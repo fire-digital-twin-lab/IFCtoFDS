@@ -103,7 +103,8 @@ def test_local_mesh_plan_covers_domain_without_overlap_and_resolves_local_dx():
     assert plan.local_mesh().ijk == (8, 8, 6)
     assert plan.local_mesh().total_cells == 384
     assert plan.total_cells > plan.local_mesh().total_cells
-    assert len(plan.meshes) == 7
+    # No lower-Z shell is needed because the refined region starts at domain zmin.
+    assert len(plan.meshes) == 6
 
     for index, mesh in enumerate(plan.meshes):
         for other in plan.meshes[index + 1 :]:
