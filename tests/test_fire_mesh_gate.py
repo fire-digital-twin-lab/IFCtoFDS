@@ -188,6 +188,12 @@ def test_check_mesh_resolution_rejects_ambiguous_units():
         check_mesh_resolution(50.0, cell_size=0.2)
 
 
+def test_mesh_gate_rejects_nonfinite_hrr_input():
+    res = check_mesh_resolution({"peak_hrr_kw": float("nan")}, cell_size=0.2)
+    assert res.status == GateStatus.FAIL
+    assert "nonfinite peak HRR" in res.reason
+
+
 def test_device_selection_sanitization_and_injection_defense():
     """H-7: verify DeviceSelection whitelists quantities and rejects injection."""
     from ifc_to_fds.fire.scenario_emitter import DeviceSelection
@@ -286,6 +292,11 @@ def test_mesh_gate_multi_source_reports_each_indicator_without_acceptance_band()
     res = check_mesh_resolution(bundle, cell_size=0.2)
     assert res.status == GateStatus.INCONCLUSIVE
     by_vehicle = {e["vehicle"]: e for e in res.evidence["ev_evaluations"]}
+    assert (
+        by_vehicle["auto-nmc"]["peak_hrr_basis"]
+        == "PRESET_RANGE_MIDPOINT_ASSUMPTION"
+    )
+    assert by_vehicle["auto-nmc"]["peak_hrr_range_kw"]
     assert (
         by_vehicle["auto-nmc"]["indicator_band"]
         == "WITHIN_HISTORICAL_4_16_SUBSET"
