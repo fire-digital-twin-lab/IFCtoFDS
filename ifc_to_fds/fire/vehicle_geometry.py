@@ -233,6 +233,10 @@ def resolve_vehicle_geometry(
         raise ValueError(
             f"Vehicle source entity is not present in MappingPlan: {source_entity_key}"
         )
+    if str(decision.simulation_role).strip().upper() != "VEHICLE":
+        raise ValueError(
+            "IFC_BOUND source requires a reviewed MappingPlan decision with simulation_role=VEHICLE"
+        )
     if decision.fds_representation != "OBST":
         raise ValueError(
             "IFC_BOUND vehicle currently requires an OBST representation in the verified base"
@@ -282,7 +286,7 @@ def resolve_vehicle_geometry(
         body_from_verified_base=True,
         provenance={
             "geometry_semantics": "VERIFIED_MAPPING_BASE",
-            "mapping_strategy": str(decision.strategy),
+            "mapping_strategy": getattr(decision.strategy, "value", str(decision.strategy)),
             "simulation_role": decision.simulation_role,
             "fds_representation": decision.fds_representation,
         },
