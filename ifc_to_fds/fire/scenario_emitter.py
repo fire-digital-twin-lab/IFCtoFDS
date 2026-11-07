@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ifc_to_fds.domain.mapping import MappingPlan
+from ifc_to_fds.fire.base_geometry import VerifiedBaseGeometry
 from ifc_to_fds.fire.ev_library import EV_LIBRARY_VERSION, EVPreset, load_ev_preset
 from ifc_to_fds.fire.vehicle_collision import (
     VehicleCollisionAssessment,
@@ -250,6 +251,7 @@ def emit_fire_scenario(
     devices: Optional[List[DeviceSelection]] = None,
     verification_status: str = "MAPPING_VERIFIED",
     allow_multi_reac: bool = False,
+    verified_base_geometry: Optional[VerifiedBaseGeometry] = None,
 ) -> ScenarioBundle:
     """Emits an FDS fire scenario bundle adhering to strict verification invariants."""
     if (
@@ -368,6 +370,7 @@ def emit_fire_scenario(
     vehicle_collision_assessments = assess_vehicle_base_collisions(
         mapping_plan,
         [cfg["geometry"] for cfg in ev_configs],
+        verified_base_geometry=verified_base_geometry,
     )
 
     lines: List[str] = [
