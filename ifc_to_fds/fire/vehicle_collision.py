@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import math
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from ifc_to_fds.domain.bim.bounding_box import BoundingBox
 from ifc_to_fds.domain.mapping import MappingPlan
+from ifc_to_fds.fire.base_geometry import VerifiedBaseGeometry
 from ifc_to_fds.fire.vehicle_geometry_models import VehicleGeometry
+from ifc_to_fds.geometry.triangle_box import prove_mesh_clearance_from_box
 
 _COLLISION_TOLERANCE_M = 1e-4
 
@@ -26,10 +28,14 @@ class VehicleCollisionAssessment(BaseModel):
     checked_base_entities: int = Field(ge=0)
     checked_obst_entities: int = Field(ge=0)
     checked_geom_entities: int = Field(ge=0)
+    geom_aabb_separated_entities: int = Field(default=0, ge=0)
+    geom_exact_checked_entities: int = Field(default=0, ge=0)
+    geom_exact_primitive_checks: int = Field(default=0, ge=0)
+    geom_exact_evidence: List[Dict[str, Any]] = Field(default_factory=list)
     nearest_entity_key: Optional[str] = None
     minimum_aabb_clearance_m: Optional[float] = Field(default=None, ge=0)
     tolerance_m: float = _COLLISION_TOLERANCE_M
-    method: str = "AABB_SEPARATION_WITH_EXACT_OBST_AND_FAIL_CLOSED_GEOM"
+    method: str = "OBST_AABB_PLUS_SEALED_FDS_GEOM_EXACT_BINARY64_SAT"
     status: Literal["PASS"] = "PASS"
 
 
@@ -45,13 +51,17 @@ def _aabb_distance(left: BoundingBox, right: BoundingBox) -> float:
 def assess_vehicle_base_collisions(
     mapping_plan: MappingPlan,
     vehicle_geometries: List[VehicleGeometry],
+    verified_base_geometry: Optional[VerifiedBaseGeometry] = None,
 ) -> List[VehicleCollisionAssessment]:
     """Require scientific vehicles to be separated from verified base solids.
 
-    For OBST, AABB is the actual serialized solid and distance <= tolerance is
-    rejected as collision/contact. For GEOM, disjoint AABBs prove separation;
-    overlapping/touching AABBs are fail-closed because exact mesh intersection
-    evidence is not available in MappingPlan.
+    OBST uses its exact serialized AABB.
+
+    GEOM first uses disjoint AABBs as a separation proof. If AABBs overlap or
+    touch, PASS requires exact emitted GEOM reconstructed from the sealed FDS:
+    every GEOM primitive must be separated from an outward-expanded vehicle box
+    by exact binary64 triangle/AABB SAT plus a containment boolean. Missing or
+    unavailable exact evidence remains fail-closed.
     """
 
     assessments: List[VehicleCollisionAssessment] = []
@@ -71,6 +81,10 @@ def assess_vehicle_base_collisions(
         checked = 0
         checked_obst = 0
         checked_geom = 0
+        geom_aabb_separated = 0
+        geom_exact_checked = 0
+        geom_exact_primitive_checks = 0
+        geom_exact_evidence: List[Dict[str, Any]] = []
         nearest_key: Optional[str] = None
         minimum_clearance: Optional[float] = None
 
@@ -99,18 +113,63 @@ def assess_vehicle_base_collisions(
                 minimum_clearance = clearance
                 nearest_key = decision.entity_key
 
-            if clearance <= _COLLISION_TOLERANCE_M:
-                if representation == "OBST":
-                    raise ValueError(
-                        "Vehicle collision/contact with verified base OBST: "
-                        f"vehicle={index}, entity_key={decision.entity_key}, "
-                        f"clearance_m={clearance:.6g}"
-                    )
+            if clearance > _COLLISION_TOLERANCE_M:
+                if representation == "GEOM":
+                    geom_aabb_separated += 1
+                continue
+
+            if representation == "OBST":
+                raise ValueError(
+                    "Vehicle collision/contact with verified base OBST: "
+                    f"vehicle={index}, entity_key={decision.entity_key}, "
+                    f"clearance_m={clearance:.6g}"
+                )
+
+            if verified_base_geometry is None:
                 raise ValueError(
                     "Vehicle clearance against verified base GEOM is INCONCLUSIVE: "
                     f"vehicle={index}, entity_key={decision.entity_key}; "
-                    "AABB overlaps/touches and exact mesh collision evidence is required"
+                    "AABB overlaps/touches and sealed emitted GEOM evidence was not supplied"
                 )
+
+            meshes = verified_base_geometry.meshes_for(decision.entity_key)
+            primitive_ids = verified_base_geometry.geom_primitive_ids.get(
+                decision.entity_key, ()
+            )
+            if not meshes or len(meshes) != len(primitive_ids):
+                raise ValueError(
+                    "Vehicle clearance against verified base GEOM is INCONCLUSIVE: "
+                    f"vehicle={index}, entity_key={decision.entity_key}; "
+                    "sealed emitted GEOM evidence is incomplete"
+                )
+
+            geom_exact_checked += 1
+            for primitive_id, mesh in zip(primitive_ids, meshes):
+                geom_exact_primitive_checks += 1
+                try:
+                    evidence = prove_mesh_clearance_from_box(
+                        mesh,
+                        geometry.body_bounds,
+                        _COLLISION_TOLERANCE_M,
+                    )
+                except (ValueError, RuntimeError) as exc:
+                    raise ValueError(
+                        "Vehicle clearance against verified base GEOM is INCONCLUSIVE: "
+                        f"vehicle={index}, entity_key={decision.entity_key}, "
+                        f"primitive_id={primitive_id}; exact geometry evidence unavailable: {exc}"
+                    ) from exc
+                item = {
+                    "entity_key": decision.entity_key,
+                    "primitive_id": primitive_id,
+                    **evidence,
+                }
+                geom_exact_evidence.append(item)
+                if evidence["status"] != "SEPARATED":
+                    raise ValueError(
+                        "Vehicle collision/contact or clearance violation with verified base GEOM: "
+                        f"vehicle={index}, entity_key={decision.entity_key}, "
+                        f"primitive_id={primitive_id}; evidence={evidence}"
+                    )
 
         assessments.append(
             VehicleCollisionAssessment(
@@ -121,6 +180,10 @@ def assess_vehicle_base_collisions(
                 checked_base_entities=checked,
                 checked_obst_entities=checked_obst,
                 checked_geom_entities=checked_geom,
+                geom_aabb_separated_entities=geom_aabb_separated,
+                geom_exact_checked_entities=geom_exact_checked,
+                geom_exact_primitive_checks=geom_exact_primitive_checks,
+                geom_exact_evidence=geom_exact_evidence,
                 nearest_entity_key=nearest_key,
                 minimum_aabb_clearance_m=minimum_clearance,
             )
