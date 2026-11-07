@@ -6,7 +6,18 @@ from ifc_to_fds.validation.parser import parse_fds
 
 
 def assess_scenario_physics(text, bundle, budget):
-    parsed = parse_fds(text)
+    legacy_surface_compatibility = bool(bundle.ev_selections) and all(
+        ev.geometry_mode == "LEGACY" for ev in bundle.ev_selections
+    )
+    parsed = parse_fds(
+        text,
+        allow_legacy_surf_fuel_id=legacy_surface_compatibility,
+    )
+    if parsed.errors or parsed.unsupported:
+        raise ValueError(
+            "Scenario physics assessment requires a supported FDS contract: "
+            f"{parsed.errors + parsed.unsupported}"
+        )
     burners = {r.id: r for r in parsed.records if r.kind == "SURF"}
     vents = {r.id: r for r in parsed.records if r.kind == "VENT"}
     ramps = {}
