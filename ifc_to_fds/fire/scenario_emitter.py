@@ -15,6 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from ifc_to_fds.domain.mapping import MappingPlan
 from ifc_to_fds.fire.ev_library import EV_LIBRARY_VERSION, EVPreset, load_ev_preset
+from ifc_to_fds.fire.vehicle_collision import (
+    VehicleCollisionAssessment,
+    assess_vehicle_base_collisions,
+)
 from ifc_to_fds.fire.vehicle_geometry import (
     BatteryPack,
     VehicleGeometry,
@@ -183,6 +187,7 @@ class ScenarioBundle(BaseModel):
     ev_count: int
     ev_selections: List[EVSelection] = Field(default_factory=list)
     vehicle_geometries: List[VehicleGeometry] = Field(default_factory=list)
+    vehicle_collision_assessments: List[VehicleCollisionAssessment] = Field(default_factory=list)
     devices: List[DeviceSelection] = Field(default_factory=list)
     opening_events: List[OpeningEvent] = Field(default_factory=list)
     hf_preset_yields: dict[str, tuple[float, float]] = Field(default_factory=dict)
@@ -359,6 +364,11 @@ def emit_fire_scenario(
                     f"Vehicle collision detected: vehicle at {e_pos} intersects another vehicle bounding box"
                 )
         placed_boxes.append(e_box)
+
+    vehicle_collision_assessments = assess_vehicle_base_collisions(
+        mapping_plan,
+        [cfg["geometry"] for cfg in ev_configs],
+    )
 
     lines: List[str] = [
         "! ==========================================================================",
@@ -611,6 +621,7 @@ def emit_fire_scenario(
         ev_count=len(normalized_evs),
         ev_selections=normalized_evs,
         vehicle_geometries=[cfg["geometry"] for cfg in ev_configs],
+        vehicle_collision_assessments=vehicle_collision_assessments,
         devices=normalized_devices,
         opening_events=normalized_opening_events,
     )

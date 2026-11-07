@@ -40,16 +40,82 @@ def _verified_bundle_for_scenario(tiny_ifc, tmp_path):
     return base, result["manifest"]["bundle_sha256"]
 
 
+def _verified_perimeter_bundle_for_scenario(tmp_path):
+    import numpy as np
+    import ifcopenshell.api.aggregate
+    import ifcopenshell.api.context
+    import ifcopenshell.api.geometry
+    import ifcopenshell.api.project
+    import ifcopenshell.api.root
+    import ifcopenshell.api.spatial
+    import ifcopenshell.api.unit
+
+    file = ifcopenshell.api.project.create_file(version="IFC4")
+    project = ifcopenshell.api.root.create_entity(
+        file, ifc_class="IfcProject", name="Scenario Collision Base"
+    )
+    ifcopenshell.api.unit.assign_unit(
+        file, units=[ifcopenshell.api.unit.add_si_unit(file, unit_type="LENGTHUNIT")]
+    )
+    context = ifcopenshell.api.context.add_context(file, context_type="Model")
+    body = ifcopenshell.api.context.add_context(
+        file,
+        context_type="Model",
+        context_identifier="Body",
+        target_view="MODEL_VIEW",
+        parent=context,
+    )
+    storey = ifcopenshell.api.root.create_entity(
+        file, ifc_class="IfcBuildingStorey", name="Ground"
+    )
+    storey.Elevation = 0.0
+    ifcopenshell.api.aggregate.assign_object(
+        file, products=[storey], relating_object=project
+    )
+
+    for name, y in (("South wall", 0.0), ("North wall", 10.0)):
+        wall = ifcopenshell.api.root.create_entity(
+            file, ifc_class="IfcWall", name=name
+        )
+        ifcopenshell.api.spatial.assign_container(
+            file, products=[wall], relating_structure=storey
+        )
+        representation = ifcopenshell.api.geometry.add_wall_representation(
+            file,
+            context=body,
+            length=10.0,
+            height=3.0,
+            thickness=0.2,
+        )
+        ifcopenshell.api.geometry.assign_representation(
+            file, product=wall, representation=representation
+        )
+        matrix = np.eye(4)
+        matrix[1, 3] = y
+        ifcopenshell.api.geometry.edit_object_placement(
+            file, product=wall, matrix=matrix
+        )
+
+    path = tmp_path / "scenario-collision-base.ifc"
+    file.write(str(path))
+    base = tmp_path / "base-collision"
+    result = convert([str(path)], output_directory=base)
+    assert result["mapping_status"] == "MAPPING_VERIFIED"
+    save_artifacts(result, base / "model.fds")
+    public = public_result(result, directory=base)
+    (base / "result.json").write_text(json.dumps(public), encoding="utf-8")
+    write_evidence_index(base, "convert", public)
+    return base, result["manifest"]["bundle_sha256"]
+
+
 def _load_sealed_base(root, digest):
     return load_verified_base(
         root, digest, verify_candidate=verify_accepted_mapping_base
     )
 
 
-def test_scenario_worker_persists_resolved_vehicle_geometry_evidence(
-    tiny_ifc, tmp_path
-):
-    _, digest = _verified_bundle_for_scenario(tiny_ifc, tmp_path)
+def test_scenario_worker_persists_resolved_vehicle_geometry_evidence(tmp_path):
+    _, digest = _verified_perimeter_bundle_for_scenario(tmp_path)
     directory = tmp_path / "job-scenario-geometry-evidence"
     directory.mkdir()
     payload = {
@@ -59,7 +125,7 @@ def test_scenario_worker_persists_resolved_vehicle_geometry_evidence(
             "ev_selections": [
                 {
                     "preset_id": "e-bike-lfp",
-                    "position": [1.0, 0.5, 0.65],
+                    "position": [5.0, 5.0, 0.65],
                     "dimensions": [1.8, 0.6, 1.1],
                     "geometry_mode": "PARAMETRIC",
                     "floor_z_m": 0.0,
@@ -79,6 +145,12 @@ def test_scenario_worker_persists_resolved_vehicle_geometry_evidence(
     assert geometry["body_bounds"]["zmin"] == pytest.approx(0.1)
     assert geometry["body_bounds"]["zmax"] == pytest.approx(1.2)
     assert result["evidence"]["ev_evaluations"][0]["geometry_mode"] == "PARAMETRIC"
+    collision = result["evidence"]["vehicle_collision_assessments"][0]
+    assert collision["status"] == "PASS"
+    assert collision["checked_base_entities"] == 2
+    assert collision["checked_obst_entities"] == 2
+    assert collision["checked_geom_entities"] == 0
+    assert collision["minimum_aabb_clearance_m"] > 4.0
 
 
 def test_verified_base_rejects_changed_fds_and_acceptance(tiny_ifc, tmp_path):

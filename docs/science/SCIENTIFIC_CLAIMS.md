@@ -71,13 +71,24 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 - **status**: PASS
 - **reviewer**: REPOSITORY_CI_PINNED_SOLVER_AND_DIFF_REVIEW
 
+## Claim `EV-GEO-P3B-001`
+- **statement**: For the scoped P3b contract, scientific `PARAMETRIC` and `IFC_BOUND` vehicles are separated from every verified base `OBST` by a positive AABB clearance greater than `1e-4 m`; disjoint base `GEOM` AABBs are accepted as proven-separated, while touching/overlapping `GEOM` AABBs fail closed as `INCONCLUSIVE`; own IFC-bound vehicle/battery sources are excluded explicitly and all other emitting base entities remain checked.
+- **intended_use**: Software-level collision/contact prevention between supported axis-aligned EV scenario geometry and verified base geometry before orientation, exact GEOM collision and local-mesh work.
+- **affected_modules**: `ifc_to_fds/fire/vehicle_collision.py`, `ifc_to_fds/fire/scenario_emitter.py`, scenario worker evidence path and P3b regression/E2E tests.
+- **evidence_level**: E2
+- **supporting_evidence**: PR #71 code candidate `6ad904c7b5fb975968e856fa8bbc686b4b6b4d85`; Source quality #42382470834 PASS with 889 passed, 14 deselected and 87% coverage, artifact 13578780011 digest sha256:43ea31cc163100cd89c61a7b711cac5ca597b84c4cdde44005871f62829c71f1; Conversion #42382470941 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; solver job reports 9 passed, 894 deselected; solver artifact 13577534013 digest sha256:b1575008ebed1e2d3694e25b50dcf3cc1e930a839ba6d45013a614702f5eb6b4. Worker E2E converts a real IFC perimeter base and persists machine-readable `vehicle_collision_assessments`.
+- **known_limitations**: AABB overlap/touch with `GEOM` is rejected rather than resolved by exact triangle-mesh intersection; rotated/non-axis-aligned vehicle fidelity, native automatic IFC vehicle classification, post-snap clearance, local MeshPlan/grid sensitivity, jet outlets, EV physics and application validation remain outside P3b.
+- **validation_domain**: Axis-aligned P3a vehicle bodies checked against verified base OBST/GEOM representation bounds available in MappingPlan; positive AABB separation only.
+- **status**: PASS
+- **reviewer**: REPOSITORY_CI_PINNED_SOLVER_AND_DIFF_REVIEW
+
 ## Claim `EV-GEO-001`
 - **statement**: EV scenario geometry preserves IFC vehicle identity, battery location, orientation, and ground clearance through IFC-to-FDS emission.
 - **intended_use**: EV underbody fire geometry and local-mesh scientific analysis.
-- **affected_modules**: `ifc_to_fds/fire/scenario_request.py`, `ifc_to_fds/fire/scenario_emitter.py`, vehicle geometry domain/resolver, mapping policy and future P3b geometry/collision work.
+- **affected_modules**: `ifc_to_fds/fire/scenario_request.py`, `ifc_to_fds/fire/scenario_emitter.py`, vehicle geometry/collision domain, mapping policy and future P3c orientation/exact-GEOM work.
 - **evidence_level**: E2
-- **supporting_evidence**: Scoped claim `EV-GEO-P3A-001` now verifies explicit source binding, axis-aligned body/battery bounds and positive pre-snap ground clearance for supported P3a modes, but the full statement still lacks orientation preservation, complete collision gates, jet-outlet geometry, production post-snap/local-mesh clearance evidence and real IFC application evidence.
-- **known_limitations**: Automatic native IFC vehicle classification, rotated/non-axis-aligned orientation fidelity, vehicle-to-wall/column collision acceptance, jet outlets, post-snap clearance metrics, local MeshPlan sensitivity and application-specific geometry evidence remain incomplete.
+- **supporting_evidence**: Scoped claims `EV-GEO-P3A-001` and `EV-GEO-P3B-001` verify explicit source binding, axis-aligned body/battery bounds, positive pre-snap ground clearance and fail-closed separation from verified base geometry for supported cases. The full statement still lacks rotated orientation preservation, exact collision resolution for overlapping GEOM AABBs, jet-outlet geometry, production post-snap/local-mesh clearance evidence and real IFC application evidence.
+- **known_limitations**: Automatic native IFC vehicle classification, rotated/non-axis-aligned orientation fidelity, exact GEOM collision when AABBs overlap, jet outlets, post-snap clearance metrics, local MeshPlan sensitivity and application-specific geometry evidence remain incomplete.
 - **validation_domain**: Full P3 vehicle-geometry claim remains broader than the scoped P3a fixtures and is therefore not accepted.
 - **status**: FAIL
 - **reviewer**: PENDING_INDEPENDENT_REVIEW
