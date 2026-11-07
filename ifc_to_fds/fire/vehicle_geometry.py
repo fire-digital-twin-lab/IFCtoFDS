@@ -233,9 +233,15 @@ def resolve_vehicle_geometry(
         raise ValueError(
             f"Vehicle source entity is not present in MappingPlan: {source_entity_key}"
         )
-    if str(decision.simulation_role).strip().upper() != "VEHICLE":
+    semantic_role = str((decision.decision or {}).get("semantic_role", "")).strip().upper()
+    if (
+        str(decision.simulation_role).strip().upper() != "PASSIVE_OBSTACLE"
+        or decision.review_status != "APPROVED"
+        or semantic_role != "VEHICLE"
+    ):
         raise ValueError(
-            "IFC_BOUND source requires a reviewed MappingPlan decision with simulation_role=VEHICLE"
+            "IFC_BOUND source requires reviewed semantic_role=VEHICLE "
+            "with PASSIVE_OBSTACLE authorization"
         )
     if decision.fds_representation != "OBST":
         raise ValueError(
@@ -288,6 +294,8 @@ def resolve_vehicle_geometry(
             "geometry_semantics": "VERIFIED_MAPPING_BASE",
             "mapping_strategy": getattr(decision.strategy, "value", str(decision.strategy)),
             "simulation_role": decision.simulation_role,
+            "semantic_role": semantic_role,
+            "review_status": decision.review_status,
             "fds_representation": decision.fds_representation,
         },
     )
