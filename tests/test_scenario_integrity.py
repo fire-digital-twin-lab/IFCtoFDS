@@ -288,6 +288,8 @@ def test_scenario_worker_persists_local_mesh_plan_and_source_local_evidence(
     plan = evidence["local_mesh_plan"]
 
     assert result["mesh_status"] == "INCONCLUSIVE"
+    assert evidence["local_source_mesh_resolved"] is True
+    assert evidence["cell_size_basis"] == "PER_BURNER_UNIQUE_MESH"
     assert local["status"] == "INCONCLUSIVE"
     assert local["local_source_mesh_resolved"] is True
     assert local["local_mesh_id"] == plan["local_mesh_id"] == "P4B_LOCAL_V0"
