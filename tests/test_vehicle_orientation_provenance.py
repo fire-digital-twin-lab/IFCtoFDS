@@ -169,6 +169,30 @@ def test_ifc_bound_rejects_missing_or_unconfirmed_placement():
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("units", "MILLIMETRE", "requires units=METRE"),
+        ("matrix_order", "COLUMN_MAJOR", "requires matrix_order=ROW_MAJOR"),
+        ("vector_convention", "ROW", "requires vector_convention=COLUMN"),
+    ],
+)
+def test_ifc_bound_rejects_ambiguous_placement_conventions(field, value, message):
+    bounds = BoundingBox(
+        xmin=3.0, xmax=7.0, ymin=4.0, ymax=6.0, zmin=0.2, zmax=1.7
+    )
+    placement = _placement()
+    placement[field] = value
+    decision = _vehicle_decision(bounds, placement=placement)
+
+    with pytest.raises(ValueError, match=message):
+        emit_fire_scenario(
+            MappingPlan(decisions=[decision]),
+            _hash(),
+            [_selection(bounds)],
+        )
+
+
 def test_ifc_bound_rejects_non_axis_aligned_yaw():
     bounds = BoundingBox(
         xmin=3.0, xmax=7.0, ymin=4.0, ymax=6.0, zmin=0.2, zmax=1.7
