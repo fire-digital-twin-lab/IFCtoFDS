@@ -481,23 +481,24 @@ def emit_fire_scenario(
         )
 
         obst_xb = [xmin, xmax, ymin, ymax, zmin, zmax]
-        lines.append(f"! Vehicle geometry mode: {geometry.mode}")
-        if geometry.source_entity_key:
-            lines.append(f"! Vehicle source entity_key: {geometry.source_entity_key}")
-        if geometry.ground_clearance_m is not None:
-            lines.append(
-                f"! Ground clearance: {geometry.ground_clearance_m:.4f} m "
-                f"above floor z={geometry.floor_z_m:.4f} m"
-            )
-        if geometry.battery_bounds is not None:
-            battery_source = (
-                f", source_entity_key={geometry.battery_source_entity_key}"
-                if geometry.battery_source_entity_key
-                else ""
-            )
-            lines.append(
-                f"! Battery bounds XB={format_xb(geometry.battery_bounds.to_xb())}{battery_source}"
-            )
+        if geometry.mode != "LEGACY":
+            lines.append(f"! Vehicle geometry mode: {geometry.mode}")
+            if geometry.source_entity_key:
+                lines.append(f"! Vehicle source entity_key: {geometry.source_entity_key}")
+            if geometry.ground_clearance_m is not None:
+                lines.append(
+                    f"! Ground clearance: {geometry.ground_clearance_m:.4f} m "
+                    f"above floor z={geometry.floor_z_m:.4f} m"
+                )
+            if geometry.battery_bounds is not None:
+                battery_source = (
+                    f", source_entity_key={geometry.battery_source_entity_key}"
+                    if geometry.battery_source_entity_key
+                    else ""
+                )
+                lines.append(
+                    f"! Battery bounds XB={format_xb(geometry.battery_bounds.to_xb())}{battery_source}"
+                )
 
         if geometry.body_from_verified_base:
             lines.append(
