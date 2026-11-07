@@ -4,6 +4,7 @@ import pytest
 import trimesh
 
 from ifc_to_fds.domain.bim import TriangleMesh
+from ifc_to_fds.domain.mapping import MappingStrategy
 from ifc_to_fds.domain.validation import AuditConfig, GateStatus
 from ifc_to_fds.geometry.mesh import as_trimesh, valid_solid
 from ifc_to_fds.validation import preflight
@@ -11,6 +12,7 @@ from ifc_to_fds.validation.checkers.air_path import AirPathTopologyChecker
 from ifc_to_fds.validation.checkers.geometry import GeometryChecker
 from ifc_to_fds.validation.checkers.openings import OpeningsChecker
 from ifc_to_fds.validation.checkers.solver import SolverChecker
+from ifc_to_fds.mapping.exporter import serialize_fds
 from ifc_to_fds.validation.engine import run_independent_validation
 from ifc_to_fds.validation.runner import ValidationRunner
 
@@ -117,6 +119,29 @@ def test_independent_validation_blocks_air_path_and_solver_before_negative_volum
     assert report.gates["solver"].status == GateStatus.NOT_RUN
     assert report.element_statuses[key] == "UNSUPPORTED"
     assert report.metrics["source_topology_preflight_evidence"][key]["reason"] == "SELF_INTERSECTION"
+
+
+def test_non_fail_fast_mode_keeps_full_comparison_diagnostics(box_model):
+    model = _overlapping_closed_boxes(box_model)
+    element = model.elements[0]
+    element.mapping_strategy = MappingStrategy.GEOM
+    element.fds_representation = "GEOM"
+    fds_text, manifest = serialize_fds(model)
+
+    report = run_independent_validation(
+        model,
+        fds_text,
+        manifest,
+        AuditConfig(fail_fast_on_source_errors=False),
+    )
+
+    key = element.entity_key
+    assert report.gates["geometry"].status == GateStatus.FAIL
+    assert report.gates["air_path"].status != GateStatus.NOT_RUN
+    assert report.element_statuses[key] == "DEVIATED"
+    issue = report.metrics["source_topology_preflight_evidence"][key]
+    assert issue["reason"] == "SELF_INTERSECTION"
+    assert issue["self_intersection"]["witness"]
 
 
 def test_uncertain_self_intersection_blocks_dependents_without_becoming_fail(
