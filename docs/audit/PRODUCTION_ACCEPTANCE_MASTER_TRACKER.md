@@ -1,5 +1,20 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint P0 governance hoàn tất, bắt đầu P2 parser contract — 07/11/2026
+
+**Main SHA đã nghiệm thu:** c5fe1ae1a883459c1f7d961df600c187e20cbc8d (squash merge PR #67).
+
+- PR #67 bổ sung docs/science/SCIENTIFIC_CLAIMS.md, scientific evidence-manifest schema và fail-closed governance tests.
+- Main c5fe1ae1: Conversion correctness #42347938814 **SUCCESS**; Source quality and regression evidence #42347938815 **SUCCESS**.
+- P0 governance scope = **PASS (E2 software/governance verification)**; không nâng bất kỳ physics/application claim nào.
+- Re-audit P2 xác nhận parser tại baseline chưa nhận MATL, PROP, PART, SLCF, BNDF, ISOF; do đó các record khoa học tương lai sẽ bị syntax gate hạ xuống INCONCLUSIVE.
+- Work package P2 hiện tại chỉ sửa parser/schema/tests; không thêm EV physics, vật liệu giả định, sprinkler behavior hay threshold.
+
+**Kết luận:** overall scientific/application verdict vẫn **INCONCLUSIVE**; release vẫn **NOT_PRODUCTION_READY**.
+
+---
+
+
 ## Checkpoint P1 regression và scientific governance — 07/11/2026
 
 **Main SHA đã nghiệm thu:** `cb5424f3886d8269ff8fd45b07f7b57c4ff3f67d` (squash merge PR #66).

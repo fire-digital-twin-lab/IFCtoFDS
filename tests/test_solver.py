@@ -131,3 +131,40 @@ def test_probe_timeout_is_inconclusive_and_retains_evidence(
     assert saved["timed_out"]
     assert (directory / "version.log").read_bytes() == b"partial version output"
     assert (directory / "audit.fds").read_bytes() == text.encode()
+
+
+@pytest.mark.solver
+def test_pinned_fds_accepts_scientific_parser_contract(tmp_path):
+    """Oracle: FDS 6.11.1 must accept the supported P2 scientific namelist subset."""
+    executable = os.environ.get("IFCFDS_SOLVER") or shutil.which("fds")
+    if not executable:
+        pytest.fail("Solver suite requires FDS 6.11.1; it must not silently skip")
+    text = """&HEAD CHID='parser_contract_solver' /
+&MESH IJK=4,4,4, XB=0,1,0,1,0,1 /
+&TIME T_END=0.1 /
+&MATL ID='STEEL', DENSITY=7850, CONDUCTIVITY=54, SPECIFIC_HEAT=0.465, EMISSIVITY=0.9 /
+&SURF ID='STEEL_SURF', MATL_ID='STEEL', THICKNESS=0.01 /
+&OBST ID='BOX', XB=0.2,0.8,0.2,0.8,0.2,0.8, SURF_ID='STEEL_SURF' /
+&SPEC ID='WATER VAPOR' /
+&PART ID='WATER', SPEC_ID='WATER VAPOR', DIAMETER=500, SAMPLING_FACTOR=5 /
+&PROP ID='SPRINKLER', QUANTITY='SPRINKLER LINK TEMPERATURE', RTI=50, ACTIVATION_TEMPERATURE=74, OFFSET=0.05, PART_ID='WATER', FLOW_RATE=5, PARTICLE_VELOCITY=5, SPRAY_ANGLE=50,55 /
+&DEVC ID='SPR-1', XYZ=0.5,0.5,0.9, PROP_ID='SPRINKLER' /
+&SLCF PBZ=0.5, QUANTITY='TEMPERATURE', CELL_CENTERED=.TRUE. /
+&BNDF QUANTITY='WALL TEMPERATURE', CELL_CENTERED=.TRUE. /
+&ISOF QUANTITY='TEMPERATURE', VALUE=50 /
+&TAIL /
+"""
+    evidence_dir = tmp_path / "parser-contract-solver"
+    solver, _effective = solver_gates(
+        text,
+        AuditConfig(
+            solver_executable=executable,
+            solver_evidence_directory=str(evidence_dir),
+        ),
+    )
+    assert solver.status == "PASS", solver.reason
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    (evidence_dir / "parser_contract.fds").write_text(text, encoding="utf-8")
+    (evidence_dir / "solver_gate.json").write_text(
+        solver.model_dump_json(indent=2), encoding="utf-8"
+    )

@@ -16,6 +16,17 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 6. Evidence references must point to immutable/reproducible repository or CI artifacts where possible. Existing `result_evidence.json` remains an integrity index; it does not by itself raise scientific evidence level.
 7. `reviewer=PENDING_INDEPENDENT_REVIEW` is an explicit blocker for claims whose target level requires independent review.
 
+## Claim `FDS-PARSER-001`
+- **statement**: The Python Verified Core parser recognizes the reviewed FDS 6.11.1 scientific namelist subset and rejects missing required fields, unsupported fields, nonfinite values, and dangling supported references without depending on namelist order.
+- **intended_use**: Parser/schema prerequisite for thermal materials, detection/suppression, instrumentation and later scientific evidence generation.
+- **affected_modules**: ifc_to_fds/validation/parser.py, parser contract tests, pinned FDS solver regression.
+- **evidence_level**: E1
+- **supporting_evidence**: Authoritative FDS 6.11.1 references are documented in docs/science/FDS_PARSER_CONTRACT.md; candidate software/solver CI is pending.
+- **known_limitations**: This is a deliberately supported subset, not a complete FDS grammar; parser/solver syntax acceptance does not establish physical validity.
+- **validation_domain**: FDS 6.11.1 fields explicitly enumerated by the project parser contract.
+- **status**: INCONCLUSIVE
+- **reviewer**: PENDING_INDEPENDENT_REVIEW
+
 ## Claim `GEOM-SER-001`
 - **statement**: Supported JS conversion paths count only nondegenerate GEOM triangles consistently across serializer, strategy summary, and parsed scene.
 - **intended_use**: Software regression and conversion accounting.
