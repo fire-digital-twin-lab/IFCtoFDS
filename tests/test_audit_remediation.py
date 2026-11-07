@@ -732,7 +732,22 @@ def test_runner_verdict_fails_when_physics_fails(tmp_path):
     )
     mock_mesh_outcome = MagicMock()
     mock_mesh_outcome.result = GateResult(status=GateStatus.PASS)
-    with patch("ifc_to_fds.application.services.scenario_base.load_verified_base", return_value=(base_text, plan, manifest)), \
+    from ifc_to_fds.application.services.scenario_base import VerifiedScenarioBase
+    from ifc_to_fds.fire.base_geometry import VerifiedBaseGeometry
+
+    verified_base = VerifiedScenarioBase(
+        fds_text=base_text,
+        mapping_plan=plan,
+        manifest=manifest,
+        emitted_geometry=VerifiedBaseGeometry(
+            geom_meshes={},
+            geom_primitive_ids={},
+        ),
+    )
+    with patch(
+        "ifc_to_fds.application.services.scenario_base.load_verified_scenario_base",
+        return_value=verified_base,
+    ), \
          patch("ifc_to_fds.fire.scenario_emitter.emit_fire_scenario", return_value=bundle), \
          patch("ifc_to_fds.fire.scenario_composer.compose_scenario", return_value=base_text), \
          patch("ifc_to_fds.fire.scenario_composer.configure_scenario_time", return_value=(base_text, 10.0)), \
