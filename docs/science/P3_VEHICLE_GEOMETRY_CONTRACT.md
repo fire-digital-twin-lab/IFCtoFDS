@@ -56,7 +56,7 @@ Battery geometry is optional but never invented.
 
 It must be either:
 
-1. bound to an explicit MappingPlan `source_entity_key`; or
+1. bound to an explicit MappingPlan `source_entity_key` whose reviewed decision carries `semantic_role=BATTERY_PACK` and passive-obstacle authorization; or
 2. supplied parametrically with explicit dimensions and center offset.
 
 Resolved battery bounds must remain within the vehicle body envelope. P3a stores the battery bounds in the machine-readable `ScenarioBundle.vehicle_geometries`; it does not yet add independent battery thermal physics.
@@ -78,6 +78,7 @@ The software oracle is exact geometric arithmetic on resolved bounding boxes:
 - `z_min - floor_z = ground_clearance`;
 - IFC-bound center must equal the verified source-bound center;
 - IFC-bound source must exist, retain passive-obstacle authorization, and carry reviewed `semantic_role=VEHICLE`;
+- IFC-bound battery source must carry reviewed `semantic_role=BATTERY_PACK`;
 - battery bounds must be contained by body bounds;
 - P3 scientific modes place the burner at `z_min`, not `z_max`;
 - legacy emission remains unchanged.
@@ -92,7 +93,7 @@ This work package does **not** claim:
 - battery thermal material correctness;
 - validated EV fire physics.
 
-Those remain required before `EV-GEO-001` can be raised beyond the exact scoped software evidence established here.
+Automatic promotion from native IFC `IfcVehicle` semantics is also not implemented in P3a; binding requires an explicit reviewed decision. Those items remain required before `EV-GEO-001` can be raised beyond the exact scoped software evidence established here.
 
 ## Rollback
 
