@@ -124,11 +124,11 @@ def test_mesh_resolution_checker_with_scenario_fds(box_model):
     assert mesh_gate.status == GateStatus.INCONCLUSIVE
     assert mesh_gate.evidence["cell_size_m"] == pytest.approx(0.2, rel=1e-3)
     assert mesh_gate.evidence["grid_sensitivity_required"] is True
-    assert (
-        mesh_gate.evidence["cell_size_basis"]
-        == "GLOBAL_MAX_MESH_SPACING_NOT_SOURCE_LOCAL"
-    )
-    assert mesh_gate.evidence["local_source_mesh_resolved"] is False
+    assert mesh_gate.evidence["cell_size_basis"] == "PER_BURNER_UNIQUE_MESH"
+    assert mesh_gate.evidence["local_source_mesh_resolved"] is True
+    burner = mesh_gate.evidence["burner_evaluations"][0]
+    assert burner["local_mesh_id"] == "M1"
+    assert burner["mesh_match_count"] == 1
 
 
 def test_mesh_gate_reports_critical_geometry_cells_without_thresholds():
