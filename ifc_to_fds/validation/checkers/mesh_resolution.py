@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Dict, List, Optional, Union
 
@@ -58,38 +59,122 @@ def _get_ev_peak_hrr_kw(ev: Any) -> float:
     return 0.0
 
 
+def _indicator_band(ratio: float) -> str:
+    """Describe D*/dx without turning historical validation values into acceptance limits."""
+
+    if ratio < 4.0:
+        return "BELOW_HISTORICAL_4_16_SUBSET"
+    if ratio <= 16.0:
+        return "WITHIN_HISTORICAL_4_16_SUBSET"
+    return "ABOVE_HISTORICAL_4_16_SUBSET"
+
+
+def _geometry_resolution_metrics(
+    scenario: Union[Any, Dict[str, Any]],
+    cell_size: float,
+) -> List[Dict[str, Any]]:
+    """Report critical EV geometry cell counts without inventing acceptance thresholds."""
+
+    raw = getattr(scenario, "vehicle_geometries", None)
+    if raw is None and isinstance(scenario, dict):
+        raw = scenario.get("vehicle_geometries")
+    metrics: List[Dict[str, Any]] = []
+    for index, geometry in enumerate(raw or []):
+        if hasattr(geometry, "model_dump"):
+            data = geometry.model_dump()
+        elif isinstance(geometry, dict):
+            data = geometry
+        else:
+            continue
+
+        clearance = data.get("ground_clearance_m")
+        battery = data.get("battery_bounds")
+        battery_thickness = None
+        if isinstance(battery, dict):
+            try:
+                battery_thickness = float(battery["zmax"]) - float(battery["zmin"])
+            except (KeyError, TypeError, ValueError):
+                battery_thickness = None
+
+        entry: Dict[str, Any] = {"vehicle_index": index}
+        if clearance is not None:
+            clearance = float(clearance)
+            if math.isfinite(clearance) and clearance > 0.0:
+                entry["ground_clearance_m"] = clearance
+                entry["ground_clearance_over_dx"] = clearance / cell_size
+        if (
+            battery_thickness is not None
+            and math.isfinite(battery_thickness)
+            and battery_thickness > 0.0
+        ):
+            entry["battery_thickness_m"] = battery_thickness
+            entry["battery_thickness_over_dx"] = battery_thickness / cell_size
+        if len(entry) > 1:
+            metrics.append(entry)
+    return metrics
+
+
+def _indicator_gate(
+    evaluations: List[Dict[str, Any]],
+    *,
+    evidence_key: str,
+    geometry_metrics: Optional[List[Dict[str, Any]]] = None,
+) -> GateResult:
+    """Return an evidence-only mesh gate until grid sensitivity is available."""
+
+    first = evaluations[0]
+    evidence: Dict[str, Any] = {
+        "d_star_m": first["d_star_m"],
+        "cell_size_m": first["cell_size_m"],
+        "d_star_over_dx": first["d_star_over_dx"],
+        "peak_hrr_kw": first["peak_hrr_kw"],
+        evidence_key: evaluations,
+        "scientific_interpretation": "INDICATOR_ONLY",
+        "historical_4_16_is_acceptance_rule": False,
+        "grid_sensitivity_required": True,
+        "reference": "NIST_FDS_VALIDATION_GUIDE_6_11_1",
+    }
+    if geometry_metrics:
+        evidence["critical_geometry_resolution"] = geometry_metrics
+    return GateResult(
+        status=GateStatus.INCONCLUSIVE,
+        reason=(
+            "D*/dx is reported as a plume-resolution indicator only; current FDS "
+            "validation studies span a wide range of D*/dx values. Mesh adequacy "
+            "requires scenario-specific grid sensitivity and relevant geometry "
+            "resolution evidence before PASS can be issued."
+        ),
+        evidence=evidence,
+    )
+
+
 def check_mesh_resolution(
     scenario: Union[Any, Dict[str, Any]], cell_size: float = 0.2
 ) -> GateResult:
-    """Check whether computational cell size satisfies 4 <= D*/dx <= 16 for fire scenario.
+    """Report D*/dx and critical geometry cell counts without using a universal band.
 
-    Parameters
-    ----------
-    scenario: ScenarioBundle, dict, or numeric peak HRR
-        Carries total peak HRR (or individual max peak HRR). If total_peak_hrr_mw
-        is in MW, converts to kW (* 1000.0).
-    cell_size: float
-        Computational mesh cell size in meters (dx). Default 0.2m.
-
-    Returns
-    -------
-    GateResult with PASS, FAIL, or NOT_APPLICABLE and evidence dict.
+    D*/dx is a useful comparison indicator, not a standalone scientific acceptance
+    criterion. This helper therefore remains INCONCLUSIVE for positive-fire cases
+    until a later MeshPlan/grid-sensitivity work package supplies the missing
+    solution-verification evidence.
     """
+
     cell_size = float(cell_size)
-    if cell_size <= 0.0:
+    if not math.isfinite(cell_size) or cell_size <= 0.0:
         return GateResult(
             status=GateStatus.FAIL,
-            reason=f"Mesh resolution invalid: cell_size must be positive (> 0), got {cell_size}",
+            reason=(
+                "Mesh resolution invalid: cell_size must be finite and positive "
+                f"(> 0), got {cell_size}"
+            ),
             evidence={"cell_size_m": cell_size},
         )
 
-    # Multi-source evaluation: if scenario carries ev_selections, check each vehicle individually
     ev_selections = getattr(scenario, "ev_selections", None) or (
         scenario.get("ev_selections") if isinstance(scenario, dict) else None
     )
     if ev_selections:
-        ev_evaluations: List[Dict[str, Any]] = []
-        failing_evaluations: List[tuple[str, float, float, float, str]] = []
+        evaluations: List[Dict[str, Any]] = []
         for idx, ev in enumerate(ev_selections):
             ev_id = getattr(ev, "id", None) or getattr(ev, "preset_id", None)
             if not ev_id and isinstance(ev, dict):
@@ -99,69 +184,30 @@ def check_mesh_resolution(
 
             hrr_kw = _get_ev_peak_hrr_kw(ev)
             d_star = calculate_d_star(hrr_kw)
-            ratio = d_star / cell_size if cell_size > 0 else 0.0
-
-            evaluation = {
-                "vehicle": ev_id,
-                "peak_hrr_kw": hrr_kw,
-                "d_star_m": d_star,
-                "cell_size_m": cell_size,
-                "d_star_over_dx": ratio,
-            }
-            ev_evaluations.append(evaluation)
-            if ratio < 4.0:
-                failing_evaluations.append(
-                    (
-                        ev_id,
-                        ratio,
-                        d_star,
-                        hrr_kw,
-                        f"Mesh resolution too coarse for vehicle '{ev_id}': D*/dx = {ratio:.2f} < 4.0 "
-                        f"(cell_size={cell_size:.3f}m, required cell_size <= {d_star / 4.0:.3f}m)",
-                    )
-                )
-            elif ratio > 16.0:
-                failing_evaluations.append(
-                    (
-                        ev_id,
-                        ratio,
-                        d_star,
-                        hrr_kw,
-                        f"Mesh resolution too fine for vehicle '{ev_id}': D*/dx = {ratio:.2f} > 16.0 "
-                        f"(exceeds validated [4.0, 16.0] range; computationally expensive)",
-                    )
-                )
-
-        if failing_evaluations:
-            has_coarse = any(f[1] < 4.0 for f in failing_evaluations)
-            rep = failing_evaluations[0]
-            evidence = {
-                "d_star_m": rep[2],
-                "cell_size_m": cell_size,
-                "d_star_over_dx": rep[1],
-                "peak_hrr_kw": rep[3],
-                "ev_evaluations": ev_evaluations,
-            }
-            reasons = "; ".join(f[4] for f in failing_evaluations)
-            return GateResult(
-                status=GateStatus.FAIL if has_coarse else GateStatus.INCONCLUSIVE,
-                reason=reasons,
-                evidence=evidence,
+            ratio = d_star / cell_size if hrr_kw > 0.0 else 0.0
+            evaluations.append(
+                {
+                    "vehicle": ev_id,
+                    "peak_hrr_kw": hrr_kw,
+                    "d_star_m": d_star,
+                    "cell_size_m": cell_size,
+                    "d_star_over_dx": ratio,
+                    "indicator_band": _indicator_band(ratio),
+                }
             )
-        else:
-            first = ev_evaluations[0] if ev_evaluations else {}
-            evidence = {
-                "d_star_m": first.get("d_star_m", 0.0),
-                "cell_size_m": cell_size,
-                "d_star_over_dx": first.get("d_star_over_dx", 0.0),
-                "peak_hrr_kw": first.get("peak_hrr_kw", 0.0),
-                "ev_evaluations": ev_evaluations,
-            }
+
+        positive = [item for item in evaluations if item["peak_hrr_kw"] > 0.0]
+        if not positive:
             return GateResult(
-                status=GateStatus.PASS,
-                reason=f"Mesh resolution adequate for all {len(ev_evaluations)} vehicle fire source(s) within [4.0, 16.0]",
-                evidence=evidence,
+                status=GateStatus.NOT_APPLICABLE,
+                reason="No positive fire HRR for mesh resolution checking",
+                evidence={"ev_evaluations": evaluations, "cell_size_m": cell_size},
             )
+        return _indicator_gate(
+            positive,
+            evidence_key="ev_evaluations",
+            geometry_metrics=_geometry_resolution_metrics(scenario, cell_size),
+        )
 
     peak_hrr_kw = 0.0
     if isinstance(scenario, dict):
@@ -188,7 +234,8 @@ def check_mesh_resolution(
             )
         else:
             raise ValueError(
-                "Scenario dict must specify peak HRR with explicit unit (e.g. 'total_peak_hrr_mw' or 'peak_hrr_kw')"
+                "Scenario dict must specify peak HRR with explicit unit "
+                "(e.g. 'total_peak_hrr_mw' or 'peak_hrr_kw')"
             )
     elif hasattr(scenario, "total_peak_hrr_mw"):
         peak_hrr_kw = float(getattr(scenario, "total_peak_hrr_mw")) * 1000.0
@@ -200,7 +247,9 @@ def check_mesh_resolution(
     elif hasattr(scenario, "peak_hrr_kw"):
         peak_hrr_kw = float(scenario.peak_hrr_kw)
     else:
-        raise TypeError(f"Unsupported scenario type for check_mesh_resolution: {type(scenario)}")
+        raise TypeError(
+            f"Unsupported scenario type for check_mesh_resolution: {type(scenario)}"
+        )
 
     if peak_hrr_kw <= 0.0:
         return GateResult(
@@ -211,31 +260,18 @@ def check_mesh_resolution(
 
     d_star = calculate_d_star(peak_hrr_kw)
     ratio = d_star / cell_size
-
-    evidence = {
+    evaluation = {
+        "id": "aggregate_or_single_source",
+        "peak_hrr_kw": peak_hrr_kw,
         "d_star_m": d_star,
         "cell_size_m": cell_size,
         "d_star_over_dx": ratio,
-        "peak_hrr_kw": peak_hrr_kw,
+        "indicator_band": _indicator_band(ratio),
     }
-
-    if ratio < 4.0:
-        status = GateStatus.FAIL
-        reason = (
-            f"Mesh resolution too coarse: D*/dx = {ratio:.2f} < 4.0 "
-            f"(cell_size={cell_size:.3f}m, required cell_size <= {d_star / 4.0:.3f}m)"
-        )
-    elif 4.0 <= ratio <= 16.0:
-        status = GateStatus.PASS
-        reason = f"Mesh resolution adequate: D*/dx = {ratio:.2f} within [4.0, 16.0]"
-    else:
-        status = GateStatus.INCONCLUSIVE
-        reason = f"Mesh resolution too fine: D*/dx = {ratio:.2f} > 16.0 (exceeds validated [4.0, 16.0] range; computationally expensive)"
-
-    return GateResult(
-        status=status,
-        reason=reason,
-        evidence=evidence,
+    return _indicator_gate(
+        [evaluation],
+        evidence_key="source_evaluations",
+        geometry_metrics=_geometry_resolution_metrics(scenario, cell_size),
     )
 
 
@@ -357,91 +393,33 @@ class MeshResolutionChecker:
                                     "hrr_kw": hrrpua * area,
                                 })
 
-        # If burners exist, evaluate each burner individually
+        # If burners exist, report each burner without applying a universal D*/dx band.
         if burner_sources:
             evaluations: List[Dict[str, Any]] = []
-            failing_burners: List[Dict[str, Any]] = []
             for burner in burner_sources:
-                bid = burner["id"]
                 hrr_kw = burner["hrr_kw"]
                 d_star = calculate_d_star(hrr_kw)
-                ratio = d_star / cell_size if cell_size > 0 else 0.0
-                evaluations.append({
-                    "id": bid,
-                    "hrr_kw": hrr_kw,
-                    "d_star_m": d_star,
-                    "cell_size_m": cell_size,
-                    "d_star_over_dx": ratio,
-                })
-                if ratio < 4.0:
-                    failing_burners.append({
-                        "id": bid,
-                        "ratio": ratio,
-                        "d_star": d_star,
+                ratio = d_star / cell_size if hrr_kw > 0.0 else 0.0
+                evaluations.append(
+                    {
+                        "id": burner["id"],
                         "hrr_kw": hrr_kw,
-                        "reason": (
-                            f"Mesh resolution too coarse for fire source '{bid}': "
-                            f"D*/dx = {ratio:.2f} < 4.0 (cell_size={cell_size:.3f}m, "
-                            f"required cell_size <= {d_star / 4.0:.3f}m)"
-                        ),
-                    })
-                elif ratio > 16.0:
-                    failing_burners.append({
-                        "id": bid,
-                        "ratio": ratio,
-                        "d_star": d_star,
-                        "hrr_kw": hrr_kw,
-                        "reason": (
-                            f"Mesh resolution too fine for fire source '{bid}': "
-                            f"D*/dx = {ratio:.2f} > 16.0 (exceeds validated [4.0, 16.0] range; computationally expensive)"
-                        ),
-                    })
-
-            if failing_burners:
-                has_coarse = any(fb["ratio"] < 4.0 for fb in failing_burners)
-                rep = failing_burners[0]
-                reason = "; ".join(fb["reason"] for fb in failing_burners)
-                gate_result = GateResult(
-                    status=GateStatus.FAIL if has_coarse else GateStatus.INCONCLUSIVE,
-                    reason=reason,
-                    evidence={
-                        "d_star_m": rep["d_star"],
+                        "peak_hrr_kw": hrr_kw,
+                        "d_star_m": d_star,
                         "cell_size_m": cell_size,
-                        "d_star_over_dx": rep["ratio"],
-                        "peak_hrr_kw": rep["hrr_kw"],
-                        "burner_evaluations": evaluations,
-                    },
+                        "d_star_over_dx": ratio,
+                        "indicator_band": _indicator_band(ratio),
+                    }
                 )
-                findings = [
-                    Finding(
-                        id=f"FND-MESH-{i + 1:04d}",
-                        severity=Severity.P1 if fb["ratio"] < 4.0 else Severity.P2,
-                        category="mesh_resolution",
-                        title="Computational mesh resolution outside validated [4.0, 16.0] range for fire plume",
-                        detail=fb["reason"],
-                        element_id=fb["id"],
-                    )
-                    for i, fb in enumerate(failing_burners)
-                ]
-            else:
-                rep = evaluations[0]
-                gate_result = GateResult(
-                    status=GateStatus.PASS,
-                    reason=f"Mesh resolution adequate for all {len(burner_sources)} fire source(s): D*/dx within [4.0, 16.0]",
-                    evidence={
-                        "d_star_m": rep["d_star_m"],
-                        "cell_size_m": cell_size,
-                        "d_star_over_dx": rep["d_star_over_dx"],
-                        "peak_hrr_kw": rep["hrr_kw"],
-                        "burner_evaluations": evaluations,
-                    },
-                )
-                findings = []
 
+            gate_result = _indicator_gate(
+                evaluations,
+                evidence_key="burner_evaluations",
+            )
             return CheckerOutcome(
                 gate_name=self.name,
                 result=gate_result,
-                findings=findings,
+                findings=[],
                 metrics=gate_result.evidence,
             )
 
@@ -449,22 +427,10 @@ class MeshResolutionChecker:
         scen = getattr(context, "scenario", None) or getattr(context, "scenario_bundle", None)
         if scen:
             gate_result = check_mesh_resolution(scen, cell_size=cell_size)
-            findings = []
-            if gate_result.status == GateStatus.FAIL:
-                findings.append(
-                    Finding(
-                        id="FND-MESH-0001",
-                        severity=Severity.P1,
-                        category="mesh_resolution",
-                        title="Computational mesh resolution outside validated [4.0, 16.0] range for fire plume",
-                        detail=gate_result.reason,
-                        element_id="",
-                    )
-                )
             return CheckerOutcome(
                 gate_name=self.name,
                 result=gate_result,
-                findings=findings,
+                findings=[],
                 metrics=gate_result.evidence,
             )
 
