@@ -269,7 +269,11 @@ def test_local_mesh_evidence_reports_source_local_metrics_without_pass():
 def test_p4b_adjacent_coarse_fine_mesh_layout_is_accepted_by_pinned_fds(tmp_path):
     from ifc_to_fds.validation.solver_discovery import resolve_solver_executable
 
-    executable = resolve_solver_executable()
+    executable = resolve_solver_executable(
+        os.environ.get("IFCFDS_SOLVER")
+    ).executable
+    assert executable is not None, "Solver suite requires FDS 6.11.1"
+    executable = Path(executable)
     plan = resolve_local_mesh_plan(
         _base_text(),
         _bundle(),
