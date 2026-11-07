@@ -91,6 +91,18 @@ def _vehicle_decision(
     )
 
 
+def _vehicle_bounds_for_yaw(yaw_degrees: float) -> BoundingBox:
+    """Return a 4 m x 2 m OBST whose longitudinal axis agrees with placement X."""
+    quarter = int(round(yaw_degrees / 90.0)) % 4
+    if quarter in (0, 2):
+        return BoundingBox(
+            xmin=3.0, xmax=7.0, ymin=4.0, ymax=6.0, zmin=0.2, zmax=1.7
+        )
+    return BoundingBox(
+        xmin=4.0, xmax=6.0, ymin=3.0, ymax=7.0, zmin=0.2, zmax=1.7
+    )
+
+
 def _selection(bounds: BoundingBox) -> EVSelection:
     return EVSelection(
         preset_id="auto-nmc",
@@ -128,9 +140,7 @@ def test_parametric_geometry_declares_world_axis_orientation():
 
 @pytest.mark.parametrize("yaw", [0.0, 90.0, 180.0, 270.0])
 def test_ifc_bound_accepts_confirmed_world_axis_quarter_turns(yaw):
-    bounds = BoundingBox(
-        xmin=3.0, xmax=7.0, ymin=4.0, ymax=6.0, zmin=0.2, zmax=1.7
-    )
+    bounds = _vehicle_bounds_for_yaw(yaw)
     plan = MappingPlan(decisions=[_vehicle_decision(bounds, yaw_degrees=yaw)])
     bundle = emit_fire_scenario(plan, _hash(), [_selection(bounds)])
     geometry = bundle.vehicle_geometries[0]
@@ -141,8 +151,35 @@ def test_ifc_bound_accepts_confirmed_world_axis_quarter_turns(yaw):
     assert geometry.provenance["placement_status"] == "CONFIRMED"
     assert (
         geometry.provenance["orientation_method"]
-        == "CONFIRMED_EFFECTIVE_WORLD_QUARTER_TURN"
+        == "CONFIRMED_EFFECTIVE_WORLD_QUARTER_TURN_WITH_OBST_AXIS_CROSSCHECK"
     )
+
+
+def test_ifc_bound_rejects_object_placement_that_disagrees_with_verified_long_axis():
+    # A swept-solid/item-level 90 degree rotation can leave ObjectPlacement at 0
+    # while rotating the actual body. The verified OBST is long in Y, so a 0-degree
+    # placement cannot prove vehicle yaw and must fail closed.
+    bounds = _vehicle_bounds_for_yaw(90.0)
+    decision = _vehicle_decision(bounds, yaw_degrees=0.0)
+    with pytest.raises(ValueError, match="disagrees with verified OBST longitudinal axis"):
+        emit_fire_scenario(
+            MappingPlan(decisions=[decision]),
+            _hash(),
+            [_selection(bounds)],
+        )
+
+
+def test_ifc_bound_rejects_square_footprint_as_orientation_ambiguous():
+    bounds = BoundingBox(
+        xmin=3.0, xmax=5.0, ymin=4.0, ymax=6.0, zmin=0.2, zmax=1.7
+    )
+    decision = _vehicle_decision(bounds, yaw_degrees=0.0)
+    with pytest.raises(ValueError, match="longitudinal axis is ambiguous"):
+        emit_fire_scenario(
+            MappingPlan(decisions=[decision]),
+            _hash(),
+            [_selection(bounds)],
+        )
 
 
 def test_ifc_bound_rejects_missing_or_unconfirmed_placement():
