@@ -29,6 +29,17 @@ def stop_tree(process):
 
 
 @operation("SOLVER")
+def _contains_fds_fatal_error(output: str) -> bool:
+    """Return True only for FDS fatal/error records, not diagnostic error metrics."""
+    return bool(
+        re.search(
+            r"^\s*(?:ERROR:|ERROR\([0-9]+\)|STOP:.*ERROR)",
+            output,
+            re.IGNORECASE | re.MULTILINE,
+        )
+    )
+
+
 def solver_gates(fds_text, config):
     resolution = resolve_solver_executable(config.solver_executable, config.solver_version)
     effective = GateResult(
@@ -153,9 +164,7 @@ def solver_gates(fds_text, config):
                 GateStatus.INCONCLUSIVE,
                 "Pinned solver version not confirmed",
             )
-        elif process.returncode or re.search(
-            r"ERROR:|ERROR\([0-9]+\)|STOP:.*ERROR", combined, re.I
-        ):
+        elif process.returncode or _contains_fds_fatal_error(combined):
             status, reason = (
                 GateStatus.FAIL,
                 "FDS rejected input or exited with an error",

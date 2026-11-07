@@ -1,5 +1,37 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint P2 parser/physics contract hoàn tất — 07/11/2026
+
+**Candidate đã nghiệm thu:** `125d3175066a4b12e96d23b06a99801293dcf5e5` trên PR #68.
+
+- Parser Verified Core hỗ trợ reviewed subset `MATL`, `PART`, `PROP`, `SLCF`, `BNDF`, `ISOF` và các field P2 cần thiết của `SURF`, `DEVC`, `REAC`, `HVAC`.
+- Indexed Fortran keys như `MATL_ID(1,:)` được tokenize đúng; unknown field, missing required field, nonfinite numeric và dangling supported reference tiếp tục fail-closed.
+- P2 làm lộ và sửa hai lỗi verifier phụ trợ: solver fatal matcher từng bắt nhầm `Maximum Velocity/Pressure Error:` của run thành công; `parse_value()` từng che mất nguyên nhân nonfinite.
+- Conversion correctness #42349141483: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS solver; research đúng thiết kế là skipped.
+- Source quality and regression evidence #42349141425: **SUCCESS**; full quality **862 passed, 13 deselected, 108 warnings**, coverage **87%**.
+- Pinned FDS 6.11.1 solver evidence artifact `13564483853`, digest `sha256:463110d3e78cb6d91c3c611232a7a06841fbcae3832929df86d96b805e2846fa`.
+- `FDS-PARSER-001` đạt **PASS / E2** cho parser + solver-integration contract. Không nâng thành solution verification/model validation/application validation.
+
+**Kết luận:** P2 scoped verdict = **PASS (E2)**. Overall scientific/application verdict vẫn **INCONCLUSIVE**; release vẫn **NOT_PRODUCTION_READY**.
+
+---
+
+
+## Checkpoint P0 governance hoàn tất, bắt đầu P2 parser contract — 07/11/2026
+
+**Main SHA đã nghiệm thu:** c5fe1ae1a883459c1f7d961df600c187e20cbc8d (squash merge PR #67).
+
+- PR #67 bổ sung docs/science/SCIENTIFIC_CLAIMS.md, scientific evidence-manifest schema và fail-closed governance tests.
+- Main c5fe1ae1: Conversion correctness #42347938814 **SUCCESS**; Source quality and regression evidence #42347938815 **SUCCESS**.
+- P0 governance scope = **PASS (E2 software/governance verification)**; không nâng bất kỳ physics/application claim nào.
+- Re-audit P2 xác nhận parser tại baseline chưa nhận MATL, PROP, PART, SLCF, BNDF, ISOF; do đó các record khoa học tương lai sẽ bị syntax gate hạ xuống INCONCLUSIVE.
+- Work package P2 hiện tại chỉ sửa parser/schema/tests; không thêm EV physics, vật liệu giả định, sprinkler behavior hay threshold.
+
+**Kết luận:** overall scientific/application verdict vẫn **INCONCLUSIVE**; release vẫn **NOT_PRODUCTION_READY**.
+
+---
+
+
 ## Checkpoint P1 regression và scientific governance — 07/11/2026
 
 **Main SHA đã nghiệm thu:** `cb5424f3886d8269ff8fd45b07f7b57c4ff3f67d` (squash merge PR #66).

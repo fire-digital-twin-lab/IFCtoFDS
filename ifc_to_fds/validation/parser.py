@@ -71,11 +71,110 @@ def parse_value(token):
         return token.upper() == ".TRUE."
     try:
         value = float(token.replace("D", "E").replace("d", "e"))
-        if not np.isfinite(value):
-            raise ValueError("Non-finite numeric value")
-        return value
     except ValueError:
         raise ValueError(f"Unsupported or invalid value: {token[:80]}")
+    if not np.isfinite(value):
+        raise ValueError("Non-finite numeric value")
+    return value
+
+
+def _split_fds_tokens(body: str) -> list[str]:
+    """Split a namelist body on commas outside strings and Fortran indices."""
+    tokens: list[str] = []
+    start = 0
+    quote: str | None = None
+    parenthesis_depth = 0
+    i = 0
+    while i < len(body):
+        char = body[i]
+        if quote is not None:
+            if char == quote:
+                if i + 1 < len(body) and body[i + 1] == quote:
+                    i += 1
+                else:
+                    quote = None
+        elif char in ("'", '"'):
+            quote = char
+        elif char == "(":
+            parenthesis_depth += 1
+        elif char == ")":
+            if parenthesis_depth == 0:
+                raise ValueError("Unbalanced field index parentheses")
+            parenthesis_depth -= 1
+        elif char == "," and parenthesis_depth == 0:
+            tokens.append(body[start:i])
+            start = i + 1
+        i += 1
+    if quote is not None:
+        raise ValueError("Unterminated string in namelist")
+    if parenthesis_depth:
+        raise ValueError("Unbalanced field index parentheses")
+    tokens.append(body[start:])
+    return tokens
+
+
+def _base_field_name(name: str) -> str:
+    """Return the FDS namelist field name without an optional Fortran index."""
+    return name.split("(", 1)[0]
+
+
+def _record_values(record: FDSRecord, field_name: str) -> list[Any]:
+    values: list[Any] = []
+    for key, items in record.values.items():
+        if _base_field_name(key) == field_name:
+            values.extend(items)
+    return values
+
+
+def _scientific_contract_errors(parsed: ParsedFDS) -> list[str]:
+    """Validate references and required fields for the supported scientific subset.
+
+    This is deliberately narrower than the full FDS grammar. Unsupported
+    physics remain explicit instead of being silently accepted.
+    """
+    errors: list[str] = []
+    required_fields = {
+        "MATL": ("ID",),
+        "PART": ("ID",),
+        "PROP": ("ID",),
+        "SLCF": ("QUANTITY",),
+        "BNDF": ("QUANTITY",),
+        "ISOF": ("QUANTITY", "VALUE"),
+    }
+    ids_by_kind = {
+        kind: {record.id for record in parsed.records if record.kind == kind and record.id}
+        for kind in ("MATL", "PART", "PROP")
+    }
+
+    for record in parsed.records:
+        for field_name in required_fields.get(record.kind, ()):
+            if not _record_values(record, field_name):
+                errors.append(f"{record.kind} requires {field_name}")
+
+    references = (
+        ("DEVC", "PROP_ID", "PROP"),
+        ("PROP", "PART_ID", "PART"),
+        ("SURF", "MATL_ID", "MATL"),
+        ("SURF", "PART_ID", "PART"),
+        ("SLCF", "PART_ID", "PART"),
+        ("BNDF", "PART_ID", "PART"),
+        ("BNDF", "MATL_ID", "MATL"),
+    )
+    for source_kind, field_name, target_kind in references:
+        targets = ids_by_kind[target_kind]
+        for record in (r for r in parsed.records if r.kind == source_kind):
+            for target_id in _record_values(record, field_name):
+                if not isinstance(target_id, str) or not target_id:
+                    errors.append(
+                        f"{source_kind}.{field_name} requires a non-empty {target_kind} ID"
+                    )
+                elif target_id not in targets:
+                    label = record.id or "<anonymous>"
+                    errors.append(
+                        f"{source_kind} {label}: {field_name} references missing "
+                        f"{target_kind} {target_id}"
+                    )
+    return errors
 
 
 @operation("FDS_PARSE")
@@ -111,6 +210,20 @@ def parse_fds(text):
             "MATL_ID",
             "BACKING",
             "THICKNESS",
+            "PART_ID",
+            "DT_INSERT",
+            "TMP_FRONT",
+            "TMP_GAS_FRONT",
+            "HEAT_TRANSFER_COEFFICIENT",
+            "HT3D",
+            "CELL_SIZE",
+            "IGNITION_TEMPERATURE",
+            "EXTERNAL_FLUX",
+            "RAMP_T",
+            "RAMP_V",
+            "REFERENCE_HEAT_FLUX",
+            "VOLUME_FLOW",
+            "VEL_T",
         },
         "TAIL": set(),
         "OBST": {"ID", "XB", "SURF_ID", "CTRL_ID", "DEVC_ID"},
@@ -128,6 +241,10 @@ def parse_fds(text):
             "SOOT_YIELD",
             "HEAT_OF_COMBUSTION",
             "FORMULA",
+            "FYI",
+            "RADIATIVE_FRACTION",
+            "OTHER",
+            "MW_OTHER",
         },
         "RAMP": {"ID", "T", "F"},
         "DEVC": {
@@ -139,6 +256,24 @@ def parse_fds(text):
             "INITIAL_STATE",
             "CTRL_ID",
             "IOR",
+            "XB",
+            "ORIENTATION",
+            "DEPTH",
+            "SURF_ID",
+            "SPEC_ID",
+            "PART_ID",
+            "SPATIAL_STATISTIC",
+            "TEMPORAL_STATISTIC",
+            "TIME_AVERAGED",
+            "RELATIVE",
+            "CONVERSION_FACTOR",
+            "UNITS",
+            "POINTS",
+            "POINTS_ARRAY_X",
+            "POINTS_ARRAY_Y",
+            "POINTS_ARRAY_Z",
+            "TIME_HISTORY",
+            "HIDE_COORDINATES",
         },
         "CTRL": {
             "ID",
@@ -158,6 +293,79 @@ def parse_fds(text):
             "SPEC_ID",
             "MW",
             "DENSITY",
+        },
+        "MATL": {
+            "ID",
+            "FYI",
+            "DENSITY",
+            "CONDUCTIVITY",
+            "CONDUCTIVITY_RAMP",
+            "SPECIFIC_HEAT",
+            "SPECIFIC_HEAT_RAMP",
+            "EMISSIVITY",
+        },
+        "PART": {
+            "ID",
+            "SPEC_ID",
+            "DIAMETER",
+            "SAMPLING_FACTOR",
+            "MASSLESS",
+            "QUANTITIES",
+            "GAMMA_D",
+            "STATIC",
+            "ORIENTATION",
+            "SURF_ID",
+        },
+        "PROP": {
+            "ID",
+            "QUANTITY",
+            "RTI",
+            "C_FACTOR",
+            "ACTIVATION_TEMPERATURE",
+            "FLOW_RATE",
+            "FLOW_RAMP",
+            "FLOW_TAU",
+            "OFFSET",
+            "PARTICLE_VELOCITY",
+            "PARTICLES_PER_SECOND",
+            "SPRAY_ANGLE",
+            "SPRAY_PATTERN_SHAPE",
+            "PART_ID",
+            "OPERATING_PRESSURE",
+            "K_FACTOR",
+            "ORIFICE_DIAMETER",
+            "SMOKEVIEW_ID",
+        },
+        "SLCF": {
+            "ID",
+            "QUANTITY",
+            "SPEC_ID",
+            "PART_ID",
+            "PBX",
+            "PBY",
+            "PBZ",
+            "XB",
+            "VECTOR",
+            "CELL_CENTERED",
+            "AGL_SLICE",
+        },
+        "BNDF": {
+            "QUANTITY",
+            "SPEC_ID",
+            "PART_ID",
+            "MATL_ID",
+            "PROP_ID",
+            "CELL_CENTERED",
+            "TEMPORAL_STATISTIC",
+        },
+        "ISOF": {
+            "QUANTITY",
+            "QUANTITY2",
+            "SPEC_ID",
+            "SPEC_ID2",
+            "VALUE",
+            "VELO_INDEX",
+            "VELO_INDEX2",
         },
         "HVAC": {
             "ID",
@@ -186,6 +394,36 @@ def parse_fds(text):
             "LOADING",
             "FILTER_ID",
             "AIRCOIL_ID",
+            "VENT2_ID",
+            "CLEAN_LOSS",
+            "COOLANT_SPECIFIC_HEAT",
+            "COOLANT_MASS_FLOW",
+            "COOLANT_TEMPERATURE",
+            "DISCHARGE_COEFFICIENT",
+            "DRY",
+            "EFFICIENCY",
+            "FIXED_Q",
+            "GEOM2",
+            "LEAK_ENTHALPY",
+            "LEAK_PRESSURE_EXPONENT",
+            "LEAK_REFERENCE_PRESSURE",
+            "LOADING_MULTIPLIER",
+            "MAX_FLOW",
+            "MAX_PRESSURE",
+            "N_CELLS",
+            "NETWORK_ID",
+            "QUANTITY",
+            "QUANTITY_SPEC_ID",
+            "RAMP_ID",
+            "RAMP_LOSS",
+            "ROUND",
+            "SPEC_ID",
+            "SQUARE",
+            "TAU_AC",
+            "TAU_FAN",
+            "TAU_VF",
+            "TRANSPORT_PARTICLES",
+            "WAYPOINTS",
         },
     }
     while i < len(text):
@@ -252,9 +490,7 @@ def parse_fds(text):
                 kind = kind_match.group(1).upper()
                 body = record[kind_match.end() :]
                 # Split commas outside quoted strings, then collect key=value arrays.
-                tokens = re.findall(
-                    r"(?:'[^']*(?:''[^']*)*'|\"[^\"]*(?:\"\"[^\"]*)*\"|[^,])+", body
-                )
+                tokens = _split_fds_tokens(body)
                 values = {}
                 key = None
                 for token in tokens:
@@ -278,7 +514,9 @@ def parse_fds(text):
                     parsed.unsupported.append(f"Unsupported namelist {kind}")
                 else:
                     parsed.unsupported.extend(
-                        f"{kind}.{k}" for k in values if k not in allowed[kind]
+                        f"{kind}.{k}"
+                        for k in values
+                        if _base_field_name(k) not in allowed[kind]
                     )
                 r = FDSRecord(kind, values, source, (start, i + 1))
                 if r.id and kind != "RAMP":
@@ -336,6 +574,7 @@ def parse_fds(text):
             parsed.errors.append(f"Missing {kind}")
     if parsed.records and parsed.records[-1].kind != "TAIL":
         parsed.errors.append("TAIL must be last")
+    parsed.errors.extend(_scientific_contract_errors(parsed))
     from .hvac import hvac_errors
     parsed.errors.extend(hvac_errors(parsed))
     return parsed
