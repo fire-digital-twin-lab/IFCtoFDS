@@ -12,6 +12,7 @@ def assess_scenario_physics(text, bundle, budget):
     parsed = parse_fds(
         text,
         allow_legacy_surf_fuel_id=legacy_surface_compatibility,
+        require_core_namelists=False,
     )
     if parsed.errors or parsed.unsupported:
         raise ValueError(
