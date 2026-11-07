@@ -46,6 +46,41 @@ def _load_sealed_base(root, digest):
     )
 
 
+def test_scenario_worker_persists_resolved_vehicle_geometry_evidence(
+    tiny_ifc, tmp_path
+):
+    _, digest = _verified_bundle_for_scenario(tiny_ifc, tmp_path)
+    directory = tmp_path / "job-scenario-geometry-evidence"
+    directory.mkdir()
+    payload = {
+        "mode": "scenario",
+        "configuration": {
+            "bundle_sha256": digest,
+            "ev_selections": [
+                {
+                    "preset_id": "e-bike-lfp",
+                    "position": [1.0, 0.5, 0.65],
+                    "dimensions": [1.8, 0.6, 1.1],
+                    "geometry_mode": "PARAMETRIC",
+                    "floor_z_m": 0.0,
+                    "ground_clearance_m": 0.1,
+                }
+            ],
+        },
+    }
+    (directory / "request.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    assert WorkerRunner.run(directory) == 0
+    result = json.loads((directory / "result.json").read_text(encoding="utf-8"))
+    geometry = result["evidence"]["vehicle_geometries"][0]
+    assert geometry["mode"] == "PARAMETRIC"
+    assert geometry["ground_clearance_m"] == pytest.approx(0.1)
+    assert geometry["floor_z_m"] == pytest.approx(0.0)
+    assert geometry["body_bounds"]["zmin"] == pytest.approx(0.1)
+    assert geometry["body_bounds"]["zmax"] == pytest.approx(1.2)
+    assert result["evidence"]["ev_evaluations"][0]["geometry_mode"] == "PARAMETRIC"
+
+
 def test_verified_base_rejects_changed_fds_and_acceptance(tiny_ifc, tmp_path):
     base, digest = _verified_bundle_for_scenario(tiny_ifc, tmp_path)
     _load_sealed_base(tmp_path, digest)
