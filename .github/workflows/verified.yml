@@ -47,6 +47,7 @@ jobs:
       - run: node scripts/test-golden-workflow.js
       - run: node scripts/test-artifact-viewer.js
       - run: node scripts/test-verified-regressions.js
+      - run: node scripts/test-ifc-conversion.js
       - run: node scripts/test-ephemeral-api-key.js
       - run: node scripts/test-geom-opening-regression.js
       - run: node scripts/test-background-export-worker.js

@@ -77,7 +77,7 @@ for (const fileName of examples) {
     const convertible = exporter.getExportableElements(model, exportOptions);
     const sourceTriangles = convertible.reduce((sum, element) => {
         const targetMesh = element.geomExportMesh || element.displayMesh || element.mesh;
-        return sum + (targetMesh && targetMesh.faces ? targetMesh.faces.length : 0);
+        return sum + exporter.nondegenerateFaceCount(targetMesh);
     }, 0);
 
     const obstText = exporter.exportFromIfcScene(model, { ...exportOptions, mode: 'obst' });
@@ -330,6 +330,76 @@ for (const fileName of examples) {
             failures.push(`${fileName}: review-only stair railings should stay out of the default FDS export`);
         }
     }
+}
+
+const triangleCountRegressionMesh = {
+    vertices: [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+    faces: [
+        [0, 1, 2],
+        [0, 0, 1]
+    ]
+};
+const triangleCountRegressionModel = {
+    elements: [
+        {
+            stepId: 999001,
+            name: 'Triangle count regression',
+            ifcType: 'IFCWALL',
+            fdsRole: 'solid',
+            convertible: true,
+            exportAsSolid: true,
+            bounds: { xmin: 0, xmax: 1, ymin: 0, ymax: 1, zmin: 0, zmax: 0 },
+            mesh: triangleCountRegressionMesh
+        }
+    ]
+};
+if (exporter.nondegenerateFaceCount(triangleCountRegressionMesh) !== 1) {
+    failures.push('GEOM triangle count: expected one nondegenerate triangle in the synthetic mesh');
+}
+const triangleCountRegressionSummary = exporter.summarizeStrategy(
+    triangleCountRegressionModel,
+    { mode: 'geom', cellSize: meshCellSize }
+);
+const triangleCountRegressionText = exporter.exportFromIfcScene(
+    triangleCountRegressionModel,
+    { mode: 'geom', cellSize: meshCellSize }
+);
+const triangleCountRegressionScene = fdsAdapter.toSceneModel(parser.parse(triangleCountRegressionText));
+if (triangleCountRegressionSummary.triangles !== 1 ||
+    triangleCountRegressionScene.triangleCount !== 1) {
+    failures.push(
+        'GEOM triangle count: serializer, summary, and parsed scene must agree on one nondegenerate triangle'
+    );
+}
+
+const allDegenerateModel = {
+    elements: [
+        {
+            stepId: 999002,
+            name: 'All-degenerate regression',
+            ifcType: 'IFCWALL',
+            fdsRole: 'solid',
+            convertible: true,
+            exportAsSolid: true,
+            bounds: { xmin: 0, xmax: 1, ymin: 0, ymax: 0, zmin: 0, zmax: 0 },
+            mesh: {
+                vertices: [[0, 0, 0], [1, 0, 0], [0.5, 0, 0]],
+                faces: [[0, 1, 2]]
+            }
+        }
+    ]
+};
+let allDegenerateRejected = false;
+try {
+    exporter.exportFromIfcScene(allDegenerateModel, { mode: 'geom', cellSize: meshCellSize });
+} catch (error) {
+    allDegenerateRejected =
+        error &&
+        error.name === 'ExportGeometryInputError' &&
+        /no nondegenerate triangles/i.test(error.message);
+}
+if (!allDegenerateRejected) {
+    failures.push('GEOM fail-closed: an all-degenerate mesh was not rejected');
 }
 
 const malformedGeomScene = {
