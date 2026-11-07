@@ -315,17 +315,45 @@ def test_door_event_replaces_fixed_base_fill(box_model):
     assert parse_fds(base).records, 'Base mapping remains intact'
 
 
-def test_both_validation_paths_block_coarse_fire_mesh(box_model):
-    plan = build_mapping_plan(box_model)
-    bundle = emit_fire_scenario(plan, 'a'*64, [dict(preset_id='e-bike-lfp', position=[1,.5,.5])])
-    text = "&HEAD CHID='coarse' /\n&TIME T_END=0 /\n&MESH IJK=4,4,4, XB=0,2,0,2,0,2 /\n" + bundle.fds_fragment + '\n&TAIL /'
-    with patch('ifc_to_fds.validation.engine.solver_gates') as engine_solver:
+def test_both_validation_paths_keep_mesh_inconclusive_and_collect_solver_evidence(
+    box_model,
+):
+    text = (
+        "&HEAD CHID='coarse' /\n"
+        "&TIME T_END=0 /\n"
+        "&MESH IJK=4,4,4, XB=0,2,0,2,0,2 /\n"
+        "&REAC ID='REAC_TEST', FUEL='OFFGAS', C=2.0, H=4.0, O=1.0 /\n"
+        "&SURF ID='BURNER_EBIKE', HRRPUA=92.59 /\n"
+        "&VENT ID='VENT_EBIKE', XB=0,1.8,0,0.6,0,0, SURF_ID='BURNER_EBIKE' /\n"
+        "&TAIL /"
+    )
+    pair = (
+        GateResult(status=GateStatus.PASS),
+        GateResult(status=GateStatus.PASS),
+    )
+    with patch(
+        "ifc_to_fds.validation.engine.solver_gates", return_value=pair
+    ) as engine_solver:
         engine = run_independent_validation(box_model, text)
-        engine_solver.assert_not_called()
-    with patch('ifc_to_fds.validation.checkers.solver.solver_gates') as runner_solver:
+        engine_solver.assert_called_once()
+    with patch(
+        "ifc_to_fds.validation.checkers.solver.solver_gates", return_value=pair
+    ) as runner_solver:
         runner = ValidationRunner().validate(box_model, text)
-        runner_solver.assert_not_called()
-    assert engine.gates['mesh_resolution'].status == runner.gates['mesh_resolution'].status == 'FAIL'
+        runner_solver.assert_called_once()
+
+    assert engine.gates["syntax"].status == runner.gates["syntax"].status == "PASS"
+    assert (
+        engine.gates["mesh_resolution"].status
+        == runner.gates["mesh_resolution"].status
+        == "INCONCLUSIVE"
+    )
+    assert engine.gates["solver"].status == runner.gates["solver"].status == "PASS"
+    assert (
+        engine.gates["solver"].evidence["mesh_adequacy_status"]
+        == runner.gates["solver"].evidence["mesh_adequacy_status"]
+        == "INCONCLUSIVE"
+    )
 
 
 def test_runner_preserves_effective_geometry_result(box_model):
