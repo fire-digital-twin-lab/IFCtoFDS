@@ -17,6 +17,7 @@ from ifc_to_fds.fire.scenario_emitter import (
     ScenarioBundle,
     emit_fire_scenario,
 )
+from ifc_to_fds.fire.vehicle_collision import VehicleCollisionAssessment
 from ifc_to_fds.fire.vehicle_geometry import BatteryPack, VehicleGeometry
 from ifc_to_fds.validation.checkers.mesh_resolution import (
     MeshResolutionChecker,
@@ -40,6 +41,7 @@ __all__ = [
     "emit_fire_scenario",
     "BatteryPack",
     "VehicleGeometry",
+    "VehicleCollisionAssessment",
     "MeshResolutionChecker",
     "calculate_d_star",
     "check_mesh_resolution",
