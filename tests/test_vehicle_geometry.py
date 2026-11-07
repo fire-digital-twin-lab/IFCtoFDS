@@ -213,3 +213,37 @@ def test_parametric_battery_requires_explicit_dimensions_and_offset():
     )
     bundle = emit_fire_scenario(MappingPlan(), _hash(), [selection])
     assert bundle.vehicle_geometries[0].battery_bounds is not None
+
+
+def test_legacy_rejects_scientific_geometry_fields_instead_of_ignoring_them():
+    with pytest.raises(ValueError, match="LEGACY geometry does not accept"):
+        EVSelection(
+            preset_id="auto-nmc",
+            position=(5.0, 5.0, 0.75),
+            floor_z_m=0.0,
+            ground_clearance_m=0.15,
+        )
+
+
+def test_ifc_bound_rejects_unreviewed_non_vehicle_mapping_role():
+    bounds = BoundingBox(xmin=2.75, xmax=7.25, ymin=4.1, ymax=5.9, zmin=0.2, zmax=1.7)
+    plan = MappingPlan(
+        decisions=[
+            MappingDecision(
+                entity_key="WALL_1",
+                strategy=MappingStrategy.OBST,
+                simulation_role="WALL",
+                fds_representation="OBST",
+                representation_bounds=bounds,
+            )
+        ]
+    )
+    selection = EVSelection(
+        preset_id="auto-nmc",
+        position=(5.0, 5.0, 0.95),
+        geometry_mode="IFC_BOUND",
+        source_entity_key="WALL_1",
+        floor_z_m=0.0,
+    )
+    with pytest.raises(ValueError, match="simulation_role=VEHICLE"):
+        emit_fire_scenario(plan, _hash(), [selection])
