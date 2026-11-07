@@ -31,32 +31,54 @@ def calculate_d_star(heat_release_rate_kw: float) -> float:
     return float((heat_release_rate_kw / PLUME_COEFFICIENT) ** 0.4)
 
 
-def _get_ev_peak_hrr_kw(ev: Any) -> float:
-    """Resolve peak HRR in kW for a given EV selection or dict."""
+def _get_ev_peak_hrr_evidence(ev: Any) -> Dict[str, Any]:
+    """Resolve peak HRR with an explicit basis instead of hiding assumptions."""
+
     if hasattr(ev, "peak_hrr_mw") and ev.peak_hrr_mw is not None:
-        return float(ev.peak_hrr_mw) * 1000.0
+        value = float(ev.peak_hrr_mw) * 1000.0
+        return {
+            "peak_hrr_kw": value,
+            "peak_hrr_basis": "EXPLICIT_SELECTION",
+        }
     if isinstance(ev, dict):
         if "peak_hrr_kw" in ev and ev["peak_hrr_kw"] is not None:
-            return float(ev["peak_hrr_kw"])
+            return {
+                "peak_hrr_kw": float(ev["peak_hrr_kw"]),
+                "peak_hrr_basis": "EXPLICIT_SELECTION",
+            }
         if "peak_hrr_mw" in ev and ev["peak_hrr_mw"] is not None:
-            return float(ev["peak_hrr_mw"]) * 1000.0
+            return {
+                "peak_hrr_kw": float(ev["peak_hrr_mw"]) * 1000.0,
+                "peak_hrr_basis": "EXPLICIT_SELECTION",
+            }
 
     preset_id = getattr(ev, "preset_id", None) or (
         ev.get("preset_id") if isinstance(ev, dict) else None
     )
     if preset_id:
-        try:
-            from ifc_to_fds.fire.ev_library import load_ev_preset
+        from ifc_to_fds.fire.ev_library import load_ev_preset
 
-            preset_key = str(preset_id).strip().lower()
-            if "-" in preset_key:
-                vclass, chem = preset_key.rsplit("-", 1)
-                preset = load_ev_preset(vclass, chem)
-                min_hrr, max_hrr = preset.peak_hrr_mw_range
-                return ((min_hrr + max_hrr) / 2.0) * 1000.0
-        except Exception:
-            pass
-    return 0.0
+        preset_key = str(preset_id).strip().lower()
+        if "-" in preset_key:
+            vclass, chem = preset_key.rsplit("-", 1)
+            preset = load_ev_preset(vclass, chem)
+            min_hrr, max_hrr = preset.peak_hrr_mw_range
+            midpoint_kw = ((min_hrr + max_hrr) / 2.0) * 1000.0
+            return {
+                "peak_hrr_kw": midpoint_kw,
+                "peak_hrr_basis": "PRESET_RANGE_MIDPOINT_ASSUMPTION",
+                "peak_hrr_range_kw": [min_hrr * 1000.0, max_hrr * 1000.0],
+                "preset_id": preset.preset_id,
+                "preset_confidence": preset.confidence,
+                "preset_citations": [
+                    citation.model_dump(mode="json") for citation in preset.citations
+                ],
+            }
+
+    return {
+        "peak_hrr_kw": 0.0,
+        "peak_hrr_basis": "UNAVAILABLE",
+    }
 
 
 def _indicator_band(ratio: float) -> str:
@@ -182,13 +204,20 @@ def check_mesh_resolution(
             if not ev_id:
                 ev_id = f"vehicle_{idx}"
 
-            hrr_kw = _get_ev_peak_hrr_kw(ev)
+            hrr_evidence = _get_ev_peak_hrr_evidence(ev)
+            hrr_kw = float(hrr_evidence["peak_hrr_kw"])
+            if not math.isfinite(hrr_kw):
+                return GateResult(
+                    status=GateStatus.FAIL,
+                    reason=f"Nonfinite peak HRR for vehicle '{ev_id}'",
+                    evidence={"vehicle": ev_id, **hrr_evidence},
+                )
             d_star = calculate_d_star(hrr_kw)
             ratio = d_star / cell_size if hrr_kw > 0.0 else 0.0
             evaluations.append(
                 {
                     "vehicle": ev_id,
-                    "peak_hrr_kw": hrr_kw,
+                    **hrr_evidence,
                     "d_star_m": d_star,
                     "cell_size_m": cell_size,
                     "d_star_over_dx": ratio,
@@ -249,6 +278,13 @@ def check_mesh_resolution(
     else:
         raise TypeError(
             f"Unsupported scenario type for check_mesh_resolution: {type(scenario)}"
+        )
+
+    if not math.isfinite(peak_hrr_kw):
+        return GateResult(
+            status=GateStatus.FAIL,
+            reason="Mesh indicator input has nonfinite peak HRR",
+            evidence={"peak_hrr_kw": peak_hrr_kw, "cell_size_m": cell_size},
         )
 
     if peak_hrr_kw <= 0.0:
