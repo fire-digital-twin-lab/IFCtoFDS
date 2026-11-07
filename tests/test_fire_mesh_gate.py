@@ -4,6 +4,7 @@ import pytest
 
 from ifc_to_fds.domain.validation.model import (
     AuditConfig,
+    GateResult,
     GateStatus,
     ValidationContext,
 )
