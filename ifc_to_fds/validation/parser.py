@@ -178,7 +178,12 @@ def _scientific_contract_errors(parsed: ParsedFDS) -> list[str]:
 
 
 @operation("FDS_PARSE")
-def parse_fds(text, *, allow_legacy_surf_fuel_id: bool = False):
+def parse_fds(
+    text,
+    *,
+    allow_legacy_surf_fuel_id: bool = False,
+    require_core_namelists: bool = True,
+):
     parsed = ParsedFDS()
     source: dict[str, Any] = {}
     record = ""
@@ -573,11 +578,12 @@ def parse_fds(text, *, allow_legacy_surf_fuel_id: bool = False):
         i += 1
     if active or quote:
         parsed.errors.append("Unterminated namelist or string")
-    for kind in ("HEAD", "TIME", "MESH", "TAIL"):
-        if not any(r.kind == kind for r in parsed.records):
-            parsed.errors.append(f"Missing {kind}")
-    if parsed.records and parsed.records[-1].kind != "TAIL":
-        parsed.errors.append("TAIL must be last")
+    if require_core_namelists:
+        for kind in ("HEAD", "TIME", "MESH", "TAIL"):
+            if not any(r.kind == kind for r in parsed.records):
+                parsed.errors.append(f"Missing {kind}")
+        if parsed.records and parsed.records[-1].kind != "TAIL":
+            parsed.errors.append("TAIL must be last")
     parsed.errors.extend(_scientific_contract_errors(parsed))
     from .hvac import hvac_errors
     parsed.errors.extend(hvac_errors(parsed))
