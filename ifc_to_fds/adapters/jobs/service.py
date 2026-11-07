@@ -423,19 +423,44 @@ class JobService:
             )
         except (OSError, ValueError):
             progress = {}
-        (directory / "diagnostics.json").write_text(
-            json.dumps(
-                dict(
-                    name=name,
-                    message=message,
-                    stage=progress.get("stage", "IFC_READ"),
-                    jobId=job["id"],
-                    stack="",
-                    entity=None,
-                )
-            ),
-            encoding="utf-8",
+        # A direct write_text() can publish a truncated diagnostics.json if
+        # the filesystem fails mid-write. The next retry sees is_file() and
+        # would incorrectly treat that partial file as complete evidence.
+        # Build and fsync a private temp file, then publish it using a hard
+        # link: atomic create-if-absent, never replacing a worker diagnostic.
+        content = json.dumps(
+            dict(
+                name=name,
+                message=message,
+                stage=progress.get("stage", "IFC_READ"),
+                jobId=job["id"],
+                stack="",
+                entity=None,
+            )
         )
+        temporary = directory / f".diagnostics-{uuid.uuid4().hex}.tmp"
+        try:
+            with temporary.open("x", encoding="utf-8") as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            try:
+                os.link(temporary, diag_path)
+            except FileExistsError:
+                logger.debug(
+                    "Preserving concurrent worker diagnostic for job %s",
+                    job["id"],
+                )
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                # An already published diagnostic is valid despite temp
+                # cleanup failure. Keep the failure visible for operators.
+                logger.exception(
+                    "Cannot remove temporary terminal diagnostic for job %s",
+                    job["id"],
+                )
 
     def cancel(self, jid):
         proc_to_stop = None
