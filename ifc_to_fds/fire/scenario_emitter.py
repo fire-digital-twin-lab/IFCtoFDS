@@ -474,11 +474,21 @@ def emit_fire_scenario(
         t_decay_end = round(max(prev_t + 0.01, t_plateau_end + t_decay), 2)
         lines.append(f"&RAMP ID='{ramp_id}', T={t_decay_end:.2f}, F=0.0000 /")
 
-        # &SURF
-        fuel_id = preset_fuel_ids[cfg["preset_key"]]
-        lines.append(
-            f"&SURF ID='{surf_id}', HRRPUA={hrrpua_kw_m2:.2f}, RAMP_Q='{ramp_id}', FUEL_ID='{fuel_id}' /"
-        )
+        # FDS 6.11.1 burner surfaces use HRRPUA/RAMP_Q; fuel chemistry is
+        # selected by the supported simple-chemistry REAC contract. The historical
+        # LEGACY preview serialized FUEL_ID on SURF, so retain that byte-compatible
+        # form only there. Scientific geometry modes must emit solver-accepted SURF.
+        if geometry.mode == "LEGACY":
+            fuel_id = preset_fuel_ids[cfg["preset_key"]]
+            lines.append(
+                f"&SURF ID='{surf_id}', HRRPUA={hrrpua_kw_m2:.2f}, "
+                f"RAMP_Q='{ramp_id}', FUEL_ID='{fuel_id}' /"
+            )
+        else:
+            lines.append(
+                f"&SURF ID='{surf_id}', HRRPUA={hrrpua_kw_m2:.2f}, "
+                f"RAMP_Q='{ramp_id}' /"
+            )
 
         obst_xb = [xmin, xmax, ymin, ymax, zmin, zmax]
         if geometry.mode != "LEGACY":
