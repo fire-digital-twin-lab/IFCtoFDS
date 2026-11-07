@@ -1,5 +1,33 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint P3d exact GEOM collision từ sealed FDS — 07/11/2026
+
+**PR:** #74  
+**Code candidate đã nghiệm thu:** `834bad73e218a171329293fe2567c9e3f13c1212`  
+**Roadmap:** P3 tiếp tục `IN_PROGRESS`; scoped `EV-GEO-P3D-001 = PASS / E2`, broad `EV-GEO-001 = FAIL`.
+
+- Collision narrow phase dùng chính GEOM đã emit trong sealed `model.fds`, không dùng source IFC mesh làm proxy cho emitted geometry.
+- Verified scenario-base loader đối chiếu GEOM primitive ID, FDS source `entity_key`, `ManifestRecord.fds_primitive_ids` và `primitive_to_ifc`; missing/extra/mismatch bị reject.
+- GEOM AABB disjoint tiếp tục PASS bằng broad-phase separation.
+- Khi GEOM AABB overlap/touch, exact evidence bắt buộc; thiếu evidence giữ fail-closed `INCONCLUSIVE`.
+- Vehicle body AABB được nở `1e-4 m` và binary64-round hướng ra ngoài; boundary contact bị xem là clearance violation.
+- Triangle/AABB narrow phase dùng 13-axis SAT theo Akenine-Möller, với exact rational projections trên binary64 input thay vì distance epsilon.
+- Trường hợp expanded vehicle box nằm hoàn toàn trong GEOM được kiểm thêm bằng reviewed solid-boolean containment.
+- Self-intersection hoặc backend uncertainty không được nâng thành PASS.
+- Worker E2E convert base thật với `all_geom=True`, seal/save/reload emitted GEOM và reject true vehicle↔GEOM collision bằng exact evidence.
+- Source quality #42391766635: **SUCCESS**, `924 passed, 14 deselected, 117 warnings`, coverage **87%**; artifact `13581603383`, digest `sha256:ccde0618a8057504e53f797abd4255755c3d053572593ff33b7d50c01e148c94`.
+- Conversion #42391766582: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver artifact `13582350222`, digest `sha256:c67a206755b4cc767d99d2619cfe06d3d73fc5247a92aa47205dbd1905d7a013`.
+- Browser artifact `13581782426`, digest `sha256:be40c96b6f513790603068c5df12b34174769bb8f920faf2a21fe4a50e0a1b07`.
+- Technical note: `docs/science/P3D_EXACT_GEOM_COLLISION_CONTRACT.md`.
+
+**Giới hạn khoa học:** clearance envelope hiện là axis-expanded conservative box, không phải exact Euclidean offset surface; FAIL có thể bảo thủ tại diagonal corner nhưng PASS không overclaim >1e-4 m Euclidean separation. P3d không hỗ trợ arbitrary rotated vehicle OBB/GEOM, front/rear heading, post-snap/local MeshPlan, jet outlets, grid sensitivity, EV physics hoặc application validation.
+
+**Scientific verdict:** scoped P3d `PASS / E2`; full `EV-GEO-001 = FAIL`; overall scientific/application verdict `INCONCLUSIVE`.  
+**Release verdict:** `NOT_PRODUCTION_READY`. Không cấp `SIMULATION_VERIFIED`.
+
+---
+
 ## Checkpoint source self-intersection topology preflight — 07/11/2026
 
 **PR:** #73  
@@ -63,7 +91,7 @@
 - Gate chỉ bật cho `PARAMETRIC` / `IFC_BOUND`; `LEGACY` giữ nguyên behavior/serialization.
 - Mọi verified base entity phát `OBST|GEOM` đều được kiểm; IFC-bound chỉ loại trừ own vehicle source và own battery source.
 - Base `OBST`: AABB clearance <= `1e-4 m` bị reject như collision/contact.
-- Base `GEOM`: AABB disjoint được coi là proof of separation; AABB overlap/touch bị reject `INCONCLUSIVE` vì MappingPlan chưa có exact triangle-mesh collision oracle.
+- Tại checkpoint P3b, base `GEOM`: AABB disjoint là proof of separation; AABB overlap/touch bị reject `INCONCLUSIVE` vì lúc đó MappingPlan chưa có exact triangle-mesh collision oracle. P3d (#74) về sau đóng gap này cho current axis-aligned vehicle body bằng sealed emitted GEOM evidence.
 - Evidence ghi số OBST/GEOM đã kiểm, nearest entity, minimum AABB clearance, exclusions, tolerance và method.
 - Worker E2E dựng verified base từ IFC thật với hai wall tách rời, chạy scientific parametric scenario và xác nhận collision evidence được persist.
 - Source quality #42382470834: **SUCCESS**, `889 passed, 14 deselected`, coverage **87%**; artifact `13578780011`, digest `sha256:43ea31cc163100cd89c61a7b711cac5ca597b84c4cdde44005871f62829c71f1`.
@@ -71,7 +99,7 @@
 - Solver: **9 passed, 894 deselected**; artifact `13577534013`, digest `sha256:b1575008ebed1e2d3694e25b50dcf3cc1e930a839ba6d45013a614702f5eb6b4`.
 - P3b không thay đổi EV physics hoặc solver syntax; solver PASS ở đây là regression/integration evidence, không phải model validation.
 
-**P3 chưa đạt exit criteria** vì còn thiếu: automatic/native IFC vehicle semantic binding, rotated/non-axis-aligned orientation fidelity, exact collision khi GEOM AABB overlap, jet outlets, post-snap/local MeshPlan clearance và real IFC application evidence.
+**P3 chưa đạt exit criteria** vì còn thiếu: automatic/native IFC vehicle semantic binding, arbitrary rotated/non-axis-aligned vehicle fidelity, front/rear directed heading, jet outlets, post-snap/local MeshPlan clearance và real IFC application evidence. Current axis-aligned exact-GEOM overlap gap đã được P3d (#74) xử lý sau checkpoint này.
 
 **Scientific verdict:** scoped P3b `PASS / E2`; full `EV-GEO-001 = FAIL`; overall scientific/application verdict `INCONCLUSIVE`.  
 **Release verdict:** `NOT_PRODUCTION_READY`. Không cấp `SIMULATION_VERIFIED`.
