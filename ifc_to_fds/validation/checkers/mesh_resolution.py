@@ -301,21 +301,30 @@ class MeshResolutionChecker:
                 findings=[],
             )
 
-        # Determine cell size from MESH records or context.config.cell_size
-        mesh_cell_sizes: List[float] = []
+        # Keep full MESH geometry so source-local spacing can be resolved.
+        mesh_specs: List[Dict[str, Any]] = []
         if hasattr(parsed, "records"):
             for r in parsed.records:
                 if r.kind == "MESH":
                     xb = [float(x) for x in r.values.get("XB", [])]
                     ijk = [float(x) for x in r.values.get("IJK", [])]
                     if len(xb) == 6 and len(ijk) == 3 and all(n > 0 for n in ijk):
-                        dx = abs(xb[1] - xb[0]) / ijk[0]
-                        dy = abs(xb[3] - xb[2]) / ijk[1]
-                        dz = abs(xb[5] - xb[4]) / ijk[2]
-                        mesh_cell_sizes.append(max(dx, dy, dz))
+                        spacing = (
+                            abs(xb[1] - xb[0]) / ijk[0],
+                            abs(xb[3] - xb[2]) / ijk[1],
+                            abs(xb[5] - xb[4]) / ijk[2],
+                        )
+                        mesh_specs.append(
+                            {
+                                "id": r.id or "<anonymous>",
+                                "xb": xb,
+                                "cell_size_xyz_m": spacing,
+                                "max_spacing_m": max(spacing),
+                            }
+                        )
 
-        if mesh_cell_sizes:
-            cell_size = max(mesh_cell_sizes)
+        if mesh_specs:
+            cell_size = max(mesh["max_spacing_m"] for mesh in mesh_specs)
             cell_size_basis = "GLOBAL_MAX_MESH_SPACING_NOT_SOURCE_LOCAL"
         elif context.config is not None and getattr(context.config, "cell_size", None) is not None:
             cell_size = float(getattr(context.config, "cell_size"))
@@ -347,6 +356,11 @@ class MeshResolutionChecker:
                                     "hrrpua": hrrpua,
                                     "area": area,
                                     "hrr_kw": hrrpua * area,
+                                    "centroid": [
+                                        (xb[0] + xb[1]) / 2.0,
+                                        (xb[2] + xb[3]) / 2.0,
+                                        (xb[4] + xb[5]) / 2.0,
+                                    ],
                                 })
                 elif r.kind == "OBST":
                     surf_id = str(r.values.get("SURF_ID", [""])[0]) if "SURF_ID" in r.values else ""
@@ -366,33 +380,78 @@ class MeshResolutionChecker:
                                     "hrrpua": hrrpua,
                                     "area": area,
                                     "hrr_kw": hrrpua * area,
+                                    "centroid": [
+                                        (xb[0] + xb[1]) / 2.0,
+                                        (xb[2] + xb[3]) / 2.0,
+                                        (xb[4] + xb[5]) / 2.0,
+                                    ],
                                 })
 
-        # If burners exist, report each burner without applying a universal D*/dx band.
+        # If burners exist, resolve spacing from the unique MESH containing
+        # each source centroid. Interface ambiguity fails closed to global evidence.
         if burner_sources:
             evaluations: List[Dict[str, Any]] = []
             for burner in burner_sources:
                 hrr_kw = burner["hrr_kw"]
+                centroid = burner["centroid"]
+                local_matches = []
+                for mesh in mesh_specs:
+                    xb = mesh["xb"]
+                    if all(
+                        xb[2 * axis] + 1e-9
+                        < centroid[axis]
+                        < xb[2 * axis + 1] - 1e-9
+                        for axis in range(3)
+                    ):
+                        local_matches.append(mesh)
+
+                if len(local_matches) == 1:
+                    local_mesh = local_matches[0]
+                    source_cell_size = local_mesh["max_spacing_m"]
+                    source_basis = "BURNER_CENTROID_UNIQUE_MESH"
+                    local_resolved = True
+                    local_mesh_id = local_mesh["id"]
+                    local_xyz = local_mesh["cell_size_xyz_m"]
+                else:
+                    source_cell_size = cell_size
+                    source_basis = cell_size_basis
+                    local_resolved = False
+                    local_mesh_id = None
+                    local_xyz = None
+
                 d_star = calculate_d_star(hrr_kw)
-                ratio = d_star / cell_size if hrr_kw > 0.0 else 0.0
-                evaluations.append(
-                    {
-                        "id": burner["id"],
-                        "hrr_kw": hrr_kw,
-                        "peak_hrr_kw": hrr_kw,
-                        "d_star_m": d_star,
-                        "cell_size_m": cell_size,
-                        "d_star_over_dx": ratio,
-                        "indicator_band": _indicator_band(ratio),
-                    }
-                )
+                ratio = d_star / source_cell_size if hrr_kw > 0.0 else 0.0
+                item: Dict[str, Any] = {
+                    "id": burner["id"],
+                    "hrr_kw": hrr_kw,
+                    "peak_hrr_kw": hrr_kw,
+                    "d_star_m": d_star,
+                    "cell_size_m": source_cell_size,
+                    "d_star_over_dx": ratio,
+                    "indicator_band": _indicator_band(ratio),
+                    "source_centroid_m": centroid,
+                    "cell_size_basis": source_basis,
+                    "local_source_mesh_resolved": local_resolved,
+                    "local_mesh_id": local_mesh_id,
+                    "mesh_match_count": len(local_matches),
+                }
+                if local_xyz is not None:
+                    item["local_cell_size_xyz_m"] = list(local_xyz)
+                evaluations.append(item)
 
             gate_result = _indicator_gate(
                 evaluations,
                 evidence_key="burner_evaluations",
             )
-            gate_result.evidence["cell_size_basis"] = cell_size_basis
-            gate_result.evidence["local_source_mesh_resolved"] = False
+            all_local = all(
+                item["local_source_mesh_resolved"] for item in evaluations
+            )
+            gate_result.evidence["cell_size_basis"] = (
+                "PER_BURNER_UNIQUE_MESH"
+                if all_local
+                else cell_size_basis
+            )
+            gate_result.evidence["local_source_mesh_resolved"] = all_local
             return CheckerOutcome(
                 gate_name=self.name,
                 result=gate_result,
