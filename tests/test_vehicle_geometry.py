@@ -15,14 +15,14 @@ def _hash() -> str:
     return "a" * 64
 
 
-def _reviewed_vehicle_policy() -> dict:
+def _reviewed_policy(semantic_role: str) -> dict:
     return {
         "action": "PASSIVE_OBSTACLE",
         "policy_version": "p3a-test-v1",
-        "rationale": "Reviewed vehicle geometry for P3a regression",
+        "rationale": f"Reviewed {semantic_role.lower()} geometry for P3a regression",
         "reviewer": "TEST_REVIEWER",
         "evidence": "tests/test_vehicle_geometry.py",
-        "semantic_role": "VEHICLE",
+        "semantic_role": semantic_role,
         "factors": {
             "ifc_type": "reviewed source identity",
             "mesh_scale": "source solid retained",
@@ -33,6 +33,10 @@ def _reviewed_vehicle_policy() -> dict:
             "golden_policy": "P3a software regression only",
         },
     }
+
+
+def _reviewed_vehicle_policy() -> dict:
+    return _reviewed_policy("VEHICLE")
 
 
 def _vehicle_decision(
@@ -49,6 +53,18 @@ def _vehicle_decision(
         representation_bounds=bounds,
         review_status="APPROVED",
         decision=_reviewed_vehicle_policy(),
+    )
+
+
+def _battery_decision(entity_key: str, bounds: BoundingBox) -> MappingDecision:
+    return MappingDecision(
+        entity_key=entity_key,
+        strategy=MappingStrategy.OBST,
+        simulation_role="PASSIVE_OBSTACLE",
+        fds_representation="OBST",
+        representation_bounds=bounds,
+        review_status="APPROVED",
+        decision=_reviewed_policy("BATTERY_PACK"),
     )
 
 
@@ -181,7 +197,7 @@ def test_battery_can_bind_to_verified_entity_and_must_stay_inside_vehicle():
     plan = MappingPlan(
         decisions=[
             _vehicle_decision("VEHICLE_1", vehicle_bounds),
-            _vehicle_decision("BATTERY_1", battery_bounds),
+            _battery_decision("BATTERY_1", battery_bounds),
         ]
     )
     selection = EVSelection(
@@ -202,7 +218,7 @@ def test_battery_can_bind_to_verified_entity_and_must_stay_inside_vehicle():
     outside_plan = MappingPlan(
         decisions=[
             _vehicle_decision("VEHICLE_1", vehicle_bounds),
-            _vehicle_decision(
+            _battery_decision(
                 "BATTERY_OUTSIDE",
                 BoundingBox(
                     xmin=2.0, xmax=3.0, ymin=4.25, ymax=5.75, zmin=0.2, zmax=0.35
@@ -215,6 +231,37 @@ def test_battery_can_bind_to_verified_entity_and_must_stay_inside_vehicle():
     )
     with pytest.raises(ValueError, match="Battery bounds must remain within"):
         emit_fire_scenario(outside_plan, _hash(), [invalid])
+
+
+def test_ifc_bound_battery_rejects_unreviewed_source_semantics():
+    vehicle_bounds = BoundingBox(
+        xmin=2.75, xmax=7.25, ymin=4.1, ymax=5.9, zmin=0.2, zmax=1.7
+    )
+    battery_bounds = BoundingBox(
+        xmin=3.0, xmax=7.0, ymin=4.25, ymax=5.75, zmin=0.2, zmax=0.35
+    )
+    plan = MappingPlan(
+        decisions=[
+            _vehicle_decision("VEHICLE_1", vehicle_bounds),
+            MappingDecision(
+                entity_key="BATTERY_UNREVIEWED",
+                strategy=MappingStrategy.OBST,
+                simulation_role="PASSIVE_OBSTACLE",
+                fds_representation="OBST",
+                representation_bounds=battery_bounds,
+            ),
+        ]
+    )
+    selection = EVSelection(
+        preset_id="auto-nmc",
+        position=(5.0, 5.0, 0.95),
+        geometry_mode="IFC_BOUND",
+        source_entity_key="VEHICLE_1",
+        floor_z_m=0.0,
+        battery_geometry=BatteryPack(source_entity_key="BATTERY_UNREVIEWED"),
+    )
+    with pytest.raises(ValueError, match="semantic_role=BATTERY_PACK"):
+        emit_fire_scenario(plan, _hash(), [selection])
 
 
 def test_parametric_battery_requires_explicit_dimensions_and_offset():
