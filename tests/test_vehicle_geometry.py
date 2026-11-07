@@ -247,3 +247,88 @@ def test_ifc_bound_rejects_unreviewed_non_vehicle_mapping_role():
     )
     with pytest.raises(ValueError, match="simulation_role=VEHICLE"):
         emit_fire_scenario(plan, _hash(), [selection])
+
+
+@pytest.mark.solver
+def test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds(tmp_path):
+    import os
+    from pathlib import Path
+    import subprocess
+
+    from ifc_to_fds.validation.solver_discovery import resolve_solver_executable
+
+    executable = resolve_solver_executable(os.environ.get("IFCFDS_SOLVER")).executable
+    assert executable is not None, "Solver suite requires FDS 6.11.1"
+    executable = Path(executable)
+
+    parametric = emit_fire_scenario(
+        MappingPlan(),
+        _hash(),
+        [
+            EVSelection(
+                preset_id="auto-nmc",
+                position=(5.0, 5.0, 0.9),
+                dimensions=(4.5, 1.8, 1.5),
+                geometry_mode="PARAMETRIC",
+                floor_z_m=0.0,
+                ground_clearance_m=0.15,
+            )
+        ],
+    )
+
+    bound_box = BoundingBox(
+        xmin=2.75, xmax=7.25, ymin=4.1, ymax=5.9, zmin=0.2, zmax=1.7
+    )
+    bound_plan = MappingPlan(decisions=[_vehicle_decision("VEHICLE_1", bound_box)])
+    ifc_bound = emit_fire_scenario(
+        bound_plan,
+        _hash(),
+        [
+            EVSelection(
+                preset_id="auto-nmc",
+                position=(5.0, 5.0, 0.95),
+                geometry_mode="IFC_BOUND",
+                source_entity_key="VEHICLE_1",
+                floor_z_m=0.0,
+            )
+        ],
+    )
+
+    cases = [
+        ("parametric", "", parametric.fds_fragment),
+        (
+            "ifc_bound",
+            "&OBST ID='BASE_VEHICLE', XB=2.75,7.25,4.1,5.9,0.2,1.7, SURF_ID='INERT' /\n",
+            ifc_bound.fds_fragment,
+        ),
+    ]
+    for name, base_geometry, fragment in cases:
+        case_dir = tmp_path / name
+        case_dir.mkdir()
+        (case_dir / "input.fds").write_text(
+            "&HEAD CHID='vehicle_geometry' /\n"
+            "&TIME T_END=0.0 /\n"
+            "&MESH IJK=20,20,10, XB=0,10,0,10,0,3 /\n"
+            + base_geometry
+            + fragment
+            + "\n&TAIL /\n",
+            encoding="utf-8",
+        )
+        run = subprocess.run(
+            [str(executable), "input.fds"],
+            cwd=case_dir,
+            capture_output=True,
+            text=True,
+            timeout=45,
+            env={
+                **os.environ,
+                "OMP_NUM_THREADS": "1",
+                "PATH": str(executable.parent / "mpi")
+                + os.pathsep
+                + os.environ.get("PATH", ""),
+            },
+        )
+        log = run.stdout + run.stderr
+        assert run.returncode == 0, log
+        assert "completed successfully" in log.lower(), log
+        assert "ERROR:" not in log, log
