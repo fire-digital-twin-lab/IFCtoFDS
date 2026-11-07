@@ -11,7 +11,7 @@ import math
 import re
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ifc_to_fds.domain.mapping import MappingPlan
 from ifc_to_fds.fire.ev_library import EV_LIBRARY_VERSION, EVPreset, load_ev_preset
@@ -68,6 +68,29 @@ class EVSelection(BaseModel):
             if len(v) != 3 or any(d <= 0.0 or not math.isfinite(d) for d in v):
                 raise ValueError("EV dimensions (dx, dy, dz) must be strictly positive (> 0.0)")
         return v
+
+    @model_validator(mode="after")
+    def validate_geometry_contract(self) -> "EVSelection":
+        if self.geometry_mode == "LEGACY":
+            if (
+                self.source_entity_key is not None
+                or self.floor_z_m is not None
+                or self.ground_clearance_m is not None
+                or self.battery_geometry is not None
+            ):
+                raise ValueError(
+                    "LEGACY geometry does not accept IFC binding, floor/clearance, or battery geometry"
+                )
+        elif self.geometry_mode == "PARAMETRIC":
+            if self.source_entity_key is not None:
+                raise ValueError(
+                    "PARAMETRIC geometry cannot claim IFC binding; use IFC_BOUND"
+                )
+        elif self.geometry_mode == "IFC_BOUND" and self.dimensions is not None:
+            raise ValueError(
+                "IFC_BOUND geometry uses verified source bounds and cannot accept dimensions"
+            )
+        return self
 
 
 VALID_FDS_DEVICE_QUANTITIES = {
