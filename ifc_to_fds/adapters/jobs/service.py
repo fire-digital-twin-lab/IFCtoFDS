@@ -111,6 +111,9 @@ class JobService:
         # its SQLite transition commits. Preserve the original failure reason
         # even if the killed process has exited before the next scheduler tick.
         self._pending_terminal: Dict[str, Dict[str, Any]] = {}
+        # Stopped-worker diagnostic writes can fail before the SQLite verdict.
+        # Retry the same diagnostic before publishing the preserved terminal intent.
+        self._pending_diagnostic: Dict[str, tuple[str, str]] = {}
         # Protect file responses between route validation and final ASGI send.
         self._artifact_leases: Dict[str, int] = {}
 
@@ -447,6 +450,7 @@ class JobService:
                 cancelled["finished"] = time.time()
                 self.repository.set_durable(jid, cancelled)
                 self._pending_terminal.pop(jid, None)
+                self._pending_diagnostic.pop(jid, None)
                 proc_to_stop = job.get("process")
                 was_active = True
                 try:
@@ -511,6 +515,38 @@ class JobService:
                 raise RuntimeError("Scheduler still active; exclusive lock retained")
             self._root_lock.release()
 
+    def _finish_stopped_worker(
+        self,
+        terminal: Dict[str, Any],
+        diagnostic_name: str,
+        diagnostic_message: str,
+        storage_failure_message: str,
+    ) -> None:
+        """Keep a stopped worker's original verdict through diagnostic/SQLite I/O.
+
+        The worker has already been killed at this point. If the diagnostic
+        cannot be written, a subsequent scheduler turn must NOT replace the
+        original resource/deadline reason with a generic worker-exit error.
+        """
+        jid = terminal["id"]
+        try:
+            self._terminal_diagnostic(terminal, diagnostic_name, diagnostic_message)
+        except OSError:
+            self._pending_terminal[jid] = terminal
+            self._pending_diagnostic[jid] = (diagnostic_name, diagnostic_message)
+            logger.exception(
+                "Deferring stopped worker %s terminal verdict until diagnostic I/O recovers",
+                jid,
+            )
+            return
+        try:
+            self.repository.set_durable(jid, terminal)
+        except JobPersistenceError:
+            self._pending_terminal[jid] = terminal
+            logger.exception(storage_failure_message, jid)
+        else:
+            self._cleanup(terminal)
+
     def _retry_pending_terminals(self) -> bool:
         """Retry a stopped worker's original terminal verdict after SQLite failure.
 
@@ -526,7 +562,19 @@ class JobService:
                 current = self.repository.get(jid)
                 if not current or current.get("state") not in ("QUEUED", "RUNNING"):
                     self._pending_terminal.pop(jid, None)
+                    self._pending_diagnostic.pop(jid, None)
                     continue
+                diagnostic = self._pending_diagnostic.get(jid)
+                if diagnostic is not None:
+                    try:
+                        self._terminal_diagnostic(terminal, *diagnostic)
+                    except OSError:
+                        logger.exception(
+                            "Retry of stopped worker %s diagnostic failed; preserving verdict",
+                            jid,
+                        )
+                        continue
+                    self._pending_diagnostic.pop(jid, None)
                 try:
                     self.repository.set_durable(jid, terminal)
                 except JobPersistenceError:
@@ -646,20 +694,12 @@ class JobService:
                                     finished=now,
                                     peak_rss_bytes=peak_rss,
                                 )
-                                self._terminal_diagnostic(
-                                    exhausted, "ResourceExhaustedError",
+                                self._finish_stopped_worker(
+                                    exhausted,
+                                    "ResourceExhaustedError",
                                     f"Memory limit exceeded: {used_mb} MiB > {limit_mb} MiB",
+                                    "Keeping job %s RUNNING after resource limit persistence failure",
                                 )
-                                try:
-                                    self.repository.set_durable(exhausted["id"], exhausted)
-                                except JobPersistenceError:
-                                    self._pending_terminal[exhausted["id"]] = exhausted
-                                    logger.exception(
-                                        "Keeping job %s RUNNING after resource limit persistence failure",
-                                        exhausted["id"],
-                                    )
-                                else:
-                                    self._cleanup(exhausted)
                                 continue
                             # The peak is monitoring metadata, not a terminal verdict.
                             # Cache may reflect it immediately, without changing job state.
@@ -697,19 +737,12 @@ class JobService:
                             error="Job deadline exceeded",
                             finished=time.time(),
                         )
-                        self._terminal_diagnostic(
-                            expired, "TimeoutError", "Job deadline exceeded"
+                        self._finish_stopped_worker(
+                            expired,
+                            "TimeoutError",
+                            "Job deadline exceeded",
+                            "Keeping job %s RUNNING after deadline persistence failure",
                         )
-                        try:
-                            self.repository.set_durable(expired["id"], expired)
-                        except JobPersistenceError:
-                            self._pending_terminal[expired["id"]] = expired
-                            logger.exception(
-                                "Keeping job %s RUNNING after deadline persistence failure",
-                                expired["id"],
-                            )
-                        else:
-                            self._cleanup(expired)
                     elif proc.poll() is not None:
                         terminal = dict(running)
                         directory = Path(running["directory"])
