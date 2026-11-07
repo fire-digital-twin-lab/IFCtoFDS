@@ -531,8 +531,11 @@ def test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds(tmp_path):
         input_path = case_dir / "input.fds"
         input_path.write_text(
             "&HEAD CHID='vehicle_geometry' /\n"
-            "&TIME T_END=0.0 /\n"
-            "&MESH IJK=20,20,10, XB=0,10,0,10,0,3 /\n"
+            "&TIME T_END=0.1 /\n"
+            # Axis-aligned grid deliberately resolves all source boundaries:
+            # dx=0.25 m, dy=0.10 m, dz=0.05 m. The parametric 0.15 m
+            # underbody gap therefore has three cells; IFC-bound 0.20 m has four.
+            "&MESH IJK=20,20,40, XB=2.5,7.5,4.0,6.0,0.0,2.0 /\n"
             + base_geometry
             + fragment
             + "\n&TAIL /\n",
@@ -563,12 +566,25 @@ def test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds(tmp_path):
                 "returncode": run.returncode,
                 "completed_successfully": "completed successfully" in log.lower(),
                 "fatal_error_present": "ERROR:" in log,
+                "warnings": [
+                    line.strip()
+                    for line in log.splitlines()
+                    if line.strip().startswith("WARNING:")
+                ],
+                "mesh": {
+                    "ijk": [20, 20, 40],
+                    "xb_m": [2.5, 7.5, 4.0, 6.0, 0.0, 2.0],
+                    "cell_size_m": [0.25, 0.10, 0.05],
+                },
             }
         )
-        assert run.returncode == 0, log
-        assert "completed successfully" in log.lower(), log
-        assert "ERROR:" not in log, log
 
+    solver_pass = all(
+        case["returncode"] == 0
+        and case["completed_successfully"]
+        and not case["fatal_error_present"]
+        for case in evidence_cases
+    )
     evidence_dir = Path("scripts/out/solver-evidence")
     evidence_dir.mkdir(parents=True, exist_ok=True)
     (evidence_dir / "p3a-vehicle-geometry.json").write_text(
@@ -579,7 +595,7 @@ def test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds(tmp_path):
                 "solver_target": "FDS 6.11.1",
                 "test": "test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds",
                 "cases": evidence_cases,
-                "verdict": "PASS",
+                "verdict": "PASS" if solver_pass else "FAIL",
                 "limitation": (
                     "Solver acceptance of scoped geometry only; this is not "
                     "numerical verification or experimental validation."
@@ -590,3 +606,5 @@ def test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds(tmp_path):
         ),
         encoding="utf-8",
     )
+
+    assert solver_pass, json.dumps(evidence_cases, indent=2)
