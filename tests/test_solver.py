@@ -134,7 +134,7 @@ def test_probe_timeout_is_inconclusive_and_retains_evidence(
 
 
 @pytest.mark.solver
-def test_pinned_fds_accepts_scientific_parser_contract(tmp_path):
+def test_pinned_fds_accepts_scientific_parser_contract():
     """Oracle: FDS 6.11.1 must accept the supported P2 scientific namelist subset."""
     executable = os.environ.get("IFCFDS_SOLVER") or shutil.which("fds")
     if not executable:
@@ -154,17 +154,24 @@ def test_pinned_fds_accepts_scientific_parser_contract(tmp_path):
 &ISOF QUANTITY='TEMPERATURE', VALUE=50 /
 &TAIL /
 """
-    evidence_dir = tmp_path / "parser-contract-solver"
+    evidence_root = Path("scripts/out/solver-evidence/parser-contract")
     solver, _effective = solver_gates(
         text,
         AuditConfig(
             solver_executable=executable,
-            solver_evidence_directory=str(evidence_dir),
+            solver_evidence_directory=str(evidence_root),
         ),
     )
-    assert solver.status == "PASS", solver.reason
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    (evidence_dir / "parser_contract.fds").write_text(text, encoding="utf-8")
-    (evidence_dir / "solver_gate.json").write_text(
+    evidence_dir = Path(solver.evidence.get("directory", evidence_root))
+    out_files = sorted(evidence_dir.glob("*.out")) if evidence_dir.exists() else []
+    out_tail = ""
+    if out_files:
+        out_tail = out_files[0].read_text(
+            encoding="utf-8", errors="replace"
+        )[-4000:]
+    assert solver.status == "PASS", f"{solver.reason}\n{out_tail}"
+    evidence_root.mkdir(parents=True, exist_ok=True)
+    (evidence_root / "parser_contract.fds").write_text(text, encoding="utf-8")
+    (evidence_root / "solver_gate.json").write_text(
         solver.model_dump_json(indent=2), encoding="utf-8"
     )
