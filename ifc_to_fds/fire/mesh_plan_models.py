@@ -62,6 +62,7 @@ class ResolvedLocalMeshPlan(BaseModel):
     local_mesh_id: str
     meshes: list[MeshRegion]
     total_cells: int
+    boundary_adjustments: list[str] = Field(default_factory=list)
     layout_method: Literal["ADJACENT_SHELL_REFINEMENT_V1"] = (
         "ADJACENT_SHELL_REFINEMENT_V1"
     )
