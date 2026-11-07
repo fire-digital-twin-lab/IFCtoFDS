@@ -132,8 +132,19 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 - **affected_modules**: `ifc_to_fds/validation/checkers/mesh_resolution.py`, `ifc_to_fds/validation/checkers/solver.py`, `ifc_to_fds/validation/engine.py`, mesh/scenario/API regression tests.
 - **evidence_level**: E2
 - **supporting_evidence**: PR #75 code candidate `ffe9d7ed519028a68ce8aa35ecf5530fcf8edfcd`; Source quality #42403923771 PASS with 926 passed, 14 deselected, 117 warnings and 87% coverage; artifact 13587020449 digest sha256:a8d5add592ecb6431cd98c31effda642e2ab80ecac7c147f6b6f410f1ae29aab. Conversion #42403923594 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; solver artifact 13586344048 digest sha256:d27dea30722b310a72cae6d3ed752bb134b86378aea00fc46899b4f9a3463f69; browser artifact 13586059568 digest sha256:ac78e95294343660e4ed4d25cd8954bffe943560a19f97fa993e4ace1adfc18e. Technical note: `docs/science/P4A_MESH_ADEQUACY_INDICATOR_CONTRACT.md`.
-- **known_limitations**: The current checker does not resolve the source-local mesh in a multi-mesh plan; its parsed-FDS cell-size basis is explicitly labeled global maximum spacing/not source-local. P4a has no Local MeshPlan, no post-snap geometry evidence, no grid-sensitivity series, no numerical uncertainty and no application validation. A solver PASS is integration evidence only and does not upgrade mesh adequacy.
+- **known_limitations**: At the P4a baseline the checker did not resolve a source-local mesh and therefore labeled parsed-FDS spacing as global maximum/not source-local. Scoped P4b1 later adds fail-closed source-local lookup and a typed Local MeshPlan, but P4a itself still provides no grid-sensitivity series, numerical uncertainty or application validation. A solver PASS is integration evidence only and does not upgrade mesh adequacy.
 - **validation_domain**: Current repository fire-source fixtures, scenario/API jobs and both validation orchestration paths; indicator/provenance semantics only.
+- **status**: PASS
+- **reviewer**: REPOSITORY_CI_PINNED_SOLVER_AND_DIFF_REVIEW
+
+## Claim `MESH-LOCAL-P4B1-001`
+- **statement**: For the scoped P4b1 contract, a scenario may replace the verified base uniform MESH layout with a typed coarse-lattice-aligned Local MeshPlan whose coarse shell and one refined source region cover the same simulation domain without interior overlap; requested-to-effective boundary expansion is explicit, burner-to-mesh locality is fail-closed, local spacing/critical EV geometry ratios are persisted, and the regression layout completes a real pinned FDS 6.11.1 timestep run.
+- **intended_use**: Software/solver-integration prerequisite for P4c coarse/medium/fine solution verification around supported scientific EV sources.
+- **affected_modules**: `ifc_to_fds/fire/mesh_plan*.py`, `scenario_request.py`, `scenario_composer.py`, scenario worker evidence path, `MeshResolutionChecker`, Local MeshPlan/worker/solver regression tests.
+- **evidence_level**: E2
+- **supporting_evidence**: PR #76 code candidate `df51ff056f2d33f2a179ffe719697fe5694b30ee`; Source quality #42408013138 PASS with 935 passed, 15 deselected, 121 warnings and 87% coverage; artifact 13588337635 digest sha256:8a007e1f2ef5f8c91152613d43df2ec42305a0f8dd4376ef0c02ab9ae86c69fa. Conversion #42408013221 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; solver suite reports 10 passed, 940 deselected; solver artifact 13588546447 digest sha256:04d6f3609ea5a2d759f43984bf7877a0ca7df31fb066b6abf8a2e6c11ccf8e5e; browser artifact 13588810318 digest sha256:405eff9b55476823a9e2e209060970534a78a46ddeb8de969c5861a69039bca1. Solver regression uses `T_END=0.1 s`, requires `completed successfully`, and persists JSON plus stdout/stderr logs/checksums. Technical note: `docs/science/P4B_LOCAL_MESH_PLAN_CONTRACT.md`.
+- **known_limitations**: One explicit source-local region only; local refined region is one mesh with a current 500,000-cell implementation guard; requested boundaries may expand outward on the verified coarse lattice to avoid one-cell 3D meshes and every adjustment is recorded. This claim does not establish grid convergence, mesh independence, numerical uncertainty, application-specific adequacy or any fire-physics validity. D*/dx and cells-across-gap metrics remain indicators, not universal acceptance thresholds.
+- **validation_domain**: Current axis-aligned scientific vehicle/burner fixtures, a verified uniform coarse base lattice, one explicit local refinement patch with integer ratio, source-centroid locality checks, WorkerRunner scenario persistence and the pinned FDS 6.11.1 regression layout.
 - **status**: PASS
 - **reviewer**: REPOSITORY_CI_PINNED_SOLVER_AND_DIFF_REVIEW
 
@@ -142,8 +153,8 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 - **intended_use**: Numerical/solution verification for EV fire scenarios.
 - **affected_modules**: Future `MeshPlan`, mesh checker, scenario evidence and metrics.
 - **evidence_level**: E0
-- **supporting_evidence**: No accepted MeshPlan/local-refinement evidence package is registered in this ledger. Scoped claim `MESH-INDICATOR-P4A-001` verifies that the checker no longer uses D*/dx as a universal acceptance shortcut, but it does not satisfy this MeshPlan claim.
-- **known_limitations**: A typed Local MeshPlan, source-local dx lookup, post-snap ground-clearance/battery resolution evidence, coarse/medium/fine sensitivity, numerical uncertainty and reviewed application metrics are missing.
+- **supporting_evidence**: Scoped claims `MESH-INDICATOR-P4A-001` and `MESH-LOCAL-P4B1-001` verify indicator semantics, a typed non-overlapping Local MeshPlan, source-local burner spacing lookup, critical EV geometry ratios, WorkerRunner persistence and pinned-solver acceptance for the supported regression layout. They do not satisfy the documented-sensitivity portion of this broad claim.
+- **known_limitations**: Coarse/medium/fine grid sensitivity, convergence/solution-verification metrics, numerical uncertainty and reviewed application-specific mesh adequacy are still missing. Current P4b1 supports one explicit local refined patch and does not prove grid independence.
 - **validation_domain**: EV basement/garage simulation cases.
 - **status**: INCONCLUSIVE
 - **reviewer**: PENDING_INDEPENDENT_REVIEW
