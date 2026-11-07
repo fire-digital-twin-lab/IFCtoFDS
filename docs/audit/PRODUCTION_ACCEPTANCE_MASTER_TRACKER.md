@@ -1,5 +1,34 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint P4a sửa mesh adequacy contract — 08/11/2026
+
+**PR:** #75  
+**Code candidate đã nghiệm thu:** `ffe9d7ed519028a68ce8aa35ecf5530fcf8edfcd`  
+**Roadmap:** P4 bắt đầu; scoped `MESH-INDICATOR-P4A-001 = PASS / E2`, broad `MESH-LOCAL-001 = INCONCLUSIVE / E0`.
+
+- Loại bỏ hard acceptance rule `4 <= D*/dx <= 16`; historical 4–16 chỉ còn là descriptive indicator band.
+- Positive-fire mesh gate giữ `INCONCLUSIVE` cho đến khi có grid-sensitivity/local-resolution evidence; không tự PASS chỉ vì D*/dx nằm trong một khoảng.
+- Mesh rất mịn không còn bị gọi là “too fine” chỉ vì D*/dx > 16.
+- Báo `ground_clearance/dx` và `battery_thickness/dx` khi scenario geometry có dữ liệu, nhưng không tự đặt threshold khoa học.
+- Ghi rõ provenance của HRR: explicit selection hoặc `PRESET_RANGE_MIDPOINT_ASSUMPTION` kèm range/confidence/citations; nonfinite input bị reject.
+- Ghi rõ provenance của dx. Parsed multi-mesh hiện dùng `GLOBAL_MAX_MESH_SPACING_NOT_SOURCE_LOCAL`; `local_source_mesh_resolved=false`. Không overclaim local resolution trước P4b.
+- Tách solver-integration evidence khỏi mesh adequacy. Syntax/topology vẫn có thể chặn solver; mesh `INCONCLUSIVE` không che mất pinned-FDS execution evidence. Solver PASS không nâng mesh adequacy.
+- Đồng bộ semantics giữa independent validation engine và checker-based ValidationRunner.
+- CI vòng đầu làm lộ bốn regression: stale API PASS expectation, stale “too fine” wording, solver test dùng legacy syntax không hợp lệ, và independent-engine parity chưa sửa. Đã xử lý root cause/intentional contract tests; không phục hồi hard gate 4–16 và không cập nhật golden để che lỗi.
+- Audit diff sau đó phát hiện hai fallback manifest/comment-HRR vẫn còn hard P1 finding theo 4–16; đã xóa và bổ sung regression/provenance `cell_size_basis`.
+- Source quality #42403923771: **SUCCESS**, `926 passed, 14 deselected, 117 warnings`, coverage **87%**; artifact `13587020449`, digest `sha256:a8d5add592ecb6431cd98c31effda642e2ab80ecac7c147f6b6f410f1ae29aab`.
+- Conversion #42403923594: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver artifact `13586344048`, digest `sha256:d27dea30722b310a72cae6d3ed752bb134b86378aea00fc46899b4f9a3463f69`.
+- Browser artifact `13586059568`, digest `sha256:ac78e95294343660e4ed4d25cd8954bffe943560a19f97fa993e4ace1adfc18e`.
+- Technical note: `docs/science/P4A_MESH_ADEQUACY_INDICATOR_CONTRACT.md`.
+
+**Giới hạn khoa học:** P4a chưa tạo Local MeshPlan, chưa xác định local dx tại EV source trong multi-mesh, chưa có non-overlapping refined layout, post-snap clearance, coarse/medium/fine grid sensitivity, numerical uncertainty hoặc application-specific acceptance metrics.
+
+**Scientific verdict:** scoped software contract `PASS / E2`; `MESH-LOCAL-001` vẫn `INCONCLUSIVE / E0`; overall scientific/application verdict `INCONCLUSIVE`.  
+**Release verdict:** `NOT_PRODUCTION_READY`. Không cấp `SIMULATION_VERIFIED`.
+
+---
+
 ## Checkpoint P3d exact GEOM collision từ sealed FDS — 07/11/2026
 
 **PR:** #74  
