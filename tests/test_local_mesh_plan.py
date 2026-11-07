@@ -100,11 +100,14 @@ def test_local_mesh_plan_covers_domain_without_overlap_and_resolves_local_dx():
 
     assert plan.local_mesh_id == "P4B_LOCAL_V0"
     assert plan.local_cell_size_xyz_m == pytest.approx((0.5, 0.5, 0.5))
-    assert plan.local_mesh().ijk == (8, 8, 6)
-    assert plan.local_mesh().total_cells == 384
+    assert plan.local_mesh().ijk == (8, 8, 8)
+    assert plan.local_mesh().total_cells == 512
     assert plan.total_cells > plan.local_mesh().total_cells
-    # No lower-Z shell is needed because the refined region starts at domain zmin.
-    assert len(plan.meshes) == 6
+    # The requested zmax leaves a one-cell shell; the effective region expands
+    # to domain zmax so every generated FDS mesh remains 3D.
+    assert plan.local_region.zmax == pytest.approx(4.0)
+    assert plan.boundary_adjustments == ["zmax coarse index expanded 3->4"]
+    assert len(plan.meshes) == 5
 
     for index, mesh in enumerate(plan.meshes):
         for other in plan.meshes[index + 1 :]:
@@ -258,6 +261,11 @@ def test_local_mesh_evidence_reports_source_local_metrics_without_pass():
     assert evidence["status"] == "INCONCLUSIVE"
     assert evidence["local_source_mesh_resolved"] is True
     assert evidence["grid_sensitivity_required"] is True
+    assert evidence["requested_local_region"]["zmax"] == pytest.approx(3.0)
+    assert evidence["local_region"]["zmax"] == pytest.approx(4.0)
+    assert evidence["boundary_adjustments"] == [
+        "zmax coarse index expanded 3->4"
+    ]
     assert evidence["dx_local_m"] == pytest.approx(0.5)
     assert evidence["ground_clearance_over_dz_local"] == pytest.approx(1.0)
     assert evidence["battery_thickness_over_dz_local"] == pytest.approx(0.4)
