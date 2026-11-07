@@ -13,7 +13,11 @@ from .acceptance import (
 )
 from .parser import parse_fds
 from .effective import check_opening_grid_alignment
-from .preflight import comparison_summary, invalid_source_solids
+from .preflight import (
+    comparison_summary,
+    source_topology_blockers,
+    source_topology_preflight,
+)
 from .metrics import (
     compare_solids,
     opening_residual,
@@ -262,30 +266,51 @@ def run_independent_validation(
         if e.scope_decision != ScopeDecision.OUT_OF_SCOPE
         and e.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
     )
-    invalid_source_meshes = invalid_source_solids(model)
-    bad_source = invalid_source_meshes if config.fail_fast_on_source_errors else []
+    source_topology = source_topology_preflight(model)
+    topology_blockers = source_topology_blockers(source_topology)
+    confirmed_invalid = sorted(
+        key
+        for key, item in topology_blockers.items()
+        if item.get("status") == "FAIL"
+    )
+    uncertain_source = sorted(
+        key
+        for key, item in topology_blockers.items()
+        if item.get("status") == "INCONCLUSIVE"
+    )
+    bad_source = topology_blockers if config.fail_fast_on_source_errors else {}
     stop_solid_checks = bool(bad_source)
     skip_local_comparisons = stop_solid_checks and not config.collect_partial_geometry_evidence
     comparison_attempts, completed_comparisons = set(), set()
     comparison_deviations, comparison_failures, comparison_inconclusive = set(), set(), set()
     skipped_comparisons = set()
+    if topology_blockers:
+        report.metrics["source_topology_preflight_evidence"] = topology_blockers
     if stop_solid_checks:
-        report.metrics["source_topology_preflight_rejected"] = bad_source
+        report.metrics["source_topology_preflight_rejected"] = sorted(topology_blockers)
+        reason = (
+            "Source topology defects confirmed"
+            if confirmed_invalid
+            else "Source topology evidence is inconclusive"
+        )
         report.gates["openings"] = GateResult(
             status=GateStatus.NOT_RUN,
-            reason="Source topology defects confirmed; full opening comparisons not run",
+            reason=f"{reason}; full opening comparisons not run",
         )
         report.gates["air_path"] = GateResult(
             status=GateStatus.NOT_RUN,
-            reason="Source topology defects confirmed; air path analysis not run",
+            reason=f"{reason}; air path analysis not run",
         )
         report.gates[
             "geometry"
         ].reason = (
-            "Source topology defects confirmed; "
+            reason
+            + "; "
             + ("remaining solid comparisons not run" if skip_local_comparisons else
                "partial local comparisons enabled; dependent global checks not run")
         )
+        if uncertain_source and not confirmed_invalid:
+            report.gates["geometry"].status = GateStatus.INCONCLUSIVE
     reference_solids = None
     exported_solids = None
     if opening_count > 0 and not stop_solid_checks:
@@ -489,6 +514,33 @@ def run_independent_validation(
         if strategy == MappingStrategy.HVAC.value:
             report.element_statuses[key] = "OPERATIONAL_MAPPED"
             continue
+        issue = topology_blockers.get(key)
+        if issue is not None and config.fail_fast_on_source_errors:
+            if issue.get("reason") == "SELF_INTERSECTION":
+                detail = (
+                    f"Source self-intersection confirmed: entity={key}, STEP={e.step_id}, "
+                    f"GlobalId={e.global_id}, IFC type={e.ifc_type}; "
+                    f"witness={issue.get('self_intersection', {}).get('witness', {})}"
+                )
+            elif issue.get("reason") == "SELF_INTERSECTION_UNCERTAIN":
+                detail = (
+                    f"Source self-intersection could not be resolved: entity={key}, "
+                    f"STEP={e.step_id}, GlobalId={e.global_id}, IFC type={e.ifc_type}; "
+                    f"evidence={issue.get('self_intersection', {})}"
+                )
+            else:
+                detail = (
+                    f"Unsupported source geometry: entity={key}, STEP={e.step_id}, "
+                    f"GlobalId={e.global_id}, IFC type={e.ifc_type}; "
+                    f"source mesh quality={issue.get('mesh_quality', {})}; {e.mapping_rationale}"
+                )
+            if issue.get("status") == "FAIL":
+                finding("geometry", detail, key)
+                report.element_statuses[key] = "UNSUPPORTED"
+            else:
+                unknown("geometry", detail, key)
+                report.element_statuses[key] = "INCONCLUSIVE"
+            continue
         meshes = primitives.get(key, [])
         if not meshes:
             report.missing_count += 1
@@ -634,7 +686,7 @@ def run_independent_validation(
     if model.mep_graph.isolated_element_ids:
         unknown("mep", "Isolated MEP elements require source connectivity review")
     summary, export_coverage = comparison_summary(
-        parsed, primitives, invalid_source_meshes,
+        parsed, primitives, confirmed_invalid,
         mode="FAIL_FAST" if skip_local_comparisons else "PARTIAL" if stop_solid_checks else "FULL",
         verified=report.matched_count,
         attempted=comparison_attempts, completed=completed_comparisons,
@@ -684,7 +736,7 @@ def run_independent_validation(
     if stop_solid_checks:
         report.gates["solver"] = GateResult(
             status=GateStatus.NOT_RUN,
-            reason="Source topology preflight rejected; solver not run",
+            reason="Source topology preflight did not authorize solver execution",
         )
         report.gates["effective_geometry"] = GateResult(
             status=GateStatus.NOT_RUN,

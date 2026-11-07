@@ -1,5 +1,30 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint source self-intersection topology preflight — 07/11/2026
+
+**PR:** #73  
+**Code candidate đã nghiệm thu:** `a8076880c12ddf8ec382f3fc270e190b0457ab05`  
+**Claim:** scoped `GEO-PREFLIGHT-001 = PASS / E2`; overall scientific/application verdict vẫn `INCONCLUSIVE`.
+
+- Bổ sung structured `source_topology_preflight()` để phân biệt `INVALID_SOLID`, `SELF_INTERSECTION`, `SELF_INTERSECTION_UNCERTAIN` và clean source geometry.
+- Khi `fail_fast_on_source_errors=True`, confirmed/uncertain source topology blocker chặn Air Path, Openings và Solver trước downstream calculation.
+- Confirmed self-intersection lưu machine-readable witness; uncertainty không được tự nâng thành PASS.
+- Không repair source mesh, không bbox fallback, không thay tolerance.
+- `invalid_source_solids()` giữ semantics lịch sử manifold/positive-volume để không phá consumer legacy.
+- Khi fail-fast tắt, full diagnostics/comparison lịch sử tiếp tục chạy; structured evidence không được gắn nhãn rejected.
+- CI trong quá trình sửa phát hiện hai regression FZK/Duplex; đã sửa root cause, không cập nhật golden để che lỗi.
+- Source quality #42385398407: **SUCCESS**, `894 passed, 14 deselected`, coverage **87%**; artifact `13579038618`, digest `sha256:acaaf526ce12501ce136457183112f80329cadd122411e49327277e78721819e`.
+- Conversion #42385398466: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver artifact `13579825786`, digest `sha256:8b20558c44bc7aaa28f8e2673bafdfce25949d074ccbd2fa9f8f4d39a9874a67`.
+- Technical note: `docs/science/SOURCE_TOPOLOGY_PREFLIGHT.md`.
+
+**Giới hạn:** work package này không sửa các Door/Beam/Plate/Ramp invalid trong source IFC và không tự tạo reviewed disposition; source defect vẫn phải FAIL/INCONCLUSIVE nếu chưa có source fix hoặc quyết định review có provenance.
+
+**Scientific verdict:** scoped software gate ordering `PASS / E2`; không cấp solution verification/model validation/application validation.  
+**Release verdict:** `NOT_PRODUCTION_READY`.
+
+---
+
 ## Checkpoint P3b collision gate với verified base geometry — 07/11/2026
 
 **PR:** #71  

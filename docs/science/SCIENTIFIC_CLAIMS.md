@@ -60,6 +60,17 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 - **status**: PASS
 - **reviewer**: REPOSITORY_CI_AND_DIFF_REVIEW
 
+## Claim `GEO-PREFLIGHT-001`
+- **statement**: When source-topology fail-fast is enabled, an in-scope physical source mesh with confirmed self-intersection is rejected before dependent Air Path, Openings and Solver gates execute; an uncertain self-intersection remains INCONCLUSIVE; structured witness evidence is preserved without repairing or substituting source geometry.
+- **intended_use**: Software verification of fail-closed geometry gate ordering and diagnostic traceability before downstream enclosure/opening/solver checks.
+- **affected_modules**: `ifc_to_fds/validation/preflight.py`, `ifc_to_fds/validation/engine.py`, `ifc_to_fds/validation/runner.py`, Geometry checker and source-topology regression tests.
+- **evidence_level**: E2
+- **supporting_evidence**: PR #73 code candidate `a8076880c12ddf8ec382f3fc270e190b0457ab05`; Source quality #42385398407 PASS with 894 passed, 14 deselected and 87% coverage, artifact 13579038618 digest sha256:acaaf526ce12501ce136457183112f80329cadd122411e49327277e78721819e; Conversion #42385398466 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; solver artifact 13579825786 digest sha256:8b20558c44bc7aaa28f8e2673bafdfce25949d074ccbd2fa9f8f4d39a9874a67. Regression CI first exposed and then verified repair of FZK geometry-preservation parity and Duplex finding-count compatibility without changing golden expectations.
+- **known_limitations**: This claim does not repair invalid IFC geometry, authorize bounding-box fallback, prove enclosure airtightness, establish mesh adequacy, verify FDS numerical accuracy, or validate any fire-physics model. Explicit reviewed dispositions remain required when invalid source elements are intentionally excluded or reclassified.
+- **validation_domain**: Repository source-topology fixtures, FZK/Duplex behavior-parity fixtures and the current fail-fast/full-diagnostics audit contracts.
+- **status**: PASS
+- **reviewer**: REPOSITORY_CI_AND_DIFF_REVIEW
+
 ## Claim `EV-GEO-P3A-001`
 - **statement**: For the scoped axis-aligned P3a contract, `PARAMETRIC` vehicle geometry preserves explicit floor reference and positive underbody clearance, while reviewed `IFC_BOUND` geometry preserves canonical vehicle identity and verified OBST bounds without duplicating the base body; reviewed battery bounds are traceable and contained within the vehicle envelope; both scientific modes emit an underbody burner accepted by pinned FDS 6.11.1.
 - **intended_use**: Software/solver-integration verification of the vehicle identity and ground-clearance prerequisite before local MeshPlan and EV physics work.
