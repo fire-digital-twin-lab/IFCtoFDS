@@ -1,5 +1,20 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Post-merge P3a acceptance — 07/11/2026
+
+**Main merge SHA:** `3071496022d051dee34c9b6ab5232bdd35d610e5` (squash merge PR #69).
+
+- Main Source quality #42381779321: **SUCCESS**; artifact `13578380183`, digest `sha256:093c22be03024c94c7b57b017fa2fb32d81f1278bf2bc5d7c18d9336f4590239`.
+- Main Conversion #42381779354: **SUCCESS** across Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS; solver artifact `13577997459`, digest `sha256:f1e00649213f73459f1268d1a774e4a7e2abc6a40c5ad8fada49b4ac27215faa`.
+- PR final HEAD `ecb6acbb13e6faa30d52f484afbd5c1567ce4c1e` also passed Conversion and Quality. One PR Quality attempt suffered a non-deterministic native exit-139 during coverage while the same SHA push Quality passed; controlled attempt 2 then passed without source changes. This is tracked as `CI-NATIVE-COVERAGE-SEGFAULT-01`; it is **not** treated as a source-code fix or ignored as evidence.
+- `EV-GEO-P3A-001 = PASS / E2` remains scoped to the documented axis-aligned vehicle-geometry/software/solver-integration contract.
+- Broad `EV-GEO-001 = FAIL`; P3 remains `IN_PROGRESS`.
+- Overall scientific/application verdict remains `INCONCLUSIVE`; release verdict remains `NOT_PRODUCTION_READY`.
+
+**Next P3 work:** native IFC vehicle semantic binding plus orientation/collision fidelity must be handled as new atomic work packages; P4 local MeshPlan does not begin until P3 prerequisites are satisfied or a work item is demonstrably independent.
+
+---
+
 ## Checkpoint P3a vehicle identity / ground-clearance contract — 07/11/2026
 
 **PR:** #69  
