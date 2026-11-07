@@ -153,7 +153,7 @@ class GeometryChecker:
                 element_statuses[key] = "OPERATIONAL_MAPPED"
                 continue
             issue = blockers.get(key)
-            if issue is not None:
+            if issue is not None and config and config.fail_fast_on_source_errors:
                 detail = topology_detail(e, issue)
                 if issue.get("status") == "FAIL":
                     status = GateStatus.FAIL
