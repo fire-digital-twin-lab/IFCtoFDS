@@ -285,9 +285,9 @@ def run_independent_validation(
     comparison_deviations, comparison_failures, comparison_inconclusive = set(), set(), set()
     skipped_comparisons = set()
     if topology_blockers:
-        report.metrics["source_topology_preflight_rejected"] = sorted(topology_blockers)
         report.metrics["source_topology_preflight_evidence"] = topology_blockers
     if stop_solid_checks:
+        report.metrics["source_topology_preflight_rejected"] = sorted(topology_blockers)
         reason = (
             "Source topology defects confirmed"
             if confirmed_invalid
