@@ -68,6 +68,51 @@ def _lattice_index(
     return index
 
 
+def _normalize_axis_interval(
+    lower: int,
+    upper: int,
+    total: int,
+    axis_name: str,
+) -> tuple[int, int, list[str]]:
+    """Expand an interval so every generated 3D mesh has at least two cells per axis."""
+
+    if total < 2:
+        raise ValueError(
+            f"LocalMeshPlan requires at least 2 coarse cells along {axis_name}"
+        )
+    if upper <= lower:
+        raise ValueError(f"LocalMeshPlan has empty {axis_name} interval")
+
+    original_lower, original_upper = lower, upper
+    if upper - lower == 1:
+        if upper < total:
+            upper += 1
+        elif lower > 0:
+            lower -= 1
+        else:
+            raise ValueError(
+                f"Cannot create a 3D local mesh with one coarse cell along {axis_name}"
+            )
+
+    # A one-cell residual shell creates an FDS mesh that is effectively 2D and
+    # can fail pressure-solver initialization when mixed with 3D meshes.
+    if lower == 1:
+        lower = 0
+    if total - upper == 1:
+        upper = total
+
+    adjustments: list[str] = []
+    if lower != original_lower:
+        adjustments.append(
+            f"{axis_name}min coarse index expanded {original_lower}->{lower}"
+        )
+    if upper != original_upper:
+        adjustments.append(
+            f"{axis_name}max coarse index expanded {original_upper}->{upper}"
+        )
+    return lower, upper, adjustments
+
+
 def _bounds_from_indices(
     domain: BoundingBox,
     spacing: tuple[float, float, float],
@@ -210,15 +255,59 @@ def resolve_local_mesh_plan(
 
     region = request.local_region
     indices = (
-        _lattice_index(region.xmin, simulation_domain.xmin, spacing[0], coarse_ijk[0], "local_region.xmin"),
-        _lattice_index(region.xmax, simulation_domain.xmin, spacing[0], coarse_ijk[0], "local_region.xmax"),
-        _lattice_index(region.ymin, simulation_domain.ymin, spacing[1], coarse_ijk[1], "local_region.ymin"),
-        _lattice_index(region.ymax, simulation_domain.ymin, spacing[1], coarse_ijk[1], "local_region.ymax"),
-        _lattice_index(region.zmin, simulation_domain.zmin, spacing[2], coarse_ijk[2], "local_region.zmin"),
-        _lattice_index(region.zmax, simulation_domain.zmin, spacing[2], coarse_ijk[2], "local_region.zmax"),
+        _lattice_index(
+            region.xmin,
+            simulation_domain.xmin,
+            spacing[0],
+            coarse_ijk[0],
+            "local_region.xmin",
+        ),
+        _lattice_index(
+            region.xmax,
+            simulation_domain.xmin,
+            spacing[0],
+            coarse_ijk[0],
+            "local_region.xmax",
+        ),
+        _lattice_index(
+            region.ymin,
+            simulation_domain.ymin,
+            spacing[1],
+            coarse_ijk[1],
+            "local_region.ymin",
+        ),
+        _lattice_index(
+            region.ymax,
+            simulation_domain.ymin,
+            spacing[1],
+            coarse_ijk[1],
+            "local_region.ymax",
+        ),
+        _lattice_index(
+            region.zmin,
+            simulation_domain.zmin,
+            spacing[2],
+            coarse_ijk[2],
+            "local_region.zmin",
+        ),
+        _lattice_index(
+            region.zmax,
+            simulation_domain.zmin,
+            spacing[2],
+            coarse_ijk[2],
+            "local_region.zmax",
+        ),
     )
     ix0, ix1, iy0, iy1, iz0, iz1 = indices
     nx, ny, nz = coarse_ijk
+
+    boundary_adjustments: list[str] = []
+    ix0, ix1, changes = _normalize_axis_interval(ix0, ix1, nx, "x")
+    boundary_adjustments.extend(changes)
+    iy0, iy1, changes = _normalize_axis_interval(iy0, iy1, ny, "y")
+    boundary_adjustments.extend(changes)
+    iz0, iz1, changes = _normalize_axis_interval(iz0, iz1, nz, "z")
+    boundary_adjustments.extend(changes)
 
     coarse_blocks = [
         (0, ix0, 0, ny, 0, nz),
@@ -285,4 +374,5 @@ def resolve_local_mesh_plan(
         local_mesh_id=local_id,
         meshes=meshes,
         total_cells=sum(mesh.total_cells for mesh in meshes),
+        boundary_adjustments=boundary_adjustments,
     )
