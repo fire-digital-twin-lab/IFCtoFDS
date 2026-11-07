@@ -1,8 +1,8 @@
 # P3b — Collision gate giữa vehicle và verified base geometry
 
-**Trạng thái:** implementation candidate, chờ CI/solver regression trên PR P3b  
+**Trạng thái:** `PASS / E2` trên code candidate `6ad904c7b5fb975968e856fa8bbc686b4b6b4d85`  
 **Roadmap:** P3 — Vehicle identity & geometry  
-**Claim dự kiến:** `EV-GEO-P3B-001` ở mức E2 nếu toàn bộ gate PASS  
+**Claim:** `EV-GEO-P3B-001 = PASS / E2`  
 **Claim tổng:** `EV-GEO-001` tiếp tục FAIL cho đến khi orientation/GEOM vehicle binding, post-snap/local mesh và application evidence hoàn tất.
 
 ## Vấn đề
@@ -85,6 +85,23 @@ Các hạng mục đó thuộc P3c/P4/P6.
 
 Revert P3b commits. `LEGACY` không đổi contract; scientific scenario sẽ trở về trạng thái P3a không có base-geometry collision gate.
 
+## CI và bằng chứng
+
+Code candidate: `6ad904c7b5fb975968e856fa8bbc686b4b6b4d85`.
+
+- Source quality #42382470834: **SUCCESS**, `889 passed, 14 deselected`, coverage **87%**.
+- Source-quality artifact `13578780011`, digest `sha256:43ea31cc163100cd89c61a7b711cac5ca597b84c4cdde44005871f62829c71f1`.
+- Conversion #42382470941: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver job: **9 passed, 894 deselected**.
+- Solver artifact `13577534013`, digest `sha256:b1575008ebed1e2d3694e25b50dcf3cc1e930a839ba6d45013a614702f5eb6b4`.
+- Worker E2E tạo verified base từ IFC thật gồm hai wall tách rời và xác nhận collision assessment được persist trong scenario evidence.
+
+Bằng chứng này chỉ là software/solver-integration verification E2. Solver PASS không biến collision gate thành numerical verification hoặc application validation.
+
 ## Verdict hiện tại
 
-Chưa cấp PASS trước khi CI hoàn tất. P3b candidate chỉ được nâng thành `PASS / E2` khi regression, full CI và main post-merge evidence cùng PASS.
+`EV-GEO-P3B-001 = PASS / E2` cho đúng phạm vi AABB separation/fail-closed GEOM contract ở trên.
+
+`EV-GEO-001 = FAIL` vẫn giữ nguyên vì orientation, exact GEOM collision khi AABB overlap, jet outlets, post-snap/local MeshPlan và application evidence chưa hoàn tất.
+
+PR final HEAD và hậu-merge `main` vẫn phải PASS CI trước khi checkpoint P3b được coi là đóng hoàn toàn.
