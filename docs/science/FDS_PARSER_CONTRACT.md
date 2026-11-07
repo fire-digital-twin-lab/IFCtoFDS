@@ -48,3 +48,20 @@ Indexed FDS field forms such as MATL_ID(1,:) and QUANTITIES(1:3) are checked usi
 Target for this work package: E2 — software verification.
 
 A pinned FDS 6.11.1 solver fixture is added as a syntax oracle. Solver acceptance of the fixture does not constitute model validation, numerical verification or application validation.
+
+
+## Remediation evidence from P2
+
+The P2 oracle exposed three verifier/parser defects that were fixed without weakening the acceptance criteria:
+
+1. Indexed Fortran keys containing commas, for example `MATL_ID(1,:)`, were split by the previous comma-only tokenizer. The tokenizer now splits only outside quotes and parenthesized indices and rejects unbalanced indices.
+2. The solver fatal matcher treated successful FDS convergence diagnostics such as `Maximum Velocity Error:` and `Maximum Pressure Error:` as fatal because it searched for `ERROR:` anywhere in a line. Fatal detection is now line-anchored; regression tests preserve true `ERROR:`, `ERROR(n):` and `STOP: ... ERROR` detection.
+3. `parse_value()` detected nonfinite numbers but caught its own `ValueError`, masking the reason. Nonfinite rejection now remains explicit.
+
+Acceptance evidence for candidate `125d3175066a4b12e96d23b06a99801293dcf5e5`:
+
+- Conversion correctness #42349141483: PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS.
+- Source quality and regression evidence #42349141425: PASS; 862 passed, 13 deselected; 87% coverage.
+- Pinned FDS evidence artifact 13564483853, SHA-256 `463110d3e78cb6d91c3c611232a7a06841fbcae3832929df86d96b805e2846fa`.
+
+These results support E2 software verification only.

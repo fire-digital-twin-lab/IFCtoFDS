@@ -19,13 +19,13 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 ## Claim `FDS-PARSER-001`
 - **statement**: The Python Verified Core parser recognizes the reviewed FDS 6.11.1 scientific namelist subset and rejects missing required fields, unsupported fields, nonfinite values, and dangling supported references without depending on namelist order.
 - **intended_use**: Parser/schema prerequisite for thermal materials, detection/suppression, instrumentation and later scientific evidence generation.
-- **affected_modules**: ifc_to_fds/validation/parser.py, parser contract tests, pinned FDS solver regression.
-- **evidence_level**: E1
-- **supporting_evidence**: Authoritative FDS 6.11.1 references are documented in docs/science/FDS_PARSER_CONTRACT.md; candidate software/solver CI is pending.
-- **known_limitations**: This is a deliberately supported subset, not a complete FDS grammar; parser/solver syntax acceptance does not establish physical validity.
-- **validation_domain**: FDS 6.11.1 fields explicitly enumerated by the project parser contract.
-- **status**: INCONCLUSIVE
-- **reviewer**: PENDING_INDEPENDENT_REVIEW
+- **affected_modules**: ifc_to_fds/validation/parser.py, ifc_to_fds/validation/solver.py, parser contract tests, pinned FDS solver regression.
+- **evidence_level**: E2
+- **supporting_evidence**: PR #68 candidate 125d3175066a4b12e96d23b06a99801293dcf5e5; Conversion correctness #42349141483 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; Source quality and regression evidence #42349141425 PASS with 862 passed, 13 deselected and 87% coverage; solver-evidence artifact 13564483853 digest sha256:463110d3e78cb6d91c3c611232a7a06841fbcae3832929df86d96b805e2846fa.
+- **known_limitations**: This is a deliberately supported subset, not a complete FDS grammar; parser/solver syntax acceptance does not establish numerical convergence, model validation, application validation or physical appropriateness of accepted parameter values.
+- **validation_domain**: FDS 6.11.1 fields explicitly enumerated by the project parser contract and exercised by repository parser/solver fixtures.
+- **status**: PASS
+- **reviewer**: REPOSITORY_CI_AND_PINNED_SOLVER_REVIEW
 
 ## Claim `GEOM-SER-001`
 - **statement**: Supported JS conversion paths count only nondegenerate GEOM triangles consistently across serializer, strategy summary, and parsed scene.

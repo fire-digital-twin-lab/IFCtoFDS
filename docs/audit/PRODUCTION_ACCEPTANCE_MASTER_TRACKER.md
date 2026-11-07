@@ -1,5 +1,22 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint P2 parser/physics contract hoàn tất — 07/11/2026
+
+**Candidate đã nghiệm thu:** `125d3175066a4b12e96d23b06a99801293dcf5e5` trên PR #68.
+
+- Parser Verified Core hỗ trợ reviewed subset `MATL`, `PART`, `PROP`, `SLCF`, `BNDF`, `ISOF` và các field P2 cần thiết của `SURF`, `DEVC`, `REAC`, `HVAC`.
+- Indexed Fortran keys như `MATL_ID(1,:)` được tokenize đúng; unknown field, missing required field, nonfinite numeric và dangling supported reference tiếp tục fail-closed.
+- P2 làm lộ và sửa hai lỗi verifier phụ trợ: solver fatal matcher từng bắt nhầm `Maximum Velocity/Pressure Error:` của run thành công; `parse_value()` từng che mất nguyên nhân nonfinite.
+- Conversion correctness #42349141483: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS solver; research đúng thiết kế là skipped.
+- Source quality and regression evidence #42349141425: **SUCCESS**; full quality **862 passed, 13 deselected, 108 warnings**, coverage **87%**.
+- Pinned FDS 6.11.1 solver evidence artifact `13564483853`, digest `sha256:463110d3e78cb6d91c3c611232a7a06841fbcae3832929df86d96b805e2846fa`.
+- `FDS-PARSER-001` đạt **PASS / E2** cho parser + solver-integration contract. Không nâng thành solution verification/model validation/application validation.
+
+**Kết luận:** P2 scoped verdict = **PASS (E2)**. Overall scientific/application verdict vẫn **INCONCLUSIVE**; release vẫn **NOT_PRODUCTION_READY**.
+
+---
+
+
 ## Checkpoint P0 governance hoàn tất, bắt đầu P2 parser contract — 07/11/2026
 
 **Main SHA đã nghiệm thu:** c5fe1ae1a883459c1f7d961df600c187e20cbc8d (squash merge PR #67).
