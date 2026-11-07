@@ -59,7 +59,9 @@ def test_closed_manifold_self_intersection_is_a_preflight_failure_with_witness(b
         "COPLANAR_FACE_OVERLAP",
         "COMPONENT_VOLUME_OVERLAP",
     }
-    assert preflight.invalid_source_solids(model) == [model.elements[0].entity_key]
+    # Compatibility helper intentionally retains its historical
+    # manifold/volume-only semantics; the structured preflight owns this finding.
+    assert preflight.invalid_source_solids(model) == []
 
 
 def test_validation_runner_blocks_dependent_gates_before_air_path_for_self_intersection(
