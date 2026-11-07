@@ -359,7 +359,12 @@ def test_mesh_resolution_multi_vehicle_fine_mesh_is_inconclusive():
     ev = EVSelection(preset_id="auto-nmc", position=(0.0, 0.0, 0.75))
     res = check_mesh_resolution({"ev_selections": [ev]}, cell_size=0.05)
     assert res.status == GateStatus.INCONCLUSIVE
-    assert "Mesh resolution too fine" in res.reason
+    assert "indicator only" in res.reason
+    assert (
+        res.evidence["ev_evaluations"][0]["indicator_band"]
+        == "ABOVE_HISTORICAL_4_16_SUBSET"
+    )
+    assert res.evidence["historical_4_16_is_acceptance_rule"] is False
 
 
 def test_clean_fds_id_default_fallback():
