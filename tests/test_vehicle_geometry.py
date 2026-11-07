@@ -79,7 +79,8 @@ def test_legacy_vehicle_geometry_keeps_historical_box_and_roof_burner():
     assert geometry.mode == "LEGACY"
     assert geometry.body_bounds.to_xb() == pytest.approx([2.75, 7.25, 4.1, 5.9, 0.0, 1.5])
     assert geometry.ground_clearance_m is None
-    assert "Vehicle geometry mode: LEGACY" in bundle.fds_fragment
+    assert "Vehicle geometry mode:" not in bundle.fds_fragment
+    assert "Ground clearance:" not in bundle.fds_fragment
     assert re.search(
         r"&OBST ID='OBST_EV_1', XB=2\.75,7\.25,4\.1,5\.9,0,1\.5, SURF_ID='INERT' /",
         bundle.fds_fragment,
