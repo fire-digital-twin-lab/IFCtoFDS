@@ -356,6 +356,59 @@ def test_vehicle_semantic_review_is_validated_and_survives_mapping_plan(box_mode
         validate_decisions({entity.entity_key: invalid_action})
 
 
+
+def test_legacy_scenario_parser_compatibility_is_explicit():
+    from types import SimpleNamespace
+
+    from ifc_to_fds.fire.scenario_composer import (
+        compose_scenario,
+        configure_scenario_time,
+    )
+    from ifc_to_fds.validation.parser import parse_fds
+
+    bundle = emit_fire_scenario(
+        MappingPlan(),
+        _hash(),
+        [EVSelection(preset_id="e-bike-lfp", position=(1.0, 1.0, 0.55))],
+    )
+    assert "FUEL_ID=" in bundle.fds_fragment
+
+    base = (
+        "&HEAD CHID='legacy_compat' /\n"
+        "&TIME T_END=1.0 /\n"
+        "&MESH IJK=20,20,15, XB=0,4,0,4,0,3 /\n"
+        "&TAIL /\n"
+    )
+    manifest = SimpleNamespace(
+        simulation_domain={
+            "xmin": 0.0,
+            "xmax": 4.0,
+            "ymin": 0.0,
+            "ymax": 4.0,
+            "zmin": 0.0,
+            "zmax": 3.0,
+        },
+        records=[],
+    )
+    composed = compose_scenario(base, bundle, manifest)
+
+    strict = parse_fds(composed)
+    assert "SURF.FUEL_ID" in strict.unsupported
+
+    compatible = parse_fds(composed, allow_legacy_surf_fuel_id=True)
+    assert compatible.errors == []
+    assert compatible.unsupported == []
+
+    final, _ = configure_scenario_time(
+        composed,
+        bundle.opening_events,
+        2.0,
+        allow_legacy_surf_fuel_id=True,
+    )
+    final_compatible = parse_fds(final, allow_legacy_surf_fuel_id=True)
+    assert final_compatible.errors == []
+    assert final_compatible.unsupported == []
+
 def test_scenario_composer_checks_resolved_ifc_bounds_not_legacy_dimensions():
     from types import SimpleNamespace
 
