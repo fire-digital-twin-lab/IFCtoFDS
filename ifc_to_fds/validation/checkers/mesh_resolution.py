@@ -8,10 +8,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
 from ifc_to_fds.domain.validation.model import (
-    Finding,
     GateResult,
     GateStatus,
-    Severity,
     ValidationContext,
 )
 
@@ -155,6 +153,8 @@ def _indicator_gate(
         "historical_4_16_is_acceptance_rule": False,
         "grid_sensitivity_required": True,
         "reference": "NIST_FDS_VALIDATION_GUIDE_6_11_1",
+        "cell_size_basis": "CALLER_SUPPLIED_UNVERIFIED_LOCALITY",
+        "local_source_mesh_resolved": False,
     }
     if geometry_metrics:
         evidence["critical_geometry_resolution"] = geometry_metrics
@@ -380,10 +380,13 @@ class MeshResolutionChecker:
 
         if mesh_cell_sizes:
             cell_size = max(mesh_cell_sizes)
+            cell_size_basis = "GLOBAL_MAX_MESH_SPACING_NOT_SOURCE_LOCAL"
         elif context.config is not None and getattr(context.config, "cell_size", None) is not None:
             cell_size = float(getattr(context.config, "cell_size"))
+            cell_size_basis = "CONFIGURED_CELL_SIZE_NOT_SOURCE_LOCAL"
         else:
             cell_size = 0.2
+            cell_size_basis = "LEGACY_DEFAULT_0_2M_NOT_SOURCE_LOCAL"
 
         # Collect individual burner sources from geometry (&VENT / &OBST)
         burner_sources: List[Dict[str, Any]] = []
@@ -452,6 +455,8 @@ class MeshResolutionChecker:
                 evaluations,
                 evidence_key="burner_evaluations",
             )
+            gate_result.evidence["cell_size_basis"] = cell_size_basis
+            gate_result.evidence["local_source_mesh_resolved"] = False
             return CheckerOutcome(
                 gate_name=self.name,
                 result=gate_result,
@@ -463,6 +468,8 @@ class MeshResolutionChecker:
         scen = getattr(context, "scenario", None) or getattr(context, "scenario_bundle", None)
         if scen:
             gate_result = check_mesh_resolution(scen, cell_size=cell_size)
+            gate_result.evidence["cell_size_basis"] = cell_size_basis
+            gate_result.evidence["local_source_mesh_resolved"] = False
             return CheckerOutcome(
                 gate_name=self.name,
                 result=gate_result,
@@ -477,22 +484,12 @@ class MeshResolutionChecker:
                 manifest_hrr = getattr(context.manifest, "total_peak_hrr_mw", None) or getattr(context.manifest, "peak_hrr_kw", None)
             if manifest_hrr:
                 gate_result = check_mesh_resolution(context.manifest, cell_size=cell_size)
-                findings = []
-                if gate_result.status == GateStatus.FAIL:
-                    findings.append(
-                        Finding(
-                            id="FND-MESH-0001",
-                            severity=Severity.P1,
-                            category="mesh_resolution",
-                            title="Computational mesh resolution outside validated [4.0, 16.0] range for fire plume",
-                            detail=gate_result.reason,
-                            element_id="",
-                        )
-                    )
+                gate_result.evidence["cell_size_basis"] = cell_size_basis
+                gate_result.evidence["local_source_mesh_resolved"] = False
                 return CheckerOutcome(
                     gate_name=self.name,
                     result=gate_result,
-                    findings=findings,
+                    findings=[],
                     metrics=gate_result.evidence,
                 )
 
@@ -500,23 +497,16 @@ class MeshResolutionChecker:
             m_peak = re.search(r"! Total Peak HRR:\s*([\d.]+)\s*MW", context.fds_text)
             if m_peak:
                 total_hrr_kw = float(m_peak.group(1)) * 1000.0
-                gate_result = check_mesh_resolution({"total_peak_hrr_kw": total_hrr_kw}, cell_size=cell_size)
-                findings = []
-                if gate_result.status == GateStatus.FAIL:
-                    findings.append(
-                        Finding(
-                            id="FND-MESH-0001",
-                            severity=Severity.P1,
-                            category="mesh_resolution",
-                            title="Computational mesh resolution outside validated [4.0, 16.0] range for fire plume",
-                            detail=gate_result.reason,
-                            element_id="",
-                        )
-                    )
+                gate_result = check_mesh_resolution(
+                    {"total_peak_hrr_kw": total_hrr_kw},
+                    cell_size=cell_size,
+                )
+                gate_result.evidence["cell_size_basis"] = cell_size_basis
+                gate_result.evidence["local_source_mesh_resolved"] = False
                 return CheckerOutcome(
                     gate_name=self.name,
                     result=gate_result,
-                    findings=findings,
+                    findings=[],
                     metrics=gate_result.evidence,
                 )
 
