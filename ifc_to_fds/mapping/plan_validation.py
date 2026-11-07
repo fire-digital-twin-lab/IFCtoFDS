@@ -45,6 +45,12 @@ def planned_model(model, plan):
 
         if d.scope_decision != e.scope_decision:
             reject("source scope decision cannot be changed by serializer")
+        if d.source_ifc_type is not None and d.source_ifc_type != e.ifc_type:
+            reject("source IFC type provenance differs from canonical model")
+        if d.source_type_class is not None and d.source_type_class != e.type_class:
+            reject("source type-class provenance differs from canonical model")
+        if d.placement and d.placement != e.placement:
+            reject("source placement provenance differs from canonical model")
         if (
             d.simulation_role != e.simulation_role
             or d.decision != e.decision
