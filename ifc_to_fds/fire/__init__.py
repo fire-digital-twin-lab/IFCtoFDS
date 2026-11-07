@@ -24,25 +24,11 @@ from ifc_to_fds.fire.mesh_plan import (
     MeshRegion,
     ResolvedLocalMeshPlan,
 )
-from ifc_to_fds.fire.mesh_metrics import calculate_d_star
-
-
-def check_mesh_resolution(*args, **kwargs):
-    """Lazy compatibility facade avoiding a fire-domain/validation import cycle."""
-
-    from ifc_to_fds.validation.checkers.mesh_resolution import (
-        check_mesh_resolution as implementation,
-    )
-
-    return implementation(*args, **kwargs)
-
-
-def __getattr__(name):
-    if name == "MeshResolutionChecker":
-        from ifc_to_fds.validation.checkers.mesh_resolution import MeshResolutionChecker
-
-        return MeshResolutionChecker
-    raise AttributeError(name)
+from ifc_to_fds.validation.checkers.mesh_resolution import (
+    MeshResolutionChecker,
+    calculate_d_star,
+    check_mesh_resolution,
+)
 
 __all__ = [
     "EVPreset",
