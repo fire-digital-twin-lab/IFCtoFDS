@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
+from .mesh_plan import LocalMeshPlanRequest
 from .scenario_emitter import DeviceSelection, EVSelection, OpeningEvent, _normalize_opening_events
 
 
@@ -35,6 +36,7 @@ class ScenarioRequest(BaseModel):
     devices: list[DeviceSelection] = Field(default_factory=list)
     opening_states: list[OpeningEvent] = Field(default_factory=list)
     t_end_s: float | None = Field(default=None, ge=0, strict=True)
+    mesh_plan: LocalMeshPlanRequest | None = None
     energy_budget: EnergyBudget | None = None
     require_quantitative_hf: StrictBool = False
 
