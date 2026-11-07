@@ -4,7 +4,21 @@ import shutil
 import pytest
 from ifc_to_fds.mapping.exporter import serialize_fds
 from ifc_to_fds.validation.acceptance import AuditConfig
-from ifc_to_fds.validation.solver import solver_gates
+from ifc_to_fds.validation.solver import solver_gates, _contains_fds_fatal_error
+
+
+
+
+def test_runtime_error_metrics_are_not_fatal_solver_errors():
+    successful = """
+ Maximum Velocity Error:  0.15E-02 on Mesh 1 at (1,2,2)
+ Maximum Pressure Error:  0.19E-05 on Mesh 1 at (2,4,2)
+ STOP: FDS completed successfully (CHID: parser_contract_solver)
+"""
+    assert not _contains_fds_fatal_error(successful)
+    assert _contains_fds_fatal_error("ERROR: Invalid input")
+    assert _contains_fds_fatal_error("   ERROR(101): Invalid namelist")
+    assert _contains_fds_fatal_error("STOP: FDS encountered an ERROR")
 
 
 def test_missing_solver_never_passes(box_model, monkeypatch, tmp_path):
