@@ -115,3 +115,18 @@ def test_indexed_field_tokenizer_rejects_unbalanced_parentheses() -> None:
         )
     )
     assert "Unbalanced field index parentheses" in parsed.errors
+
+
+
+def test_scientific_parser_rejects_surf_fuel_id_but_legacy_mode_is_explicit():
+    text = _contract_text().replace(
+        "&SURF ID='STEEL_SURF', MATL_ID(1,:)='STEEL', THICKNESS=0.01 /",
+        "&SURF ID='STEEL_SURF', MATL_ID(1,:)='STEEL', THICKNESS=0.01, FUEL_ID='OLD_FUEL' /",
+    )
+
+    strict = parse_fds(text)
+    assert "SURF.FUEL_ID" in strict.unsupported
+
+    compatibility = parse_fds(text, allow_legacy_surf_fuel_id=True)
+    assert "SURF.FUEL_ID" not in compatibility.unsupported
+    assert compatibility.errors == []
