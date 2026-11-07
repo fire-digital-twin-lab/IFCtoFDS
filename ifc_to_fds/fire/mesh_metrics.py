@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from ifc_to_fds.fire.ev_library import load_ev_preset
+
 # Reference constant: rho_inf * c_p * T_inf * sqrt(g)
 # 1.204 kg/m3 * 1.005 kJ/(kg K) * 293.15 K * sqrt(9.81 m/s2)
 # ~= 1111.4 kW/m^(5/2), matching the project's historical D* implementation.
@@ -42,8 +44,6 @@ def ev_peak_hrr_evidence(ev: Any) -> Dict[str, Any]:
         ev.get("preset_id") if isinstance(ev, dict) else None
     )
     if preset_id:
-        from ifc_to_fds.fire.ev_library import load_ev_preset
-
         preset_key = str(preset_id).strip().lower()
         if "-" in preset_key:
             vehicle_class, chemistry = preset_key.rsplit("-", 1)
