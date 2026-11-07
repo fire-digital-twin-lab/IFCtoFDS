@@ -192,7 +192,7 @@ def test_mesh_checker_resolves_burner_to_refined_local_mesh():
             fds_text=text,
             manifest=None,
             config=AuditConfig(),
-            parsed=parsed,
+            parsed_fds=parsed,
         )
     )
 
