@@ -6,6 +6,8 @@ from typing import Any
 
 from ifc_to_fds.adapters.jobs.evidence_index import write_evidence_index
 from ifc_to_fds.adapters.jobs.base_integrity import verify_accepted_mapping_base
+from ifc_to_fds.domain.bim import BoundingBox
+from ifc_to_fds.fire.mesh_plan import local_mesh_evidence, resolve_local_mesh_plan
 
 
 class WorkerRunner:
@@ -49,11 +51,6 @@ class WorkerRunner:
                 from ifc_to_fds.fire.scenario_composer import compose_scenario, configure_scenario_time
                 from ifc_to_fds.fire.scenario_emitter import emit_fire_scenario
                 from ifc_to_fds.fire.scenario_request import ScenarioRequest
-                from ifc_to_fds.fire.mesh_plan import (
-                    local_mesh_evidence,
-                    resolve_local_mesh_plan,
-                )
-                from ifc_to_fds.domain.bim import BoundingBox
                 from ifc_to_fds.fire.physics_assessment import assess_scenario_physics
                 from ifc_to_fds.domain.validation.model import ValidationContext, AuditConfig
                 from ifc_to_fds.validation.checkers.mesh_resolution import MeshResolutionChecker
