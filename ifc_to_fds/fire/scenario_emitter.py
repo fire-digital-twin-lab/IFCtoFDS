@@ -15,6 +15,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ifc_to_fds.domain.mapping import MappingPlan
 from ifc_to_fds.fire.ev_library import EV_LIBRARY_VERSION, EVPreset, load_ev_preset
+from ifc_to_fds.fire.vehicle_geometry import (
+    BatteryPack,
+    VehicleGeometry,
+    resolve_vehicle_geometry,
+)
 
 
 def clean_fds_id(name: str, fallback: str = "ID") -> str:
@@ -48,6 +53,11 @@ class EVSelection(BaseModel):
     dimensions: Optional[Tuple[float, float, float]] = None
     pack_kwh: Optional[float] = None
     peak_hrr_mw: Optional[float] = None
+    geometry_mode: Literal["LEGACY", "PARAMETRIC", "IFC_BOUND"] = "LEGACY"
+    source_entity_key: Optional[str] = None
+    floor_z_m: Optional[float] = None
+    ground_clearance_m: Optional[float] = Field(default=None, gt=0)
+    battery_geometry: Optional[BatteryPack] = None
 
     @field_validator("dimensions")
     @classmethod
@@ -149,6 +159,7 @@ class ScenarioBundle(BaseModel):
     total_peak_hrr_mw: float
     ev_count: int
     ev_selections: List[EVSelection] = Field(default_factory=list)
+    vehicle_geometries: List[VehicleGeometry] = Field(default_factory=list)
     devices: List[DeviceSelection] = Field(default_factory=list)
     opening_events: List[OpeningEvent] = Field(default_factory=list)
     hf_preset_yields: dict[str, tuple[float, float]] = Field(default_factory=dict)
@@ -288,6 +299,11 @@ def emit_fire_scenario(
             else:
                 dx, dy, dz = (1.8, 0.6, 1.1)
 
+        geometry = resolve_vehicle_geometry(
+            ev,
+            mapping_plan=mapping_plan,
+            dimensions=(dx, dy, dz),
+        )
         total_peak_hrr_mw += actual_peak_hrr
         ev_configs.append(
             {
@@ -296,9 +312,7 @@ def emit_fire_scenario(
                 "preset_key": preset_key,
                 "actual_kwh": actual_kwh,
                 "actual_peak_hrr": actual_peak_hrr,
-                "dx": dx,
-                "dy": dy,
-                "dz": dz,
+                "geometry": geometry,
             }
         )
 
@@ -306,15 +320,7 @@ def emit_fire_scenario(
     placed_boxes: List[Tuple[float, float, float, float, float, float]] = []
     for cfg in ev_configs:
         e_pos = cfg["ev"].position
-        e_dx, e_dy, e_dz = cfg["dx"], cfg["dy"], cfg["dz"]
-        e_box = (
-            round(e_pos[0] - e_dx / 2.0, 4),
-            round(e_pos[0] + e_dx / 2.0, 4),
-            round(e_pos[1] - e_dy / 2.0, 4),
-            round(e_pos[1] + e_dy / 2.0, 4),
-            round(e_pos[2] - e_dz / 2.0, 4),
-            round(e_pos[2] + e_dz / 2.0, 4),
-        )
+        e_box = tuple(round(value, 4) for value in cfg["geometry"].body_bounds.to_xb())
         for prev in placed_boxes:
             if (
                 max(e_box[0], prev[0]) < min(e_box[1], prev[1]) - 1e-4
@@ -383,17 +389,16 @@ def emit_fire_scenario(
         preset: EVPreset = cfg["preset"]
         actual_peak_hrr: float = cfg["actual_peak_hrr"]
         actual_kwh: float = cfg["actual_kwh"]
-        dx, dy, dz = cfg["dx"], cfg["dy"], cfg["dz"]
+        geometry: VehicleGeometry = cfg["geometry"]
+        body_bounds = geometry.body_bounds
+        xmin = round(body_bounds.xmin, 4)
+        xmax = round(body_bounds.xmax, 4)
+        ymin = round(body_bounds.ymin, 4)
+        ymax = round(body_bounds.ymax, 4)
+        zmin = round(body_bounds.zmin, 4)
+        zmax = round(body_bounds.zmax, 4)
 
-        cx, cy, cz = ev.position
-        xmin = round(cx - dx / 2.0, 4)
-        xmax = round(cx + dx / 2.0, 4)
-        ymin = round(cy - dy / 2.0, 4)
-        ymax = round(cy + dy / 2.0, 4)
-        zmin = round(cz - dz / 2.0, 4)
-        zmax = round(cz + dz / 2.0, 4)
-
-        burning_area = dx * dy
+        burning_area = body_bounds.dx * body_bounds.dy
         hrrpua_kw_m2 = (actual_peak_hrr * 1000.0) / burning_area
 
         ramp_id = clean_fds_id(f"RAMP_EV_{idx}")
@@ -452,14 +457,39 @@ def emit_fire_scenario(
             f"&SURF ID='{surf_id}', HRRPUA={hrrpua_kw_m2:.2f}, RAMP_Q='{ramp_id}', FUEL_ID='{fuel_id}' /"
         )
 
-        # &OBST
         obst_xb = [xmin, xmax, ymin, ymax, zmin, zmax]
-        lines.append(
-            f"&OBST ID='{obst_id}', XB={format_xb(obst_xb)}, SURF_ID='INERT' /"
-        )
+        lines.append(f"! Vehicle geometry mode: {geometry.mode}")
+        if geometry.source_entity_key:
+            lines.append(f"! Vehicle source entity_key: {geometry.source_entity_key}")
+        if geometry.ground_clearance_m is not None:
+            lines.append(
+                f"! Ground clearance: {geometry.ground_clearance_m:.4f} m "
+                f"above floor z={geometry.floor_z_m:.4f} m"
+            )
+        if geometry.battery_bounds is not None:
+            battery_source = (
+                f", source_entity_key={geometry.battery_source_entity_key}"
+                if geometry.battery_source_entity_key
+                else ""
+            )
+            lines.append(
+                f"! Battery bounds XB={format_xb(geometry.battery_bounds.to_xb())}{battery_source}"
+            )
 
-        # &VENT (top surface of obstacle)
-        vent_xb = [xmin, xmax, ymin, ymax, zmax, zmax]
+        if geometry.body_from_verified_base:
+            lines.append(
+                "! Vehicle body supplied by the verified mapping base; "
+                "scenario fragment does not duplicate its OBST."
+            )
+        else:
+            lines.append(
+                f"&OBST ID='{obst_id}', XB={format_xb(obst_xb)}, SURF_ID='INERT' /"
+            )
+
+        # Legacy preview keeps the historical roof burner. Scientific P3 geometry
+        # places the source on the underbody plane and requires positive clearance.
+        burner_z = zmax if geometry.mode == "LEGACY" else zmin
+        vent_xb = [xmin, xmax, ymin, ymax, burner_z, burner_z]
         lines.append(
             f"&VENT ID='{vent_id}', XB={format_xb(vent_xb)}, SURF_ID='{surf_id}' /"
         )
@@ -532,6 +562,7 @@ def emit_fire_scenario(
         total_peak_hrr_mw=round(total_peak_hrr_mw, 6),
         ev_count=len(normalized_evs),
         ev_selections=normalized_evs,
+        vehicle_geometries=[cfg["geometry"] for cfg in ev_configs],
         devices=normalized_devices,
         opening_events=normalized_opening_events,
     )
