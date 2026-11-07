@@ -398,6 +398,8 @@ def test_scenario_composer_checks_resolved_ifc_bounds_not_legacy_dimensions():
 
 @pytest.mark.solver
 def test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds(tmp_path):
+    import hashlib
+    import json
     import os
     from pathlib import Path
     import subprocess
@@ -449,10 +451,12 @@ def test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds(tmp_path):
             ifc_bound.fds_fragment,
         ),
     ]
+    evidence_cases = []
     for name, base_geometry, fragment in cases:
         case_dir = tmp_path / name
         case_dir.mkdir()
-        (case_dir / "input.fds").write_text(
+        input_path = case_dir / "input.fds"
+        input_path.write_text(
             "&HEAD CHID='vehicle_geometry' /\n"
             "&TIME T_END=0.0 /\n"
             "&MESH IJK=20,20,10, XB=0,10,0,10,0,3 /\n"
@@ -476,6 +480,40 @@ def test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds(tmp_path):
             },
         )
         log = run.stdout + run.stderr
+        evidence_cases.append(
+            {
+                "case": name,
+                "command": [str(executable), "input.fds"],
+                "input_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
+                "stdout_sha256": hashlib.sha256(run.stdout.encode("utf-8")).hexdigest(),
+                "stderr_sha256": hashlib.sha256(run.stderr.encode("utf-8")).hexdigest(),
+                "returncode": run.returncode,
+                "completed_successfully": "completed successfully" in log.lower(),
+                "fatal_error_present": "ERROR:" in log,
+            }
+        )
         assert run.returncode == 0, log
         assert "completed successfully" in log.lower(), log
         assert "ERROR:" not in log, log
+
+    evidence_dir = Path("scripts/out/solver-evidence")
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    (evidence_dir / "p3a-vehicle-geometry.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "claim_id": "EV-GEO-P3A-001",
+                "solver_target": "FDS 6.11.1",
+                "test": "test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds",
+                "cases": evidence_cases,
+                "verdict": "PASS",
+                "limitation": (
+                    "Solver acceptance of scoped geometry only; this is not "
+                    "numerical verification or experimental validation."
+                ),
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
