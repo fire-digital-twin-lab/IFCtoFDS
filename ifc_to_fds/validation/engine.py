@@ -515,7 +515,7 @@ def run_independent_validation(
             report.element_statuses[key] = "OPERATIONAL_MAPPED"
             continue
         issue = topology_blockers.get(key)
-        if issue is not None:
+        if issue is not None and config.fail_fast_on_source_errors:
             if issue.get("reason") == "SELF_INTERSECTION":
                 detail = (
                     f"Source self-intersection confirmed: entity={key}, STEP={e.step_id}, "
