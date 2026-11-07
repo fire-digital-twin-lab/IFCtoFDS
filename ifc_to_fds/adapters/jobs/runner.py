@@ -45,7 +45,7 @@ class WorkerRunner:
                 )
             elif request.get("mode") == "scenario":
                 import hashlib
-                from ifc_to_fds.application.services.scenario_base import load_verified_base
+                from ifc_to_fds.application.services.scenario_base import load_verified_scenario_base
                 from ifc_to_fds.fire.scenario_composer import compose_scenario, configure_scenario_time
                 from ifc_to_fds.fire.scenario_emitter import emit_fire_scenario
                 from ifc_to_fds.fire.scenario_request import ScenarioRequest
@@ -58,11 +58,14 @@ class WorkerRunner:
                 if not scenario_payload and (directory / "scenario.json").is_file():
                     scenario_payload = json.loads((directory / "scenario.json").read_text(encoding="utf-8"))
                 scenario = ScenarioRequest.model_validate(scenario_payload)
-                base_text, mapping_plan, base_manifest = load_verified_base(
+                base = load_verified_scenario_base(
                     directory.parent,
                     scenario.bundle_sha256,
                     verify_candidate=verify_accepted_mapping_base,
                 )
+                base_text = base.fds_text
+                mapping_plan = base.mapping_plan
+                base_manifest = base.manifest
                 bundle = emit_fire_scenario(
                     mapping_plan=mapping_plan,
                     bundle_sha256=base_manifest.bundle_sha256,
@@ -70,6 +73,7 @@ class WorkerRunner:
                     opening_states=scenario.opening_states,
                     devices=scenario.devices,
                     verification_status="MAPPING_VERIFIED",
+                    verified_base_geometry=base.emitted_geometry,
                 )
                 composed = compose_scenario(base_text, bundle, base_manifest)
                 legacy_surface_compatibility = bool(bundle.ev_selections) and all(

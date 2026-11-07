@@ -2,10 +2,12 @@
 
 import pytest
 
-from ifc_to_fds.domain.bim.bounding_box import BoundingBox
+from ifc_to_fds.domain.bim import BoundingBox, TriangleMesh
 from ifc_to_fds.domain.mapping import MappingDecision, MappingPlan, MappingStrategy
+from ifc_to_fds.fire.base_geometry import VerifiedBaseGeometry
 from ifc_to_fds.fire.scenario_emitter import EVSelection, emit_fire_scenario
 from ifc_to_fds.fire.vehicle_geometry import BatteryPack
+from ifc_to_fds.geometry.mesh import bounds_for_vertices
 
 
 def _hash() -> str:
@@ -152,6 +154,90 @@ def test_geom_aabb_overlap_fails_closed_without_exact_mesh_oracle():
         emit_fire_scenario(MappingPlan(decisions=[geom]), _hash(), [_parametric_selection()])
 
 
+def _tetra_mesh(vertices) -> TriangleMesh:
+    return TriangleMesh(
+        vertices=[list(point) for point in vertices],
+        faces=[[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]],
+    )
+
+
+def _exact_geom(entity_key: str, mesh: TriangleMesh) -> VerifiedBaseGeometry:
+    return VerifiedBaseGeometry(
+        geom_meshes={entity_key: (mesh,)},
+        geom_primitive_ids={entity_key: (f"GEOM_{entity_key}",)},
+    )
+
+
+def test_geom_overlapping_aabb_passes_only_with_exact_sealed_geometry_proof():
+    # Parametric vehicle body is x=[3,7], y=[4,6], z=[0.2,1.7].
+    # The tetrahedron's AABB overlaps its +x/+y/+z corner, but the tetrahedron
+    # lies beyond the separating plane and is geometrically disjoint.
+    mesh = _tetra_mesh(
+        [
+            (6.9, 6.5, 2.2),
+            (7.5, 5.9, 2.2),
+            (7.5, 6.5, 1.6),
+            (7.5, 6.5, 2.2),
+        ]
+    )
+    bounds = bounds_for_vertices(mesh.vertices)
+    assert bounds is not None
+    geom = _decision("GEOM_CORNER", bounds, representation="GEOM")
+    bundle = emit_fire_scenario(
+        MappingPlan(decisions=[geom]),
+        _hash(),
+        [_parametric_selection()],
+        verified_base_geometry=_exact_geom("GEOM_CORNER", mesh),
+    )
+    assessment = bundle.vehicle_collision_assessments[0]
+    assert assessment.status == "PASS"
+    assert assessment.checked_geom_entities == 1
+    assert assessment.geom_exact_checked_entities == 1
+    assert assessment.geom_exact_primitive_checks == 1
+    assert assessment.geom_aabb_separated_entities == 0
+    assert assessment.geom_exact_evidence[0]["status"] == "SEPARATED"
+    assert assessment.minimum_aabb_clearance_m == 0
+
+
+def test_geom_exact_oracle_rejects_true_collision():
+    mesh = _tetra_mesh(
+        [
+            (6.5, 5.0, 1.0),
+            (7.5, 5.0, 1.0),
+            (7.0, 5.8, 1.0),
+            (7.0, 5.4, 2.0),
+        ]
+    )
+    bounds = bounds_for_vertices(mesh.vertices)
+    assert bounds is not None
+    geom = _decision("GEOM_COLLISION", bounds, representation="GEOM")
+    with pytest.raises(ValueError, match="clearance violation with verified base GEOM"):
+        emit_fire_scenario(
+            MappingPlan(decisions=[geom]),
+            _hash(),
+            [_parametric_selection()],
+            verified_base_geometry=_exact_geom("GEOM_COLLISION", mesh),
+        )
+
+
+def test_geom_exact_oracle_rejects_sub_tolerance_clearance():
+    import trimesh
+
+    raw = trimesh.creation.box(extents=(0.2, 0.4, 0.4))
+    raw.apply_translation((7.10005, 5.0, 1.0))
+    mesh = TriangleMesh(vertices=raw.vertices.tolist(), faces=raw.faces.tolist())
+    bounds = bounds_for_vertices(mesh.vertices)
+    assert bounds is not None
+    geom = _decision("GEOM_NEAR", bounds, representation="GEOM")
+    with pytest.raises(ValueError, match="clearance violation with verified base GEOM"):
+        emit_fire_scenario(
+            MappingPlan(decisions=[geom]),
+            _hash(),
+            [_parametric_selection()],
+            verified_base_geometry=_exact_geom("GEOM_NEAR", mesh),
+        )
+
+
 def test_disjoint_geom_aabb_proves_separation_at_p3b_scope():
     geom = _decision(
         "GEOM_REMOTE",
@@ -165,6 +251,8 @@ def test_disjoint_geom_aabb_proves_separation_at_p3b_scope():
     )
     assessment = bundle.vehicle_collision_assessments[0]
     assert assessment.checked_geom_entities == 1
+    assert assessment.geom_aabb_separated_entities == 1
+    assert assessment.geom_exact_checked_entities == 0
     assert assessment.minimum_aabb_clearance_m == pytest.approx(2.0)
 
 
