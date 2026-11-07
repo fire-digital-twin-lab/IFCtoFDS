@@ -73,12 +73,49 @@ def compose_scenario(base_text, bundle, manifest):
                 "zmin": min(xb[4] for xb in meshes),
                 "zmax": max(xb[5] for xb in meshes),
             }
-    for ev in bundle.ev_selections:
-        dimensions = ev.dimensions or ((4.5, 1.8, 1.5) if ev.preset_id.lower().startswith("auto-") else (1.8, 0.6, 1.1))
-        for axis, name in enumerate(("x", "y", "z")):
-            lo, hi = ev.position[axis] - dimensions[axis]/2, ev.position[axis] + dimensions[axis]/2
-            if not math.isfinite(lo) or not math.isfinite(hi) or not domain or lo < domain[name + "min"] - 1e-8 or hi > domain[name + "max"] + 1e-8:
-                raise ValueError("Vehicle must lie inside the verified simulation domain")
+    if bundle.vehicle_geometries:
+        if len(bundle.vehicle_geometries) != len(bundle.ev_selections):
+            raise ValueError(
+                "Resolved vehicle geometry count must match EV selections"
+            )
+        vehicle_bounds = [geometry.body_bounds for geometry in bundle.vehicle_geometries]
+        for bounds in vehicle_bounds:
+            for name, lo, hi in (
+                ("x", bounds.xmin, bounds.xmax),
+                ("y", bounds.ymin, bounds.ymax),
+                ("z", bounds.zmin, bounds.zmax),
+            ):
+                if (
+                    not math.isfinite(lo)
+                    or not math.isfinite(hi)
+                    or not domain
+                    or lo < domain[name + "min"] - 1e-8
+                    or hi > domain[name + "max"] + 1e-8
+                ):
+                    raise ValueError(
+                        "Vehicle must lie inside the verified simulation domain"
+                    )
+    else:
+        # Backward-compatible path for manually constructed legacy bundles.
+        for ev in bundle.ev_selections:
+            dimensions = ev.dimensions or (
+                (4.5, 1.8, 1.5)
+                if ev.preset_id.lower().startswith("auto-")
+                else (1.8, 0.6, 1.1)
+            )
+            for axis, name in enumerate(("x", "y", "z")):
+                lo = ev.position[axis] - dimensions[axis] / 2
+                hi = ev.position[axis] + dimensions[axis] / 2
+                if (
+                    not math.isfinite(lo)
+                    or not math.isfinite(hi)
+                    or not domain
+                    or lo < domain[name + "min"] - 1e-8
+                    or hi > domain[name + "max"] + 1e-8
+                ):
+                    raise ValueError(
+                        "Vehicle must lie inside the verified simulation domain"
+                    )
     records = {r.entity_key: r for r in manifest.records}
     controls = {}
     seen = set()
