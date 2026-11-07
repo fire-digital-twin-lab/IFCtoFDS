@@ -105,3 +105,13 @@ def test_reference_integrity_is_namelist_order_invariant() -> None:
     parsed = parse_fds(moved)
     assert parsed.errors == []
     assert parsed.unsupported == []
+
+
+def test_indexed_field_tokenizer_rejects_unbalanced_parentheses() -> None:
+    parsed = parse_fds(
+        _contract_text().replace(
+            "MATL_ID(1,:)='STEEL'",
+            "MATL_ID(1,:='STEEL'",
+        )
+    )
+    assert "Unbalanced field index parentheses" in parsed.errors

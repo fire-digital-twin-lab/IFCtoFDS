@@ -78,6 +78,41 @@ def parse_value(token):
         raise ValueError(f"Unsupported or invalid value: {token[:80]}")
 
 
+def _split_fds_tokens(body: str) -> list[str]:
+    """Split a namelist body on commas outside strings and Fortran indices."""
+    tokens: list[str] = []
+    start = 0
+    quote: str | None = None
+    parenthesis_depth = 0
+    i = 0
+    while i < len(body):
+        char = body[i]
+        if quote is not None:
+            if char == quote:
+                if i + 1 < len(body) and body[i + 1] == quote:
+                    i += 1
+                else:
+                    quote = None
+        elif char in ("'", '"'):
+            quote = char
+        elif char == "(":
+            parenthesis_depth += 1
+        elif char == ")":
+            if parenthesis_depth == 0:
+                raise ValueError("Unbalanced field index parentheses")
+            parenthesis_depth -= 1
+        elif char == "," and parenthesis_depth == 0:
+            tokens.append(body[start:i])
+            start = i + 1
+        i += 1
+    if quote is not None:
+        raise ValueError("Unterminated string in namelist")
+    if parenthesis_depth:
+        raise ValueError("Unbalanced field index parentheses")
+    tokens.append(body[start:])
+    return tokens
+
+
 def _base_field_name(name: str) -> str:
     """Return the FDS namelist field name without an optional Fortran index."""
     return name.split("(", 1)[0]
@@ -455,9 +490,7 @@ def parse_fds(text):
                 kind = kind_match.group(1).upper()
                 body = record[kind_match.end() :]
                 # Split commas outside quoted strings, then collect key=value arrays.
-                tokens = re.findall(
-                    r"(?:'[^']*(?:''[^']*)*'|\"[^\"]*(?:\"\"[^\"]*)*\"|[^,])+", body
-                )
+                tokens = _split_fds_tokens(body)
                 values = {}
                 key = None
                 for token in tokens:
