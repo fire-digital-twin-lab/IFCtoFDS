@@ -125,7 +125,7 @@
             if (elementMode === 'geom') {
                 summary.geoms += 1;
                 var gMesh = element.geomExportMesh || element.displayMesh || element.mesh;
-                summary.triangles += gMesh && gMesh.faces ? gMesh.faces.length : 0;
+                summary.triangles += nondegenerateFaceCount(gMesh);
             } else if (elementMode === 'voxel') {
                 var voxelized = voxelizeElement(element, voxelSize, openingThickening, openingVoxelPolicy);
                 summary.obsts += voxelized.boxes.length;
@@ -136,6 +136,10 @@
         });
 
         return summary;
+    };
+
+    FdsExporter.prototype.nondegenerateFaceCount = function (mesh) {
+        return nondegenerateFaceCount(mesh);
     };
 
     FdsExporter.prototype.getExportableElements = function (ifcScene, options) {
@@ -362,6 +366,34 @@
         return !!set[String(itemId)];
     }
 
+    function nondegenerateFaceCount(mesh) {
+        if (!mesh || !Array.isArray(mesh.vertices) || !Array.isArray(mesh.faces)) return 0;
+        return mesh.faces.reduce(function (count, face) {
+            if (!Array.isArray(face) || face.length !== 3 ||
+                !face.every(function (vertexIndex) {
+                    return Number.isInteger(vertexIndex) &&
+                        vertexIndex >= 0 &&
+                        vertexIndex < mesh.vertices.length;
+                })) {
+                return count;
+            }
+            return count + (isNondegenerateFace(mesh, face) ? 1 : 0);
+        }, 0);
+    }
+
+    function isNondegenerateFace(mesh, face) {
+        var a = mesh.vertices[face[0]];
+        var b = mesh.vertices[face[1]];
+        var c = mesh.vertices[face[2]];
+        if (!Array.isArray(a) || !Array.isArray(b) || !Array.isArray(c) ||
+            a.length !== 3 || b.length !== 3 || c.length !== 3 ||
+            !a.every(Number.isFinite) || !b.every(Number.isFinite) || !c.every(Number.isFinite)) {
+            return false;
+        }
+        var normal = cross(subtractVector(b, a), subtractVector(c, a));
+        return normal[0] !== 0 || normal[1] !== 0 || normal[2] !== 0;
+    }
+
     function formatGeom(element, index, allocatedId) {
         var verts = [];
         var faces = [];
@@ -382,11 +414,9 @@
             if (!Array.isArray(face) || face.length !== 3 || !face.every(function (i) { return Number.isInteger(i) && i >= 0 && i < targetMesh.vertices.length; })) {
                 throw geometryInputError(element, 'GEOM faces must be triangles with valid integer vertex indices.');
             }
-            var a = targetMesh.vertices[face[0]], b = targetMesh.vertices[face[1]], c = targetMesh.vertices[face[2]];
-            var normal = cross(subtractVector(b, a), subtractVector(c, a));
             // Boolean clipping may leave triangles with exactly zero area.
             // They cover no surface and PyroSim rejects these GEOM records.
-            if (normal[0] === 0 && normal[1] === 0 && normal[2] === 0) return;
+            if (!isNondegenerateFace(targetMesh, face)) return;
             faces.push(face[0] + 1, face[1] + 1, face[2] + 1, 1);
         });
         if (!faces.length) throw geometryInputError(element, 'GEOM mesh contains no nondegenerate triangles.');
