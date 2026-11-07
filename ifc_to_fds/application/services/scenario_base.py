@@ -8,24 +8,14 @@ import json
 from pathlib import Path
 from typing import Callable
 
-from ifc_to_fds.domain.bim import BoundingBox, TriangleMesh
+from ifc_to_fds.domain.bim import BoundingBox
 from ifc_to_fds.domain.mapping import MappingDecision, MappingManifest, MappingPlan
 from ifc_to_fds.domain.validation import AcceptanceReport
 from ifc_to_fds.geometry.mesh import valid_solid
 from ifc_to_fds.geometry.package import verify_package
 from ifc_to_fds.geometry.storage import DiskPackage
+from ifc_to_fds.fire.base_geometry import VerifiedBaseGeometry
 from ifc_to_fds.validation.parser import ParsedFDS, parse_fds
-
-
-@dataclass(frozen=True)
-class VerifiedBaseGeometry:
-    """Exact emitted GEOM evidence reconstructed from the sealed FDS artifact."""
-
-    geom_meshes: dict[str, tuple[TriangleMesh, ...]]
-    geom_primitive_ids: dict[str, tuple[str, ...]]
-
-    def meshes_for(self, entity_key: str) -> tuple[TriangleMesh, ...]:
-        return self.geom_meshes.get(entity_key, ())
 
 
 @dataclass(frozen=True)
