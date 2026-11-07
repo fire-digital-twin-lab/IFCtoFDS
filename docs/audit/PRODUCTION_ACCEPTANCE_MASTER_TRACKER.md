@@ -1,5 +1,22 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint P1 regression và scientific governance — 07/11/2026
+
+**Main SHA đã nghiệm thu:** `cb5424f3886d8269ff8fd45b07f7b57c4ff3f67d` (squash merge PR #66).
+
+- PR #66 đóng finding P1 về số đếm tam giác GEOM: serializer, strategy summary và regression cùng dùng semantic “tam giác không suy biến”; mesh all-degenerate tiếp tục fail-closed.
+- Main `cb5424f3`: Conversion correctness #42347061448 **SUCCESS**; Source quality and regression evidence #42347061455 **SUCCESS**.
+- PR #66: `node scripts/test-ifc-conversion.js` **PASS** trên ba IFC example thật và regression tổng hợp; pinned FDS 6.11.1 solver **PASS**; browser **PASS**; Python Linux/Windows 3.10–3.13 **PASS**.
+- Full quality trên PR HEAD: **848 passed, 12 deselected**, coverage **87%**. Bằng chứng này chỉ cấp **E2 — software verification** cho phạm vi regression tương ứng.
+- Controlled rerun của `main@dbc37cd3` sau một native exit-139 đã PASS mà không đổi source; root cause của native crash vẫn **INCONCLUSIVE**, không được coi là đã sửa chỉ vì rerun xanh.
+- P0 governance còn thiếu formal claim ledger và scientific evidence-manifest schema; work package kế tiếp phải bổ sung fail-closed governance trước khi mở rộng physics/parser.
+- G09 IFC Geometry và G10 FDS/CFD vẫn **INCONCLUSIVE** ở mức application/scientific acceptance; B1/B2 vẫn chưa có experimental/application V&V và independent review đầy đủ.
+
+**Kết luận:** P1 regression scope = **PASS (E2)**. Overall scientific/application verdict = **INCONCLUSIVE**. Release verdict = **NOT_PRODUCTION_READY**.
+
+---
+
+
 ## Checkpoint sau các PR #61–#64 — 07/11/2026
 
 **Main SHA tại thời điểm ghi checkpoint:** `3640d99d49017b93dd8ebf47417c0279aad82648` (merge [PR #64](https://github.com/fire-digital-twin-lab/IFCtoFDS/pull/64)). Mục này **thay thế thông tin trạng thái hiện hành** của các snapshot bên dưới; không xóa lịch sử để truy vết.
