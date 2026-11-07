@@ -131,7 +131,28 @@ def _resolve_battery_bounds(
         return None, None
 
     if battery.source_entity_key is not None:
-        bounds = _decision_bounds(mapping_plan, battery.source_entity_key, "Battery")
+        decision = mapping_plan.get_decision(battery.source_entity_key)
+        if decision is None:
+            raise ValueError(
+                f"Battery source entity is not present in MappingPlan: {battery.source_entity_key}"
+            )
+        semantic_role = str(
+            (decision.decision or {}).get("semantic_role", "")
+        ).strip().upper()
+        if (
+            str(decision.simulation_role).strip().upper() != "PASSIVE_OBSTACLE"
+            or decision.review_status != "APPROVED"
+            or semantic_role != "BATTERY_PACK"
+        ):
+            raise ValueError(
+                "Battery source requires reviewed semantic_role=BATTERY_PACK "
+                "with PASSIVE_OBSTACLE authorization"
+            )
+        bounds = decision.representation_bounds or decision.element_bounds
+        if bounds is None:
+            raise ValueError(
+                f"Battery source entity has no verified bounds: {battery.source_entity_key}"
+            )
         source_key = battery.source_entity_key
     else:
         assert battery.dimensions is not None
