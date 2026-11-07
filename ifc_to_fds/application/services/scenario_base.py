@@ -47,7 +47,7 @@ def _extract_verified_emitted_geometry(
             expected_by_primitive[primitive_id] = record.entity_key
             expected_ids_by_entity.setdefault(record.entity_key, []).append(primitive_id)
 
-    meshes: dict[str, list[TriangleMesh]] = {}
+    meshes_by_primitive: dict[str, TriangleMesh] = {}
     seen: set[str] = set()
     for primitive in parsed.primitives:
         if primitive.kind != "GEOM":
@@ -78,19 +78,23 @@ def _extract_verified_emitted_geometry(
             raise ValueError(
                 f"Verified base emitted GEOM is not a valid solid: {primitive_id}"
             )
-        meshes.setdefault(expected_key, []).append(mesh)
+        meshes_by_primitive[primitive_id] = mesh
         seen.add(primitive_id)
 
     if seen != set(expected_by_primitive):
         missing = sorted(set(expected_by_primitive) - seen)
         raise ValueError(f"Verified base FDS is missing sealed GEOM primitives: {missing}")
 
+    ordered_ids = {
+        key: tuple(sorted(value))
+        for key, value in expected_ids_by_entity.items()
+    }
     return VerifiedBaseGeometry(
-        geom_meshes={key: tuple(value) for key, value in meshes.items()},
-        geom_primitive_ids={
-            key: tuple(sorted(value))
-            for key, value in expected_ids_by_entity.items()
+        geom_meshes={
+            key: tuple(meshes_by_primitive[primitive_id] for primitive_id in primitive_ids)
+            for key, primitive_ids in ordered_ids.items()
         },
+        geom_primitive_ids=ordered_ids,
     )
 
 
