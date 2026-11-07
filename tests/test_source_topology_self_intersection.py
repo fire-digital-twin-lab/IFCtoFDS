@@ -6,7 +6,7 @@ import trimesh
 from ifc_to_fds.domain.bim import TriangleMesh
 from ifc_to_fds.domain.mapping import MappingStrategy
 from ifc_to_fds.domain.validation import AuditConfig, GateStatus
-from ifc_to_fds.geometry.mesh import as_trimesh, valid_solid
+from ifc_to_fds.geometry.mesh import as_trimesh, bounds_for_vertices, valid_solid
 from ifc_to_fds.validation import preflight
 from ifc_to_fds.validation.checkers.air_path import AirPathTopologyChecker
 from ifc_to_fds.validation.checkers.geometry import GeometryChecker
@@ -28,6 +28,11 @@ def _overlapping_closed_boxes(box_model):
     )
     assert valid_solid(mesh), "Fixture must pass the historical manifold/volume predicate"
     box_model.elements[0].mesh = mesh
+    bounds = bounds_for_vertices(mesh.vertices)
+    assert bounds is not None
+    box_model.elements[0].bounding_box = bounds
+    box_model.elements[0].representation_bounds = bounds
+    box_model.model_bounds = bounds
     return box_model
 
 
