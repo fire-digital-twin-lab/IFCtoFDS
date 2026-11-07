@@ -75,12 +75,20 @@ def source_topology_blockers(evidence: Dict[str, Dict[str, Any]]) -> Dict[str, D
 
 
 def invalid_source_solids(model):
-    """Compatibility list of source entities with confirmed topology failure."""
+    """Preserve the historical manifold/volume compatibility contract.
+
+    Self-intersection is handled by source_topology_preflight(). Keeping this
+    function stable prevents legacy consumers from silently changing diagnostics.
+    """
 
     return [
-        key
-        for key, item in source_topology_preflight(model).items()
-        if item.get("status") == "FAIL"
+        element.entity_key
+        for element in model.elements
+        if element.role == "PHYSICAL"
+        and element.scope_decision
+        in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+        and element.mesh
+        and not valid_solid(element.mesh)
     ]
 
 
