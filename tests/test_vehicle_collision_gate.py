@@ -12,6 +12,22 @@ def _hash() -> str:
     return "b" * 64
 
 
+def _confirmed_placement() -> dict:
+    return {
+        "status": "CONFIRMED",
+        "units": "METRE",
+        "matrix_order": "ROW_MAJOR",
+        "vector_convention": "COLUMN",
+        "effective_world": [
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0,
+        ],
+        "mapped_items": [],
+    }
+
+
 def _decision(
     entity_key: str,
     bounds: BoundingBox | None,
@@ -47,6 +63,8 @@ def _decision(
         simulation_role="PASSIVE_OBSTACLE",
         fds_representation=representation,
         representation_bounds=bounds,
+        source_ifc_type="IfcBuildingElementProxy" if semantic_role else "IfcWall",
+        placement=_confirmed_placement() if semantic_role == "VEHICLE" else {},
         review_status=review_status,
         decision=payload,
     )
