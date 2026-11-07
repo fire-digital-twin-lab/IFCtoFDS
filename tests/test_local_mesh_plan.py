@@ -274,14 +274,18 @@ def test_p4b_adjacent_coarse_fine_mesh_layout_is_accepted_by_pinned_fds(tmp_path
     ).executable
     assert executable is not None, "Solver suite requires FDS 6.11.1"
     executable = Path(executable)
+    solver_base = _base_text().replace(
+        "&TIME T_END=0.0 /",
+        "&TIME T_END=0.1 /",
+    )
     plan = resolve_local_mesh_plan(
-        _base_text(),
+        solver_base,
         _bundle(),
         _domain(),
         1.0,
         _request(),
     )
-    text = apply_local_mesh_plan(_base_text(), plan)
+    text = apply_local_mesh_plan(solver_base, plan)
     case_dir = tmp_path / "p4b-local-mesh"
     case_dir.mkdir()
     input_path = case_dir / "input.fds"
@@ -318,7 +322,14 @@ def test_p4b_adjacent_coarse_fine_mesh_layout_is_accepted_by_pinned_fds(tmp_path
         "mesh_count": len(plan.meshes),
         "local_mesh_id": plan.local_mesh_id,
         "refinement_ratio": plan.refinement_ratio,
-        "verdict": "PASS" if run.returncode == 0 and "ERROR:" not in log else "FAIL",
+        "t_end_s": 0.1,
+        "verdict": (
+            "PASS"
+            if run.returncode == 0
+            and "completed successfully" in log.lower()
+            and "ERROR:" not in log
+            else "FAIL"
+        ),
         "limitation": (
             "Solver acceptance of one adjacent coarse/fine layout only; "
             "grid sensitivity and solution verification remain pending."
