@@ -8,10 +8,31 @@ from ifc_to_fds.domain.bim.bounding_box import BoundingBox
 from ifc_to_fds.domain.mapping import MappingDecision, MappingPlan, MappingStrategy
 from ifc_to_fds.fire.scenario_emitter import EVSelection, emit_fire_scenario
 from ifc_to_fds.fire.vehicle_geometry import BatteryPack
+from ifc_to_fds.mapping.policy import plan_mapping, validate_decisions
 
 
 def _hash() -> str:
     return "a" * 64
+
+
+def _reviewed_vehicle_policy() -> dict:
+    return {
+        "action": "PASSIVE_OBSTACLE",
+        "policy_version": "p3a-test-v1",
+        "rationale": "Reviewed vehicle geometry for P3a regression",
+        "reviewer": "TEST_REVIEWER",
+        "evidence": "tests/test_vehicle_geometry.py",
+        "semantic_role": "VEHICLE",
+        "factors": {
+            "ifc_type": "reviewed source identity",
+            "mesh_scale": "source solid retained",
+            "domain_position": "inside test domain",
+            "airflow_clearance": "ground clearance checked separately",
+            "system": "not an MEP network member",
+            "future_operational_role": "EV fire scenario host",
+            "golden_policy": "P3a software regression only",
+        },
+    }
 
 
 def _vehicle_decision(
@@ -23,9 +44,11 @@ def _vehicle_decision(
     return MappingDecision(
         entity_key=entity_key,
         strategy=MappingStrategy.OBST,
-        simulation_role="VEHICLE",
+        simulation_role="PASSIVE_OBSTACLE",
         fds_representation=representation,
         representation_bounds=bounds,
+        review_status="APPROVED",
+        decision=_reviewed_vehicle_policy(),
     )
 
 
@@ -225,16 +248,18 @@ def test_legacy_rejects_scientific_geometry_fields_instead_of_ignoring_them():
         )
 
 
-def test_ifc_bound_rejects_unreviewed_non_vehicle_mapping_role():
+def test_ifc_bound_rejects_unreviewed_or_non_vehicle_semantics():
     bounds = BoundingBox(xmin=2.75, xmax=7.25, ymin=4.1, ymax=5.9, zmin=0.2, zmax=1.7)
     plan = MappingPlan(
         decisions=[
             MappingDecision(
                 entity_key="WALL_1",
                 strategy=MappingStrategy.OBST,
-                simulation_role="WALL",
+                simulation_role="PASSIVE_OBSTACLE",
                 fds_representation="OBST",
                 representation_bounds=bounds,
+                review_status="NOT_REQUIRED",
+                decision={},
             )
         ]
     )
@@ -245,9 +270,39 @@ def test_ifc_bound_rejects_unreviewed_non_vehicle_mapping_role():
         source_entity_key="WALL_1",
         floor_z_m=0.0,
     )
-    with pytest.raises(ValueError, match="simulation_role=VEHICLE"):
+    with pytest.raises(ValueError, match="reviewed semantic_role=VEHICLE"):
         emit_fire_scenario(plan, _hash(), [selection])
 
+
+
+def test_vehicle_semantic_review_is_validated_and_survives_mapping_plan(box_model):
+    entity = box_model.elements[0]
+    policy = _reviewed_vehicle_policy()
+    validate_decisions({entity.entity_key: policy})
+
+    planned = plan_mapping(
+        box_model,
+        decisions={entity.entity_key: policy},
+    )
+    from ifc_to_fds.domain.mapping import build_mapping_plan
+
+    plan = build_mapping_plan(planned)
+    decision = plan.get_decision(entity.entity_key)
+    assert decision is not None
+    assert decision.simulation_role == "PASSIVE_OBSTACLE"
+    assert decision.review_status == "APPROVED"
+    assert decision.decision["semantic_role"] == "VEHICLE"
+
+    invalid = dict(policy)
+    invalid["semantic_role"] = "CAR_BY_NAME"
+    with pytest.raises(ValueError, match="Unsupported semantic role"):
+        validate_decisions({entity.entity_key: invalid})
+
+    invalid_action = dict(policy)
+    invalid_action["action"] = "REFERENCE_GEOMETRY"
+    invalid_action.pop("factors")
+    with pytest.raises(ValueError, match="requires action=PASSIVE_OBSTACLE"):
+        validate_decisions({entity.entity_key: invalid_action})
 
 @pytest.mark.solver
 def test_p3_underbody_burner_geometry_is_accepted_by_pinned_fds(tmp_path):
