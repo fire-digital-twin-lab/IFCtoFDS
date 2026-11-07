@@ -178,7 +178,7 @@ def _scientific_contract_errors(parsed: ParsedFDS) -> list[str]:
 
 
 @operation("FDS_PARSE")
-def parse_fds(text):
+def parse_fds(text, *, allow_legacy_surf_fuel_id: bool = False):
     parsed = ParsedFDS()
     source: dict[str, Any] = {}
     record = ""
@@ -206,7 +206,6 @@ def parse_fds(text):
             "TRANSPARENCY",
             "HRRPUA",
             "RAMP_Q",
-            "FUEL_ID",
             "MATL_ID",
             "BACKING",
             "THICKNESS",
@@ -426,6 +425,11 @@ def parse_fds(text):
             "WAYPOINTS",
         },
     }
+    if allow_legacy_surf_fuel_id:
+        # Compatibility only: FDS 6.11.1 rejects SURF.FUEL_ID. Keep this
+        # opt-in so historical serialized fragments remain parseable without
+        # weakening the default scientific parser contract.
+        allowed["SURF"].add("FUEL_ID")
     while i < len(text):
         c = text[i]
         if quote:
