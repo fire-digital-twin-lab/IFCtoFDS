@@ -21,8 +21,8 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 - **intended_use**: Parser/schema prerequisite for thermal materials, detection/suppression, instrumentation and later scientific evidence generation.
 - **affected_modules**: ifc_to_fds/validation/parser.py, ifc_to_fds/validation/solver.py, parser contract tests, pinned FDS solver regression.
 - **evidence_level**: E2
-- **supporting_evidence**: PR #68 candidate 125d3175066a4b12e96d23b06a99801293dcf5e5; Conversion correctness #42349141483 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; Source quality and regression evidence #42349141425 PASS with 862 passed, 13 deselected and 87% coverage; solver-evidence artifact 13564483853 digest sha256:463110d3e78cb6d91c3c611232a7a06841fbcae3832929df86d96b805e2846fa.
-- **known_limitations**: This is a deliberately supported subset, not a complete FDS grammar; parser/solver syntax acceptance does not establish numerical convergence, model validation, application validation or physical appropriateness of accepted parameter values.
+- **supporting_evidence**: PR #68 candidate 125d3175066a4b12e96d23b06a99801293dcf5e5; Conversion correctness #42349141483 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; Source quality and regression evidence #42349141425 PASS with 862 passed, 13 deselected and 87% coverage; solver-evidence artifact 13564483853 digest sha256:463110d3e78cb6d91c3c611232a7a06841fbcae3832929df86d96b805e2846fa. P3a re-verification on code candidate 6169b55321d6c7404d7b1a39d3633f3aef2733a9 found that FDS 6.11.1 rejects `SURF.FUEL_ID`; the default scientific parser now rejects that field, while an explicit legacy-only compatibility flag preserves historical parsing. Conversion #42380373058 and solver artifact 13577781396 (sha256:686ada474718c4261eeac039d4548c1ce75453b50cdf5a3aa042c44701861c9c) verify the corrected contract.
+- **known_limitations**: This is a deliberately supported subset, not a complete FDS grammar. `allow_legacy_surf_fuel_id=True` is compatibility-only and must not be treated as FDS 6.11.1 scientific support. Parser/solver syntax acceptance does not establish numerical convergence, model validation, application validation or physical appropriateness of accepted parameter values.
 - **validation_domain**: FDS 6.11.1 fields explicitly enumerated by the project parser contract and exercised by repository parser/solver fixtures.
 - **status**: PASS
 - **reviewer**: REPOSITORY_CI_AND_PINNED_SOLVER_REVIEW
@@ -60,14 +60,25 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 - **status**: PASS
 - **reviewer**: REPOSITORY_CI_AND_DIFF_REVIEW
 
+## Claim `EV-GEO-P3A-001`
+- **statement**: For the scoped axis-aligned P3a contract, `PARAMETRIC` vehicle geometry preserves explicit floor reference and positive underbody clearance, while reviewed `IFC_BOUND` geometry preserves canonical vehicle identity and verified OBST bounds without duplicating the base body; reviewed battery bounds are traceable and contained within the vehicle envelope; both scientific modes emit an underbody burner accepted by pinned FDS 6.11.1.
+- **intended_use**: Software/solver-integration verification of the vehicle identity and ground-clearance prerequisite before local MeshPlan and EV physics work.
+- **affected_modules**: `ifc_to_fds/fire/vehicle_geometry_models.py`, `ifc_to_fds/fire/vehicle_geometry.py`, `ifc_to_fds/fire/scenario_emitter.py`, scenario composer/runner evidence path, mapping policy, parser contract and P3a regression tests.
+- **evidence_level**: E2
+- **supporting_evidence**: PR #69 code candidate `6169b55321d6c7404d7b1a39d3633f3aef2733a9`; Source quality #42380373024 PASS with 879 passed, 14 deselected and 87% coverage, artifact 13577831468 digest sha256:37b0be1cc4c529a94cb5eaf2b96ff09727798c654598d3651c099b114eec23a9; Conversion #42380373058 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; solver job reports 9 passed, 884 deselected; solver artifact 13577781396 digest sha256:686ada474718c4261eeac039d4548c1ce75453b50cdf5a3aa042c44701861c9c. The solver fixture uses dz=0.05 m, giving 3 cells across the 0.15 m parametric clearance and 4 cells across the 0.20 m IFC-bound clearance.
+- **known_limitations**: This claim does not cover rotated/non-axis-aligned vehicle orientation, automatic native IFC vehicle classification, vehicle-to-wall/column collision acceptance, jet outlets, GEOM-bound vehicles, post-snap clearance in a production MeshPlan, grid sensitivity, thermal materials, EV reaction/species validity, numerical verification or experimental/application validation. FDS emits warnings that the current REAC should use SPEC-defined fuel chemistry and that the generated OFFGAS species is undefined in the built-in table; those are retained as P6 physics limitations and prevent upgrading this scoped geometry evidence into a physics claim.
+- **validation_domain**: Axis-aligned PARAMETRIC vehicles and reviewed IFC_BOUND passive-obstacle source bounds exercised by repository P3a fixtures, with exact pre-snap bounding-box arithmetic and pinned FDS 6.11.1 solver acceptance only.
+- **status**: PASS
+- **reviewer**: REPOSITORY_CI_PINNED_SOLVER_AND_DIFF_REVIEW
+
 ## Claim `EV-GEO-001`
 - **statement**: EV scenario geometry preserves IFC vehicle identity, battery location, orientation, and ground clearance through IFC-to-FDS emission.
 - **intended_use**: EV underbody fire geometry and local-mesh scientific analysis.
-- **affected_modules**: `ifc_to_fds/fire/scenario_request.py`, `ifc_to_fds/fire/scenario_emitter.py`, future vehicle geometry domain model.
+- **affected_modules**: `ifc_to_fds/fire/scenario_request.py`, `ifc_to_fds/fire/scenario_emitter.py`, vehicle geometry domain/resolver, mapping policy and future P3b geometry/collision work.
 - **evidence_level**: E2
-- **supporting_evidence**: Current `EVSelection` lacks IFC entity binding and ground-clearance fields; current emitter constructs a parametric full-body `OBST` and places the burner `VENT` on its top surface.
-- **known_limitations**: No accepted IFC_BOUND vehicle model, battery-pack primitive, post-snap clearance metric, or geometry fidelity evidence exists for this claim.
-- **validation_domain**: Current EV scenario emitter at `main@cb5424f3`.
+- **supporting_evidence**: Scoped claim `EV-GEO-P3A-001` now verifies explicit source binding, axis-aligned body/battery bounds and positive pre-snap ground clearance for supported P3a modes, but the full statement still lacks orientation preservation, complete collision gates, jet-outlet geometry, production post-snap/local-mesh clearance evidence and real IFC application evidence.
+- **known_limitations**: Automatic native IFC vehicle classification, rotated/non-axis-aligned orientation fidelity, vehicle-to-wall/column collision acceptance, jet outlets, post-snap clearance metrics, local MeshPlan sensitivity and application-specific geometry evidence remain incomplete.
+- **validation_domain**: Full P3 vehicle-geometry claim remains broader than the scoped P3a fixtures and is therefore not accepted.
 - **status**: FAIL
 - **reviewer**: PENDING_INDEPENDENT_REVIEW
 
