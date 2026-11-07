@@ -733,6 +733,10 @@ def run_independent_validation(
     from time import perf_counter
 
     solver_start = perf_counter()
+    mesh_adequacy_passed = report.gates["mesh_resolution"].status in (
+        GateStatus.PASS,
+        GateStatus.NOT_APPLICABLE,
+    )
     if stop_solid_checks:
         report.gates["solver"] = GateResult(
             status=GateStatus.NOT_RUN,
@@ -742,13 +746,18 @@ def run_independent_validation(
             status=GateStatus.NOT_RUN,
             reason="Source topology preflight rejected; effective geometry not run",
         )
-    elif report.gates["mesh_resolution"].status not in (GateStatus.PASS, GateStatus.NOT_APPLICABLE):
-        report.gates["solver"] = GateResult(status=GateStatus.INCONCLUSIVE, reason="Mesh resolution gate did not pass")
-        report.gates["effective_geometry"] = GateResult(status=GateStatus.INCONCLUSIVE, reason="Mesh resolution gate did not pass")
     elif report.gates["syntax"].status == GateStatus.PASS:
         report.gates["solver"], report.gates["effective_geometry"] = solver_gates(
             fds_text, config
         )
+        if not mesh_adequacy_passed:
+            report.gates["solver"].evidence["mesh_adequacy_status"] = "INCONCLUSIVE"
+            report.gates["solver"].evidence[
+                "mesh_adequacy_note"
+            ] = "Solver execution does not establish grid adequacy"
+            report.gates["effective_geometry"].evidence[
+                "mesh_adequacy_status"
+            ] = "INCONCLUSIVE"
     else:
         report.gates["solver"] = GateResult(
             status=GateStatus.NOT_RUN, reason="Syntax gate did not pass"
@@ -757,6 +766,7 @@ def run_independent_validation(
             status=GateStatus.NOT_RUN, reason="Syntax gate did not pass"
         )
     report.metrics["solver_s"] = perf_counter() - solver_start
+    report.metrics["mesh_adequacy_passed"] = mesh_adequacy_passed
     report.gates["solver"].required = False
     report.gates["effective_geometry"].required = False
     return report.finalize()

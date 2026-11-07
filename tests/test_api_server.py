@@ -555,10 +555,12 @@ def test_submit_scenario_job_executes_mesh_gate(monkeypatch, tiny_ifc):
     assert res["verdict"] == "INCONCLUSIVE"
     assert "not been verified" in res["verdict_reason"]
     assert res["simulation_status"] == "NOT_RUN"
-    assert res["mesh_status"] == "PASS"
+    assert res["mesh_status"] == "INCONCLUSIVE"
     assert res["peak_hrr_mw"] == 4.5
     assert "evidence" in res
     assert "ev_evaluations" in res["evidence"]
+    assert res["evidence"]["grid_sensitivity_required"] is True
+    assert res["evidence"]["historical_4_16_is_acceptance_rule"] is False
 
     # Verify scenario.fds was generated and contains fire physics namelists (C-2)
     assert (job_dir / "scenario.fds").is_file()

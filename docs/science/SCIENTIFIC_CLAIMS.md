@@ -126,13 +126,24 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 - **status**: FAIL
 - **reviewer**: PENDING_INDEPENDENT_REVIEW
 
+## Claim `MESH-INDICATOR-P4A-001`
+- **statement**: The mesh checker reports D*/dx as a plume-resolution indicator without treating the historical 4–16 subset as a universal PASS/FAIL range, reports available EV ground-clearance/battery cell counts without inventing acceptance thresholds, records HRR/cell-size provenance, and preserves pinned-solver integration evidence separately from mesh scientific adequacy.
+- **intended_use**: Software-level prerequisite for a later typed Local MeshPlan and coarse/medium/fine solution-verification workflow.
+- **affected_modules**: `ifc_to_fds/validation/checkers/mesh_resolution.py`, `ifc_to_fds/validation/checkers/solver.py`, `ifc_to_fds/validation/engine.py`, mesh/scenario/API regression tests.
+- **evidence_level**: E2
+- **supporting_evidence**: PR #75 code candidate `ffe9d7ed519028a68ce8aa35ecf5530fcf8edfcd`; Source quality #42403923771 PASS with 926 passed, 14 deselected, 117 warnings and 87% coverage; artifact 13587020449 digest sha256:a8d5add592ecb6431cd98c31effda642e2ab80ecac7c147f6b6f410f1ae29aab. Conversion #42403923594 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; solver artifact 13586344048 digest sha256:d27dea30722b310a72cae6d3ed752bb134b86378aea00fc46899b4f9a3463f69; browser artifact 13586059568 digest sha256:ac78e95294343660e4ed4d25cd8954bffe943560a19f97fa993e4ace1adfc18e. Technical note: `docs/science/P4A_MESH_ADEQUACY_INDICATOR_CONTRACT.md`.
+- **known_limitations**: The current checker does not resolve the source-local mesh in a multi-mesh plan; its parsed-FDS cell-size basis is explicitly labeled global maximum spacing/not source-local. P4a has no Local MeshPlan, no post-snap geometry evidence, no grid-sensitivity series, no numerical uncertainty and no application validation. A solver PASS is integration evidence only and does not upgrade mesh adequacy.
+- **validation_domain**: Current repository fire-source fixtures, scenario/API jobs and both validation orchestration paths; indicator/provenance semantics only.
+- **status**: PASS
+- **reviewer**: REPOSITORY_CI_PINNED_SOLVER_AND_DIFF_REVIEW
+
 ## Claim `MESH-LOCAL-001`
 - **statement**: The simulation uses a reviewed local/refined MeshPlan that resolves the EV source, underbody clearance, battery thickness, and near-field plume with documented sensitivity.
 - **intended_use**: Numerical/solution verification for EV fire scenarios.
 - **affected_modules**: Future `MeshPlan`, mesh checker, scenario evidence and metrics.
 - **evidence_level**: E0
-- **supporting_evidence**: No accepted MeshPlan/local-refinement evidence package is registered in this ledger.
-- **known_limitations**: D-star over dx alone is not an acceptance rule; coarse/medium/fine sensitivity and critical-gap cell counts are missing.
+- **supporting_evidence**: No accepted MeshPlan/local-refinement evidence package is registered in this ledger. Scoped claim `MESH-INDICATOR-P4A-001` verifies that the checker no longer uses D*/dx as a universal acceptance shortcut, but it does not satisfy this MeshPlan claim.
+- **known_limitations**: A typed Local MeshPlan, source-local dx lookup, post-snap ground-clearance/battery resolution evidence, coarse/medium/fine sensitivity, numerical uncertainty and reviewed application metrics are missing.
 - **validation_domain**: EV basement/garage simulation cases.
 - **status**: INCONCLUSIVE
 - **reviewer**: PENDING_INDEPENDENT_REVIEW

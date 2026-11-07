@@ -4,6 +4,7 @@ import pytest
 
 from ifc_to_fds.domain.validation.model import (
     AuditConfig,
+    GateResult,
     GateStatus,
     ValidationContext,
 )
@@ -18,45 +19,59 @@ from ifc_to_fds.validation.checkers.mesh_resolution import MeshResolutionChecker
 from ifc_to_fds.validation.runner import ValidationRunner
 
 
-def test_mesh_gate_blocks_coarse_cell():
-    """Verify check_mesh_resolution blocks coarse cell size when D*/dx < 4.0."""
+def test_mesh_gate_reports_low_dstar_indicator_without_universal_fail():
+    """D*/dx below 4 is evidence, not a universal scientific FAIL threshold."""
     # 5MW nominal fire: D* = (5000 / 1111.4)^0.4 ~= 1.821m.
     # At cell_size = 0.5m, D*/dx = 1.821 / 0.5 = 3.64 < 4.0.
     scenario_7mw = {"total_peak_hrr_mw": 5.0}
     res = check_mesh_resolution(scenario_7mw, cell_size=0.5)
-    assert res.status != GateStatus.PASS
-    assert res.status == GateStatus.FAIL
-    assert "Mesh resolution too coarse" in res.reason
+    assert res.status == GateStatus.INCONCLUSIVE
+    assert "indicator only" in res.reason
     assert res.evidence["d_star_over_dx"] < 4.0
+    assert (
+        res.evidence["source_evaluations"][0]["indicator_band"]
+        == "BELOW_HISTORICAL_4_16_SUBSET"
+    )
+    assert res.evidence["grid_sensitivity_required"] is True
 
 
-def test_mesh_gate_passes_appropriate_resolution():
-    """Verify 5MW fire with cell_size=0.2 passes (D*/dx ~= 9.1 in [4, 16])."""
+def test_mesh_gate_does_not_promote_historical_4_16_subset_to_pass():
+    """A D*/dx value inside the historical subset remains indicator-only."""
     scenario_5mw = {"total_peak_hrr_mw": 5.0}
     res = check_mesh_resolution(scenario_5mw, cell_size=0.2)
-    assert res.status == GateStatus.PASS
+    assert res.status == GateStatus.INCONCLUSIVE
     assert res.evidence["d_star_over_dx"] == pytest.approx(9.1065, rel=1e-2)
-    assert "Mesh resolution adequate" in res.reason
+    assert (
+        res.evidence["source_evaluations"][0]["indicator_band"]
+        == "WITHIN_HISTORICAL_4_16_SUBSET"
+    )
+    assert res.evidence["historical_4_16_is_acceptance_rule"] is False
 
 
-def test_mesh_gate_blocks_coarse_ebike():
-    """Verify 100 kW e-bike with cell_size=0.2 fails (D*/dx ~= 1.9 < 4)."""
+def test_mesh_gate_reports_low_ebike_indicator_as_inconclusive():
+    """A low-resolution e-bike indicator cannot substitute for grid sensitivity."""
     scenario_ebike = {"peak_hrr_kw": 100.0}
     res = check_mesh_resolution(scenario_ebike, cell_size=0.2)
-    assert res.status == GateStatus.FAIL
+    assert res.status == GateStatus.INCONCLUSIVE
     assert res.evidence["d_star_over_dx"] == pytest.approx(1.9045, rel=1e-2)
-    assert "Mesh resolution too coarse" in res.reason
+    assert (
+        res.evidence["source_evaluations"][0]["indicator_band"]
+        == "BELOW_HISTORICAL_4_16_SUBSET"
+    )
 
 
-def test_mesh_gate_passes_very_fine_mesh():
-    """Verify D*/dx > 16.0 does NOT pass (strictly enforce 4.0 <= D*/dx <= 16.0; returns INCONCLUSIVE)."""
+def test_mesh_gate_does_not_reject_fine_mesh_for_exceeding_16():
+    """A fine mesh above historical D*/dx values is not automatically wrong."""
     scenario_5mw = {"total_peak_hrr_mw": 5.0}
     res = check_mesh_resolution(scenario_5mw, cell_size=0.05)
-    assert res.status != GateStatus.PASS
     assert res.status == GateStatus.INCONCLUSIVE
     assert res.evidence["d_star_over_dx"] > 16.0
-    assert "Mesh resolution too fine" in res.reason
-    assert "exceeds validated [4.0, 16.0] range" in res.reason
+    assert (
+        res.evidence["source_evaluations"][0]["indicator_band"]
+        == "ABOVE_HISTORICAL_4_16_SUBSET"
+    )
+    assert "too fine" not in res.reason.lower()
+    assert res.evidence["historical_4_16_is_acceptance_rule"] is False
 
 
 def test_mesh_resolution_checker_not_applicable_when_no_fire(box_model):
@@ -106,9 +121,42 @@ def test_mesh_resolution_checker_with_scenario_fds(box_model):
 
     assert "mesh_resolution" in report.gates
     mesh_gate = report.gates["mesh_resolution"]
-    assert mesh_gate.status == GateStatus.PASS
+    assert mesh_gate.status == GateStatus.INCONCLUSIVE
     assert mesh_gate.evidence["cell_size_m"] == pytest.approx(0.2, rel=1e-3)
-    assert 4.0 <= mesh_gate.evidence["d_star_over_dx"] <= 16.0
+    assert mesh_gate.evidence["grid_sensitivity_required"] is True
+    assert (
+        mesh_gate.evidence["cell_size_basis"]
+        == "GLOBAL_MAX_MESH_SPACING_NOT_SOURCE_LOCAL"
+    )
+    assert mesh_gate.evidence["local_source_mesh_resolved"] is False
+
+
+def test_mesh_gate_reports_critical_geometry_cells_without_thresholds():
+    scenario = {
+        "total_peak_hrr_mw": 5.0,
+        "vehicle_geometries": [
+            {
+                "ground_clearance_m": 0.15,
+                "battery_bounds": {
+                    "xmin": 0.0,
+                    "xmax": 4.0,
+                    "ymin": 0.0,
+                    "ymax": 1.5,
+                    "zmin": 0.20,
+                    "zmax": 0.35,
+                },
+            }
+        ],
+    }
+    res = check_mesh_resolution(scenario, cell_size=0.05)
+
+    assert res.status == GateStatus.INCONCLUSIVE
+    metric = res.evidence["critical_geometry_resolution"][0]
+    assert metric["ground_clearance_over_dx"] == pytest.approx(3.0)
+    assert metric["battery_thickness_over_dx"] == pytest.approx(3.0)
+    assert res.evidence["grid_sensitivity_required"] is True
+    assert res.evidence["cell_size_basis"] == "CALLER_SUPPLIED_UNVERIFIED_LOCALITY"
+    assert res.evidence["local_source_mesh_resolved"] is False
 
 
 def test_calculate_d_star_values():
@@ -132,7 +180,7 @@ def test_check_mesh_resolution_with_scenario_bundle():
         ev_count=1,
     )
     res = check_mesh_resolution(bundle, cell_size=0.2)
-    assert res.status == GateStatus.PASS
+    assert res.status == GateStatus.INCONCLUSIVE
     # 4.5 MW = 4500 kW -> D* = (4500/1111.4)^0.4 ~= 1.7454 -> D*/0.2 ~= 8.727
     assert res.evidence["peak_hrr_kw"] == 4500.0
     assert res.evidence["d_star_over_dx"] == pytest.approx(8.727, rel=1e-2)
@@ -145,6 +193,12 @@ def test_check_mesh_resolution_rejects_ambiguous_units():
 
     with pytest.raises(TypeError, match="Scalar number for scenario HRR is ambiguous"):
         check_mesh_resolution(50.0, cell_size=0.2)
+
+
+def test_mesh_gate_rejects_nonfinite_hrr_input():
+    res = check_mesh_resolution({"peak_hrr_kw": float("nan")}, cell_size=0.2)
+    assert res.status == GateStatus.FAIL
+    assert "nonfinite peak HRR" in res.reason
 
 
 def test_device_selection_sanitization_and_injection_defense():
@@ -183,8 +237,10 @@ def test_device_selection_sanitization_and_injection_defense():
 
 
 
-def test_solver_blocked_when_mesh_resolution_fails(box_model, monkeypatch):
-    """When mesh resolution fails, runner sets solver gate to INCONCLUSIVE without calling solver."""
+def test_solver_integration_runs_even_when_mesh_adequacy_is_inconclusive(
+    box_model, monkeypatch
+):
+    """Solver evidence remains collectable while mesh adequacy stays separate."""
     solver_called = False
 
     def fake_solver_gates(fds_text, config):
@@ -192,41 +248,33 @@ def test_solver_blocked_when_mesh_resolution_fails(box_model, monkeypatch):
         solver_called = True
         return GateResult(status=GateStatus.PASS), GateResult(status=GateStatus.PASS)
 
-    monkeypatch.setattr("ifc_to_fds.validation.checkers.solver.solver_gates", fake_solver_gates)
-
-    plan = getattr(box_model, "mapping_plan", None)
-    if plan is None:
-        from ifc_to_fds.domain.mapping import MappingPlan
-        plan = MappingPlan()
-
-    # e-bike-lfp produces ~100 kW -> D* ~ 0.38m -> cell_size 0.5m yields D*/dx ~ 0.76 < 4.0 (fails)
-    ev = EVSelection(preset_id="e-bike-lfp", position=(1.0, 0.5, 0.5))
-    bundle = emit_fire_scenario(
-        mapping_plan=plan,
-        bundle_sha256="b" * 64,
-        ev_selections=[ev],
-        verification_status="MAPPING_VERIFIED",
+    monkeypatch.setattr(
+        "ifc_to_fds.validation.checkers.solver.solver_gates", fake_solver_gates
     )
 
     fds_text = (
-        "&HEAD CHID='EV_FIRE_COARSE', TITLE='EV Fire Coarse Mesh' /\n"
+        "&HEAD CHID='EV_FIRE_COARSE' /\n"
         "&TIME T_END=60.0 /\n"
         "&MESH ID='M1', IJK=4,4,4, XB=0.0,2.0,0.0,2.0,0.0,2.0 /\n"
-        f"{bundle.fds_fragment}\n"
+        "&REAC ID='REAC_TEST', FUEL='OFFGAS', C=2.0, H=4.0, O=1.0 /\n"
+        "&SURF ID='BURNER_EBIKE', HRRPUA=92.59 /\n"
+        "&VENT ID='VENT_EBIKE', XB=0.0,1.8,0.0,0.6,0.0,0.0, "
+        "SURF_ID='BURNER_EBIKE' /\n"
         "&TAIL /\n"
     )
 
     runner = ValidationRunner()
     report = runner.validate(box_model, fds_text)
 
-    assert report.gates["mesh_resolution"].status == GateStatus.FAIL
-    assert report.gates["solver"].status == GateStatus.INCONCLUSIVE
-    assert "Mesh resolution gate did not pass" in report.gates["solver"].reason
-    assert not solver_called
+    assert report.gates["syntax"].status == GateStatus.PASS
+    assert report.gates["mesh_resolution"].status == GateStatus.INCONCLUSIVE
+    assert report.gates["solver"].status == GateStatus.PASS
+    assert report.gates["solver"].evidence["mesh_adequacy_status"] == "INCONCLUSIVE"
+    assert solver_called
 
 
-def test_mesh_gate_multi_source_fails_if_any_source_out_of_bounds():
-    """Verify check_mesh_resolution evaluates each vehicle selection individually."""
+def test_mesh_gate_multi_source_reports_each_indicator_without_acceptance_band():
+    """Each source keeps its own D*/dx indicator; none creates a universal threshold."""
     ev_auto = EVSelection(preset_id="auto-nmc", position=(1.0, 0.5, 0.5))
     ev_ebike = EVSelection(preset_id="e-bike-lfp", position=(5.0, 0.5, 0.5))
 
@@ -240,11 +288,22 @@ def test_mesh_gate_multi_source_fails_if_any_source_out_of_bounds():
         ev_selections=[ev_auto, ev_ebike],
     )
 
-    # cell_size 0.2m: auto-nmc (4.5MW) -> D*/dx ~ 8.7 (pass); e-bike-lfp (0.1MW) -> D*/dx ~ 1.9 (fail)
     res = check_mesh_resolution(bundle, cell_size=0.2)
-    assert res.status == GateStatus.FAIL
-    assert "e-bike-lfp" in res.reason
-    assert "< 4.0" in res.reason
+    assert res.status == GateStatus.INCONCLUSIVE
+    by_vehicle = {e["vehicle"]: e for e in res.evidence["ev_evaluations"]}
+    assert (
+        by_vehicle["auto-nmc"]["peak_hrr_basis"]
+        == "PRESET_RANGE_MIDPOINT_ASSUMPTION"
+    )
+    assert by_vehicle["auto-nmc"]["peak_hrr_range_kw"]
+    assert (
+        by_vehicle["auto-nmc"]["indicator_band"]
+        == "WITHIN_HISTORICAL_4_16_SUBSET"
+    )
+    assert (
+        by_vehicle["e-bike-lfp"]["indicator_band"]
+        == "BELOW_HISTORICAL_4_16_SUBSET"
+    )
 
 
 def test_mesh_resolution_checker_multi_burner_evaluates_per_source(box_model):
@@ -265,9 +324,13 @@ def test_mesh_resolution_checker_multi_burner_evaluates_per_source(box_model):
     checker = MeshResolutionChecker()
     outcome = checker.check(context)
 
-    assert outcome.result.status == GateStatus.FAIL
-    assert "VENT_EBIKE" in outcome.result.reason or "BURNER_EBIKE" in outcome.result.reason
-    assert "< 4.0" in outcome.result.reason
+    assert outcome.result.status == GateStatus.INCONCLUSIVE
+    by_id = {e["id"]: e for e in outcome.result.evidence["burner_evaluations"]}
+    assert (
+        by_id["VENT_EBIKE"]["indicator_band"]
+        == "BELOW_HISTORICAL_4_16_SUBSET"
+    )
+    assert outcome.result.evidence["grid_sensitivity_required"] is True
 
 
 def test_mesh_resolution_checker_dimensional_fallback_inconclusive(box_model):
