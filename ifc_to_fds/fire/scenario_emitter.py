@@ -265,6 +265,11 @@ def emit_fire_scenario(
         d if isinstance(d, DeviceSelection) else DeviceSelection.model_validate(d)
         for d in (devices or [])
     ]
+    geometry_modes = {ev.geometry_mode for ev in normalized_evs}
+    if "LEGACY" in geometry_modes and len(geometry_modes) > 1:
+        raise ValueError(
+            "LEGACY and scientific vehicle geometry modes cannot be mixed in one scenario"
+        )
     normalized_opening_events = _normalize_opening_events(opening_states)
     opening_bounds = {}
     for event in normalized_opening_events:
