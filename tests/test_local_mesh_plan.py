@@ -207,6 +207,43 @@ def test_mesh_checker_resolves_burner_to_refined_local_mesh():
     assert burner["mesh_match_count"] == 1
 
 
+def test_mesh_checker_does_not_guess_when_burner_centroid_is_on_mesh_interface():
+    plan = resolve_local_mesh_plan(
+        _base_text(),
+        _bundle(),
+        _domain(),
+        1.0,
+        _request(),
+    )
+    text = apply_local_mesh_plan(_base_text(), plan)
+    text = text.replace(
+        "&TAIL /",
+        (
+            "&SURF ID='INTERFACE_FIRE', HRRPUA=1000.0 /\n"
+            "&VENT ID='INTERFACE_BURNER', XB=2.5,3.5,4.5,5.5,1.5,1.5, "
+            "SURF_ID='INTERFACE_FIRE' /\n"
+            "&TAIL /"
+        ),
+    )
+    parsed = parse_fds(text)
+    outcome = MeshResolutionChecker().check(
+        ValidationContext(
+            model=None,
+            fds_text=text,
+            manifest=None,
+            config=AuditConfig(),
+            parsed_fds=parsed,
+        )
+    )
+
+    assert outcome.result.status.value == "INCONCLUSIVE"
+    assert outcome.result.evidence["local_source_mesh_resolved"] is False
+    burner = outcome.result.evidence["burner_evaluations"][0]
+    assert burner["local_mesh_id"] is None
+    assert burner["mesh_match_count"] == 0
+    assert burner["cell_size_basis"] == "GLOBAL_MAX_MESH_SPACING_NOT_SOURCE_LOCAL"
+
+
 def test_local_mesh_evidence_reports_source_local_metrics_without_pass():
     bundle = _bundle()
     plan = resolve_local_mesh_plan(
