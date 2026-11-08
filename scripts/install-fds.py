@@ -24,7 +24,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _retryable(exc: BaseException) -> bool:
+def _retryable(exc: Exception) -> bool:
     if isinstance(exc, urllib.error.HTTPError):
         return exc.code == 429 or 500 <= exc.code <= 599
     return isinstance(exc, (urllib.error.URLError, TimeoutError))
@@ -34,7 +34,7 @@ def _download_archive(archive: Path) -> None:
     """Download through a temporary file; retry only transient transport failures."""
 
     part = archive.with_name(archive.name + ".part")
-    last_error: BaseException | None = None
+    last_error: Exception | None = None
     for attempt in range(len(RETRY_DELAYS_S) + 1):
         part.unlink(missing_ok=True)
         try:
@@ -52,7 +52,7 @@ def _download_archive(archive: Path) -> None:
                 raise ValueError("Official bundle differs from pinned checksum")
             part.replace(archive)
             return
-        except BaseException as exc:
+        except Exception as exc:
             part.unlink(missing_ok=True)
             if isinstance(exc, ValueError) or not _retryable(exc):
                 raise
