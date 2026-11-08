@@ -22,6 +22,7 @@ from .adapters.jobs.result_views import make_findings_page
 from .adapters.jobs.repository import JobPersistenceError
 from .adapters.jobs.service import ArtifactLeaseConflict
 from .adapters.jobs.readiness import is_scheduler_healthy
+from .operations.runtime_status import collect_operational_status
 from .deployment_config import validate_deployment_config
 
 # Fail fast instead of accidentally running an anonymous internet-facing API.
@@ -166,6 +167,16 @@ def scheduler_health():
     if not is_scheduler_healthy(manager):
         raise HTTPException(503, "Job scheduler unavailable")
     return {"status": "ok", "component": "job_scheduler"}
+
+
+@app.get("/api/operational-status")
+def operational_status():
+    """Authenticated runtime telemetry for external staging/production monitors."""
+
+    status = collect_operational_status(manager)
+    if status["status"] != "ok":
+        return JSONResponse(status_code=503, content=status)
+    return status
 
 
 def configuration_value(
