@@ -91,6 +91,11 @@ jobs:
             -out "$IFCFDS_TLS_CERT_DIR/fullchain.pem" \
             -subj "/CN=ifctofds.example.org" \
             -addext "subjectAltName=DNS:ifctofds.example.org"
+          sudo chown root:root \
+            "$IFCFDS_TLS_CERT_DIR/privkey.pem" \
+            "$IFCFDS_TLS_CERT_DIR/fullchain.pem"
+          sudo chmod 0600 "$IFCFDS_TLS_CERT_DIR/privkey.pem"
+          sudo chmod 0644 "$IFCFDS_TLS_CERT_DIR/fullchain.pem"
 
       - name: Start full TLS reverse-proxy stack
         run: |
