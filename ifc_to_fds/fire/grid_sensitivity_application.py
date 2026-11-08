@@ -93,6 +93,8 @@ def assess_application_grid_study_readiness(
         blockers.append("REFERENCE_DOMAIN_METADATA_MISMATCH")
 
     manifest = values.get("golden-manifest.json", {})
+    if manifest.get("schema_version") != SCHEMA_VERSION:
+        blockers.append("GOLDEN_MANIFEST_SCHEMA_NOT_CURRENT")
     manifest_domain = _domain(manifest.get("simulation_domain"))
     if simulation_domain is not None and manifest_domain != simulation_domain:
         blockers.append("GOLDEN_MANIFEST_DOMAIN_MISMATCH")
@@ -106,11 +108,17 @@ def assess_application_grid_study_readiness(
         blockers.append("REFERENCE_OUTPUT_INCOMPLETE")
 
     geometry_digest = manifest.get("geometry_package_sha256")
-    if not isinstance(geometry_digest, str) or len(geometry_digest) != 64:
+    if (
+        not isinstance(geometry_digest, str)
+        or len(geometry_digest) != 64
+        or any(ch not in "0123456789abcdef" for ch in geometry_digest)
+    ):
         blockers.append("REFERENCE_GEOMETRY_PACKAGE_NOT_BOUND")
 
     sources = values.get("sources.json", {}).get("sources", [])
     source_count = len(sources) if isinstance(sources, list) else 0
+    if source_count < 1:
+        blockers.append("REFERENCE_SOURCES_EMPTY")
     sources_verified = False
     if source_map is None:
         blockers.append("EXTERNAL_SOURCES_NOT_RESOLVED")
