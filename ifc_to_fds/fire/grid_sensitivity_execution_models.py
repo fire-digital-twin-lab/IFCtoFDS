@@ -29,6 +29,14 @@ class GridSensitivityObservableRequest(BaseModel):
     aggregation: ExecutionAggregation
     time_window_s: tuple[float, float] | None = None
 
+    @field_validator("metric_id", "device_id", "expected_quantity", "expected_unit")
+    @classmethod
+    def strip_required_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Observable identifiers, quantity and unit cannot be blank")
+        return value
+
     @field_validator("time_window_s")
     @classmethod
     def validate_time_window(
@@ -60,6 +68,36 @@ class GridSensitivityCaseExecutionEvidence(BaseModel):
     stderr_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     output_files_sha256: dict[str, str] = Field(default_factory=dict)
     result: GridSensitivityCaseResult | None = None
+
+    @model_validator(mode="after")
+    def validate_case_provenance(self) -> "GridSensitivityCaseExecutionEvidence":
+        if self.result is not None:
+            if self.solver_status != "PASS":
+                raise ValueError("Case result requires solver_status=PASS")
+            required = {
+                "solver_version": self.solver_version,
+                "solver_sha256": self.solver_sha256,
+                "configuration_sha256": self.configuration_sha256,
+                "run_json_sha256": self.run_json_sha256,
+                "stdout_sha256": self.stdout_sha256,
+                "stderr_sha256": self.stderr_sha256,
+            }
+            missing = [name for name, value in required.items() if not value]
+            if missing:
+                raise ValueError(
+                    "Accepted case result is missing solver provenance: "
+                    + ", ".join(missing)
+                )
+            if self.result.fds_sha256 != self.fds_sha256:
+                raise ValueError("Case result FDS hash differs from execution FDS hash")
+        if self.result is not None and not self.output_files_sha256:
+            raise ValueError("Accepted case result requires output file checksums")
+        for name, digest in self.output_files_sha256.items():
+            if not name or "/" in name or "\\" in name:
+                raise ValueError("Output evidence keys must be plain file names")
+            if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+                raise ValueError(f"Invalid SHA-256 for output artifact {name!r}")
+        return self
 
 
 class ExecutedGridSensitivityStudyEvidence(BaseModel):
