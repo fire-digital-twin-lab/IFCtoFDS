@@ -22,10 +22,16 @@ jobs:
     env:
       IFCFDS_PUBLIC_HOST: ifctofds.example.org
       IFCFDS_API_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef
+      IFCFDS_API_KEY_FILE: /tmp/ifctofds-api-key
       IFCFDS_TLS_CERT_DIR: /tmp/ifctofds-tls
       IFCFDS_IMAGE_TAG: ci
     steps:
       - uses: actions/checkout@v4
+
+      - name: Prepare non-secret CI placeholders
+        run: |
+          printf '%s' "$IFCFDS_API_KEY" > "$IFCFDS_API_KEY_FILE"
+          mkdir -p "$IFCFDS_TLS_CERT_DIR"
 
       - name: Validate compose expansion
         run: docker compose -f compose.production.yml config --quiet
