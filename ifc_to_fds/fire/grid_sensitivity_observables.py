@@ -73,6 +73,13 @@ def scenario_observable_metadata(
                 f"P4c2 requires exactly one DEVC with ID {request.device_id!r}"
             )
         record = matches[0]
+        allowed_fields = {"ID", "XYZ", "QUANTITY", "UNITS"}
+        unsupported_fields = sorted(set(record.values) - allowed_fields)
+        if unsupported_fields:
+            raise ValueError(
+                "P4c2 simple point-DEVC scope does not support fields "
+                f"{unsupported_fields!r} for {request.device_id!r}"
+            )
         quantity = _single_value(record, "QUANTITY")
         if not isinstance(quantity, str) or not quantity.strip():
             raise ValueError(
@@ -119,6 +126,12 @@ def _aggregate(
     samples = list(zip(series.times_s, series.values, strict=True))
     if request.time_window_s is not None:
         start, stop = request.time_window_s
+        if series.times_s[0] > start or series.times_s[-1] < stop:
+            raise ValueError(
+                f"FDS DEVC series for metric {request.metric_id!r} does not cover "
+                f"the requested time window {request.time_window_s!r}; "
+                f"available range is {(series.times_s[0], series.times_s[-1])!r}"
+            )
         samples = [
             (time_s, value)
             for time_s, value in samples
