@@ -1,0 +1,78 @@
+name: ifctofds
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ifctofds:${IFCFDS_IMAGE_TAG:-local}
+    environment:
+      IFCFDS_ENV: production
+      IFCFDS_ALLOWED_HOSTS: ${IFCFDS_PUBLIC_HOST:?set IFCFDS_PUBLIC_HOST}
+      IFCFDS_ALLOWED_ORIGINS: https://${IFCFDS_PUBLIC_HOST:?set IFCFDS_PUBLIC_HOST}
+      IFCFDS_API_KEY: ${IFCFDS_API_KEY:?set IFCFDS_API_KEY}
+      IFCFDS_JOB_ROOT: /var/lib/ifctofds/jobs
+      IFCFDS_MAX_WAITING: ${IFCFDS_MAX_WAITING:-2}
+      IFCFDS_TIMEOUT_S: ${IFCFDS_TIMEOUT_S:-1800}
+      IFCFDS_QUEUE_TIMEOUT_S: ${IFCFDS_QUEUE_TIMEOUT_S:-1800}
+      IFCFDS_JOB_RETENTION_S: ${IFCFDS_JOB_RETENTION_S:-86400}
+      IFCFDS_WORKER_MAX_MEMORY_MB: ${IFCFDS_WORKER_MAX_MEMORY_MB:-4096}
+      IFCFDS_MAX_FILE_BYTES: ${IFCFDS_MAX_FILE_BYTES:-209715200}
+      IFCFDS_MAX_JOB_BYTES: ${IFCFDS_MAX_JOB_BYTES:-524288000}
+    volumes:
+      - jobs:/var/lib/ifctofds/jobs
+    expose:
+      - "8000"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=268435456
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: ${IFCFDS_APP_MEMORY_LIMIT:-6g}
+    cpus: ${IFCFDS_APP_CPU_LIMIT:-2.0}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3).read()"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  proxy:
+    image: nginx:1.30.6-alpine
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      IFCFDS_PUBLIC_HOST: ${IFCFDS_PUBLIC_HOST:?set IFCFDS_PUBLIC_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${IFCFDS_TLS_CERT_DIR:?set IFCFDS_TLS_CERT_DIR}:/etc/nginx/tls:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+
+volumes:
+  jobs:
