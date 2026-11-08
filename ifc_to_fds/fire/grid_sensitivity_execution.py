@@ -9,6 +9,7 @@ from typing import Any
 
 from ifc_to_fds.domain.validation import AuditConfig, GateStatus
 from ifc_to_fds.validation.solver import solver_gates
+from ifc_to_fds.validation.solver_discovery import PINNED_VERSION
 
 from .grid_sensitivity_analysis import analyze_grid_sensitivity
 from .grid_sensitivity_execution_models import (
@@ -40,6 +41,24 @@ def _case_file_hashes(directory: Path) -> dict[str, str]:
         for path in sorted(directory.iterdir())
         if path.is_file()
     }
+
+
+def _warning_lines(directory: Path) -> list[str]:
+    lines: list[str] = []
+    candidates = [
+        *directory.glob("*.out"),
+        directory / "stdout.log",
+        directory / "stderr.log",
+    ]
+    seen: set[Path] = set()
+    for path in candidates:
+        if path in seen or not path.is_file():
+            continue
+        seen.add(path)
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if "WARNING:" in line.upper():
+                lines.append(line.strip())
+    return lines
 
 
 def _validated_pass_directory(
@@ -80,6 +99,10 @@ def execute_grid_sensitivity_study(
 
     if hashlib.sha256(scenario_fds.encode("utf-8")).hexdigest() != plan.scenario_invariant_sha256:
         raise ValueError("Scenario differs from the resolved grid-sensitivity plan")
+    if config.solver_version != PINNED_VERSION:
+        raise ValueError(
+            f"P4c2 requires pinned FDS {PINNED_VERSION}, got {config.solver_version!r}"
+        )
 
     chid, metadata = scenario_observable_metadata(scenario_fds, observables)
     rendered = render_grid_sensitivity_cases(scenario_fds, plan)
@@ -106,6 +129,11 @@ def execute_grid_sensitivity_study(
             if run_directory is not None and run_directory.is_dir()
             else {}
         )
+        warning_lines = (
+            _warning_lines(run_directory)
+            if run_directory is not None and run_directory.is_dir()
+            else []
+        )
 
         result = None
         output_evidence_status = "NOT_EVALUATED"
@@ -118,6 +146,7 @@ def execute_grid_sensitivity_study(
                     expected_solver_version=config.solver_version,
                 )
                 file_hashes = _case_file_hashes(run_directory)
+                warning_lines = _warning_lines(run_directory)
                 observations = observations_from_solver_output(
                     run_directory,
                     chid,
@@ -150,6 +179,7 @@ def execute_grid_sensitivity_study(
                 level=case.level,
                 refinement_ratio=case.refinement_ratio,
                 local_dx_m=case.local_dx_m,
+                mesh_plan_sha256=case.mesh_plan_sha256,
                 fds_sha256=rendered_case["fds_sha256"],
                 solver_status=solver_gate.status.value,
                 output_evidence_status=output_evidence_status,
@@ -161,6 +191,10 @@ def execute_grid_sensitivity_study(
                 stdout_sha256=file_hashes.get("stdout.log"),
                 stderr_sha256=file_hashes.get("stderr.log"),
                 output_files_sha256=file_hashes,
+                returncode=gate_evidence.get("returncode"),
+                timed_out=gate_evidence.get("timed_out"),
+                warning_count=len(warning_lines),
+                warning_lines=warning_lines,
                 result=result,
             )
         )
@@ -184,6 +218,8 @@ def execute_grid_sensitivity_study(
         ),
         plan_sha256=_sha256_model(plan),
         scenario_invariant_sha256=plan.scenario_invariant_sha256,
+        required_solver_version=PINNED_VERSION,
+        observable_requests=observables,
         cases=case_evidence,
         analysis=analysis,
     )
