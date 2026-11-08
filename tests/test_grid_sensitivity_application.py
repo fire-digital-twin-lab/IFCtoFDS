@@ -34,6 +34,7 @@ def _ready_values():
             "simulation_domain": domain,
         },
         "golden-manifest.json": {
+            "schema_version": "0.5.0",
             "simulation_domain": domain,
             "mapping_acceptance": "MAPPING_VERIFIED",
             "output_complete": True,
@@ -65,6 +66,7 @@ def test_tracked_basement_reference_is_not_ready_for_p4c2b():
     assert set(readiness.blockers) >= {
         "REFERENCE_NOT_HUMAN_APPROVED",
         "REFERENCE_SCHEMA_NOT_CURRENT",
+        "GOLDEN_MANIFEST_SCHEMA_NOT_CURRENT",
         "SIMULATION_DOMAIN_NOT_APPROVED",
         "REFERENCE_MAPPING_NOT_VERIFIED",
         "REFERENCE_OUTPUT_INCOMPLETE",
