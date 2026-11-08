@@ -25,6 +25,7 @@ from ifc_to_fds.fire.mesh_plan import (
     ResolvedLocalMeshPlan,
 )
 from ifc_to_fds.fire.grid_sensitivity import (
+    ApplicationGridStudyReadiness,
     ExecutedGridSensitivityStudyEvidence,
     GridSensitivityCaseExecutionEvidence,
     GridSensitivityCaseResult,
@@ -34,7 +35,9 @@ from ifc_to_fds.fire.grid_sensitivity import (
     GridSensitivityStudyEvidence,
     ResolvedGridSensitivityPlan,
     analyze_grid_sensitivity,
+    assess_application_grid_study_readiness,
     execute_grid_sensitivity_study,
+    require_application_grid_study_ready,
     render_grid_sensitivity_cases,
     resolve_grid_sensitivity_plan,
 )
@@ -64,6 +67,7 @@ __all__ = [
     "LocalMeshPlanRequest",
     "MeshRegion",
     "ResolvedLocalMeshPlan",
+    "ApplicationGridStudyReadiness",
     "ExecutedGridSensitivityStudyEvidence",
     "GridSensitivityCaseExecutionEvidence",
     "GridSensitivityCaseResult",
@@ -73,7 +77,9 @@ __all__ = [
     "GridSensitivityStudyEvidence",
     "ResolvedGridSensitivityPlan",
     "analyze_grid_sensitivity",
+    "assess_application_grid_study_readiness",
     "execute_grid_sensitivity_study",
+    "require_application_grid_study_ready",
     "render_grid_sensitivity_cases",
     "resolve_grid_sensitivity_plan",
     "MeshResolutionChecker",
