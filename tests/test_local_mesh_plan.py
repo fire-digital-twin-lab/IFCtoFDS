@@ -203,7 +203,7 @@ def test_mesh_checker_resolves_burner_to_refined_local_mesh():
 
     assert outcome.result.status.value == "INCONCLUSIVE"
     assert outcome.result.evidence["local_source_mesh_resolved"] is True
-    assert outcome.result.evidence["cell_size_basis"] == "PER_BURNER_UNIQUE_MESH"
+    assert outcome.result.evidence["cell_size_basis"] == "PER_BURNER_EXTENT_UNIQUE_MESH"
     burner = outcome.result.evidence["burner_evaluations"][0]
     assert burner["local_mesh_id"] == "P4B_LOCAL_V0"
     assert burner["cell_size_m"] == pytest.approx(0.5)
