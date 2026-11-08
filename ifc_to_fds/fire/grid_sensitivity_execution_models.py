@@ -15,6 +15,7 @@ from .grid_sensitivity_models import (
 
 ExecutionAggregation = Literal["MAX", "MIN", "FINAL"]
 SolverExecutionStatus = Literal["PASS", "FAIL", "INCONCLUSIVE", "NOT_RUN"]
+OutputEvidenceStatus = Literal["PASS", "FAIL", "NOT_EVALUATED"]
 
 
 class GridSensitivityObservableRequest(BaseModel):
@@ -57,6 +58,7 @@ class GridSensitivityCaseExecutionEvidence(BaseModel):
     local_dx_m: float = Field(gt=0)
     fds_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     solver_status: SolverExecutionStatus
+    output_evidence_status: OutputEvidenceStatus
     reason: str = Field(min_length=1)
     solver_version: str | None = None
     solver_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -123,7 +125,9 @@ class ExecutedGridSensitivityStudyEvidence(BaseModel):
         if [case.level for case in self.cases] != ["COARSE", "MEDIUM", "FINE"]:
             raise ValueError("Executed cases must be ordered COARSE/MEDIUM/FINE")
         complete = all(
-            case.solver_status == "PASS" and case.result is not None
+            case.solver_status == "PASS"
+            and case.output_evidence_status == "PASS"
+            and case.result is not None
             for case in self.cases
         )
         if self.execution_status == "COMPLETE" and not complete:
