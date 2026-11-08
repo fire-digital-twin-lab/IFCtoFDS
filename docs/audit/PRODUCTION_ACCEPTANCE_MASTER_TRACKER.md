@@ -3,7 +3,7 @@
 ## Checkpoint P4b1 Local MeshPlan + source-local resolution evidence — 08/11/2026
 
 **PR:** #76  
-**Code candidate đã nghiệm thu:** `df51ff056f2d33f2a179ffe719697fe5694b30ee`  
+**Code candidate đã nghiệm thu:** `74d731b98c7e40d96bb55ad78f55eea8cece0a1e`  
 **Roadmap:** P4 tiếp tục; scoped `MESH-LOCAL-P4B1-001 = PASS / E2`; broad `MESH-LOCAL-001 = INCONCLUSIVE`.
 
 - Thêm typed `LocalMeshPlanRequest`, `MeshRegion`, `ResolvedLocalMeshPlan`.
@@ -11,17 +11,18 @@
 - Requested local region phải nằm trên verified coarse lattice và strictly chứa scientific vehicle body.
 - Coarse shell + local refined region phủ đúng simulation domain, không interior overlap; default scenario không có `mesh_plan` giữ nguyên path cũ.
 - MESH replacement dùng parser source spans và reparse identity check, không regex hậu xử lý.
-- `MeshResolutionChecker` resolve local spacing bằng burner centroid → đúng một MESH; centroid trên interface/không có unique match giữ fail-closed locality.
+- `MeshResolutionChecker` chỉ resolve local spacing khi **toàn burner extent** nằm strictly trong đúng một MESH; centroid chỉ còn là diagnostic. Burner chạm/span interface hoặc không có unique full-extent match giữ fail-closed locality.
 - WorkerRunner persist `local_mesh_plan` + `local_mesh_evidence`; evidence có local xyz spacing, D*/dx local, ground-clearance/dz, battery-thickness/dz, total cells, HRR provenance.
 - Requested region có thể được mở rộng ra coarse lattice nếu cần tránh local span/residual shell 1 cell; requested/effective regions và `boundary_adjustments` được lưu tường minh.
 - Pinned FDS timestep run từng phát hiện `ERROR(426): Poisson initialization error, MESH 3` ở coarse shell `IJK=(4,4,1)`. Resolver đã sửa root cause; regression khóa min(I,J,K)>=2 cho mọi emitted nonempty P4b mesh.
 - Solver harness từng dùng sai `SolverResolution` và từng chỉ chạy setup-only `T_END=0`; đã sửa theo API chuẩn và buộc `T_END=0.1` + `completed successfully`.
 - Solver artifact lưu JSON + stdout/stderr logs + input/stdout/stderr SHA-256 + warning lines/count; không chỉ lưu screenshot/return code.
 - New import debt và hai lần god-module finding đã được CI/diff audit phát hiện và sửa; production MeshPlan modules hiện dưới khoảng 300 dòng.
-- Source quality #42408013138: **SUCCESS**, `935 passed, 15 deselected, 121 warnings`, coverage **87%**; artifact `13588337635`, digest `sha256:8a007e1f2ef5f8c91152613d43df2ec42305a0f8dd4376ef0c02ab9ae86c69fa`.
-- Conversion #42408013221: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
-- Solver suite: **10 passed, 940 deselected**; solver artifact `13588546447`, digest `sha256:04d6f3609ea5a2d759f43984bf7877a0ca7df31fb066b6abf8a2e6c11ccf8e5e`.
-- Browser artifact `13588810318`, digest `sha256:405eff9b55476823a9e2e209060970534a78a46ddeb8de969c5861a69039bca1`.
+- Acceptance review phát hiện centroid-only lookup có thể overclaim local dx khi burner extent span coarse-fine interface; đã chuyển sang `BURNER_EXTENT_UNIQUE_MESH`/`PER_BURNER_EXTENT_UNIQUE_MESH`, thêm negative regression centroid-in-local nhưng extent-cross-interface, và sửa stale test expectation do CI bắt được.
+- Source quality #42448081967: **SUCCESS**, `936 passed, 15 deselected, 121 warnings`, coverage **87%**; artifact `13604293336`, digest `sha256:002e23b1c97629b8319e321b23935782f2d5b7581e7580c221da062fdbc8041a`.
+- Conversion #42448077861: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver suite: **10 passed, 941 deselected**; solver artifact `13603679195`, digest `sha256:42cb18b79783a00de43fa1c0f95da1d34fd49ffaf4b60539e8ade5e296adf7ff`.
+- Browser artifact `13604173674`, digest `sha256:cccad28a042cddd4e27447b16ad70efe30ca752795f53878c269d9268f7639b6`.
 - Technical note: `docs/science/P4B_LOCAL_MESH_PLAN_CONTRACT.md`.
 
 **Giới hạn khoa học:** P4b1 chỉ software/solver-verify một explicit local patch. Chưa có coarse/medium/fine sensitivity, convergence, numerical uncertainty, application-specific mesh adequacy hoặc grid independence. D*/dx và cells-across-gap/battery vẫn là indicators, không phải universal threshold.
