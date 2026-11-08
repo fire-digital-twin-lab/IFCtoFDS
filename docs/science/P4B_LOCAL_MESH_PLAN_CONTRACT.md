@@ -112,30 +112,38 @@ Default scenario không có `mesh_plan` giữ nguyên path cũ.
 
 ## 3. Source-local resolution lookup
 
-`MeshResolutionChecker` giữ full MESH geometry.
+`MeshResolutionChecker` giữ full MESH geometry và full `XB` của burner.
 
 Với mỗi burner:
 
-1. tính burner centroid;
-2. tìm MESH có centroid nằm **strictly bên trong**;
-3. chỉ khi có đúng một match mới cấp source-local lookup evidence.
+1. giữ centroid chỉ làm diagnostic evidence;
+2. lấy toàn bộ burner extent `XB`;
+3. tìm MESH **strictly chứa toàn burner extent** trên cả ba trục;
+4. chỉ khi có đúng một match mới cấp source-local lookup evidence.
 
 Khi thành công:
 
 ```text
-cell_size_basis = BURNER_CENTROID_UNIQUE_MESH
+cell_size_basis = BURNER_EXTENT_UNIQUE_MESH
 local_source_mesh_resolved = true
 local_mesh_id = ...
 local_cell_size_xyz_m = [...]
+source_extent_xb = [...]
 ```
 
-Nếu centroid nằm trên mesh interface hoặc không có đúng một match:
+Ở cấp aggregate, khi tất cả burner đều resolve duy nhất:
+
+```text
+cell_size_basis = PER_BURNER_EXTENT_UNIQUE_MESH
+```
+
+Nếu burner chạm/span coarse-fine interface, nằm ngoài mesh, hoặc không có đúng một full-extent match:
 
 ```text
 local_source_mesh_resolved = false
 ```
 
-và checker không đoán một phía theo thứ tự MESH.
+Checker không được chọn mesh chỉ vì **centroid** nằm trong refined region. Acceptance review đã thêm regression trong đó centroid nằm trong local mesh nhưng burner extent cắt interface; trường hợp này bắt buộc fail-closed locality.
 
 ## 4. Scientific metrics được report
 
@@ -196,7 +204,7 @@ Scenario WorkerRunner persist:
 - normal mesh checker evidence;
 - scenario FDS.
 
-Worker E2E kiểm chính emitted `scenario.fds` và xác nhận burner được resolve tới refined MESH.
+Worker E2E kiểm chính emitted `scenario.fds` và xác nhận full burner extent được resolve duy nhất tới refined MESH.
 
 ## 7. Pinned FDS solver evidence
 
@@ -213,34 +221,34 @@ Solver test dùng FDS 6.11.1 thực và:
 Final code-head:
 
 ```text
-df51ff056f2d33f2a179ffe719697fe5694b30ee
+74d731b98c7e40d96bb55ad78f55eea8cece0a1e
 ```
 
 Source Quality:
 
 ```text
-run #42408013138
-935 passed
+run #42448081967
+936 passed
 15 deselected
 121 warnings
 coverage 87%
-artifact 13588337635
-sha256:8a007e1f2ef5f8c91152613d43df2ec42305a0f8dd4376ef0c02ab9ae86c69fa
+artifact 13604293336
+sha256:002e23b1c97629b8319e321b23935782f2d5b7581e7580c221da062fdbc8041a
 ```
 
 Conversion:
 
 ```text
-run #42408013221
+run #42448077861
 Linux/Windows Python 3.10–3.13 PASS
 JavaScript PASS
 browser PASS
 pinned FDS PASS
-solver: 10 passed, 940 deselected
-solver artifact 13588546447
-sha256:04d6f3609ea5a2d759f43984bf7877a0ca7df31fb066b6abf8a2e6c11ccf8e5e
-browser artifact 13588810318
-sha256:405eff9b55476823a9e2e209060970534a78a46ddeb8de969c5861a69039bca1
+solver: 10 passed, 941 deselected
+solver artifact 13603679195
+sha256:42cb18b79783a00de43fa1c0f95da1d34fd49ffaf4b60539e8ade5e296adf7ff
+browser artifact 13604173674
+sha256:cccad28a042cddd4e27447b16ad70efe30ca752795f53878c269d9268f7639b6
 ```
 
 ## 8. Remediation history
@@ -253,9 +261,10 @@ CI/audit đã phát hiện và sửa, không hạ gate:
 4. dùng sai `SolverResolution` như Path;
 5. setup-only `T_END=0.0`;
 6. FDS Poisson failure do one-cell coarse shell;
-7. solver evidence ban đầu chỉ hash log tạm, chưa persist stdout/stderr.
+7. solver evidence ban đầu chỉ hash log tạm, chưa persist stdout/stderr;
+8. acceptance review phát hiện centroid-only mesh ownership có thể overclaim local dx khi burner span coarse-fine interface; resolver/checker đã chuyển sang full burner-extent containment và CI bắt thêm một stale regression expectation.
 
-Tất cả được sửa ở root cause.
+Tất cả được sửa ở root cause; không hạ gate và không chọn mesh theo centroid để làm test xanh.
 
 ## 9. Scoped verdict
 
@@ -270,7 +279,7 @@ PASS chỉ bao phủ:
 - coarse-lattice alignment;
 - explicit requested→effective boundary adjustments;
 - structured MESH replacement;
-- source-local burner→mesh lookup;
+- full-burner-extent → unique-MESH source-local lookup;
 - WorkerRunner persisted evidence;
 - pinned FDS timestep acceptance của regression layout.
 
