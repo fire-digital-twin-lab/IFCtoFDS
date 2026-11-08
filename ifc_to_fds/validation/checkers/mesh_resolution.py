@@ -453,7 +453,7 @@ class MeshResolutionChecker:
                 item["local_source_mesh_resolved"] for item in evaluations
             )
             gate_result.evidence["cell_size_basis"] = (
-                "PER_BURNER_UNIQUE_MESH"
+                "PER_BURNER_EXTENT_UNIQUE_MESH"
                 if all_local
                 else cell_size_basis
             )
