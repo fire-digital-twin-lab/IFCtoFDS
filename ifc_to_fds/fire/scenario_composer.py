@@ -3,6 +3,7 @@
 import math
 import re
 from ifc_to_fds.validation.parser import parse_fds
+from .mesh_plan import ResolvedLocalMeshPlan, apply_local_mesh_plan
 from .scenario_emitter import opening_timer_id, opening_control_id
 
 
@@ -71,7 +72,15 @@ def configure_scenario_time(
     return final_text, end
 
 
-def compose_scenario(base_text, bundle, manifest):
+def compose_scenario(
+    base_text,
+    bundle,
+    manifest,
+    mesh_plan: ResolvedLocalMeshPlan | None = None,
+):
+    if mesh_plan is not None:
+        base_text = apply_local_mesh_plan(base_text, mesh_plan)
+
     legacy_surface_compatibility = bool(bundle.ev_selections) and all(
         ev.geometry_mode == "LEGACY" for ev in bundle.ev_selections
     )

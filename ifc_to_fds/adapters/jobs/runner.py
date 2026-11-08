@@ -6,6 +6,8 @@ from typing import Any
 
 from ifc_to_fds.adapters.jobs.evidence_index import write_evidence_index
 from ifc_to_fds.adapters.jobs.base_integrity import verify_accepted_mapping_base
+from ifc_to_fds.domain.bim import BoundingBox
+from ifc_to_fds.fire.mesh_plan import local_mesh_evidence, resolve_local_mesh_plan
 
 
 class WorkerRunner:
@@ -75,7 +77,25 @@ class WorkerRunner:
                     verification_status="MAPPING_VERIFIED",
                     verified_base_geometry=base.emitted_geometry,
                 )
-                composed = compose_scenario(base_text, bundle, base_manifest)
+                resolved_mesh_plan = None
+                if scenario.mesh_plan is not None:
+                    if not base_manifest.simulation_domain:
+                        raise ValueError(
+                            "LocalMeshPlan requires a verified simulation domain"
+                        )
+                    resolved_mesh_plan = resolve_local_mesh_plan(
+                        base_text,
+                        bundle,
+                        BoundingBox.model_validate(base_manifest.simulation_domain),
+                        mapping_plan.cell_size,
+                        scenario.mesh_plan,
+                    )
+                composed = compose_scenario(
+                    base_text,
+                    bundle,
+                    base_manifest,
+                    mesh_plan=resolved_mesh_plan,
+                )
                 legacy_surface_compatibility = bool(bundle.ev_selections) and all(
                     ev.geometry_mode == "LEGACY" for ev in bundle.ev_selections
                 )
@@ -111,6 +131,12 @@ class WorkerRunner:
                         assessment.model_dump()
                         for assessment in bundle.vehicle_collision_assessments
                     ]
+                if resolved_mesh_plan is not None:
+                    evidence["local_mesh_plan"] = resolved_mesh_plan.model_dump()
+                    evidence["local_mesh_evidence"] = local_mesh_evidence(
+                        bundle,
+                        resolved_mesh_plan,
+                    )
                 mesh_status = mesh_gate.status.value
                 physics_status = physics.get("status", "INCONCLUSIVE")
                 verdict = scenario_verdict(mesh_status, physics_status)

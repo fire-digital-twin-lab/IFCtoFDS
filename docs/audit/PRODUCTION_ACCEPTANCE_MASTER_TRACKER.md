@@ -1,5 +1,37 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint P4b1 Local MeshPlan + source-local resolution evidence — 08/11/2026
+
+**PR:** #76  
+**Code candidate đã nghiệm thu:** `74d731b98c7e40d96bb55ad78f55eea8cece0a1e`  
+**Roadmap:** P4 tiếp tục; scoped `MESH-LOCAL-P4B1-001 = PASS / E2`; broad `MESH-LOCAL-001 = INCONCLUSIVE`.
+
+- Thêm typed `LocalMeshPlanRequest`, `MeshRegion`, `ResolvedLocalMeshPlan`.
+- Mesh refinement thuộc scenario phase; verified base tiếp tục sở hữu accepted geometry/mapping/domain.
+- Requested local region phải nằm trên verified coarse lattice và strictly chứa scientific vehicle body.
+- Coarse shell + local refined region phủ đúng simulation domain, không interior overlap; default scenario không có `mesh_plan` giữ nguyên path cũ.
+- MESH replacement dùng parser source spans và reparse identity check, không regex hậu xử lý.
+- `MeshResolutionChecker` chỉ resolve local spacing khi **toàn burner extent** nằm strictly trong đúng một MESH; centroid chỉ còn là diagnostic. Burner chạm/span interface hoặc không có unique full-extent match giữ fail-closed locality.
+- WorkerRunner persist `local_mesh_plan` + `local_mesh_evidence`; evidence có local xyz spacing, D*/dx local, ground-clearance/dz, battery-thickness/dz, total cells, HRR provenance.
+- Requested region có thể được mở rộng ra coarse lattice nếu cần tránh local span/residual shell 1 cell; requested/effective regions và `boundary_adjustments` được lưu tường minh.
+- Pinned FDS timestep run từng phát hiện `ERROR(426): Poisson initialization error, MESH 3` ở coarse shell `IJK=(4,4,1)`. Resolver đã sửa root cause; regression khóa min(I,J,K)>=2 cho mọi emitted nonempty P4b mesh.
+- Solver harness từng dùng sai `SolverResolution` và từng chỉ chạy setup-only `T_END=0`; đã sửa theo API chuẩn và buộc `T_END=0.1` + `completed successfully`.
+- Solver artifact lưu JSON + stdout/stderr logs + input/stdout/stderr SHA-256 + warning lines/count; không chỉ lưu screenshot/return code.
+- New import debt và hai lần god-module finding đã được CI/diff audit phát hiện và sửa; production MeshPlan modules hiện dưới khoảng 300 dòng.
+- Acceptance review phát hiện centroid-only lookup có thể overclaim local dx khi burner extent span coarse-fine interface; đã chuyển sang `BURNER_EXTENT_UNIQUE_MESH`/`PER_BURNER_EXTENT_UNIQUE_MESH`, thêm negative regression centroid-in-local nhưng extent-cross-interface, và sửa stale test expectation do CI bắt được.
+- Source quality #42448081967: **SUCCESS**, `936 passed, 15 deselected, 121 warnings`, coverage **87%**; artifact `13604293336`, digest `sha256:002e23b1c97629b8319e321b23935782f2d5b7581e7580c221da062fdbc8041a`.
+- Conversion #42448077861: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver suite: **10 passed, 941 deselected**; solver artifact `13603679195`, digest `sha256:42cb18b79783a00de43fa1c0f95da1d34fd49ffaf4b60539e8ade5e296adf7ff`.
+- Browser artifact `13604173674`, digest `sha256:cccad28a042cddd4e27447b16ad70efe30ca752795f53878c269d9268f7639b6`.
+- Technical note: `docs/science/P4B_LOCAL_MESH_PLAN_CONTRACT.md`.
+
+**Giới hạn khoa học:** P4b1 chỉ software/solver-verify một explicit local patch. Chưa có coarse/medium/fine sensitivity, convergence, numerical uncertainty, application-specific mesh adequacy hoặc grid independence. D*/dx và cells-across-gap/battery vẫn là indicators, không phải universal threshold.
+
+**Scientific verdict:** scoped `MESH-LOCAL-P4B1-001 = PASS / E2`; broad `MESH-LOCAL-001 = INCONCLUSIVE`; overall scientific/application verdict `INCONCLUSIVE`.  
+**Release verdict:** `NOT_PRODUCTION_READY`. Không cấp `SIMULATION_VERIFIED`.
+
+---
+
 ## Checkpoint P4a sửa mesh adequacy contract — 08/11/2026
 
 **PR:** #75  

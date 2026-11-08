@@ -19,6 +19,11 @@ from ifc_to_fds.fire.scenario_emitter import (
 )
 from ifc_to_fds.fire.vehicle_collision import VehicleCollisionAssessment
 from ifc_to_fds.fire.vehicle_geometry import BatteryPack, VehicleGeometry
+from ifc_to_fds.fire.mesh_plan import (
+    LocalMeshPlanRequest,
+    MeshRegion,
+    ResolvedLocalMeshPlan,
+)
 from ifc_to_fds.validation.checkers.mesh_resolution import (
     MeshResolutionChecker,
     calculate_d_star,
@@ -42,6 +47,9 @@ __all__ = [
     "BatteryPack",
     "VehicleGeometry",
     "VehicleCollisionAssessment",
+    "LocalMeshPlanRequest",
+    "MeshRegion",
+    "ResolvedLocalMeshPlan",
     "MeshResolutionChecker",
     "calculate_d_star",
     "check_mesh_resolution",

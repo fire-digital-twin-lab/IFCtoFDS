@@ -129,6 +129,12 @@ def test_mesh_resolution_checker_with_scenario_fds(box_model):
         == "GLOBAL_MAX_MESH_SPACING_NOT_SOURCE_LOCAL"
     )
     assert mesh_gate.evidence["local_source_mesh_resolved"] is False
+    burner = mesh_gate.evidence["burner_evaluations"][0]
+    assert burner["local_mesh_id"] is None
+    assert burner["mesh_match_count"] == 0
+    assert burner["source_centroid_m"] == pytest.approx([1.0, 0.5, 1.25])
+    assert burner["source_extent_xb"][0] < 0.0
+    assert burner["source_extent_xb"][1] > 2.0
 
 
 def test_mesh_gate_reports_critical_geometry_cells_without_thresholds():
