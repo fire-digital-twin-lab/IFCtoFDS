@@ -28,7 +28,9 @@ def collect_operational_status(service: Any, *, now: float | None = None) -> dic
         jobs = list(service.repository.all_jobs())
         states = Counter(str(job.get("state", "UNKNOWN")) for job in jobs)
         scheduler_healthy = is_scheduler_healthy(service)
-        accepting_jobs = bool(service.can_accept()) and not service.closed
+        accepting_jobs = (
+            bool(service.can_accept()) and not service.closed and scheduler_healthy
+        )
         uptime_s = max(0.0, timestamp - float(service.boot_time))
         max_waiting = int(service.max_waiting)
 
