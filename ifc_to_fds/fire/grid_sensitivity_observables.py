@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,15 @@ from ifc_to_fds.validation.parser import FDSRecord, parse_fds
 from .grid_sensitivity_execution_models import GridSensitivityObservableRequest
 from .grid_sensitivity_models import GridSensitivityObservation
 from .grid_sensitivity_outputs import DeviceTimeSeries, load_fds_device_series
+
+
+def _record_descriptor_sha256(record: FDSRecord) -> str:
+    payload = json.dumps(
+        {"kind": record.kind, "values": record.values},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _single_value(record: FDSRecord, field: str) -> Any | None:
@@ -96,6 +107,7 @@ def scenario_observable_metadata(
             "device_id": request.device_id,
             "quantity": quantity.strip(),
             "location_m": location,
+            "descriptor_sha256": _record_descriptor_sha256(record),
         }
     return chid, metadata
 
@@ -162,6 +174,8 @@ def observations_from_solver_output(
                 time_window_s=request.time_window_s,
                 source_artifact=series.source_artifact,
                 source_sha256=series.source_sha256,
+                source_device_id=descriptor["device_id"],
+                source_descriptor_sha256=descriptor["descriptor_sha256"],
             )
         )
     return observations
