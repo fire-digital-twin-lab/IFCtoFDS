@@ -56,6 +56,7 @@ class GridSensitivityCaseExecutionEvidence(BaseModel):
     level: SensitivityLevel
     refinement_ratio: int = Field(ge=2)
     local_dx_m: float = Field(gt=0)
+    mesh_plan_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     fds_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     solver_status: SolverExecutionStatus
     output_evidence_status: OutputEvidenceStatus
@@ -69,6 +70,10 @@ class GridSensitivityCaseExecutionEvidence(BaseModel):
     stdout_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     stderr_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     output_files_sha256: dict[str, str] = Field(default_factory=dict)
+    returncode: int | None = None
+    timed_out: bool | None = None
+    warning_count: int = Field(default=0, ge=0)
+    warning_lines: list[str] = Field(default_factory=list)
     result: GridSensitivityCaseResult | None = None
 
     @model_validator(mode="after")
@@ -100,6 +105,8 @@ class GridSensitivityCaseExecutionEvidence(BaseModel):
                 )
             if self.result.fds_sha256 != self.fds_sha256:
                 raise ValueError("Case result FDS hash differs from execution FDS hash")
+        if self.solver_status == "PASS" and self.output_evidence_status == "NOT_EVALUATED":
+            raise ValueError("PASS solver execution requires output evidence evaluation")
         if self.result is not None and not self.output_files_sha256:
             raise ValueError("Accepted case result requires output file checksums")
         for name, digest in self.output_files_sha256.items():
@@ -107,6 +114,28 @@ class GridSensitivityCaseExecutionEvidence(BaseModel):
                 raise ValueError("Output evidence keys must be plain file names")
             if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
                 raise ValueError(f"Invalid SHA-256 for output artifact {name!r}")
+        if self.warning_count != len(self.warning_lines):
+            raise ValueError("warning_count must equal warning_lines length")
+        if self.result is not None:
+            expected_files = {
+                "audit.fds": self.fds_sha256,
+                "run.json": self.run_json_sha256,
+                "stdout.log": self.stdout_sha256,
+                "stderr.log": self.stderr_sha256,
+            }
+            for name, digest in expected_files.items():
+                if self.output_files_sha256.get(name) != digest:
+                    raise ValueError(
+                        f"Accepted case provenance mismatch for output artifact {name!r}"
+                    )
+            for observation in self.result.observations:
+                if (
+                    self.output_files_sha256.get(observation.source_artifact)
+                    != observation.source_sha256
+                ):
+                    raise ValueError(
+                        "Observation artifact checksum differs from case output evidence"
+                    )
         return self
 
 
@@ -121,6 +150,8 @@ class ExecutedGridSensitivityStudyEvidence(BaseModel):
     reason: str = Field(min_length=1)
     plan_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     scenario_invariant_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    required_solver_version: str = Field(min_length=1)
+    observable_requests: list[GridSensitivityObservableRequest] = Field(min_length=1)
     cases: list[GridSensitivityCaseExecutionEvidence] = Field(
         min_length=3, max_length=3
     )
