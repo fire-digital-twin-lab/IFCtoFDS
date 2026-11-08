@@ -158,34 +158,34 @@ Pairwise deltas và trend không đủ để chứng minh:
 Code candidate:
 
 ```text
-0c0b3a95ea22526f24055a696c8bd4db3d959bd7
+f28f8846c17dfc4952f3862d6ef4dabf6c0a7cd2
 ```
 
 Source Quality:
 
 ```text
-run #42450313705
+run #42450794968
 945 passed
 15 deselected
 121 warnings
 coverage 87%
-artifact 13605387487
-sha256:a603eabba6ab369041ae252009a50a50ab586840ef111d9377ea82236a5ff530
+artifact 13605856905
+sha256:9553d7784611eb54ce27d09753da6c4e323424fa16574090b857a47f87aadeab
 ```
 
 Conversion:
 
 ```text
-run #42450280979
+run #42450791576
 Linux/Windows Python 3.10–3.13 PASS
 JavaScript PASS
 browser PASS
 pinned FDS PASS
 solver: 10 passed, 950 deselected
-solver artifact 13605256901
-sha256:e3d7480f94536543acd6312fe998af2cc7d2d7c612538bae55fbe473f36bef0c
-browser artifact 13605965213
-sha256:526c68e34675b620ac9a791fe87571e9af5449b3eab37f786cd8714b633b3fa9
+solver artifact 13605681774
+sha256:c9bca00d25733a1bcdf622becdde33ea1790f685c730395d123b9d2a5a896f33
+browser artifact 13605426706
+sha256:51d583523d47c4c70f4dd9301e98170c8c5412c655a7ec39ef33e1db4818d18e
 ```
 
 Regression P4c1 khóa:
