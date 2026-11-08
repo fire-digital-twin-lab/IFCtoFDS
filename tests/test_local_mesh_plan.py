@@ -208,6 +208,7 @@ def test_mesh_checker_resolves_burner_to_refined_local_mesh():
     assert burner["local_mesh_id"] == "P4B_LOCAL_V0"
     assert burner["cell_size_m"] == pytest.approx(0.5)
     assert burner["local_cell_size_xyz_m"] == pytest.approx([0.5, 0.5, 0.5])
+    assert burner["cell_size_basis"] == "BURNER_EXTENT_UNIQUE_MESH"
     assert burner["mesh_match_count"] == 1
 
 
@@ -243,6 +244,46 @@ def test_mesh_checker_does_not_guess_when_burner_centroid_is_on_mesh_interface()
     assert outcome.result.status.value == "INCONCLUSIVE"
     assert outcome.result.evidence["local_source_mesh_resolved"] is False
     burner = outcome.result.evidence["burner_evaluations"][0]
+    assert burner["local_mesh_id"] is None
+    assert burner["mesh_match_count"] == 0
+    assert burner["cell_size_basis"] == "GLOBAL_MAX_MESH_SPACING_NOT_SOURCE_LOCAL"
+
+
+def test_mesh_checker_rejects_extent_spanning_interface_even_when_centroid_is_local():
+    plan = resolve_local_mesh_plan(
+        _base_text(),
+        _bundle(),
+        _domain(),
+        1.0,
+        _request(),
+    )
+    text = apply_local_mesh_plan(_base_text(), plan)
+    text = text.replace(
+        "&TAIL /",
+        (
+            "&SURF ID='SPAN_FIRE', HRRPUA=1000.0 /\n"
+            "&VENT ID='SPAN_BURNER', XB=2.9,3.7,4.5,5.5,1.5,1.5, "
+            "SURF_ID='SPAN_FIRE' /\n"
+            "&TAIL /"
+        ),
+    )
+    parsed = parse_fds(text)
+    outcome = MeshResolutionChecker().check(
+        ValidationContext(
+            model=None,
+            fds_text=text,
+            manifest=None,
+            config=AuditConfig(),
+            parsed_fds=parsed,
+        )
+    )
+
+    burner = outcome.result.evidence["burner_evaluations"][0]
+    assert burner["source_centroid_m"][0] == pytest.approx(3.3)
+    assert burner["source_extent_xb"] == pytest.approx(
+        [2.9, 3.7, 4.5, 5.5, 1.5, 1.5]
+    )
+    assert burner["local_source_mesh_resolved"] is False
     assert burner["local_mesh_id"] is None
     assert burner["mesh_match_count"] == 0
     assert burner["cell_size_basis"] == "GLOBAL_MAX_MESH_SPACING_NOT_SOURCE_LOCAL"
