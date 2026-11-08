@@ -24,8 +24,9 @@ Container ứng dụng chạy UID/GID 10001, root filesystem read-only, chỉ jo
 1. Docker Engine + Compose plugin đã được cập nhật và quản trị bằng quy trình của hạ tầng.
 2. DNS của `IFCFDS_PUBLIC_HOST` trỏ tới máy chủ.
 3. Có chứng chỉ TLS hợp lệ trong thư mục chỉ đọc:
-   - `fullchain.pem`
-   - `privkey.pem`
+   - `fullchain.pem`: owner `root:root`, mode `0644`;
+   - `privkey.pem`: owner `root:root`, mode `0600`.
+   Proxy đã drop `DAC_OVERRIDE`, vì vậy operator phải cấu hình ownership/mode đúng thay vì cấp thêm capability chỉ để đọc private key.
 4. Tạo API key ngẫu nhiên tối thiểu 32 ký tự trong file chỉ operator đọc được; không commit vào Git và không truyền secret qua Compose environment.
 5. Có dung lượng persistent volume đủ cho IFC, SQLite và artifacts.
 6. Chọn release SHA đã qua CI. Không deploy trực tiếp nhánh feature.
