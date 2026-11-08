@@ -356,6 +356,7 @@ class MeshResolutionChecker:
                                     "hrrpua": hrrpua,
                                     "area": area,
                                     "hrr_kw": hrrpua * area,
+                                    "xb": list(xb),
                                     "centroid": [
                                         (xb[0] + xb[1]) / 2.0,
                                         (xb[2] + xb[3]) / 2.0,
@@ -380,6 +381,7 @@ class MeshResolutionChecker:
                                     "hrrpua": hrrpua,
                                     "area": area,
                                     "hrr_kw": hrrpua * area,
+                                    "xb": list(xb),
                                     "centroid": [
                                         (xb[0] + xb[1]) / 2.0,
                                         (xb[2] + xb[3]) / 2.0,
@@ -387,20 +389,23 @@ class MeshResolutionChecker:
                                     ],
                                 })
 
-        # If burners exist, resolve spacing from the unique MESH containing
-        # each source centroid. Interface ambiguity fails closed to global evidence.
+        # If burners exist, resolve spacing only when the complete burner
+        # extent lies strictly inside exactly one MESH. Centroid-only lookup can
+        # overclaim locality when a burner spans a coarse/fine interface.
         if burner_sources:
             evaluations: List[Dict[str, Any]] = []
             for burner in burner_sources:
                 hrr_kw = burner["hrr_kw"]
                 centroid = burner["centroid"]
+                source_xb = burner["xb"]
                 local_matches = []
                 for mesh in mesh_specs:
-                    xb = mesh["xb"]
+                    mesh_xb = mesh["xb"]
                     if all(
-                        xb[2 * axis] + 1e-9
-                        < centroid[axis]
-                        < xb[2 * axis + 1] - 1e-9
+                        mesh_xb[2 * axis] + 1e-9
+                        < source_xb[2 * axis]
+                        and source_xb[2 * axis + 1]
+                        < mesh_xb[2 * axis + 1] - 1e-9
                         for axis in range(3)
                     ):
                         local_matches.append(mesh)
@@ -408,7 +413,7 @@ class MeshResolutionChecker:
                 if len(local_matches) == 1:
                     local_mesh = local_matches[0]
                     source_cell_size = local_mesh["max_spacing_m"]
-                    source_basis = "BURNER_CENTROID_UNIQUE_MESH"
+                    source_basis = "BURNER_EXTENT_UNIQUE_MESH"
                     local_resolved = True
                     local_mesh_id = local_mesh["id"]
                     local_xyz = local_mesh["cell_size_xyz_m"]
@@ -430,6 +435,7 @@ class MeshResolutionChecker:
                     "d_star_over_dx": ratio,
                     "indicator_band": _indicator_band(ratio),
                     "source_centroid_m": centroid,
+                    "source_extent_xb": list(source_xb),
                     "cell_size_basis": source_basis,
                     "local_source_mesh_resolved": local_resolved,
                     "local_mesh_id": local_mesh_id,
