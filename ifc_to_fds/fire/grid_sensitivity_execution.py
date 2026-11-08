@@ -42,6 +42,33 @@ def _case_file_hashes(directory: Path) -> dict[str, str]:
     }
 
 
+def _validated_pass_directory(
+    gate_evidence: dict[str, Any],
+    *,
+    expected_fds_sha256: str,
+    expected_solver_version: str,
+) -> Path:
+    if gate_evidence.get("fds_sha256") != expected_fds_sha256:
+        raise ValueError("Pinned solver evidence FDS hash differs from rendered case")
+    if expected_solver_version not in gate_evidence.get("reported_versions", []):
+        raise ValueError("Pinned solver evidence does not confirm the required version")
+    for field in ("sha256", "configuration_sha256"):
+        digest = gate_evidence.get(field)
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(ch not in "0123456789abcdef" for ch in digest)
+        ):
+            raise ValueError(f"Pinned solver evidence has invalid {field}")
+    directory = gate_evidence.get("directory")
+    if not isinstance(directory, str):
+        raise ValueError("Pinned solver PASS omitted its evidence directory")
+    path = Path(directory)
+    if not path.is_dir():
+        raise ValueError("Pinned solver evidence directory does not exist")
+    return path
+
+
 def execute_grid_sensitivity_study(
     scenario_fds: str,
     plan: ResolvedGridSensitivityPlan,
@@ -84,8 +111,12 @@ def execute_grid_sensitivity_study(
         reason = solver_gate.reason or "Pinned FDS produced no execution reason"
         if solver_gate.status == GateStatus.PASS:
             try:
-                if run_directory is None:
-                    raise ValueError("Pinned solver PASS omitted its evidence directory")
+                run_directory = _validated_pass_directory(
+                    gate_evidence,
+                    expected_fds_sha256=rendered_case["fds_sha256"],
+                    expected_solver_version=config.solver_version,
+                )
+                file_hashes = _case_file_hashes(run_directory)
                 observations = observations_from_solver_output(
                     run_directory,
                     chid,
