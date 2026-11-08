@@ -84,6 +84,63 @@ jobs:
             -H "X-API-Key: $IFCFDS_API_KEY" \
             http://127.0.0.1:18000/api/scheduler-health >/dev/null
 
+      - name: Prepare TLS fixture for full Compose stack
+        run: |
+          openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
+            -keyout "$IFCFDS_TLS_CERT_DIR/privkey.pem" \
+            -out "$IFCFDS_TLS_CERT_DIR/fullchain.pem" \
+            -subj "/CN=ifctofds.example.org" \
+            -addext "subjectAltName=DNS:ifctofds.example.org"
+
+      - name: Start full TLS reverse-proxy stack
+        run: |
+          docker rm -f ifctofds-ci
+          docker compose -f compose.production.yml up -d --no-build
+          docker compose -f compose.production.yml ps
+
+      - name: Smoke TLS, redirect, auth and security headers through proxy
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --noproxy '*' \
+              --cacert "$IFCFDS_TLS_CERT_DIR/fullchain.pem" \
+              --resolve ifctofds.example.org:443:127.0.0.1 \
+              https://ifctofds.example.org/api/health >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker compose -f compose.production.yml logs
+              exit 1
+            fi
+            sleep 1
+          done
+
+          redirect="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --noproxy '*' -H 'Host: ifctofds.example.org' http://127.0.0.1/)"
+          test "$redirect" = "308"
+
+          unauth="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --noproxy '*' \
+            --cacert "$IFCFDS_TLS_CERT_DIR/fullchain.pem" \
+            --resolve ifctofds.example.org:443:127.0.0.1 \
+            https://ifctofds.example.org/api/scheduler-health)"
+          test "$unauth" = "401"
+
+          curl --fail --silent --noproxy '*' \
+            --cacert "$IFCFDS_TLS_CERT_DIR/fullchain.pem" \
+            --resolve ifctofds.example.org:443:127.0.0.1 \
+            -H "X-API-Key: $IFCFDS_API_KEY" \
+            -D /tmp/ifctofds-headers.txt \
+            https://ifctofds.example.org/api/scheduler-health >/dev/null
+          grep -qi '^strict-transport-security: max-age=31536000' /tmp/ifctofds-headers.txt
+          grep -qi '^x-content-type-options: nosniff' /tmp/ifctofds-headers.txt
+
       - name: Container logs on failure
         if: failure()
-        run: docker logs ifctofds-ci || true
+        run: |
+          docker logs ifctofds-ci 2>/dev/null || true
+          docker compose -f compose.production.yml logs || true
+
+      - name: Stop test stack
+        if: always()
+        run: docker compose -f compose.production.yml down --volumes --remove-orphans || true
