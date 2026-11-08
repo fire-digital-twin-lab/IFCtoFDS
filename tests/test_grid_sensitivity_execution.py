@@ -169,7 +169,7 @@ def test_execution_ingests_fake_solver_outputs_and_runs_analysis(tmp_path, monke
         counter += 1
         case_dir = tmp_path / f"solver-{counter}"
         case_dir.mkdir()
-        (case_dir / "audit.fds").write_text(fds_text, encoding="utf-8")
+        (case_dir / "audit.fds").write_bytes(fds_text.encode("utf-8"))
         (case_dir / "run.json").write_text("{}", encoding="utf-8")
         (case_dir / "stdout.log").write_text("completed successfully", encoding="utf-8")
         (case_dir / "stderr.log").write_text("", encoding="utf-8")
@@ -232,7 +232,7 @@ def test_execution_withholds_analysis_when_solver_output_is_missing(tmp_path, mo
         counter += 1
         case_dir = tmp_path / f"missing-{counter}"
         case_dir.mkdir()
-        (case_dir / "audit.fds").write_text(fds_text, encoding="utf-8")
+        (case_dir / "audit.fds").write_bytes(fds_text.encode("utf-8"))
         (case_dir / "run.json").write_text("{}", encoding="utf-8")
         (case_dir / "stdout.log").write_text("completed successfully", encoding="utf-8")
         (case_dir / "stderr.log").write_text("", encoding="utf-8")
@@ -281,7 +281,7 @@ def test_execution_rejects_solver_input_hash_mismatch(tmp_path, monkeypatch):
         counter += 1
         case_dir = tmp_path / f"hash-mismatch-{counter}"
         case_dir.mkdir()
-        (case_dir / "audit.fds").write_text(fds_text, encoding="utf-8")
+        (case_dir / "audit.fds").write_bytes(fds_text.encode("utf-8"))
         (case_dir / "run.json").write_text("{}", encoding="utf-8")
         (case_dir / "stdout.log").write_text("completed successfully", encoding="utf-8")
         (case_dir / "stderr.log").write_text("", encoding="utf-8")
@@ -428,7 +428,7 @@ def test_execution_rejects_time_window_not_covered_by_solver_output(tmp_path, mo
         counter += 1
         case_dir = tmp_path / f"short-{counter}"
         case_dir.mkdir()
-        (case_dir / "audit.fds").write_text(fds_text, encoding="utf-8")
+        (case_dir / "audit.fds").write_bytes(fds_text.encode("utf-8"))
         (case_dir / "run.json").write_text("{}", encoding="utf-8")
         (case_dir / "stdout.log").write_text("completed successfully", encoding="utf-8")
         (case_dir / "stderr.log").write_text("", encoding="utf-8")
