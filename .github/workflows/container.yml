@@ -1,0 +1,83 @@
+name: Production container contract
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/production-deployment-stack'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      IFCFDS_PUBLIC_HOST: ifctofds.example.org
+      IFCFDS_API_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef
+      IFCFDS_TLS_CERT_DIR: /tmp/ifctofds-tls
+      IFCFDS_IMAGE_TAG: ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose expansion
+        run: docker compose -f compose.production.yml config --quiet
+
+      - name: Build runtime image
+        run: docker build --pull --tag ifctofds:ci .
+
+      - name: Production startup must fail without API key
+        shell: bash
+        run: |
+          set +e
+          timeout 15s docker run --rm \
+            -e IFCFDS_ENV=production \
+            -e IFCFDS_ALLOWED_HOSTS=ifctofds.example.org \
+            ifctofds:ci
+          code=$?
+          set -e
+          if [ "$code" -eq 124 ] || [ "$code" -eq 0 ]; then
+            echo "Container did not fail closed when IFCFDS_API_KEY was missing"
+            exit 1
+          fi
+
+      - name: Start application container
+        run: |
+          docker run -d --name ifctofds-ci \
+            -e IFCFDS_ENV=production \
+            -e IFCFDS_ALLOWED_HOSTS=ifctofds.example.org,127.0.0.1 \
+            -e IFCFDS_ALLOWED_ORIGINS=https://ifctofds.example.org \
+            -e IFCFDS_API_KEY="$IFCFDS_API_KEY" \
+            -e IFCFDS_JOB_ROOT=/var/lib/ifctofds/jobs \
+            -p 127.0.0.1:18000:8000 \
+            ifctofds:ci
+
+      - name: Probe health and static workbench
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent -H 'Host: ifctofds.example.org' http://127.0.0.1:18000/api/health >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs ifctofds-ci
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent -H 'Host: ifctofds.example.org' http://127.0.0.1:18000/ >/dev/null
+          curl --fail --silent \
+            -H 'Host: ifctofds.example.org' \
+            -H "X-API-Key: $IFCFDS_API_KEY" \
+            http://127.0.0.1:18000/api/scheduler-health >/dev/null
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs ifctofds-ci || true
