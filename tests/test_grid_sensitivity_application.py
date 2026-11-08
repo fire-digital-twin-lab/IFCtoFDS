@@ -40,6 +40,7 @@ def _ready_values():
             "output_complete": True,
             "geometry_package_sha256": "a" * 64,
         },
+        "geometry-package.json": {"sha256": "a" * 64},
         "sources.json": {
             "sources": [
                 {
@@ -105,6 +106,34 @@ def test_readiness_requires_all_reference_and_source_preconditions(monkeypatch):
     assert readiness.mapping_acceptance == "MAPPING_VERIFIED"
     assert readiness.output_complete is True
     require_application_grid_study_ready(readiness)
+
+
+def test_readiness_rejects_geometry_package_digest_mismatch(monkeypatch):
+    approval = {
+        "status": "APPROVED",
+        "reviewer": "reviewer",
+        "rationale": "Reviewed",
+        "evidence": ["evidence"],
+    }
+    values = _ready_values()
+    values["geometry-package.json"]["sha256"] = "f" * 64
+
+    monkeypatch.setattr(
+        "ifc_to_fds.fire.grid_sensitivity_application.inspect_case",
+        lambda case: ("e" * 64, approval, values),
+    )
+    monkeypatch.setattr(
+        "ifc_to_fds.fire.grid_sensitivity_application.resolve_sources",
+        lambda case, mapping: [Path("/external/approved.ifc")],
+    )
+
+    readiness = assess_application_grid_study_readiness(
+        "reference-cases/application-package-mismatch",
+        {"b" * 64: "/external/approved.ifc"},
+    )
+
+    assert readiness.status == "NOT_READY"
+    assert "REFERENCE_GEOMETRY_PACKAGE_DIGEST_MISMATCH" in readiness.blockers
 
 
 def test_readiness_rejects_domain_drift_and_source_integrity_failure(monkeypatch):
