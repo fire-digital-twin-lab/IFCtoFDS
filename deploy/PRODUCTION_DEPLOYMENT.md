@@ -17,7 +17,7 @@ IFCtoFDS app :8000 (không publish trực tiếp)
   +-- single scheduler owner enforced by job-root lock
 ```
 
-Container ứng dụng chạy UID/GID 10001, root filesystem read-only, chỉ job volume và `/tmp` được ghi. `IFCFDS_ENV=production` buộc API key và Host allowlist; thiếu cấu hình thì app phải dừng thay vì mở anonymous API.
+Container ứng dụng chạy UID/GID 10001, root filesystem read-only, chỉ job volume và `/tmp` được ghi. Python dependencies được cài từ `uv.lock`; binary uv được pin bằng OCI SHA-256 để giảm drift của build. `IFCFDS_ENV=production` buộc API key và Host allowlist; thiếu cấu hình thì app phải dừng thay vì mở anonymous API.
 
 ## Điều kiện trước khi triển khai
 
@@ -26,7 +26,7 @@ Container ứng dụng chạy UID/GID 10001, root filesystem read-only, chỉ jo
 3. Có chứng chỉ TLS hợp lệ trong thư mục chỉ đọc:
    - `fullchain.pem`
    - `privkey.pem`
-4. Tạo API key ngẫu nhiên tối thiểu 32 ký tự; không commit vào Git.
+4. Tạo API key ngẫu nhiên tối thiểu 32 ký tự trong file chỉ operator đọc được; không commit vào Git và không truyền secret qua Compose environment.
 5. Có dung lượng persistent volume đủ cho IFC, SQLite và artifacts.
 6. Chọn release SHA đã qua CI. Không deploy trực tiếp nhánh feature.
 7. Với profile yêu cầu FDS solver evidence: image hiện tại **không đóng gói FDS Linux**. Chỉ bật solver khi operator đã cung cấp executable FDS 6.11.1 tương thích và xác minh version/checksum theo contract dự án. Nếu chưa có, giữ simulation verification fail-closed.
@@ -37,12 +37,12 @@ Ví dụ shell; thay giá trị thật bằng secret manager hoặc cơ chế tr
 
 ```bash
 export IFCFDS_PUBLIC_HOST=ifctofds.example.org
-export IFCFDS_API_KEY='replace-with-a-random-secret-at-least-32-characters'
+export IFCFDS_API_KEY_FILE=/srv/ifctofds/secrets/api-key
 export IFCFDS_TLS_CERT_DIR=/srv/ifctofds/tls
 export IFCFDS_IMAGE_TAG=release-sha
 ```
 
-Không lưu file `.env` chứa secret vào repository.
+Compose mount `IFCFDS_API_KEY_FILE` thành `/run/secrets/api_key`; CLI đọc secret file trước khi import server. Không lưu secret trực tiếp trong `.env`, command line, image layer hoặc repository.
 
 ## Kiểm tra cấu hình trước khi chạy
 
