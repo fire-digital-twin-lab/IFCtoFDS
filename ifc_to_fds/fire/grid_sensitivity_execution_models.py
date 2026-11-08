@@ -103,8 +103,18 @@ class GridSensitivityCaseExecutionEvidence(BaseModel):
                     "Accepted case result is missing solver provenance: "
                     + ", ".join(missing)
                 )
+            if self.result.level != self.level:
+                raise ValueError("Case result level differs from execution case")
+            if self.result.refinement_ratio != self.refinement_ratio:
+                raise ValueError("Case result refinement ratio differs from execution case")
+            if self.result.local_dx_m != self.local_dx_m:
+                raise ValueError("Case result local dx differs from execution case")
             if self.result.fds_sha256 != self.fds_sha256:
                 raise ValueError("Case result FDS hash differs from execution FDS hash")
+            if self.returncode != 0:
+                raise ValueError("Accepted case result requires solver returncode=0")
+            if self.timed_out is not False:
+                raise ValueError("Accepted case result requires timed_out=false")
         if self.solver_status == "PASS" and self.output_evidence_status == "NOT_EVALUATED":
             raise ValueError("PASS solver execution requires output evidence evaluation")
         if self.result is not None and not self.output_files_sha256:
@@ -163,6 +173,16 @@ class ExecutedGridSensitivityStudyEvidence(BaseModel):
     def validate_execution_consistency(self) -> "ExecutedGridSensitivityStudyEvidence":
         if [case.level for case in self.cases] != ["COARSE", "MEDIUM", "FINE"]:
             raise ValueError("Executed cases must be ordered COARSE/MEDIUM/FINE")
+        ratios = [case.refinement_ratio for case in self.cases]
+        if not (ratios[0] < ratios[1] < ratios[2]):
+            raise ValueError("Executed refinement ratios must increase toward FINE")
+        dx = [case.local_dx_m for case in self.cases]
+        if not (dx[0] > dx[1] > dx[2]):
+            raise ValueError("Executed local dx must decrease toward FINE")
+        if len({case.mesh_plan_sha256 for case in self.cases}) != 3:
+            raise ValueError("Executed mesh-plan hashes must be distinct")
+        if len({case.fds_sha256 for case in self.cases}) != 3:
+            raise ValueError("Executed FDS hashes must be distinct")
         complete = all(
             case.solver_status == "PASS"
             and case.output_evidence_status == "PASS"
@@ -178,4 +198,13 @@ class ExecutedGridSensitivityStudyEvidence(BaseModel):
                 raise ValueError("Analysis requires COMPLETE execution")
             if self.analysis.scenario_invariant_sha256 != self.scenario_invariant_sha256:
                 raise ValueError("Analysis scenario fingerprint differs from execution")
+            results = [case.result for case in self.cases]
+            if any(
+                result is None
+                or result.scenario_invariant_sha256 != self.scenario_invariant_sha256
+                for result in results
+            ):
+                raise ValueError("Case result scenario fingerprint differs from execution")
+            if self.analysis.cases != results:
+                raise ValueError("Analysis cases differ from executed case results")
         return self
