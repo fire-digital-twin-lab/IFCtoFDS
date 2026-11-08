@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 ReadinessStatus = Literal["READY", "NOT_READY"]
@@ -31,6 +31,25 @@ class ApplicationGridStudyReadiness(BaseModel):
     mapping_acceptance: str | None = None
     output_complete: bool | None = None
     blockers: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_readiness_consistency(self) -> "ApplicationGridStudyReadiness":
+        if self.status == "READY":
+            if self.blockers:
+                raise ValueError("READY readiness cannot contain blockers")
+            if not self.sources_verified or self.source_count < 1:
+                raise ValueError("READY readiness requires verified external sources")
+            if self.reference_schema_version != self.current_schema_version:
+                raise ValueError("READY readiness requires current reference schema")
+            if self.simulation_domain is None:
+                raise ValueError("READY readiness requires an approved simulation domain")
+            if self.mapping_acceptance != "MAPPING_VERIFIED":
+                raise ValueError("READY readiness requires MAPPING_VERIFIED reference")
+            if self.output_complete is not True:
+                raise ValueError("READY readiness requires complete reference output")
+        elif not self.blockers:
+            raise ValueError("NOT_READY readiness requires at least one blocker")
+        return self
 
     @property
     def ready(self) -> bool:
