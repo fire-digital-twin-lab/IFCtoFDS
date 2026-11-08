@@ -114,6 +114,15 @@ def assess_application_grid_study_readiness(
         or any(ch not in "0123456789abcdef" for ch in geometry_digest)
     ):
         blockers.append("REFERENCE_GEOMETRY_PACKAGE_NOT_BOUND")
+    else:
+        geometry_package = values.get("geometry-package.json", {})
+        package_digest = (
+            geometry_package.get("sha256")
+            if hasattr(geometry_package, "get")
+            else None
+        )
+        if package_digest != geometry_digest:
+            blockers.append("REFERENCE_GEOMETRY_PACKAGE_DIGEST_MISMATCH")
 
     sources = values.get("sources.json", {}).get("sources", [])
     source_count = len(sources) if isinstance(sources, list) else 0
