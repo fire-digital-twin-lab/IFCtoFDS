@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import threading
-from types import SimpleNamespace
-
 from ifc_to_fds.operations.runtime_status import collect_operational_status
 
 
