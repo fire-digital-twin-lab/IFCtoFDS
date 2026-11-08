@@ -1,5 +1,37 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+
+## Checkpoint P4c2a executed pinned-FDS grid study + DEVC provenance — 08/11/2026
+
+**PR:** #78  
+**Code candidate đã nghiệm thu:** `1520d9fdad9e50ca08a382d3c5a5df5219c749f9`  
+**Roadmap:** P4 tiếp tục; scoped `MESH-SENS-P4C2A-001 = PASS / E2`; broad `MESH-LOCAL-001 = INCONCLUSIVE`.
+
+- Thêm execution layer nối P4c1 COARSE/MEDIUM/FINE plan với existing `solver_gates()`; không bypass pinned FDS/version/checksum/evidence path.
+- P4c2a bắt buộc solver version `6.11.1` trước khi chạy và đối chiếu exact rendered FDS SHA-256 với solver evidence trước khi ingest output.
+- Tách `solver_status` khỏi `output_evidence_status`; solver PASS nhưng DEVC artifact thiếu/hỏng/mismatch vẫn tạo study `INCOMPLETE`, không sinh comparative analysis.
+- DEVC CSV parser dùng contract của FDS source: `CHID_devc.csv` hoặc `CHID_<n>_devc.csv`, units row bắt đầu `s`, labels row bắt đầu `Time`, device IDs unique, values finite, time strictly increasing.
+- Execution scope hiện chỉ nhận simple point DEVC với `ID/XYZ/QUANTITY/(optional UNITS)` và aggregation `MAX/MIN/FINAL`; advanced DEVC modifiers bị reject trước solver.
+- Requested time window phải được solver series bao phủ đầy đủ; không gắn nhãn statistic cho một cửa sổ dài hơn dữ liệu thực.
+- Observation provenance khóa cả output CSV filename/hash và input `DEVC` ID/canonical descriptor hash.
+- Case evidence khóa MeshPlan hash, FDS hash, solver/config hashes, `audit.fds/run.json/stdout/stderr` hashes, toàn bộ output-file hashes, return code, timeout và warning lines/count.
+- Evidence models reject nội tại nếu case/result/hash/runtime/analysis không nhất quán; ba case phải có ratios tăng, local dx giảm, distinct MeshPlan/FDS hashes.
+- Repeated GitHub runner HTTP 504 khi tải official FDS bundle được harden bằng bounded retry cho transient transport failures; archive và binary SHA-256 pins giữ nguyên, non-transient 4xx/checksum mismatch không được bypass.
+- Cross-platform acceptance review phát hiện fake solver fixture ghi `audit.fds` bằng text mode làm Windows đổi newline và phá exact hash; fixture đã chuyển sang byte-exact write, production validator không bị nới.
+- Source Quality #42471828594: **SUCCESS**, `959 passed, 16 deselected, 121 warnings`, coverage **87%** (`10916 / 1428` statements missed); artifact `13614090611`, digest `sha256:3d13f27fb6277e2aeaba125473ac7d41f635e5a9d8a005fc0b1c67eb03ee09a4`.
+- Push Conversion #42471825172: **SUCCESS** trên Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver suite: **11 passed, 964 deselected, 2 warnings**; solver artifact `13613906019`, digest `sha256:ad5f08e76abf779a61b0df532ed6bbb0394ec931f2cf7a3a8b0bfe8b3efb1c48`.
+- Browser artifact `13613906012`, digest `sha256:302a429e03c31ca8530ec541d3ebde71fad8078b34dcdffefba97b645b997317`.
+- PR Conversion #42471828517: **SUCCESS** trên cùng platform matrix, browser, JavaScript và pinned FDS.
+- Technical note: `docs/science/P4C2A_EXECUTED_GRID_STUDY_CONTRACT.md`.
+
+**Giới hạn khoa học:** solver regression P4c2a chỉ là minimal integration fixture `T_END=0.1 s` với point `TEMPERATURE` DEVC. Nó chứng minh execution/provenance pipeline, không chứng minh developed EV-fire response, grid convergence, mesh independence, GCI/Richardson, numerical uncertainty hoặc application-specific mesh adequacy.
+
+**Scientific verdict:** scoped `MESH-SENS-P4C2A-001 = PASS / E2`; broad `MESH-LOCAL-001 = INCONCLUSIVE`; overall scientific/application verdict `INCONCLUSIVE`.  
+**Release verdict:** `NOT_PRODUCTION_READY`. Không cấp `SIMULATION_VERIFIED`.
+
+---
+
 ## Checkpoint P4c1 software grid-sensitivity contract — 08/11/2026
 
 **PR:** #77  
