@@ -46,7 +46,7 @@ def test_operational_status_reports_bounded_runtime_metrics(tmp_path):
 
     result = collect_operational_status(service, now=160.0)
 
-    assert result["status"] == "ok"
+    assert result["status"] == "degraded"
     assert result["scheduler_healthy"] is False  # pending work needs a live supervisor
     assert result["jobs"]["total"] == 4
     assert result["jobs"]["pending"] == 2
