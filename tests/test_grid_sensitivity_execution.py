@@ -351,6 +351,97 @@ def test_execution_returns_incomplete_when_solver_is_inconclusive(tmp_path, monk
     )
     assert all(case.result is None for case in evidence.cases)
 
+
+def test_execution_rejects_advanced_devc_modifier_before_solver(tmp_path, monkeypatch):
+    scenario = _scenario().replace(
+        "QUANTITY='TEMPERATURE' /",
+        "QUANTITY='TEMPERATURE', TEMPORAL_STATISTIC='TIME AVERAGE' /",
+    )
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Solver must not run for unsupported DEVC modifiers")
+
+    monkeypatch.setattr(
+        "ifc_to_fds.fire.grid_sensitivity_execution.solver_gates",
+        forbidden,
+    )
+    plan = resolve_grid_sensitivity_plan(
+        scenario,
+        _bundle(),
+        _domain(),
+        1.0,
+        GridSensitivityPlanRequest(
+            source_vehicle_index=0,
+            local_region=BoundingBox(
+                xmin=3.0,
+                xmax=7.0,
+                ymin=3.0,
+                ymax=7.0,
+                zmin=0.0,
+                zmax=3.0,
+            ),
+            refinement_ratios=(2, 3, 4),
+        ),
+    )
+    with pytest.raises(ValueError, match="simple point-DEVC scope"):
+        execute_grid_sensitivity_study(
+            scenario,
+            plan,
+            [_observable()],
+            AuditConfig(),
+            tmp_path / "study",
+        )
+
+
+def test_execution_rejects_time_window_not_covered_by_solver_output(tmp_path, monkeypatch):
+    counter = 0
+
+    def fake_solver_gates(fds_text, config):
+        nonlocal counter
+        counter += 1
+        case_dir = tmp_path / f"short-{counter}"
+        case_dir.mkdir()
+        (case_dir / "run.json").write_text("{}", encoding="utf-8")
+        (case_dir / "stdout.log").write_text("completed successfully", encoding="utf-8")
+        (case_dir / "stderr.log").write_text("", encoding="utf-8")
+        _write_devc(
+            case_dir / "p4c2_devc.csv",
+            "T_POINT",
+            "C",
+            [20.0, 21.0],
+        )
+        return (
+            GateResult(
+                status=GateStatus.PASS,
+                reason="Pinned FDS completed",
+                evidence={
+                    "directory": str(case_dir),
+                    "reported_versions": ["6.11.1"],
+                    "sha256": "a" * 64,
+                    "configuration_sha256": "b" * 64,
+                    "fds_sha256": hashlib.sha256(fds_text.encode("utf-8")).hexdigest(),
+                },
+            ),
+            GateResult(status=GateStatus.INCONCLUSIVE),
+        )
+
+    monkeypatch.setattr(
+        "ifc_to_fds.fire.grid_sensitivity_execution.solver_gates",
+        fake_solver_gates,
+    )
+    evidence = execute_grid_sensitivity_study(
+        _scenario(),
+        _plan(),
+        [_observable(time_window_s=(0.0, 1.0))],
+        AuditConfig(),
+        tmp_path / "study",
+    )
+
+    assert evidence.execution_status == "INCOMPLETE"
+    assert evidence.analysis is None
+    assert all(case.output_evidence_status == "FAIL" for case in evidence.cases)
+    assert all("does not cover" in case.reason for case in evidence.cases)
+
 def test_execution_rejects_observable_quantity_drift_before_solver(tmp_path, monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail("Solver must not run when observable metadata is inconsistent")
