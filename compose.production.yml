@@ -10,7 +10,6 @@ services:
       IFCFDS_ENV: production
       IFCFDS_ALLOWED_HOSTS: ${IFCFDS_PUBLIC_HOST:?set IFCFDS_PUBLIC_HOST}
       IFCFDS_ALLOWED_ORIGINS: https://${IFCFDS_PUBLIC_HOST:?set IFCFDS_PUBLIC_HOST}
-      IFCFDS_API_KEY: ${IFCFDS_API_KEY:?set IFCFDS_API_KEY}
       IFCFDS_JOB_ROOT: /var/lib/ifctofds/jobs
       IFCFDS_MAX_WAITING: ${IFCFDS_MAX_WAITING:-2}
       IFCFDS_TIMEOUT_S: ${IFCFDS_TIMEOUT_S:-1800}
@@ -19,6 +18,19 @@ services:
       IFCFDS_WORKER_MAX_MEMORY_MB: ${IFCFDS_WORKER_MAX_MEMORY_MB:-4096}
       IFCFDS_MAX_FILE_BYTES: ${IFCFDS_MAX_FILE_BYTES:-209715200}
       IFCFDS_MAX_JOB_BYTES: ${IFCFDS_MAX_JOB_BYTES:-524288000}
+    command:
+      - python
+      - -m
+      - ifc_to_fds
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --api-key-file
+      - /run/secrets/api_key
+    secrets:
+      - api_key
     volumes:
       - jobs:/var/lib/ifctofds/jobs
     expose:
@@ -76,3 +88,7 @@ services:
 
 volumes:
   jobs:
+
+secrets:
+  api_key:
+    file: ${IFCFDS_API_KEY_FILE:?set IFCFDS_API_KEY_FILE}
