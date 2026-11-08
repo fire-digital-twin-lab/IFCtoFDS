@@ -169,6 +169,7 @@ def test_execution_ingests_fake_solver_outputs_and_runs_analysis(tmp_path, monke
         counter += 1
         case_dir = tmp_path / f"solver-{counter}"
         case_dir.mkdir()
+        (case_dir / "audit.fds").write_text(fds_text, encoding="utf-8")
         (case_dir / "run.json").write_text("{}", encoding="utf-8")
         (case_dir / "stdout.log").write_text("completed successfully", encoding="utf-8")
         (case_dir / "stderr.log").write_text("", encoding="utf-8")
@@ -183,6 +184,8 @@ def test_execution_ingests_fake_solver_outputs_and_runs_analysis(tmp_path, monke
             "reported_versions": ["6.11.1"],
             "sha256": "a" * 64,
             "configuration_sha256": "b" * 64,
+            "returncode": 0,
+            "timed_out": False,
             "fds_sha256": hashlib.sha256(fds_text.encode("utf-8")).hexdigest(),
         }
         return (
@@ -229,6 +232,7 @@ def test_execution_withholds_analysis_when_solver_output_is_missing(tmp_path, mo
         counter += 1
         case_dir = tmp_path / f"missing-{counter}"
         case_dir.mkdir()
+        (case_dir / "audit.fds").write_text(fds_text, encoding="utf-8")
         (case_dir / "run.json").write_text("{}", encoding="utf-8")
         (case_dir / "stdout.log").write_text("completed successfully", encoding="utf-8")
         (case_dir / "stderr.log").write_text("", encoding="utf-8")
@@ -241,6 +245,8 @@ def test_execution_withholds_analysis_when_solver_output_is_missing(tmp_path, mo
                     "reported_versions": ["6.11.1"],
                     "sha256": "a" * 64,
                     "configuration_sha256": "b" * 64,
+                    "returncode": 0,
+                    "timed_out": False,
                     "fds_sha256": hashlib.sha256(fds_text.encode("utf-8")).hexdigest(),
                 },
             ),
@@ -275,6 +281,7 @@ def test_execution_rejects_solver_input_hash_mismatch(tmp_path, monkeypatch):
         counter += 1
         case_dir = tmp_path / f"hash-mismatch-{counter}"
         case_dir.mkdir()
+        (case_dir / "audit.fds").write_text(fds_text, encoding="utf-8")
         (case_dir / "run.json").write_text("{}", encoding="utf-8")
         (case_dir / "stdout.log").write_text("completed successfully", encoding="utf-8")
         (case_dir / "stderr.log").write_text("", encoding="utf-8")
@@ -293,6 +300,8 @@ def test_execution_rejects_solver_input_hash_mismatch(tmp_path, monkeypatch):
                     "reported_versions": ["6.11.1"],
                     "sha256": "a" * 64,
                     "configuration_sha256": "b" * 64,
+                    "returncode": 0,
+                    "timed_out": False,
                     "fds_sha256": "f" * 64,
                 },
             ),
@@ -352,6 +361,24 @@ def test_execution_returns_incomplete_when_solver_is_inconclusive(tmp_path, monk
     assert all(case.result is None for case in evidence.cases)
 
 
+
+def test_execution_rejects_non_pinned_solver_version_before_solver(tmp_path, monkeypatch):
+    def forbidden(*args, **kwargs):
+        pytest.fail("Solver must not run for a non-pinned version")
+
+    monkeypatch.setattr(
+        "ifc_to_fds.fire.grid_sensitivity_execution.solver_gates",
+        forbidden,
+    )
+    with pytest.raises(ValueError, match="requires pinned FDS 6.11.1"):
+        execute_grid_sensitivity_study(
+            _scenario(),
+            _plan(),
+            [_observable()],
+            AuditConfig(solver_version="6.10.1"),
+            tmp_path / "study",
+        )
+
 def test_execution_rejects_advanced_devc_modifier_before_solver(tmp_path, monkeypatch):
     scenario = _scenario().replace(
         "QUANTITY='TEMPERATURE' /",
@@ -401,6 +428,7 @@ def test_execution_rejects_time_window_not_covered_by_solver_output(tmp_path, mo
         counter += 1
         case_dir = tmp_path / f"short-{counter}"
         case_dir.mkdir()
+        (case_dir / "audit.fds").write_text(fds_text, encoding="utf-8")
         (case_dir / "run.json").write_text("{}", encoding="utf-8")
         (case_dir / "stdout.log").write_text("completed successfully", encoding="utf-8")
         (case_dir / "stderr.log").write_text("", encoding="utf-8")
@@ -419,6 +447,8 @@ def test_execution_rejects_time_window_not_covered_by_solver_output(tmp_path, mo
                     "reported_versions": ["6.11.1"],
                     "sha256": "a" * 64,
                     "configuration_sha256": "b" * 64,
+                    "returncode": 0,
+                    "timed_out": False,
                     "fds_sha256": hashlib.sha256(fds_text.encode("utf-8")).hexdigest(),
                 },
             ),
@@ -479,10 +509,14 @@ def test_p4c2_executes_three_pinned_fds_cases_and_ingests_real_devc_output():
     assert [case.output_evidence_status for case in evidence.cases] == ["PASS", "PASS", "PASS"]
     for case in evidence.cases:
         assert case.solver_version == "6.11.1"
+        assert case.mesh_plan_sha256
         assert case.solver_sha256
         assert case.run_json_sha256
         assert case.stdout_sha256
         assert case.stderr_sha256
+        assert case.returncode == 0
+        assert case.timed_out is False
+        assert case.warning_count == len(case.warning_lines)
         assert case.result is not None
         observation = case.result.observations[0]
         assert observation.quantity == "TEMPERATURE"
