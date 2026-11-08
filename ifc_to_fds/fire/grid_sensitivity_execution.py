@@ -132,8 +132,10 @@ def execute_grid_sensitivity_study(
                     observations=observations,
                 )
                 results.append(result)
+                output_evidence_status = "PASS"
                 reason = "Pinned FDS completed and requested DEVC evidence was ingested"
             except ValueError as exc:
+                output_evidence_status = "FAIL"
                 reason = f"Pinned FDS completed but output evidence was rejected: {exc}"
 
         reported_versions = gate_evidence.get("reported_versions", [])
@@ -149,6 +151,7 @@ def execute_grid_sensitivity_study(
                 local_dx_m=case.local_dx_m,
                 fds_sha256=rendered_case["fds_sha256"],
                 solver_status=solver_gate.status.value,
+                output_evidence_status=output_evidence_status,
                 reason=reason,
                 solver_version=solver_version,
                 solver_sha256=gate_evidence.get("sha256"),
@@ -162,7 +165,9 @@ def execute_grid_sensitivity_study(
         )
 
     complete = len(results) == 3 and all(
-        case.solver_status == "PASS" and case.result is not None
+        case.solver_status == "PASS"
+        and case.output_evidence_status == "PASS"
+        and case.result is not None
         for case in case_evidence
     )
     analysis = analyze_grid_sensitivity(results) if complete else None
