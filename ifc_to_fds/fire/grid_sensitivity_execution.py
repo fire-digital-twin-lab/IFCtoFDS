@@ -108,6 +108,7 @@ def execute_grid_sensitivity_study(
         )
 
         result = None
+        output_evidence_status = "NOT_EVALUATED"
         reason = solver_gate.reason or "Pinned FDS produced no execution reason"
         if solver_gate.status == GateStatus.PASS:
             try:
