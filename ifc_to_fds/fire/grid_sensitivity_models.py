@@ -104,6 +104,10 @@ class GridSensitivityObservation(BaseModel):
     time_window_s: tuple[float, float] | None = None
     source_artifact: str = Field(min_length=1)
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_device_id: str | None = Field(default=None, min_length=1)
+    source_descriptor_sha256: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
 
     @field_validator("time_window_s")
     @classmethod

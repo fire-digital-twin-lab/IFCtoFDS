@@ -159,13 +159,24 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 - **status**: PASS
 - **reviewer**: REPOSITORY_CI_AND_DIFF_REVIEW
 
+## Claim `MESH-SENS-P4C2A-001`
+- **statement**: The scoped P4c2a execution layer runs exactly three P4c1-rendered COARSE/MEDIUM/FINE cases through required FDS 6.11.1, ingests supported simple point-DEVC CSV outputs with unit/device/input-descriptor provenance, binds rendered input, mesh-plan, solver, configuration, log and output-artifact hashes, and withholds comparative analysis unless all three solver/output evidence chains are accepted.
+- **intended_use**: Software and solver-output provenance prerequisite for application-relevant P4c2b grid-sensitivity studies and later reviewed numerical/solution-verification methods.
+- **affected_modules**: `ifc_to_fds/fire/grid_sensitivity_execution*.py`, `grid_sensitivity_observables.py`, `grid_sensitivity_outputs.py`, grid-sensitivity facades/models, `scripts/install-fds.py`, `tests/test_grid_sensitivity_execution.py` and `tests/test_install_fds_script.py`.
+- **evidence_level**: E2
+- **supporting_evidence**: PR #78 code candidate `1520d9fdad9e50ca08a382d3c5a5df5219c749f9`; Source Quality #42471828594 PASS with 959 passed, 16 deselected, 121 warnings and 87% coverage (10916 statements / 1428 missed); artifact 13614090611 digest sha256:3d13f27fb6277e2aeaba125473ac7d41f635e5a9d8a005fc0b1c67eb03ee09a4. Push Conversion #42471825172 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; solver suite reports 11 passed, 964 deselected, 2 warnings; solver artifact 13613906019 digest sha256:ad5f08e76abf779a61b0df532ed6bbb0394ec931f2cf7a3a8b0bfe8b3efb1c48; browser artifact 13613906012 digest sha256:302a429e03c31ca8530ec541d3ebde71fad8078b34dcdffefba97b645b997317. PR Conversion #42471828517 PASS across the same platform matrix including pinned FDS. Technical note: `docs/science/P4C2A_EXECUTED_GRID_STUDY_CONTRACT.md`.
+- **known_limitations**: The real solver regression is intentionally a minimal `T_END=0.1 s` point-TEMPERATURE integration fixture, not a developed EV-fire application study. P4c2a supports only simple point DEVC records with ID/XYZ/QUANTITY/(optional UNITS) and MAX/MIN/FINAL aggregation; advanced DEVC modifiers, application-relevant fire response, reviewed convergence criteria, observed order, Richardson/GCI and numerical uncertainty remain outside this scoped claim. This claim does not establish mesh independence or EV-fire predictive validity.
+- **validation_domain**: Software execution/provenance pipeline for P4b/P4c1-compatible three-grid plans plus the pinned FDS 6.11.1 minimal DEVC regression fixture.
+- **status**: PASS
+- **reviewer**: REPOSITORY_CI_PINNED_SOLVER_AND_DIFF_REVIEW
+
 ## Claim `MESH-LOCAL-001`
 - **statement**: The simulation uses a reviewed local/refined MeshPlan that resolves the EV source, underbody clearance, battery thickness, and near-field plume with documented sensitivity.
 - **intended_use**: Numerical/solution verification for EV fire scenarios.
 - **affected_modules**: Future `MeshPlan`, mesh checker, scenario evidence and metrics.
 - **evidence_level**: E0
-- **supporting_evidence**: Scoped claims `MESH-INDICATOR-P4A-001`, `MESH-LOCAL-P4B1-001` and `MESH-SENS-P4C1-001` verify indicator semantics, a typed non-overlapping Local MeshPlan, fail-closed source-local spacing, critical EV geometry ratios, pinned-solver acceptance, and a software-level three-grid comparability/observable contract. They do not yet provide an executed coarse/medium/fine output study or a reviewed convergence/uncertainty decision.
-- **known_limitations**: P4c2 still needs to execute three comparable FDS cases, ingest real solver observables, and demonstrate the behavior of application-relevant quantities. Reviewed convergence criteria, numerical uncertainty and application-specific mesh adequacy are still missing; current evidence does not prove grid independence.
+- **supporting_evidence**: Scoped claims `MESH-INDICATOR-P4A-001`, `MESH-LOCAL-P4B1-001`, `MESH-SENS-P4C1-001` and `MESH-SENS-P4C2A-001` verify indicator semantics, a typed non-overlapping Local MeshPlan, fail-closed source-local spacing, critical EV geometry ratios, three-grid comparability, and a real pinned-FDS three-case execution/output-provenance pipeline. P4c2a's real solver regression is intentionally minimal and does not constitute an application-relevant EV-fire response study or a reviewed convergence/uncertainty decision.
+- **known_limitations**: P4c2a now executes three comparable FDS cases and ingests real minimal DEVC output with provenance, but P4c2b still needs an application-relevant fire scenario, scientifically meaningful duration/instrumentation, and observed response of the quantities used for the engineering decision. Reviewed convergence criteria, numerical uncertainty and application-specific mesh adequacy remain missing; current evidence does not prove grid independence.
 - **validation_domain**: EV basement/garage simulation cases.
 - **status**: INCONCLUSIVE
 - **reviewer**: PENDING_INDEPENDENT_REVIEW

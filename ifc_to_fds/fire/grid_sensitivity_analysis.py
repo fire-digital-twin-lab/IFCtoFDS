@@ -23,6 +23,8 @@ def _descriptor(observation):
         observation.aggregation,
         observation.location_m,
         observation.time_window_s,
+        observation.source_device_id,
+        observation.source_descriptor_sha256,
     )
 
 
