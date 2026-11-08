@@ -73,9 +73,17 @@ class GridSensitivityCaseExecutionEvidence(BaseModel):
 
     @model_validator(mode="after")
     def validate_case_provenance(self) -> "GridSensitivityCaseExecutionEvidence":
+        if self.solver_status != "PASS" and self.output_evidence_status != "NOT_EVALUATED":
+            raise ValueError(
+                "Non-PASS solver execution cannot claim evaluated output evidence"
+            )
+        if self.output_evidence_status == "PASS" and self.result is None:
+            raise ValueError("output_evidence_status=PASS requires a case result")
         if self.result is not None:
             if self.solver_status != "PASS":
                 raise ValueError("Case result requires solver_status=PASS")
+            if self.output_evidence_status != "PASS":
+                raise ValueError("Case result requires output_evidence_status=PASS")
             required = {
                 "solver_version": self.solver_version,
                 "solver_sha256": self.solver_sha256,
