@@ -211,6 +211,7 @@ def test_execution_ingests_fake_solver_outputs_and_runs_analysis(tmp_path, monke
     assert evidence.analysis is not None
     assert evidence.analysis.status == "INCONCLUSIVE"
     assert [case.solver_status for case in evidence.cases] == ["PASS", "PASS", "PASS"]
+    assert [case.output_evidence_status for case in evidence.cases] == ["PASS", "PASS", "PASS"]
     values = [case.result.observations[0].value for case in evidence.cases if case.result]
     assert values == pytest.approx([101.0, 102.0, 103.0])
     assert evidence.analysis.metrics[0].trend == "MONOTONIC"
@@ -258,6 +259,7 @@ def test_execution_withholds_analysis_when_solver_output_is_missing(tmp_path, mo
     assert evidence.execution_status == "INCOMPLETE"
     assert evidence.analysis is None
     assert all(case.solver_status == "PASS" for case in evidence.cases)
+    assert all(case.output_evidence_status == "FAIL" for case in evidence.cases)
     assert all(case.result is None for case in evidence.cases)
     assert all("output evidence was rejected" in case.reason for case in evidence.cases)
 
@@ -312,6 +314,58 @@ def test_execution_rejects_solver_input_hash_mismatch(tmp_path, monkeypatch):
     assert all("FDS hash differs" in case.reason for case in evidence.cases)
 
 
+
+def test_execution_rejects_solver_evidence_input_hash_mismatch(tmp_path, monkeypatch):
+    counter = 0
+
+    def fake_solver_gates(fds_text, config):
+        nonlocal counter
+        counter += 1
+        case_dir = tmp_path / f"mismatch-{counter}"
+        case_dir.mkdir()
+        (case_dir / "run.json").write_text("{}", encoding="utf-8")
+        (case_dir / "stdout.log").write_text("completed successfully", encoding="utf-8")
+        (case_dir / "stderr.log").write_text("", encoding="utf-8")
+        _write_devc(
+            case_dir / "p4c2_devc.csv",
+            "T_POINT",
+            "C",
+            [20.0, 21.0],
+        )
+        return (
+            GateResult(
+                status=GateStatus.PASS,
+                reason="Pinned FDS completed",
+                evidence={
+                    "directory": str(case_dir),
+                    "reported_versions": ["6.11.1"],
+                    "sha256": "a" * 64,
+                    "configuration_sha256": "b" * 64,
+                    "fds_sha256": "f" * 64,
+                },
+            ),
+            GateResult(status=GateStatus.INCONCLUSIVE),
+        )
+
+    monkeypatch.setattr(
+        "ifc_to_fds.fire.grid_sensitivity_execution.solver_gates",
+        fake_solver_gates,
+    )
+    evidence = execute_grid_sensitivity_study(
+        _scenario(),
+        _plan(),
+        [_observable()],
+        AuditConfig(),
+        tmp_path / "study",
+    )
+
+    assert evidence.execution_status == "INCOMPLETE"
+    assert evidence.analysis is None
+    assert all(case.solver_status == "PASS" for case in evidence.cases)
+    assert all(case.output_evidence_status == "FAIL" for case in evidence.cases)
+    assert all(case.result is None for case in evidence.cases)
+    assert all("input hash differs" in case.reason for case in evidence.cases)
+
 def test_execution_rejects_observable_quantity_drift_before_solver(tmp_path, monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail("Solver must not run when observable metadata is inconsistent")
@@ -346,6 +400,7 @@ def test_p4c2_executes_three_pinned_fds_cases_and_ingests_real_devc_output():
     assert evidence.analysis is not None
     assert evidence.analysis.acceptance_policy == "NOT_DEFINED"
     assert [case.solver_status for case in evidence.cases] == ["PASS", "PASS", "PASS"]
+    assert [case.output_evidence_status for case in evidence.cases] == ["PASS", "PASS", "PASS"]
     for case in evidence.cases:
         assert case.solver_version == "6.11.1"
         assert case.solver_sha256
