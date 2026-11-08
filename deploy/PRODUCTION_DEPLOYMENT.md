@@ -58,7 +58,7 @@ docker compose -f compose.production.yml up -d
 docker compose -f compose.production.yml ps
 ```
 
-App không publish cổng 8000 ra host. Chỉ reverse proxy mở 80/443; cổng 80 chuyển hướng vĩnh viễn sang HTTPS.
+App không publish cổng 8000 ra host. Host allowlist của app gồm public hostname cộng `127.0.0.1/localhost` để Docker healthcheck nội bộ hoạt động; NGINX luôn chuyển Host của lưu lượng ngoài thành public hostname. Chỉ reverse proxy mở 80/443; cổng 80 chuyển hướng vĩnh viễn sang HTTPS.
 
 ## Smoke nghiệm thu
 
