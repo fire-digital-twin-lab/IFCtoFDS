@@ -148,13 +148,24 @@ This ledger is the fail-closed registry for scientific and verification claims. 
 - **status**: PASS
 - **reviewer**: REPOSITORY_CI_PINNED_SOLVER_AND_DIFF_REVIEW
 
+## Claim `MESH-SENS-P4C1-001`
+- **statement**: The scoped P4c1 software contract resolves exactly three comparable COARSE/MEDIUM/FINE Local MeshPlans over one invariant pre-mesh scenario, enforces strictly increasing refinement ratios and decreasing local spacing, requires observable unit/location/time-window provenance, rejects non-mesh scenario or observable-metadata drift, and reports pairwise grid changes/trends without inventing a convergence threshold or numerical-uncertainty claim.
+- **intended_use**: Software/comparability prerequisite for executed P4c2 FDS grid-sensitivity studies and later reviewed solution-verification analysis.
+- **affected_modules**: `ifc_to_fds/fire/grid_sensitivity*.py`, public fire facade and `tests/test_grid_sensitivity.py`.
+- **evidence_level**: E2
+- **supporting_evidence**: PR #77 code candidate `f28f8846c17dfc4952f3862d6ef4dabf6c0a7cd2`; Source quality #42450794968 PASS with 945 passed, 15 deselected, 121 warnings and 87% coverage; artifact 13605856905 digest sha256:9553d7784611eb54ce27d09753da6c4e323424fa16574090b857a47f87aadeab. Conversion #42450791576 PASS across Linux/Windows Python 3.10–3.13, JavaScript, browser and pinned FDS; solver suite reports 10 passed, 950 deselected; solver artifact 13605681774 digest sha256:c9bca00d25733a1bcdf622becdde33ea1790f685c730395d123b9d2a5a896f33; browser artifact 13605426706 digest sha256:51d583523d47c4c70f4dd9301e98170c8c5412c655a7ec39ef33e1db4818d18e. Technical note: `docs/science/P4C1_GRID_SENSITIVITY_CONTRACT.md`.
+- **known_limitations**: P4c1 does not execute the three FDS cases as a study package, does not parse solver output/DEVC CSV, does not define a reviewed convergence acceptance policy, does not estimate observed order/GCI/Richardson/numerical uncertainty, and does not demonstrate application-specific mesh independence. Its result status is intentionally INCONCLUSIVE.
+- **validation_domain**: Current P4b-compatible Local MeshPlan fixtures and software-level observable/comparability contracts only.
+- **status**: PASS
+- **reviewer**: REPOSITORY_CI_AND_DIFF_REVIEW
+
 ## Claim `MESH-LOCAL-001`
 - **statement**: The simulation uses a reviewed local/refined MeshPlan that resolves the EV source, underbody clearance, battery thickness, and near-field plume with documented sensitivity.
 - **intended_use**: Numerical/solution verification for EV fire scenarios.
 - **affected_modules**: Future `MeshPlan`, mesh checker, scenario evidence and metrics.
 - **evidence_level**: E0
-- **supporting_evidence**: Scoped claims `MESH-INDICATOR-P4A-001` and `MESH-LOCAL-P4B1-001` verify indicator semantics, a typed non-overlapping Local MeshPlan, source-local burner spacing lookup, critical EV geometry ratios, WorkerRunner persistence and pinned-solver acceptance for the supported regression layout. They do not satisfy the documented-sensitivity portion of this broad claim.
-- **known_limitations**: Coarse/medium/fine grid sensitivity, convergence/solution-verification metrics, numerical uncertainty and reviewed application-specific mesh adequacy are still missing. Current P4b1 supports one explicit local refined patch and does not prove grid independence.
+- **supporting_evidence**: Scoped claims `MESH-INDICATOR-P4A-001`, `MESH-LOCAL-P4B1-001` and `MESH-SENS-P4C1-001` verify indicator semantics, a typed non-overlapping Local MeshPlan, fail-closed source-local spacing, critical EV geometry ratios, pinned-solver acceptance, and a software-level three-grid comparability/observable contract. They do not yet provide an executed coarse/medium/fine output study or a reviewed convergence/uncertainty decision.
+- **known_limitations**: P4c2 still needs to execute three comparable FDS cases, ingest real solver observables, and demonstrate the behavior of application-relevant quantities. Reviewed convergence criteria, numerical uncertainty and application-specific mesh adequacy are still missing; current evidence does not prove grid independence.
 - **validation_domain**: EV basement/garage simulation cases.
 - **status**: INCONCLUSIVE
 - **reviewer**: PENDING_INDEPENDENT_REVIEW

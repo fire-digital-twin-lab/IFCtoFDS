@@ -1,5 +1,34 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint P4c1 software grid-sensitivity contract — 08/11/2026
+
+**PR:** #77  
+**Code candidate đã nghiệm thu:** `f28f8846c17dfc4952f3862d6ef4dabf6c0a7cd2`  
+**Roadmap:** P4 tiếp tục; scoped `MESH-SENS-P4C1-001 = PASS / E2`; broad `MESH-LOCAL-001 = INCONCLUSIVE`.
+
+- Thêm typed `GridSensitivityPlanRequest`, `GridSensitivityCasePlan`, `ResolvedGridSensitivityPlan`, `GridSensitivityObservation`, `GridSensitivityCaseResult` và evidence models.
+- Study plan bắt buộc đúng ba case COARSE/MEDIUM/FINE; ratios >=2 và tăng strictly; local dx giảm strictly.
+- Ba Local MeshPlan phải resolve cùng effective local region; mỗi plan có canonical SHA-256 riêng.
+- `scenario_invariant_sha256` khóa exact pre-mesh scenario. Scenario thay đổi sau plan resolution bị reject.
+- Rendered case FDS được tạo từ cùng invariant scenario bằng structured P4b MESH replacement và phải có ba SHA-256 khác nhau.
+- Observable bắt buộc quantity/unit/aggregation và artifact SHA-256; location/time window được khóa khi có. Case có khác metadata/unit hoặc khác metric set bị reject.
+- Analysis chỉ báo signed/absolute pairwise delta, relative-to-finer khi denominator khác 0, monotonic/oscillatory/plateau trend và change-magnitude trend.
+- Finer value = 0 trả `relative_change = null`; không thêm epsilon ẩn.
+- Không hard-code 5%/10% hoặc universal convergence threshold; không tính GCI/Richardson/observed order khi chưa chứng minh applicability/asymptotic regime và chưa có reviewed policy.
+- Study evidence cố định `status=INCONCLUSIVE`, `acceptance_policy=NOT_DEFINED`, `numerical_uncertainty_status=NOT_ESTIMATED`.
+- Source quality #42450794968: **SUCCESS**, `945 passed, 15 deselected, 121 warnings`, coverage **87%**; artifact `13605856905`, digest `sha256:9553d7784611eb54ce27d09753da6c4e323424fa16574090b857a47f87aadeab`.
+- Conversion #42450791576: **SUCCESS** cho Linux/Windows Python 3.10–3.13, JavaScript, browser và pinned FDS.
+- Solver suite: **10 passed, 950 deselected**; solver artifact `13605681774`, digest `sha256:c9bca00d25733a1bcdf622becdde33ea1790f685c730395d123b9d2a5a896f33`.
+- Browser artifact `13605426706`, digest `sha256:51d583523d47c4c70f4dd9301e98170c8c5412c655a7ec39ef33e1db4818d18e`.
+- Technical note: `docs/science/P4C1_GRID_SENSITIVITY_CONTRACT.md`.
+
+**Giới hạn khoa học:** P4c1 mới xác minh study-plan/comparability/analysis software contract. Chưa chạy ba FDS cases như một evidence package, chưa parse real solver observables, chưa có reviewed convergence policy hoặc numerical-uncertainty estimate. Pairwise changes/trends không phải mesh-independence proof.
+
+**Scientific verdict:** scoped `MESH-SENS-P4C1-001 = PASS / E2`; broad `MESH-LOCAL-001 = INCONCLUSIVE`; overall scientific/application verdict `INCONCLUSIVE`.  
+**Release verdict:** `NOT_PRODUCTION_READY`. Không cấp `SIMULATION_VERIFIED`.
+
+---
+
 ## Checkpoint P4b1 Local MeshPlan + source-local resolution evidence — 08/11/2026
 
 **PR:** #76  
