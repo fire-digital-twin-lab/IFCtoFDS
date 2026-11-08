@@ -1,6 +1,12 @@
 """Public facade for P4c grid-sensitivity study contracts."""
 
 from .grid_sensitivity_analysis import analyze_grid_sensitivity
+from .grid_sensitivity_execution import execute_grid_sensitivity_study
+from .grid_sensitivity_execution_models import (
+    ExecutedGridSensitivityStudyEvidence,
+    GridSensitivityCaseExecutionEvidence,
+    GridSensitivityObservableRequest,
+)
 from .grid_sensitivity_models import (
     GridSensitivityCasePlan,
     GridSensitivityCaseResult,
@@ -16,6 +22,9 @@ from .grid_sensitivity_plan import (
 )
 
 __all__ = [
+    "ExecutedGridSensitivityStudyEvidence",
+    "GridSensitivityCaseExecutionEvidence",
+    "GridSensitivityObservableRequest",
     "GridSensitivityCasePlan",
     "GridSensitivityCaseResult",
     "GridSensitivityObservation",
@@ -24,6 +33,7 @@ __all__ = [
     "MetricSensitivityEvidence",
     "ResolvedGridSensitivityPlan",
     "analyze_grid_sensitivity",
+    "execute_grid_sensitivity_study",
     "render_grid_sensitivity_cases",
     "resolve_grid_sensitivity_plan",
 ]
