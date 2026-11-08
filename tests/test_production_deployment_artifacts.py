@@ -10,6 +10,7 @@ def test_compose_requires_explicit_public_host_api_key_secret_and_tls():
     compose = (ROOT / "compose.production.yml").read_text(encoding="utf-8")
     assert "IFCFDS_ENV: production" in compose
     assert "IFCFDS_PUBLIC_HOST:?set IFCFDS_PUBLIC_HOST" in compose
+    assert "IFCFDS_PUBLIC_HOST:?set IFCFDS_PUBLIC_HOST},127.0.0.1,localhost" in compose
     assert "IFCFDS_API_KEY_FILE:?set IFCFDS_API_KEY_FILE" in compose
     assert "IFCFDS_API_KEY:" not in compose
     assert "/run/secrets/api_key" in compose
