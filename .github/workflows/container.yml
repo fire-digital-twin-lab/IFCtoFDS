@@ -22,7 +22,8 @@ jobs:
     env:
       IFCFDS_PUBLIC_HOST: ifctofds.example.org
       IFCFDS_API_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef
-      IFCFDS_API_KEY_FILE: /tmp/ifctofds-api-key
+      IFCFDS_API_KEY_FILE: /tmp/ifctofds-secrets/api-key
+      IFCFDS_SMOKE_API_KEY_FILE: /tmp/ifctofds-smoke-api-key
       IFCFDS_TLS_CERT_DIR: /tmp/ifctofds-tls
       IFCFDS_IMAGE_TAG: ci
     steps:
@@ -30,7 +31,15 @@ jobs:
 
       - name: Prepare non-secret CI placeholders
         run: |
-          printf '%s' "$IFCFDS_API_KEY" > "$IFCFDS_API_KEY_FILE"
+          # File-backed Compose secrets giữ nguyên UID/GID/mode của Linux host.
+          # Không dùng file world-readable chỉ để container chạy được.
+          sudo install -d -o root -g root -m 0755 /tmp/ifctofds-secrets
+          printf '%s' "$IFCFDS_API_KEY" | sudo tee "$IFCFDS_API_KEY_FILE" >/dev/null
+          sudo chown root:10001 "$IFCFDS_API_KEY_FILE"
+          sudo chmod 0640 "$IFCFDS_API_KEY_FILE"
+          # Bản sao test-only cho smoke CLI chạy với quyền runner, không mount vào app.
+          printf '%s' "$IFCFDS_API_KEY" > "$IFCFDS_SMOKE_API_KEY_FILE"
+          chmod 0600 "$IFCFDS_SMOKE_API_KEY_FILE"
           mkdir -p "$IFCFDS_TLS_CERT_DIR"
 
       - name: Validate compose expansion
@@ -38,6 +47,36 @@ jobs:
 
       - name: Build runtime image
         run: docker build --pull --tag ifctofds:ci .
+
+      - name: Validate file-backed secret ownership and container isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo python scripts/production-secret-preflight.py --file "$IFCFDS_API_KEY_FILE"
+
+          # App UID/GID 10001 phải đọc được file root:10001, 0640.
+          docker compose -f compose.production.yml run --rm --no-deps \
+            --entrypoint python app -c \
+            'import os; from pathlib import Path; assert (os.geteuid(), os.getegid()) == (10001, 10001); assert len(Path("/run/secrets/api_key").read_text(encoding="utf-8").strip()) >= 32'
+
+          # UID/GID không được cấp quyền không được đọc cùng secret.
+          docker compose -f compose.production.yml run --rm --no-deps \
+            --user 10002:10002 --entrypoint python app -c \
+            'import os; assert not os.access("/run/secrets/api_key", os.R_OK)'
+
+          # File root:root 0600 phải thất bại khi chạy dưới UID 10001.
+          printf '%s' "$IFCFDS_API_KEY" | sudo tee /tmp/ifctofds-secrets/unreadable >/dev/null
+          sudo chown root:root /tmp/ifctofds-secrets/unreadable
+          sudo chmod 0600 /tmp/ifctofds-secrets/unreadable
+          IFCFDS_API_KEY_FILE=/tmp/ifctofds-secrets/unreadable \
+            docker compose -f compose.production.yml run --rm --no-deps \
+              --entrypoint python app -c \
+              'import os; assert not os.access("/run/secrets/api_key", os.R_OK)'
+          if sudo python scripts/production-secret-preflight.py \
+            --file /tmp/ifctofds-secrets/unreadable; then
+            echo "Root-only file unexpectedly passed secret metadata preflight"
+            exit 1
+          fi
 
       - name: Production startup must fail without API key
         shell: bash
@@ -190,7 +229,45 @@ jobs:
           echo "127.0.0.1 ifctofds.example.org" | sudo tee -a /etc/hosts
           python scripts/production-smoke.py \
             --base-url https://ifctofds.example.org \
-            --api-key-file "$IFCFDS_API_KEY_FILE"
+            --api-key-file "$IFCFDS_SMOKE_API_KEY_FILE"
+
+      - name: Verify secret rotation revokes old key after container restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fixture giả, chỉ dùng trong CI; không in key ra log.
+          rotated_key=abcdef0123456789abcdef0123456789abcdef0123456789
+          printf '%s' "$rotated_key" | sudo tee "$IFCFDS_API_KEY_FILE" >/dev/null
+          sudo chown root:10001 "$IFCFDS_API_KEY_FILE"
+          sudo chmod 0640 "$IFCFDS_API_KEY_FILE"
+          sudo python scripts/production-secret-preflight.py --file "$IFCFDS_API_KEY_FILE"
+
+          # Key được nạp lúc app startup, rotation yêu cầu recreate container.
+          docker compose -f compose.production.yml up -d --force-recreate --no-build
+
+          # Sau recreate: key mới hợp lệ, key cũ phải HTTP 401.
+          ready=0
+          for attempt in {1..30}; do
+            code="$(curl --silent --noproxy '*' --max-time 5 \
+              --cacert "$IFCFDS_TLS_CERT_DIR/fullchain.pem" \
+              --resolve ifctofds.example.org:443:127.0.0.1 \
+              -H "X-API-Key: $rotated_key" \
+              --output /dev/null --write-out '%{http_code}' \
+              https://ifctofds.example.org/api/scheduler-health || true)"
+            if [ "$code" = "200" ]; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = "1"
+          old_key_status="$(curl --silent --noproxy '*' --max-time 5 \
+            --cacert "$IFCFDS_TLS_CERT_DIR/fullchain.pem" \
+            --resolve ifctofds.example.org:443:127.0.0.1 \
+            -H "X-API-Key: $IFCFDS_API_KEY" \
+            --output /dev/null --write-out '%{http_code}' \
+            https://ifctofds.example.org/api/scheduler-health)"
+          test "$old_key_status" = "401"
 
       - name: Container logs on failure
         if: failure()

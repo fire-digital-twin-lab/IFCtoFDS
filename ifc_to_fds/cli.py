@@ -94,15 +94,30 @@ def main(argv=None):
             loopback_hosts = {"127.0.0.1", "localhost", "::1", "testserver"}
             is_public_host = args.host not in loopback_hosts
             api_key = args.api_key
-            if not api_key and getattr(args, "api_key_file", None):
-                key_path = Path(args.api_key_file)
-                if not key_path.is_file():
+            if args.api_key_file:
+                # Nếu operator chỉ định file, không âm thầm quay về key môi trường.
+                # Tránh khởi động bằng credential cũ khi file thiếu, rỗng hoặc sai quyền.
+                if api_key:
                     sys.stderr.write(
-                        f"SECURITY ERROR: Specified --api-key-file does not exist or is not a file: {args.api_key_file}\n"
+                        "SECURITY ERROR: Choose --api-key-file or --api-key, not both\n"
                     )
                     return 1
-                api_key = key_path.read_text(encoding="utf-8").strip()
-            if not api_key:
+                key_path = Path(args.api_key_file)
+                try:
+                    if not key_path.is_file():
+                        sys.stderr.write(
+                            "SECURITY ERROR: API key file is missing or not a regular file\n"
+                        )
+                        return 1
+                    api_key = key_path.read_text(encoding="utf-8").strip()
+                except (OSError, UnicodeError):
+                    # Không in secret hoặc traceback/đường dẫn nhạy cảm vào log.
+                    sys.stderr.write("SECURITY ERROR: Cannot read API key file\n")
+                    return 1
+                if not api_key:
+                    sys.stderr.write("SECURITY ERROR: API key file is empty\n")
+                    return 1
+            elif not api_key:
                 api_key = os.getenv("IFCFDS_API_KEY")
 
             if is_public_host and not api_key:

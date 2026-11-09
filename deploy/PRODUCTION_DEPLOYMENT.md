@@ -27,7 +27,7 @@ Container ứng dụng chạy UID/GID 10001, root filesystem read-only, chỉ jo
    - `fullchain.pem`: owner `root:root`, mode `0644`;
    - `privkey.pem`: owner `root:root`, mode `0600`.
    Proxy đã drop `DAC_OVERRIDE`, vì vậy operator phải cấu hình ownership/mode đúng thay vì cấp thêm capability chỉ để đọc private key.
-4. Tạo API key ngẫu nhiên tối thiểu 32 ký tự trong file chỉ operator đọc được; không commit vào Git và không truyền secret qua Compose environment.
+4. Tạo API key ngẫu nhiên tối thiểu 32 ký tự trong file-backed Compose secret đúng policy Linux host: regular file `root:10001`, mode `0640`, thư mục cha không cho group/others ghi. Không dùng `0600 root:root` vì ứng dụng chạy UID/GID `10001` sẽ không đọc được; không dùng `0644` vì mọi user trong container có thể đọc. Không commit secret hoặc đưa nội dung khóa lên argv/Compose environment.
 5. Có dung lượng persistent volume đủ cho IFC, SQLite và artifacts.
 6. Chọn release SHA đã qua CI. Không deploy trực tiếp nhánh feature.
 7. Với profile yêu cầu FDS solver evidence: image hiện tại **không đóng gói FDS Linux**. Chỉ bật solver khi operator đã cung cấp executable FDS 6.11.1 tương thích và xác minh version/checksum theo contract dự án. Nếu chưa có, giữ simulation verification fail-closed.
@@ -43,7 +43,24 @@ export IFCFDS_TLS_CERT_DIR=/srv/ifctofds/tls
 export IFCFDS_IMAGE_TAG=release-sha
 ```
 
-Compose mount `IFCFDS_API_KEY_FILE` thành `/run/secrets/api_key`; CLI đọc secret file trước khi import server. Không lưu secret trực tiếp trong `.env`, command line, image layer hoặc repository.
+Compose mount `IFCFDS_API_KEY_FILE` thành `/run/secrets/api_key`; CLI đọc secret file trước khi import server. Docker Compose secret có nguồn từ file là **bind mount**; khai báo `uid/gid/mode` tại Compose **không tự remap** owner/mode của host trên cơ chế này. Runtime hiện chỉ được nghiệm thu với Linux Docker Engine rootful không cấu hình remap UID/GID; nếu dùng rootless/userns phải đánh giá lại UID mapping và thử quyền đọc trong container thực tế.
+
+### Tạo và kiểm tra API key trên Linux host
+
+Operator cần `sudo` và quyền quản trị Docker. Ví dụ sử dụng thư mục do root kiểm soát:
+
+```bash
+sudo install -d -o root -g root -m 0755 /srv/ifctofds/secrets
+openssl rand -hex 32 | sudo tee /srv/ifctofds/secrets/api-key >/dev/null
+sudo chown root:10001 /srv/ifctofds/secrets/api-key
+sudo chmod 0640 /srv/ifctofds/secrets/api-key
+sudo python scripts/production-secret-preflight.py \
+  --file /srv/ifctofds/secrets/api-key
+```
+
+Preflight chỉ kiểm tra metadata owner/group/mode và đường dẫn; **không đọc hoặc in nội dung khóa**. Ứng dụng phải kiểm tra chính nội dung và độ dài khi khởi động. Phải chứng minh Docker secret được UID/GID `10001` đọc và user khác bị từ chối; CI có positive/negative mount tests, còn staging phải chạy lại với host thực. Một host có user/group khác dùng GID `10001` cần đánh giá rủi ro chia sẻ group trước khi dùng policy này.
+
+Khi `--api-key-file` đã được chỉ định, file thiếu, không đọc được hoặc rỗng phải làm startup thất bại. CLI không được âm thầm fallback sang `IFCFDS_API_KEY` từ môi trường. Không đưa key lên command line, debug logs, `.env` hoặc image layer.
 
 ## Kiểm tra cấu hình trước khi chạy
 
@@ -64,12 +81,23 @@ App không publish cổng 8000 ra host. Host allowlist của app gồm public ho
 ## Smoke nghiệm thu
 
 ```bash
-python scripts/production-smoke.py \
+sudo python scripts/production-smoke.py \
   --base-url "https://$IFCFDS_PUBLIC_HOST" \
   --api-key-file "$IFCFDS_API_KEY_FILE"
 ```
 
-Smoke đọc API key từ file, không nhận secret qua command line; không tự theo redirect, đặc biệt redirect rời HTTPS. Endpoint Workbench trả HTML, không phải JSON.
+Smoke đọc API key từ file, không nhận secret qua command line; không tự theo redirect, đặc biệt redirect rời HTTPS. Endpoint Workbench trả HTML, không phải JSON. Ví dụ dùng `sudo` vì file host `root:10001/0640` không cho user vận hành thông thường đọc nội dung; hạn chế lệnh `sudo` vào nguồn đã kiểm soát, không dùng `chmod 0644` để làm smoke chạy được.
+
+### Xoay vòng API key
+
+1. Chọn cửa sổ bảo trì hoặc phương án chuyển đổi được phê duyệt, vì hệ thống dùng **một shared key** và không có hỗ trợ zero-downtime key overlap.
+2. Sinh key mới bằng nguồn ngẫu nhiên an toàn, ghi đè file host với owner `root:10001` mode `0640`, chạy `production-secret-preflight.py`. Không ghi key ra terminal hoặc logs.
+3. Tái tạo ứng dụng để đọc key mới; thay file trên host không tự đổi key đã nạp trong process:
+   ```bash
+   docker compose -f compose.production.yml up -d --force-recreate --no-build
+   ```
+4. Chạy smoke với key mới, xác nhận key cũ nhận HTTP `401`. Thu hồi bản sao key cũ đã được cấp, lưu biên bản rotation và thời gian gián đoạn. Nếu startup lỗi, không mở anonymous API hoặc nới file permissions; rollback có kiểm soát theo runbook.
+
 
 Smoke chỉ kiểm tra:
 - TLS endpoint có thể truy cập bằng client verification mặc định;
