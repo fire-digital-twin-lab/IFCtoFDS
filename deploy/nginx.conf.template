@@ -1,10 +1,26 @@
 limit_req_zone $binary_remote_addr zone=ifctofds_api:10m rate=10r/s;
 
+# Chặn Host không nằm trong cấu hình; không dùng $host để tạo URL chuyển hướng.
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    return 444;
+}
+
 server {
     listen 80;
     listen [::]:80;
     server_name ${IFCFDS_PUBLIC_HOST};
-    return 308 https://$host$request_uri;
+    return 308 https://${IFCFDS_PUBLIC_HOST}$request_uri;
+}
+
+# Từ chối TLS không có SNI hợp lệ; không dùng chứng chỉ của hostname public cho Host lạ.
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    ssl_reject_handshake on;
+    return 421;
 }
 
 server {

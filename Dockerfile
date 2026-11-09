@@ -1,6 +1,21 @@
-FROM python:3.12.16-slim-bookworm
+FROM python:3.12.16-slim-trixie@sha256:962f801b08c870ac2a51b72bf02dae38c9a4162319e5e882ec244e198188d54e
 
 # uv 0.13.7 is pinned by immutable OCI digest; uv.lock pins Python dependencies.
+# Patches for scanner-confirmed Debian Trixie OS CVEs.
+# Exact package versions are intentional: fail closed if a secured repository
+# no longer provides them rather than silently rebuilding with vulnerable ones.
+# apt/libapt-pkg7.0: CVE-2026-109518; zlib1g: CVE-2026-76844/85091.
+RUN set -eu; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      apt=3.0.4 \
+      libapt-pkg7.0=3.0.4 \
+      'zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1'; \
+    dpkg-query -W -f='${Version}\n' apt | grep -Fx '3.0.4'; \
+    dpkg-query -W -f='${Version}\n' libapt-pkg7.0 | grep -Fx '3.0.4'; \
+    dpkg-query -W -f='${Version}\n' zlib1g | grep -Fx '1:1.3.dfsg+really1.3.1-1+deb13u1'; \
+    rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff /uv /uvx /bin/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

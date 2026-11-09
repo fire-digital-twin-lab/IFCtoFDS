@@ -18,25 +18,52 @@
 4. Kiểm tra quyền chỉ đọc/ghi phù hợp, mã hóa vùng lưu trữ và chính sách bảo mật dữ liệu công trình. Công cụ **không tự mã hóa hoặc ký số** backup.
 5. Chọn thư mục backup chưa tồn tại, không nằm trong job store, không có symbolic link chuyển hướng.
 
-## Backup
+## Backup/restore đúng Compose named volume (Linux Docker Engine)
+
+**Không dùng** đường dẫn host giả định `/srv/ifctofds/jobs`. Compose hiện gắn named volume mặc định `ifctofds_jobs` vào `/var/lib/ifctofds/jobs` **bên trong container**. Tên volume có thể chỉ định bằng `IFCFDS_JOB_VOLUME_NAME` sau khi có phê duyệt đổi root; không đặt biến này trỏ tới volume production khác khi đang thử nghiệm.
+
+Chỉ chạy trong bảo trì có kiểm soát; không thực thi lệnh `down --volumes` hoặc `docker volume rm` với volume thực. Công cụ `scripts/production-volume-maintenance.sh` kiểm tra nhãn project/volume, ngăn backup nếu còn container đang dùng volume, và không pull image bất ngờ.
+
+Chuẩn bị thư mục host chỉ UID 10001 đọc/ghi (ví dụ mới, chưa có dữ liệu nhạy cảm); dùng nguồn ảnh build đã nghiệm thu:
 
 ```bash
-python -m ifc_to_fds.operations.offline_backup backup \
-  --job-root /srv/ifctofds/jobs \
-  --destination /srv/backups/ifctofds-2026-11-05
+sudo install -d -o 10001 -g 10001 -m 0700 /srv/ifctofds/backups
+export IFCFDS_JOB_VOLUME_NAME=ifctofds_jobs
+export IFCFDS_RELEASE_IMAGE=ifctofds:release-sha
+docker image inspect "$IFCFDS_RELEASE_IMAGE" >/dev/null
 ```
 
-Đầu ra hợp lệ phải có `manifest.json` và `jobs.sqlite3`. Nếu công cụ dừng giữa chừng, backup có thể thiếu `manifest.json`, phải coi là **INCOMPLETE**, không đưa vào hệ thống phục hồi.
-
-## Verify và restore vào thư mục cô lập
+Trước khi backup, dừng **sạch** API/worker/proxy qua quy trình bảo trì đã duyệt. `docker compose stop` không thay thế việc xác minh job đã hoàn thành; công cụ backup còn từ chối SQLite có job `QUEUED`/`RUNNING`. Chỉ sau khi kiểm tra trạng thái và chấp thuận downtime:
 
 ```bash
-python -m ifc_to_fds.operations.offline_backup restore \
-  --source /srv/backups/ifctofds-2026-11-05 \
-  --destination /srv/ifctofds-restore-test/jobs
+docker compose -f compose.production.yml stop proxy app
+bash scripts/production-volume-maintenance.sh backup \
+  "$IFCFDS_RELEASE_IMAGE" /srv/ifctofds/backups backup_20261109_01
 ```
 
-Đích phải chưa tồn tại. Công cụ không có `--force`, không xóa dữ liệu và từ chối checksum không khớp, thiếu tệp/thư mục (kể cả thư mục rỗng), thư mục không được manifest khai báo, symlink, đường dẫn traversal, SQLite integrity lỗi hoặc metadata thư mục không hợp lệ. Manifest v1 cũ không còn được chấp nhận để tránh bỏ sót các thư mục rỗng.
+Đầu ra hợp lệ phải có `manifest.json`, `jobs.sqlite3`, các artifact và `status=OFFLINE_SNAPSHOT_ONLY`. Nếu backup thiếu `manifest.json`, coi là **INCOMPLETE** và không dùng phục hồi. Backup phải được sao chép ra vùng lưu trữ ngoài host, mã hóa và phân quyền theo chính sách operator đã ký duyệt; công cụ không tự làm những bước đó.
+
+## Verify và restore vào named volume mới, cô lập
+
+Phục hồi phải dùng **volume mới chưa tồn tại**, có tiền tố riêng, không được chỉ định `ifctofds_jobs` làm đích:
+
+```bash
+bash scripts/production-volume-maintenance.sh restore \
+  "$IFCFDS_RELEASE_IMAGE" /srv/ifctofds/backups backup_20261109_01 \
+  ifctofds_jobs_restore_20261109_01
+```
+
+Script tạo volume mới, mount vào đúng `/var/lib/ifctofds/jobs`, chạy restore với `--allow-empty-existing` (chỉ cho phép mount root **đang rỗng**), kiểm tra đầy đủ SHA-256/SQLite integrity và marker `.restore-verified.json` được ghi sau cùng. Restore từ manifest v1, hỏng hash, symlink/traversal hoặc dữ liệu active bị từ chối; giữ nguyên source và không ghi đè volume đã tồn tại.
+
+Nếu restore dừng giữa chừng, volume mới có thể còn dữ liệu **INCOMPLETE** và không có marker; **không** gắn volume đó vào app. Không tự xóa volume lỗi trước khi lưu evidence điều tra. Marker/checksum chứng minh tính toàn vẹn theo contract, không phải chứng cứ số đã ký hoặc CFD validation.
+
+Sau restore, kiểm tra lại metadata `jobs.directory` trỏ về `/var/lib/ifctofds/jobs/job-*`, so sánh job count, artifact SHA-256 và manifest. Chỉ nghiệm thu G12 sau khi khởi chạy trong staging cô lập, test đọc/download được evidence, drill failure/restart và ghi RPO/RTO.
+
+### Chuyển volume trên staging (sau phê duyệt riêng)
+
+Compose chấp nhận `IFCFDS_JOB_VOLUME_NAME` để chọn tên volume; môi trường đang hoạt động **không** tự đổi giá trị. Không chuyển tên volume production chỉ dựa vào PASS của CI. Trên staging cô lập, xác minh volume mới trước, sau đó cấu hình lại Compose bằng tên volume phục hồi có chủ đích và khởi động có kiểm soát. Giữ volume gốc không bị xóa để rollback. Không dùng `docker compose down --volumes` trong runbook staging/production.
+
+Đích mới trong Python API mặc định vẫn phải **chưa tồn tại**; `--allow-empty-existing` là cờ opt-in hẹp để khôi phục trực tiếp vào root của Docker named volume mới, và vẫn từ chối mọi đích có tệp, thư mục hoặc symlink.
 
 Sau khi restore: xác minh `jobs.sqlite3`, các bản ghi job đã kết thúc và artifact/evidence, chạy ứng dụng trong môi trường cô lập bằng cấu hình riêng, kiểm tra restore khi API/worker không dùng root production. Không đổi DNS hoặc root đang phục vụ lưu lượng nếu chưa phê duyệt chuyển đổi.
 

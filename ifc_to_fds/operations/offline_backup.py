@@ -28,9 +28,18 @@ def _hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _sqlite_integrity(path: Path) -> None:
+def _sqlite_integrity(path: Path, *, sealed_snapshot: bool = False) -> None:
+    """Kiểm tra SQLite; snapshot đã niêm phong được đọc immutable, không ghi SHM/WAL."""
     try:
-        with closing(sqlite3.connect(str(path))) as connection:
+        if sealed_snapshot:
+            # Sau khi SHA-256 từng file đã được kiểm tra theo manifest offline,
+            # SQLite không được tạo -wal/-shm trên backup bind mount read-only.
+            # Cấm dùng immutable với DB live: có thể bỏ qua WAL mới commit.
+            location = path.resolve(strict=True).as_uri() + "?mode=ro&immutable=1"
+            connection = sqlite3.connect(location, uri=True)
+        else:
+            connection = sqlite3.connect(str(path))
+        with closing(connection) as connection:
             results = [row[0] for row in connection.execute("PRAGMA integrity_check")]
             if results != ["ok"]:
                 raise OfflineBackupError("SQLite integrity_check failed")
@@ -241,21 +250,41 @@ def _check_backup_files(source: Path, manifest: dict) -> list[dict]:
             raise OfflineBackupError("Unexpected unmanifested backup file")
         if path.is_dir() and relative not in seen_dirs:
             raise OfflineBackupError("Unexpected unmanifested backup directory")
-    _sqlite_integrity(source / "jobs.sqlite3")
+    # Backup đã hoàn chỉnh, hash-verified và có thể được mount read-only.
+    _sqlite_integrity(source / "jobs.sqlite3", sealed_snapshot=True)
     return files
 
 
-def restore_offline_backup(source_dir: Path | str, target_root: Path | str) -> dict:
-    """Verify all checksums before restoring to a NEW, nonexistent directory."""
+def restore_offline_backup(
+    source_dir: Path | str,
+    target_root: Path | str,
+    *,
+    allow_empty_existing: bool = False,
+) -> dict:
+    """Khôi phục vào thư mục mới; chỉ cho phép mount root rỗng khi opt-in.
+
+    Dùng với *volume mới* khi target là Docker mount point tồn tại nhưng rỗng.
+    Không dùng tùy chọn opt-in với volume production hoặc thư mục có dữ liệu.
+    """
     supplied = Path(source_dir)
     if supplied.is_symlink():
         raise OfflineBackupError("Backup root cannot be a symbolic link")
     source = supplied.resolve(strict=True)
-    target = Path(target_root).resolve()
+    supplied_target = Path(target_root)
+    if supplied_target.is_symlink():
+        raise OfflineBackupError("Restore destination cannot be a symbolic link")
+    target = supplied_target.resolve()
     if not source.is_dir() or not (source / "manifest.json").is_file():
         raise OfflineBackupError("Missing backup manifest")
-    if target.exists() or target == source or source in target.parents:
-        raise OfflineBackupError("Restore destination must not exist or be inside backup")
+    if target == source or source in target.parents:
+        raise OfflineBackupError("Restore destination must not be inside backup")
+    target_existed = target.exists()
+    if target_existed and (
+        not allow_empty_existing or not target.is_dir() or any(target.iterdir())
+    ):
+        raise OfflineBackupError(
+            "Restore destination must not exist unless explicitly allowed and empty"
+        )
     manifest_file = source / "manifest.json"
     _require_regular_no_links(manifest_file, source)
     try:
@@ -263,7 +292,12 @@ def restore_offline_backup(source_dir: Path | str, target_root: Path | str) -> d
     except (OSError, ValueError) as exc:
         raise OfflineBackupError("Invalid backup manifest") from exc
     files = _check_backup_files(source, manifest)
-    target.mkdir(parents=True, exist_ok=False)
+    if target_existed:
+        # Kiểm tra lại sát bước ghi; volume đích phải đang rỗng và cô lập.
+        if supplied_target.is_symlink() or not target.is_dir() or any(target.iterdir()):
+            raise OfflineBackupError("Restore destination is no longer empty")
+    else:
+        target.mkdir(parents=True, exist_ok=False)
     for raw in manifest["directories"]:
         rel = _validated_directory(raw)
         target.joinpath(*rel.parts).mkdir(parents=True, exist_ok=False)
@@ -299,6 +333,23 @@ def restore_offline_backup(source_dir: Path | str, target_root: Path | str) -> d
             )
         connection.commit()
     _sqlite_integrity(db)
+    # Marker xuất bản sau cùng, chỉ báo restore đã chạy hết và SQLite còn nguyên vẹn.
+    # Checksum không phải chữ ký nguồn và không chứng minh kết quả khoa học.
+    marker = target / ".restore-verified.json"
+    with marker.open("x", encoding="utf-8") as stream:
+        json.dump(
+            {
+                "schema": 1,
+                "status": "OFFLINE_RESTORE_VERIFIED",
+                "source_manifest_sha256": _hash_file(manifest_file),
+                "job_count": len(rows),
+            },
+            stream,
+            indent=2,
+        )
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
     return {"job_count": len(rows), "restored_to": str(target), "verified": True}
 
 
@@ -311,12 +362,21 @@ def main(argv: list[str] | None = None) -> int:
     restore = actions.add_parser("restore", help="Restore to a NEW empty location")
     restore.add_argument("--source", required=True)
     restore.add_argument("--destination", required=True)
+    restore.add_argument(
+        "--allow-empty-existing",
+        action="store_true",
+        help="Chỉ cho phép thư mục đích đã tồn tại nếu thực sự rỗng (Docker volume mới)",
+    )
     args = parser.parse_args(argv)
     try:
         if args.action == "backup":
             result = create_offline_backup(args.job_root, args.destination)
         else:
-            result = restore_offline_backup(args.source, args.destination)
+            result = restore_offline_backup(
+                args.source,
+                args.destination,
+                allow_empty_existing=args.allow_empty_existing,
+            )
     except (OfflineBackupError, OSError, sqlite3.Error) as exc:
         print(f"Backup/restore rejected: {exc}", file=sys.stderr)
         return 2
