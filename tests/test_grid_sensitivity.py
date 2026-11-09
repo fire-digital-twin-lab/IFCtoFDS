@@ -258,3 +258,76 @@ def test_analysis_rejects_observable_metadata_drift():
     )
     with pytest.raises(ValueError, match="metadata differs"):
         analyze_grid_sensitivity(cases)
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        ((0.0, 1e-200, 2e-200), "MONOTONIC"),
+        ((0.0, -1e-200, -2e-200), "MONOTONIC"),
+        ((0.0, 2e-200, 1e-200), "OSCILLATORY"),
+        ((0.0, -2e-200, -1e-200), "OSCILLATORY"),
+        ((0.0, 1e-200, 1e-200), "PLATEAU_OR_UNRESOLVED"),
+        ((0.0, 0.0, 0.0), "FLAT"),
+    ],
+)
+def test_analysis_classifies_tiny_finite_changes_without_product_underflow(
+    values: tuple[float, float, float], expected: str
+):
+    """Dấu của hai sai phân không được phụ thuộc tích có thể underflow."""
+    cases = [
+        _case("COARSE", 2, 0.5, values[0], fds_hash="b" * 64),
+        _case("MEDIUM", 3, 1.0 / 3.0, values[1], fds_hash="c" * 64),
+        _case("FINE", 4, 0.25, values[2], fds_hash="d" * 64),
+    ]
+
+    evidence = analyze_grid_sensitivity(cases)
+
+    assert evidence.status == "INCONCLUSIVE"
+    assert evidence.metrics[0].trend == expected
+    assert evidence.acceptance_policy == "NOT_DEFINED"
+
+
+@pytest.mark.parametrize(
+    "values",
+    [(0.0, 1.0, 2.0), (0.0, 2.0, 1.0), (0.0, -1.0, -2.0)],
+)
+def test_analysis_trend_is_invariant_under_positive_unit_scale(values):
+    """Thay đơn vị bằng scale dương không được đổi xu hướng vật lý."""
+    def analyze(sample):
+        return analyze_grid_sensitivity([
+            _case("COARSE", 2, 0.5, sample[0], fds_hash="b" * 64),
+            _case("MEDIUM", 3, 1.0 / 3.0, sample[1], fds_hash="c" * 64),
+            _case("FINE", 4, 0.25, sample[2], fds_hash="d" * 64),
+        ]).metrics[0]
+
+    reference = analyze(values)
+    tiny = analyze(tuple(value * 1e-200 for value in values))
+
+    assert tiny.trend == reference.trend
+    assert tiny.change_trend == reference.change_trend
+    assert tiny.coarse_to_medium_relative_to_finer == pytest.approx(
+        reference.coarse_to_medium_relative_to_finer
+    ) if reference.coarse_to_medium_relative_to_finer is not None else (
+        tiny.coarse_to_medium_relative_to_finer is None
+    )
+
+
+def test_analysis_rejects_overflowed_deltas_instead_of_emitting_evidence():
+    cases = [
+        _case("COARSE", 2, 0.5, -1e308, fds_hash="b" * 64),
+        _case("MEDIUM", 3, 1.0 / 3.0, 1e308, fds_hash="c" * 64),
+        _case("FINE", 4, 0.25, 1.1e308, fds_hash="d" * 64),
+    ]
+    with pytest.raises(ValueError, match="non-finite grid difference"):
+        analyze_grid_sensitivity(cases)
+
+
+def test_analysis_rejects_nonrepresentable_relative_change():
+    cases = [
+        _case("COARSE", 2, 0.5, 1e300, fds_hash="b" * 64),
+        _case("MEDIUM", 3, 1.0 / 3.0, 1e-300, fds_hash="c" * 64),
+        _case("FINE", 4, 0.25, 2e-300, fds_hash="d" * 64),
+    ]
+    with pytest.raises(ValueError, match="non-finite relative change"):
+        analyze_grid_sensitivity(cases)
