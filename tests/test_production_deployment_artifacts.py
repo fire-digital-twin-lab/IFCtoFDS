@@ -123,3 +123,5 @@ def test_production_ci_runs_real_ifc_e2e_and_restart_without_deleting_jobs():
     assert "down --volumes" not in workflow.split(
         "Verify real IFC conversion and persisted artifacts through HTTPS", 1
     )[1].split("Verify secret rotation revokes old key", 1)[0]
+    assert "evidence[\"artifact_sha256\"][kind]" in workflow
+    assert "marker[\"job_count\"] == 2" in workflow
