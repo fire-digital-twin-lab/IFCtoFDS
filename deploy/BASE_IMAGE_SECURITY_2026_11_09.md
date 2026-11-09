@@ -28,6 +28,22 @@ Digest là **OCI multi-platform index** được công bố cho tag này trên [
 
 Không thay Python minor version, UV binary digest, `uv.lock`, user UID/GID 10001, entrypoint, Volume, TLS, API contract hoặc FDS solver policy. Đây **không phải** sự kiện phê duyệt scientific claim.
 
+## 2.1. Kết quả thực nghiệm Trivy trên base Trixie (CI)
+
+**Run:** [Release image security evidence #42654966363](https://github.com/fire-digital-twin-lab/IFCtoFDS/actions/runs/42654966363), HEAD nhánh thử nghiệm `58d191e37ed1cabd2972634f4e8ce19119b2ebd5`. Artifact `image-security-evidence` gồm SPDX, Trivy JSON, `summary.json` và SHA-256 của các báo cáo. Dữ liệu từ chính scanner, **không phải ước tính**:
+
+| Chỉ tiêu | Bookworm 12.15 (run #42652597149) | Trixie 13.7 (run #42654966363) |
+|---|---:|---:|
+| Packages SPDX SBOM | 1.220 | 1.202 |
+| CRITICAL findings | 2 | **0** |
+| HIGH findings | 40 | **51** |
+| HIGH CVE IDs không trùng | 15 | 14 |
+| Security release approval | NOT_GRANTED | **NOT_GRANTED** |
+
+Mức CRITICAL của scanner đã giảm về 0 trên digest được pin, nhưng HIGH **tăng 11 findings**; không được gọi đây là image sạch lỗ hổng. Phần lớn HIGH liên quan nhiều binary packages cho cùng CVE ID. Ở Trixie, Trivy đánh dấu 4 HIGH findings là đã có phiên bản sửa: `CVE-2026-109518` (apt/libapt), `CVE-2026-76844` và `CVE-2026-85091` (zlib); 46 findings ở trạng thái `affected` chưa có `FixedVersion` và một finding `fix_deferred`. Các nhận định cần được đối chiếu với Debian Security Tracker và actual usage trước khi chấp thuận exception hoặc nâng image.
+
+Hai lần quét khác thời điểm; vulnerability DB, OS package set và distribution thay đổi. So sánh không chứng minh tự động có giảm rủi ro tổng thể. `--enforce` với policy HIGH/CRITICAL vẫn sẽ FAIL. R5b chỉ chốt thay đổi base image sau khi regression đủ PASS; CVE triage/remediation là work package tiếp theo trước release.
+
 ## 3. Ma trận nghiệm thu
 
 1. Docker build mới thành công, image vẫn chạy non-root UID/GID 10001 và read-only filesystem.
