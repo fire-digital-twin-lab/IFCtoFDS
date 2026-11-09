@@ -231,6 +231,25 @@ jobs:
             --base-url https://ifctofds.example.org \
             --api-key-file "$IFCFDS_SMOKE_API_KEY_FILE"
 
+      - name: Verify real IFC conversion and persisted artifacts through HTTPS
+        shell: bash
+        env:
+          SSL_CERT_FILE: /tmp/ifctofds-tls/fullchain.pem
+          NO_PROXY: ifctofds.example.org
+        run: |
+          set -euo pipefail
+          python scripts/production-conversion-e2e.py create \
+            --base-url https://ifctofds.example.org \
+            --api-key-file "$IFCFDS_SMOKE_API_KEY_FILE" \
+            --fixture tests/baseline/fixtures/tiny.ifc \
+            --evidence /tmp/ifctofds-production-e2e-evidence.json \
+            --job-timeout 180
+          docker compose -f compose.production.yml up -d --force-recreate --no-build app proxy
+          python scripts/production-conversion-e2e.py verify \
+            --base-url https://ifctofds.example.org \
+            --api-key-file "$IFCFDS_SMOKE_API_KEY_FILE" \
+            --evidence /tmp/ifctofds-production-e2e-evidence.json
+
       - name: Verify secret rotation revokes old key after container restart
         shell: bash
         run: |
