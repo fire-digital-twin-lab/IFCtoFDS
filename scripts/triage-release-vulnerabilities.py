@@ -56,7 +56,9 @@ def make_triage_report(
         target = section.get("Target")
         if not isinstance(target, str) or not target:
             raise TriageContractError("Trivy target must be nonempty")
-        vulns = section.get("Vulnerabilities") or []
+        vulns = section.get("Vulnerabilities", [])
+        if vulns is None:
+            vulns = []
         if not isinstance(vulns, list):
             raise TriageContractError("Invalid vulnerability collection")
         for v in vulns:
