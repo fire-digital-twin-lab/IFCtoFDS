@@ -86,3 +86,26 @@ def test_container_secret_policy_is_enforced_by_real_compose_mount_checks():
     assert "root:10001" in docs and "0640" in docs
     assert "IFCFDS_API_KEY_FILE:?set IFCFDS_API_KEY_FILE" in compose
     assert "IFCFDS_API_KEY:" not in compose
+
+
+def test_production_volume_restore_requires_isolated_new_volume_and_ci_drill():
+    compose = (ROOT / "compose.production.yml").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "container.yml").read_text(
+        encoding="utf-8"
+    )
+    runbook = (ROOT / "docs" / "operations" / "BACKUP_RESTORE_RUNBOOK.md").read_text(
+        encoding="utf-8"
+    )
+    maintenance = (ROOT / "scripts" / "production-volume-maintenance.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "name: ${IFCFDS_JOB_VOLUME_NAME:-ifctofds_jobs}" in compose
+    assert "docker volume inspect" in maintenance
+    assert "docker ps -q --filter" in maintenance
+    assert "--allow-empty-existing" in maintenance
+    assert "ifctofds_jobs_restore_" in maintenance
+    assert "OFFLINE_RESTORE_VERIFIED" in maintenance
+    assert "Verify offline backup and restore into a new named volume" in workflow
+    assert "docker compose -f compose.production.yml stop proxy app" in workflow
+    assert "G12" in runbook and "INCOMPLETE" in runbook
+    assert "down --volumes" in runbook

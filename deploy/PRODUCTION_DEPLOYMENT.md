@@ -109,7 +109,11 @@ Smoke PASS không phải scientific acceptance.
 
 ## Backup / restore
 
-Job store nằm trên named volume. Trước backup phải dừng API/worker và dùng quy trình trong `docs/operations/BACKUP_RESTORE_RUNBOOK.md`. Chưa được gọi G12 PASS cho đến khi diễn tập restore trên staging với checksum, release SHA, RPO/RTO thực đo và biên bản.
+Job store nằm trên Docker named volume `ifctofds_jobs` (mặc định cho project `ifctofds`) gắn vào **container path** `/var/lib/ifctofds/jobs`; không đồng nghĩa với đường dẫn host `/srv/ifctofds/jobs`. Tên volume có thể thay đổi một cách tường minh bằng `IFCFDS_JOB_VOLUME_NAME` chỉ sau khi xác minh volume mới và có phê duyệt cutover.
+
+Trước backup phải dừng API/worker và dùng `scripts/production-volume-maintenance.sh` theo `docs/operations/BACKUP_RESTORE_RUNBOOK.md`. Công cụ từ chối backup đang có container sử dụng volume và job đang chạy; restore chỉ dùng volume **mới chưa tồn tại**, marker `.restore-verified.json` được ghi sau cùng. Tuyệt đối không dùng `docker compose down --volumes` trên môi trường staging/production thực; mọi thao tác chuyển volume/rollback cần biên bản và approval.
+
+Kiểm thử backup/restore Docker trong CI chỉ xác minh hợp đồng phần mềm; **G12 = NOT_RUN** đến khi diễn tập thực trên staging, so sánh checksum, release SHA, RPO/RTO thực đo và phê duyệt.
 
 ## Rollback
 

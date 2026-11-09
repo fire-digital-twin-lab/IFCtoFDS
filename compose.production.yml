@@ -88,6 +88,7 @@ services:
 
 volumes:
   jobs:
+    name: ${IFCFDS_JOB_VOLUME_NAME:-ifctofds_jobs}
 
 secrets:
   api_key:

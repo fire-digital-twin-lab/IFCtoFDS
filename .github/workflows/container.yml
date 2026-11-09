@@ -269,6 +269,73 @@ jobs:
             https://ifctofds.example.org/api/scheduler-health)"
           test "$old_key_status" = "401"
 
+      - name: Verify offline backup and restore into a new named volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/production-volume-maintenance.sh
+          sudo install -d -o 10001 -g 10001 -m 0700 /tmp/ifctofds-volume-backups
+
+          # Chặn backup khi production app vẫn mount volume.
+          if bash scripts/production-volume-maintenance.sh backup \
+            ifctofds:ci /tmp/ifctofds-volume-backups ci-backup; then
+            echo "Online backup unexpectedly succeeded"
+            exit 1
+          fi
+          docker compose -f compose.production.yml stop proxy app
+
+          # Tạo job terminal + artifact thật trên volume, sau khi app/worker đã dừng.
+          docker run --rm --user 10001:10001 \
+            --mount type=volume,source=ifctofds_jobs,target=/var/lib/ifctofds/jobs \
+            ifctofds:ci python -c '
+          from pathlib import Path
+          import time
+          from ifc_to_fds.adapters.jobs.repository import JobRepository
+          root = Path("/var/lib/ifctofds/jobs")
+          directory = root / "job-maintenance-fixture"
+          directory.mkdir()
+          (directory / "result.json").write_text("{\"status\":\"INCONCLUSIVE\"}", encoding="utf-8")
+          now = time.time()
+          JobRepository(root=root).register("maintenance-fixture", dict(
+              id="maintenance-fixture", state="COMPLETED", mode="convert",
+              directory=str(directory), created=now - 100, started=now - 90,
+              finished=now - 10, last_accessed=now, process=None
+          ))
+          '
+
+          bash scripts/production-volume-maintenance.sh backup \
+            ifctofds:ci /tmp/ifctofds-volume-backups ci-backup
+          bash scripts/production-volume-maintenance.sh restore \
+            ifctofds:ci /tmp/ifctofds-volume-backups ci-backup \
+            ifctofds_jobs_restore_ci
+
+          # Job metadata phải trỏ tới root của restored volume, không trỏ tới host path.
+          docker run --rm --user 10001:10001 \
+            --mount type=volume,source=ifctofds_jobs_restore_ci,target=/var/lib/ifctofds/jobs \
+            ifctofds:ci python -c '
+          from pathlib import Path
+          import json
+          from ifc_to_fds.adapters.jobs.repository import JobRepository
+          root = Path("/var/lib/ifctofds/jobs")
+          job = JobRepository(root=root).get("maintenance-fixture")
+          assert job is not None and job["state"] == "COMPLETED"
+          assert job["directory"] == str(root / "job-maintenance-fixture")
+          assert (root / "job-maintenance-fixture" / "result.json").read_text(encoding="utf-8") == "{\"status\":\"INCONCLUSIVE\"}"
+          assert json.loads((root / ".restore-verified.json").read_text())["job_count"] == 1
+          '
+
+          # Không được restore lần nữa vào cùng volume đã có dữ liệu.
+          if bash scripts/production-volume-maintenance.sh restore \
+            ifctofds:ci /tmp/ifctofds-volume-backups ci-backup \
+            ifctofds_jobs_restore_ci; then
+            echo "Restore unexpectedly overwrote an existing named volume"
+            exit 1
+          fi
+
+      - name: Cleanup isolated CI restore volume
+        if: always()
+        run: docker volume rm ifctofds_jobs_restore_ci 2>/dev/null || true
+
       - name: Container logs on failure
         if: failure()
         run: |
