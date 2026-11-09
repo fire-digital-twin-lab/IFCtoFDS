@@ -231,6 +231,25 @@ jobs:
             --base-url https://ifctofds.example.org \
             --api-key-file "$IFCFDS_SMOKE_API_KEY_FILE"
 
+      - name: Verify real IFC conversion and persisted artifacts through HTTPS
+        shell: bash
+        env:
+          SSL_CERT_FILE: /tmp/ifctofds-tls/fullchain.pem
+          NO_PROXY: ifctofds.example.org
+        run: |
+          set -euo pipefail
+          python scripts/production-conversion-e2e.py create \
+            --base-url https://ifctofds.example.org \
+            --api-key-file "$IFCFDS_SMOKE_API_KEY_FILE" \
+            --fixture tests/baseline/fixtures/tiny.ifc \
+            --evidence /tmp/ifctofds-production-e2e-evidence.json \
+            --job-timeout 180
+          docker compose -f compose.production.yml up -d --force-recreate --no-build app proxy
+          python scripts/production-conversion-e2e.py verify \
+            --base-url https://ifctofds.example.org \
+            --api-key-file "$IFCFDS_SMOKE_API_KEY_FILE" \
+            --evidence /tmp/ifctofds-production-e2e-evidence.json
+
       - name: Verify secret rotation revokes old key after container restart
         shell: bash
         run: |
@@ -309,21 +328,32 @@ jobs:
             ifctofds:ci /tmp/ifctofds-volume-backups ci-backup \
             ifctofds_jobs_restore_ci
 
-          # Job metadata phải trỏ tới root của restored volume, không trỏ tới host path.
+          # Kiểm chứng cả job E2E trước đó và fixture bảo trì sau restore.
           docker run --rm --user 10001:10001 \
             --mount type=volume,source=ifctofds_jobs_restore_ci,target=/var/lib/ifctofds/jobs \
+            --mount type=bind,source=/tmp/ifctofds-production-e2e-evidence.json,target=/tmp/ifctofds-e2e.json,readonly \
             ifctofds:ci python -c '
           from pathlib import Path
+          import hashlib
           import json
           from ifc_to_fds.adapters.jobs.repository import JobRepository
           root = Path("/var/lib/ifctofds/jobs")
-          job = JobRepository(root=root).get("maintenance-fixture")
+          repo = JobRepository(root=root)
+          job = repo.get("maintenance-fixture")
           assert job is not None and job["state"] == "COMPLETED"
           assert job["directory"] == str(root / "job-maintenance-fixture")
           assert (root / "job-maintenance-fixture" / "result.json").read_text(encoding="utf-8") == "{\"status\":\"INCONCLUSIVE\"}"
-          assert json.loads((root / ".restore-verified.json").read_text())["job_count"] == 1
+          evidence = json.loads(Path("/tmp/ifctofds-e2e.json").read_text(encoding="utf-8"))
+          actual_job = repo.get(evidence["job_id"])
+          assert actual_job is not None and actual_job["state"] == "COMPLETED"
+          directory = Path(actual_job["directory"])
+          assert directory.parent == root and directory.is_dir()
+          for kind, filename in {"manifest": "model_manifest.json", "fds": "model.fds", "geometry": "model_geometry.json"}.items():
+              actual_hash = hashlib.sha256((directory / filename).read_bytes()).hexdigest()
+              assert actual_hash == evidence["artifact_sha256"][kind]
+          marker = json.loads((root / ".restore-verified.json").read_text(encoding="utf-8"))
+          assert marker["job_count"] == 2
           '
-
           # Không được restore lần nữa vào cùng volume đã có dữ liệu.
           if bash scripts/production-volume-maintenance.sh restore \
             ifctofds:ci /tmp/ifctofds-volume-backups ci-backup \

@@ -107,6 +107,14 @@ Smoke chỉ kiểm tra:
 
 Smoke PASS không phải scientific acceptance.
 
+## Nghiệm thu conversion E2E qua HTTPS (phạm vi CI)
+
+Workflow `Production container contract` chạy `scripts/production-conversion-e2e.py` trên đúng Compose image + NGINX TLS. Phép thử gửi IFC nhỏ thật (`tests/baseline/fixtures/tiny.ifc`) qua `POST /api/jobs` với API key; kiểm tra HTTP 401 khi thiếu khóa và HTTP 403 với Origin sai; chờ terminal state `COMPLETED`, đối chiếu `MAPPING_VERIFIED` và `simulation_status=INCONCLUSIVE`, xác minh `manifest`, `fds`, `geometry` theo SHA-256.
+
+CI sau đó tái tạo `app` và `proxy` **không xóa jobs volume**, truy vấn lại job và so sánh hash artifact trước/sau restart. `--evidence` là file test tạm chứa ID job, kết luận mapping và SHA-256; không được lưu API key vào evidence.
+
+Chỉ ghi nhận là software E2E contract của bản build tại CI runner. Không dùng kết quả này để phát hành `SIMULATION_VERIFIED`, không thay thế load/soak/staging smoke, không chứng minh durability dưới power loss. Nếu chạy trên staging, dùng IFC test được duyệt và bản key không được tiết lộ; không chạy fixture/negative tests trên production dữ liệu thực khi chưa phê duyệt.
+
 ## Backup / restore
 
 Job store nằm trên Docker named volume `ifctofds_jobs` (mặc định cho project `ifctofds`) gắn vào **container path** `/var/lib/ifctofds/jobs`; không đồng nghĩa với đường dẫn host `/srv/ifctofds/jobs`. Tên volume có thể thay đổi một cách tường minh bằng `IFCFDS_JOB_VOLUME_NAME` chỉ sau khi xác minh volume mới và có phê duyệt cutover.
