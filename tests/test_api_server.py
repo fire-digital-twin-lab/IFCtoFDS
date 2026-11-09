@@ -16,6 +16,20 @@ def test_api_health_and_private_paths():
         assert client.get(path).status_code == 404
 
 
+def test_operational_status_exposes_path_free_runtime_telemetry():
+    response = client.get("/api/operational-status")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["scheduler_healthy"] is True
+    assert payload["process"]["rss_bytes"] > 0
+    assert payload["storage"]["probe_ok"] is True
+    assert set(payload["jobs"]) == {
+        "total", "pending", "terminal", "states", "max_waiting"
+    }
+    assert "root" not in payload["storage"]
+
+
 def test_api_inventory(tiny_ifc):
     path, _, _ = tiny_ifc
     response = client.post(
