@@ -208,3 +208,24 @@ PR #82 là thay đổi tracker riêng; không merge gộp với các PR sửa co
 ## 9. Bước thực hiện kế tiếp
 
 **Bắt đầu R1** trên nhánh riêng: tái hiện wrong-Host redirect bằng production NGINX image; sửa canonical redirect và default-server; bổ sung positive/negative HTTP+HTTPS regression; chạy Container + Source Quality + Conversion; tạo PR tiếng Việt để review. Không chỉnh sửa dữ liệu production trong vòng R1.
+
+## 10. Checkpoint triển khai R1–R5 — 09/11/2026
+
+**Lưu ý:** mục 2 của kế hoạch này ghi **baseline lịch sử** tại lúc khởi tạo. Bảng sau là trạng thái mới hơn, đã đối chiếu GitHub. Không xóa dữ liệu baseline để giữ provenance.
+
+| WP | PR và merge commit | Bằng chứng/phạm vi | Trạng thái |
+|---|---|---|---|
+| R1 | #84, `2e5a55406c63a0d802427b91dfa9cfb450db4d3e` | HTTP canonical redirect, Host/SNI reject, Container/Source/Conversion CI | SOFTWARE PASS |
+| R2 | #85, `fab1cbbf84fb96b7137ed90e03405cf12037af6d` | File secret `root:10001/0640`, fail-closed CLI, key rotation, container/CI | SOFTWARE PASS |
+| R3 | #86, `6c8d00ad823b006971f1e8ca8dda7820a8515366` | Backup offline → restore named volume mới, snapshot integrity/negative tests | SOFTWARE PASS; G12 STAGING NOT_RUN |
+| R4 | #87, `8528c0cc3493e14d19ae01c78adfa334f124bfa3` | IFC tiny fixture → HTTPS job → artifact hashes → restart/restore; 3 CI PASS | SOFTWARE PASS; G09/G10 vẫn chưa được validation |
+| R5a | #88, `4dd621cf28fa74f633ae8c2e9d6ebf581a636f03` | SPDx SBOM + Trivy ImageID provenance, CI report-only | EVIDENCE PASS; SECURITY RELEASE NO_GO |
+| R5b | #89, `83340f0ecfd620affe4fe84dcd6e658d4ef3f419` | Python 3.12 Trixie OCI base digest, 4 PR CI PASS; 0 CRITICAL, 51 HIGH ở scanner baseline | SOFTWARE PASS; SECURITY RELEASE NO_GO |
+| R5c | #90, `77f047f392fc4ac7fc3d4414df4cbc9087151ebb` | Pin apt/zlib security versions, deny-list hồi quy CVE, 4 PR CI PASS; artifact PR 0 CRITICAL/47 HIGH | SOFTWARE PASS; SECURITY RELEASE NO_GO |
+| R5d | #91, HEAD ở thời điểm checkpoint chưa merge | Sổ CVE tự động, quyết định UNREVIEWED/NO_GO, source scan SHA, fail-closed malformed evidence | IN_PROGRESS — cần CI final HEAD |
+
+**Chưa được nghiệm thu:** R5 publish một image duy nhất theo immutable GHCR digest + attestation + release approval, CVE triage cho 47 HIGH còn mở, branch protection required checks (cần repo admin), protected environment; R6 staging/DR/rollback/monitoring/load drills; R7 approved B1/B2 reference và application scientific V&V; R8 final independent release sign-off.
+
+**Điều kiện NO-GO không thay đổi:** không có staging deployment/prod evidence, không có approved CVE exceptions, không có độc lập EV-fire scientific validation. G11–G15 không được coi PASS dựa trên GitHub runner; overall scientific/application vẫn `INCONCLUSIVE`, broad `EV-GEO-001=FAIL` và `MESH-LOCAL-001=INCONCLUSIVE`; release `NOT_PRODUCTION_READY`.
+
+**Next:** hoàn tất #91; đóng CVE risk review bằng evidence/reviewer; build-once promotion digest + release gate; thu thập staging operator approval và thực hiện R6 mà không phá volume/cơ sở dữ liệu gốc.
