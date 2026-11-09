@@ -124,3 +124,19 @@ def test_cli_writes_once_and_prevents_overwriting_existing_evidence(tmp_path, ca
     assert evidence.main(argv) == 2
     assert saved == json.loads(target.read_text())
     assert "already exists" in capsys.readouterr().err
+
+
+def test_release_enforcement_rejects_unverified_image_even_without_cves(tmp_path):
+    sbom, scan = _fixtures(tmp_path)
+    payload = json.loads(scan.read_text(encoding="utf-8"))
+    payload["Metadata"].pop("ImageID")
+    scan.write_text(json.dumps(payload), encoding="utf-8")
+    # Inventory có thể ghi nhận sự thiếu bằng chứng, nhưng release không được duyệt.
+    report = evidence.build_evidence(
+        sbom, scan, source_sha=SOURCE_SHA, image_id=IMAGE_ID
+    )
+    assert report["scanner_image_id_verified"] is False
+    with pytest.raises(evidence.ReleaseEvidenceError, match="exact image ID"):
+        evidence.build_evidence(
+            sbom, scan, source_sha=SOURCE_SHA, image_id=IMAGE_ID, enforce=True
+        )
