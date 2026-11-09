@@ -141,3 +141,15 @@ def test_cli_writes_hashed_evidence_once_without_auto_approval(tmp_path, capsys)
     assert triage.main(argv) == 2
     assert data == json.loads(output.read_text(encoding="utf-8"))
     assert "CVE triage: FAIL" in capsys.readouterr().err
+
+
+def test_release_workflow_exports_triage_from_same_trivy_json():
+    workflow = (
+        SOURCE.parents[1] / ".github" / "workflows" / "release-security.yml"
+    ).read_text(encoding="utf-8")
+    assert "Generate unreviewed CVE triage ledger from Trivy evidence" in workflow
+    assert "scripts/triage-release-vulnerabilities.py" in workflow
+    assert "--scan release-evidence/vulnerabilities.json" in workflow
+    assert "--output release-evidence/cve-triage.json" in workflow
+    assert "if: always()" in workflow
+    assert "name: image-security-evidence" in workflow
