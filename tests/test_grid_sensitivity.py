@@ -267,6 +267,8 @@ def test_analysis_rejects_observable_metadata_drift():
         ((0.0, -1e-200, -2e-200), "MONOTONIC"),
         ((0.0, 2e-200, 1e-200), "OSCILLATORY"),
         ((0.0, -2e-200, -1e-200), "OSCILLATORY"),
+        ((-1e-200, 0.0, 1e-200), "MONOTONIC"),
+        ((-1e-200, 0.0, -1e-200), "OSCILLATORY"),
         ((0.0, 1e-200, 1e-200), "PLATEAU_OR_UNRESOLVED"),
         ((0.0, 0.0, 0.0), "FLAT"),
     ],
