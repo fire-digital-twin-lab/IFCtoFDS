@@ -180,3 +180,35 @@ def test_cli_does_not_publish_summary_when_denied_cve_present(tmp_path, capsys):
     assert ret == 2
     assert not target.exists()
     assert "denied CVE" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("malformed", ["", 0, {}, "missing"])
+def test_scanner_rejects_malformed_vulnerability_collection(tmp_path, malformed):
+    sbom, scan = _fixtures(tmp_path)
+    value = json.loads(scan.read_text(encoding="utf-8"))
+    if malformed == "missing":
+        value["Results"][0]["Vulnerabilities"] = ""
+    else:
+        value["Results"][0]["Vulnerabilities"] = malformed
+    scan.write_text(json.dumps(value), encoding="utf-8")
+    with pytest.raises(evidence.ReleaseEvidenceError, match="must be an array"):
+        evidence.build_evidence(
+            sbom, scan, source_sha=SOURCE_SHA, image_id=IMAGE_ID,
+        )
+
+
+def test_strict_gate_refuses_scanner_without_image_identity(tmp_path):
+    sbom, scan = _fixtures(tmp_path)
+    value = json.loads(scan.read_text(encoding="utf-8"))
+    del value["Metadata"]["ImageID"]
+    scan.write_text(json.dumps(value), encoding="utf-8")
+    report = evidence.build_evidence(
+        sbom, scan, source_sha=SOURCE_SHA, image_id=IMAGE_ID,
+    )
+    assert report["scanner_image_id_verified"] is False
+    assert report["security_gate"] == "NOT_ENFORCED"
+    with pytest.raises(evidence.ReleaseEvidenceError, match="verified scanner ImageID"):
+        evidence.build_evidence(
+            sbom, scan, source_sha=SOURCE_SHA, image_id=IMAGE_ID,
+            enforce=True,
+        )
