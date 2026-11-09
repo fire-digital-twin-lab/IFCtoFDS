@@ -124,3 +124,59 @@ def test_cli_writes_once_and_prevents_overwriting_existing_evidence(tmp_path, ca
     assert evidence.main(argv) == 2
     assert saved == json.loads(target.read_text())
     assert "already exists" in capsys.readouterr().err
+
+@pytest.mark.parametrize(
+    "cve",
+    ["CVE-2026-109518", "CVE-2026-76844", "CVE-2026-85091"],
+)
+def test_patched_cve_cannot_reenter_image_in_report_only_mode(tmp_path, cve):
+    sbom, scan = _fixtures(tmp_path, severity="HIGH")
+    value = json.loads(scan.read_text(encoding="utf-8"))
+    value["Results"][0]["Vulnerabilities"][0]["VulnerabilityID"] = cve
+    scan.write_text(json.dumps(value), encoding="utf-8")
+    with pytest.raises(evidence.ReleaseEvidenceError, match="denied CVE"):
+        evidence.build_evidence(
+            sbom, scan,
+            source_sha=SOURCE_SHA, image_id=IMAGE_ID,
+            deny_cves=(cve,),
+            enforce=False,
+        )
+
+
+def test_explicit_cve_deny_list_preserves_other_high_findings(tmp_path):
+    sbom, scan = _fixtures(tmp_path, severity="HIGH")
+    result = evidence.build_evidence(
+        sbom, scan, source_sha=SOURCE_SHA, image_id=IMAGE_ID,
+        deny_cves=("CVE-2026-109518", "CVE-2026-76844", "CVE-2026-85091"),
+    )
+    assert result["vulnerabilities"]["HIGH"] == 1
+    assert result["security_gate"] == "NOT_ENFORCED"
+    assert result["release_approval"] == "NOT_GRANTED"
+    assert result["denied_cve_ids"] == [
+        "CVE-2026-109518", "CVE-2026-76844", "CVE-2026-85091"
+    ]
+
+
+def test_deny_list_rejects_invalid_cve_identifiers(tmp_path):
+    sbom, scan = _fixtures(tmp_path)
+    with pytest.raises(evidence.ReleaseEvidenceError, match="Invalid CVE"):
+        evidence.build_evidence(
+            sbom, scan, source_sha=SOURCE_SHA, image_id=IMAGE_ID,
+            deny_cves=("wrong-id",),
+        )
+
+
+def test_cli_does_not_publish_summary_when_denied_cve_present(tmp_path, capsys):
+    sbom, scan = _fixtures(tmp_path, severity="HIGH")
+    obj = json.loads(scan.read_text(encoding="utf-8"))
+    obj["Results"][0]["Vulnerabilities"][0]["VulnerabilityID"] = "CVE-2026-109518"
+    scan.write_text(json.dumps(obj), encoding="utf-8")
+    target = tmp_path / "summary.json"
+    ret = evidence.main([
+        "--sbom", str(sbom), "--scan", str(scan),
+        "--source-sha", SOURCE_SHA, "--image-id", IMAGE_ID,
+        "--output", str(target), "--deny-cve", "CVE-2026-109518",
+    ])
+    assert ret == 2
+    assert not target.exists()
+    assert "denied CVE" in capsys.readouterr().err

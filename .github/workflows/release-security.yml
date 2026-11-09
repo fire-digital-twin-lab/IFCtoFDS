@@ -69,7 +69,10 @@ jobs:
             --scan release-evidence/vulnerabilities.json \
             --source-sha "$SOURCE_SHA" \
             --image-id "$image_id" \
-            --output release-evidence/summary.json
+            --output release-evidence/summary.json \
+            --deny-cve CVE-2026-109518 \
+            --deny-cve CVE-2026-76844 \
+            --deny-cve CVE-2026-85091
 
       - name: Enforce HIGH and CRITICAL security gate for explicit release preflight
         if: github.event_name == 'workflow_dispatch' && inputs.enforce
@@ -85,6 +88,9 @@ jobs:
             --source-sha "$SOURCE_SHA" \
             --image-id "$image_id" \
             --output release-evidence/enforced-gate.json \
+            --deny-cve CVE-2026-109518 \
+            --deny-cve CVE-2026-76844 \
+            --deny-cve CVE-2026-85091 \
             --enforce
 
       - name: Preserve evidence artifacts even when gates fail
