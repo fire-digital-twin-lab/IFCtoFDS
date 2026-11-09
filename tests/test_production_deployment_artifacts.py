@@ -67,3 +67,22 @@ def test_container_ci_covers_host_poisoning_and_unknown_sni():
     assert "Host: $invalid_host" in workflow
     assert "openssl s_client" in workflow
     assert "https://ifctofds.example.org/hello?x=1" in workflow
+
+
+def test_container_secret_policy_is_enforced_by_real_compose_mount_checks():
+    workflow = (ROOT / ".github" / "workflows" / "container.yml").read_text(
+        encoding="utf-8"
+    )
+    docs = (ROOT / "deploy" / "PRODUCTION_DEPLOYMENT.md").read_text(
+        encoding="utf-8"
+    )
+    compose = (ROOT / "compose.production.yml").read_text(encoding="utf-8")
+    assert "sudo chown root:10001" in workflow
+    assert "sudo chmod 0640" in workflow
+    assert "production-secret-preflight.py" in workflow
+    assert "--user 10002:10002" in workflow
+    assert "Verify secret rotation revokes old key" in workflow
+    assert "IFCFDS_SMOKE_API_KEY_FILE" in workflow
+    assert "root:10001" in docs and "0640" in docs
+    assert "IFCFDS_API_KEY_FILE:?set IFCFDS_API_KEY_FILE" in compose
+    assert "IFCFDS_API_KEY:" not in compose
