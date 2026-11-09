@@ -48,3 +48,26 @@ def test_inventory_does_not_masquerade_as_release_approval():
     assert "EVIDENCE_ONLY" in documentation
     assert "NOT_PRODUCTION_READY" in documentation
     assert "build once" in documentation
+
+
+def test_os_security_patches_are_pinned_and_verified_in_runtime():
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    container = (ROOT / ".github" / "workflows" / "container.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "apt=3.0.4" in dockerfile
+    assert "libapt-pkg7.0=3.0.4" in dockerfile
+    assert "zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1" in dockerfile
+    assert "apt-get update" in dockerfile
+    assert "Verify exact Debian security package versions inside production image" in container
+    assert "dpkg-query -W" in container
+    assert "--read-only --entrypoint sh ifctofds:ci" in container
+
+
+def test_scanner_denies_known_patched_cves_in_both_validation_modes():
+    workflow = (ROOT / ".github" / "workflows" / "release-security.yml").read_text(
+        encoding="utf-8"
+    )
+    for cve in ("CVE-2026-109518", "CVE-2026-76844", "CVE-2026-85091"):
+        assert workflow.count(f"--deny-cve {cve}") == 2
+    assert "exit-code: '0'" in workflow  # Khác strict release: vẫn thống kê HIGH.
