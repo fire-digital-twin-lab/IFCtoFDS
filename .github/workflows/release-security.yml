@@ -1,0 +1,97 @@
+name: Release image security evidence
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: 'Chặn HIGH/CRITICAL khi chạy release preflight thủ công'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-image-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build the exact image to be inventoried
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-evidence
+          docker build --pull -t ifctofds:security .
+
+      - name: Generate SPDX SBOM for the built image
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ifctofds:security
+          format: spdx-json
+          output-file: release-evidence/image.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Scan vulnerabilities in the same image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ifctofds:security
+          format: json
+          output: release-evidence/vulnerabilities.json
+          scanners: vuln
+          ignore-unfixed: false
+          severity: HIGH,CRITICAL
+          version: v0.70.0
+          exit-code: '0'
+
+      - name: Validate SBOM and scan provenance without asserting release approval
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image_id="$(docker image inspect --format '{{.Id}}' ifctofds:security)"
+          python scripts/validate-release-security-evidence.py \
+            --sbom release-evidence/image.spdx.json \
+            --scan release-evidence/vulnerabilities.json \
+            --source-sha "$SOURCE_SHA" \
+            --image-id "$image_id" \
+            --output release-evidence/summary.json
+
+      - name: Enforce HIGH and CRITICAL security gate for explicit release preflight
+        if: github.event_name == 'workflow_dispatch' && inputs.enforce
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image_id="$(docker image inspect --format '{{.Id}}' ifctofds:security)"
+          python scripts/validate-release-security-evidence.py \
+            --sbom release-evidence/image.spdx.json \
+            --scan release-evidence/vulnerabilities.json \
+            --source-sha "$SOURCE_SHA" \
+            --image-id "$image_id" \
+            --output release-evidence/enforced-gate.json \
+            --enforce
+
+      - name: Preserve evidence artifacts even when gates fail
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: image-security-evidence
+          path: release-evidence/
+          if-no-files-found: warn
+          retention-days: 30
