@@ -1,4 +1,4 @@
-FROM python:3.12.16-slim-bookworm
+FROM python:3.12.16-slim-trixie@sha256:962f801b08c870ac2a51b72bf02dae38c9a4162319e5e882ec244e198188d54e
 
 # uv 0.13.7 is pinned by immutable OCI digest; uv.lock pins Python dependencies.
 COPY --from=ghcr.io/astral-sh/uv@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff /uv /uvx /bin/

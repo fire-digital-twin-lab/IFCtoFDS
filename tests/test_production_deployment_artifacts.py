@@ -35,7 +35,10 @@ def test_proxy_contract_enforces_tls_and_does_not_publish_app_port():
 
 def test_runtime_image_uses_non_root_application_user():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert dockerfile.startswith("FROM python:3.12.16-slim-bookworm")
+    assert dockerfile.startswith(
+        "FROM python:3.12.16-slim-trixie@sha256:"
+        "962f801b08c870ac2a51b72bf02dae38c9a4162319e5e882ec244e198188d54e"
+    )
     assert "ghcr.io/astral-sh/uv@sha256:" in dockerfile
     assert "COPY pyproject.toml uv.lock README.md LICENSE ./" in dockerfile
     assert "uv sync --locked --no-editable" in dockerfile
