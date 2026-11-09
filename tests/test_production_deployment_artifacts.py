@@ -35,10 +35,96 @@ def test_proxy_contract_enforces_tls_and_does_not_publish_app_port():
 
 def test_runtime_image_uses_non_root_application_user():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert dockerfile.startswith("FROM python:3.12.16-slim-bookworm")
+    assert dockerfile.startswith(
+        "FROM python:3.12.16-slim-trixie@sha256:"
+        "962f801b08c870ac2a51b72bf02dae38c9a4162319e5e882ec244e198188d54e"
+    )
     assert "ghcr.io/astral-sh/uv@sha256:" in dockerfile
     assert "COPY pyproject.toml uv.lock README.md LICENSE ./" in dockerfile
     assert "uv sync --locked --no-editable" in dockerfile
     assert "USER 10001:10001" in dockerfile
     assert '--host", "0.0.0.0"' in dockerfile
     assert "/api/health" in dockerfile
+
+def test_proxy_denies_unknown_hosts_without_host_reflection():
+    proxy = (ROOT / "deploy" / "nginx.conf.template").read_text(encoding="utf-8")
+    # HTTP Host không khớp phải vào default server từ chối (cả IPv4/IPv6).
+    assert "listen 80 default_server;" in proxy
+    assert "listen [::]:80 default_server;" in proxy
+    assert "return 444;" in proxy
+    # Redirect hợp lệ luôn dùng hostname canonical, không phản chiếu Host của client.
+    assert "return 308 https://${IFCFDS_PUBLIC_HOST}$request_uri;" in proxy
+    assert "https://$host$request_uri" not in proxy
+    # SNI lạ thất bại TLS; Host lạ trên kết nối TLS hợp lệ nhận 421.
+    assert "listen 443 ssl default_server;" in proxy
+    assert "listen [::]:443 ssl default_server;" in proxy
+    assert "ssl_reject_handshake on;" in proxy
+    assert "return 421;" in proxy
+
+
+def test_container_ci_covers_host_poisoning_and_unknown_sni():
+    workflow = (ROOT / ".github" / "workflows" / "container.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "Reject forged Host and unknown SNI through proxy" in workflow
+    assert "Host: $invalid_host" in workflow
+    assert "openssl s_client" in workflow
+    assert "https://ifctofds.example.org/hello?x=1" in workflow
+
+
+def test_container_secret_policy_is_enforced_by_real_compose_mount_checks():
+    workflow = (ROOT / ".github" / "workflows" / "container.yml").read_text(
+        encoding="utf-8"
+    )
+    docs = (ROOT / "deploy" / "PRODUCTION_DEPLOYMENT.md").read_text(
+        encoding="utf-8"
+    )
+    compose = (ROOT / "compose.production.yml").read_text(encoding="utf-8")
+    assert "sudo chown root:10001" in workflow
+    assert "sudo chmod 0640" in workflow
+    assert "production-secret-preflight.py" in workflow
+    assert "--user 10002:10002" in workflow
+    assert "Verify secret rotation revokes old key" in workflow
+    assert "IFCFDS_SMOKE_API_KEY_FILE" in workflow
+    assert "root:10001" in docs and "0640" in docs
+    assert "IFCFDS_API_KEY_FILE:?set IFCFDS_API_KEY_FILE" in compose
+    assert "IFCFDS_API_KEY:" not in compose
+
+
+def test_production_volume_restore_requires_isolated_new_volume_and_ci_drill():
+    compose = (ROOT / "compose.production.yml").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "container.yml").read_text(
+        encoding="utf-8"
+    )
+    runbook = (ROOT / "docs" / "operations" / "BACKUP_RESTORE_RUNBOOK.md").read_text(
+        encoding="utf-8"
+    )
+    maintenance = (ROOT / "scripts" / "production-volume-maintenance.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "name: ${IFCFDS_JOB_VOLUME_NAME:-ifctofds_jobs}" in compose
+    assert "docker volume inspect" in maintenance
+    assert "docker ps -q --filter" in maintenance
+    assert "--allow-empty-existing" in maintenance
+    assert "ifctofds_jobs_restore_" in maintenance
+    assert "OFFLINE_RESTORE_VERIFIED" in maintenance
+    assert "Verify offline backup and restore into a new named volume" in workflow
+    assert "docker compose -f compose.production.yml stop proxy app" in workflow
+    assert "G12" in runbook and "INCOMPLETE" in runbook
+    assert "down --volumes" in runbook
+
+
+def test_production_ci_runs_real_ifc_e2e_and_restart_without_deleting_jobs():
+    workflow = (ROOT / ".github" / "workflows" / "container.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "Verify real IFC conversion and persisted artifacts through HTTPS" in workflow
+    assert "scripts/production-conversion-e2e.py create" in workflow
+    assert "scripts/production-conversion-e2e.py verify" in workflow
+    assert "--fixture tests/baseline/fixtures/tiny.ifc" in workflow
+    assert "up -d --force-recreate --no-build app proxy" in workflow
+    assert "down --volumes" not in workflow.split(
+        "Verify real IFC conversion and persisted artifacts through HTTPS", 1
+    )[1].split("Verify secret rotation revokes old key", 1)[0]
+    assert "evidence[\"artifact_sha256\"][kind]" in workflow
+    assert "marker[\"job_count\"] == 2" in workflow
