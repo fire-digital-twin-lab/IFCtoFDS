@@ -1,5 +1,24 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint cơ chế triển khai production và smoke HTTPS — 09/11/2026
+
+**PR:** #80 đã merge bằng squash, main commit 4a5029e9040ba15927c25444595126c19e5f6bd9; final PR HEAD 87594f8d67a167efa6cdaa246e4997f6c41bb875.
+**Phạm vi:** Workbench + Verified Mapping/API single-instance. Không mở rộng phạm vi scientific validation.
+
+- Production container contract PR run #42607250010: SUCCESS; Docker build, Compose, startup thiếu API key fail-closed, NGINX/TLS, auth/header probes và CLI smoke HTTPS thực tế đều PASS.
+- Source quality PR run #42607250070: SUCCESS; 976 passed, 16 deselected, 121 warnings, coverage 87%.
+- Conversion PR run #42607250004: SUCCESS; Linux/Windows Python 3.10–3.13, JavaScript, browser, pinned FDS integration.
+- Sau merge main@4a5029e: Container run #42608206469 SUCCESS; Source Quality #42608206539 và Conversion #42608206468 còn IN_PROGRESS tại thời điểm ghi checkpoint, chưa được đánh dấu PASS.
+- Đã sửa lỗi smoke parse trang Workbench HTML như JSON, loại API key khỏi command-line arguments, chặn redirect, chỉ chấp nhận HTTPS origin, đọc secret file và chạy chính production smoke CLI trong CI. Targeted regression: 5 passed.
+- Không thay đổi IFC, geometry, FDS, physics hoặc scientific verification semantics. MESH-SENS-P4C2A-001 chỉ PASS/E2 trong scoped minimal solver integration; MESH-LOCAL-001 và overall scientific/application verdict vẫn INCONCLUSIVE.
+- B1/B2 P4c2b reference hiện DRAFT, schema 0.4.0, chưa có approved simulation domain, MAPPING_VERIFIED hay external IFC hash evidence đầy đủ; readiness NOT_READY, không tự tạo/phê duyệt nguồn dữ liệu.
+- G11 staging NOT_RUN; G12 backup/restore DR NOT_RUN; G13 rollback NOT_RUN; G14 runtime monitoring alert drill chưa có evidence; G15 production deploy NOT_RUN. G09/G10 scientific và G16 sign-off còn mở.
+- Release verdict: NOT_PRODUCTION_READY. Không cấp SIMULATION_VERIFIED.
+
+**Next work package:** kiểm chứng main CI hậu merge; chuẩn bị staging TLS/monitoring/backup-restore/rollback drill theo release SHA và thu thập approved B1/B2 external scientific reference trước khi chạy P4c2b.
+
+---
+
 
 ## Checkpoint P4c2a executed pinned-FDS grid study + DEVC provenance — 08/11/2026
 
