@@ -1,6 +1,14 @@
 """Production smoke regression: HTML workbench and credential-safe HTTPS probes."""
 
-from scripts import production_smoke as smoke
+import importlib.util
+from pathlib import Path
+
+
+SOURCE = Path(__file__).resolve().parents[1] / "scripts" / "production-smoke.py"
+SPEC = importlib.util.spec_from_file_location("ifctofds_production_smoke", SOURCE)
+assert SPEC is not None and SPEC.loader is not None
+smoke = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(smoke)
 
 
 class _Response:
