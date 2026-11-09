@@ -42,3 +42,28 @@ def test_runtime_image_uses_non_root_application_user():
     assert "USER 10001:10001" in dockerfile
     assert '--host", "0.0.0.0"' in dockerfile
     assert "/api/health" in dockerfile
+
+def test_proxy_denies_unknown_hosts_without_host_reflection():
+    proxy = (ROOT / "deploy" / "nginx.conf.template").read_text(encoding="utf-8")
+    # HTTP Host không khớp phải vào default server từ chối (cả IPv4/IPv6).
+    assert "listen 80 default_server;" in proxy
+    assert "listen [::]:80 default_server;" in proxy
+    assert "return 444;" in proxy
+    # Redirect hợp lệ luôn dùng hostname canonical, không phản chiếu Host của client.
+    assert "return 308 https://${IFCFDS_PUBLIC_HOST}$request_uri;" in proxy
+    assert "https://$host$request_uri" not in proxy
+    # SNI lạ thất bại TLS; Host lạ trên kết nối TLS hợp lệ nhận 421.
+    assert "listen 443 ssl default_server;" in proxy
+    assert "listen [::]:443 ssl default_server;" in proxy
+    assert "ssl_reject_handshake on;" in proxy
+    assert "return 421;" in proxy
+
+
+def test_container_ci_covers_host_poisoning_and_unknown_sni():
+    workflow = (ROOT / ".github" / "workflows" / "container.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "Reject forged Host and unknown SNI through proxy" in workflow
+    assert "Host: $invalid_host" in workflow
+    assert "openssl s_client" in workflow
+    assert "https://ifctofds.example.org/hello?x=1" in workflow
