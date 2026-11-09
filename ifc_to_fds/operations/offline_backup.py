@@ -28,9 +28,18 @@ def _hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _sqlite_integrity(path: Path) -> None:
+def _sqlite_integrity(path: Path, *, sealed_snapshot: bool = False) -> None:
+    """Kiểm tra SQLite; snapshot đã niêm phong được đọc immutable, không ghi SHM/WAL."""
     try:
-        with closing(sqlite3.connect(str(path))) as connection:
+        if sealed_snapshot:
+            # Sau khi SHA-256 từng file đã được kiểm tra theo manifest offline,
+            # SQLite không được tạo -wal/-shm trên backup bind mount read-only.
+            # Cấm dùng immutable với DB live: có thể bỏ qua WAL mới commit.
+            location = path.resolve(strict=True).as_uri() + "?mode=ro&immutable=1"
+            connection = sqlite3.connect(location, uri=True)
+        else:
+            connection = sqlite3.connect(str(path))
+        with closing(connection) as connection:
             results = [row[0] for row in connection.execute("PRAGMA integrity_check")]
             if results != ["ok"]:
                 raise OfflineBackupError("SQLite integrity_check failed")
@@ -241,7 +250,8 @@ def _check_backup_files(source: Path, manifest: dict) -> list[dict]:
             raise OfflineBackupError("Unexpected unmanifested backup file")
         if path.is_dir() and relative not in seen_dirs:
             raise OfflineBackupError("Unexpected unmanifested backup directory")
-    _sqlite_integrity(source / "jobs.sqlite3")
+    # Backup đã hoàn chỉnh, hash-verified và có thể được mount read-only.
+    _sqlite_integrity(source / "jobs.sqlite3", sealed_snapshot=True)
     return files
 
 
