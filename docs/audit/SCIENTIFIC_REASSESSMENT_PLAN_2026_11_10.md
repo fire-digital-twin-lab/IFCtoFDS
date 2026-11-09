@@ -104,6 +104,13 @@ Theo tracker, `EV-GEO-001=FAIL` vẫn là unresolved broad issue; các P3 partia
 9. **LEDGER:** cập nhật claim/evidence/tracker sau bằng chứng, không thay PASS scoped thành application PASS.
 10. **REPEAT:** chọn WP cao nhất tiếp theo hoặc báo blocker có chứng cứ.
 
+## 5.1. Checkpoint sau PR #91 — 10/11/2026
+
+- PR #91 đã được merge bằng squash vào `main@50a40d0b351eaedaea26cf2aaf00287577079ed0` sau khi đủ bốn workflow PASS trên PR HEAD. `cve-triage.json` được sản xuất từ scanner, nhưng `UNREVIEWED/NO_GO` không được nâng thành release approval.
+- PR #92 triển khai P4-NUM-001 và có T1 code review + reproduction độc lập; không đánh dấu E2/PASS đến khi toàn bộ CI trên cuối HEAD hoàn tất.
+- PR #82/#83 và planning PR #93 còn là tài liệu cần nghiệm thu; không được dùng trạng thái trước merge của một SHA cũ như PASS cho HEAD mới.
+- Mọi staging/DR/rollback và B1/B2 external scientific approval tiếp tục không đủ evidence.
+
 ## 6. No-go và nguồn tham khảo
 
 - `SIMULATION_VERIFIED` không cấp vì P4c2b/B1B2/reference, thermal/EV physics và uncertainty E3–E6 chưa đủ.
