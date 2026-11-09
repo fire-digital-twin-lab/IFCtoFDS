@@ -75,7 +75,9 @@ def _check_scan(value: dict, image_id: str) -> dict:
     for result in results:
         if not isinstance(result, dict):
             raise ReleaseEvidenceError("Invalid Trivy result")
-        vulnerabilities = result.get("Vulnerabilities") or []
+        vulnerabilities = result.get("Vulnerabilities", [])
+        if vulnerabilities is None:
+            vulnerabilities = []
         if not isinstance(vulnerabilities, list):
             raise ReleaseEvidenceError("Trivy Vulnerabilities must be an array")
         for vulnerability in vulnerabilities:
@@ -106,6 +108,9 @@ def build_evidence(
         raise ReleaseEvidenceError("Source SHA or local image ID has invalid format")
     count = _check_sbom(_read_json_object(sbom_path))
     scan = _check_scan(_read_json_object(scan_path), image_id)
+    if enforce and not scan["image_id_verified"]:
+        # Không cấp strict security PASS nếu scanner không xác nhận image ID.
+        raise ReleaseEvidenceError("Strict gate requires a verified scanner ImageID")
     if any(not _CVE_ID.fullmatch(cve) for cve in deny_cves):
         raise ReleaseEvidenceError("Invalid CVE ID in deny-list")
     present = sorted(set(deny_cves).intersection(scan["cve_ids"]))

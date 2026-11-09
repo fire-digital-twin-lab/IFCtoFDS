@@ -74,6 +74,21 @@ jobs:
             --deny-cve CVE-2026-76844 \
             --deny-cve CVE-2026-85091
 
+      - name: Generate unreviewed CVE triage ledger from Trivy evidence
+        if: always()
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -s release-evidence/vulnerabilities.json
+          image_id="$(docker image inspect --format '{{.Id}}' ifctofds:security)"
+          python scripts/triage-release-vulnerabilities.py \
+            --scan release-evidence/vulnerabilities.json \
+            --source-sha "$SOURCE_SHA" \
+            --image-id "$image_id" \
+            --output release-evidence/cve-triage.json
+
       - name: Enforce HIGH and CRITICAL security gate for explicit release preflight
         if: github.event_name == 'workflow_dispatch' && inputs.enforce
         shell: bash
