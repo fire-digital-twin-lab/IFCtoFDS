@@ -66,8 +66,10 @@ App không publish cổng 8000 ra host. Host allowlist của app gồm public ho
 ```bash
 python scripts/production-smoke.py \
   --base-url "https://$IFCFDS_PUBLIC_HOST" \
-  --api-key "$IFCFDS_API_KEY"
+  --api-key-file "$IFCFDS_API_KEY_FILE"
 ```
+
+Smoke đọc API key từ file, không nhận secret qua command line; không tự theo redirect, đặc biệt redirect rời HTTPS. Endpoint Workbench trả HTML, không phải JSON.
 
 Smoke chỉ kiểm tra:
 - TLS endpoint có thể truy cập bằng client verification mặc định;
