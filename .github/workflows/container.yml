@@ -140,6 +140,48 @@ jobs:
           grep -qi '^strict-transport-security: max-age=31536000' /tmp/ifctofds-headers.txt
           grep -qi '^x-content-type-options: nosniff' /tmp/ifctofds-headers.txt
 
+      - name: Reject forged Host and unknown SNI through proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Host hợp lệ vẫn nhận redirect 308 tới hostname canonical và giữ path/query.
+          headers="$(mktemp)"
+          code="$(curl --silent --noproxy '*' --max-time 5 \
+            --output /dev/null --dump-header "$headers" --write-out '%{http_code}' \
+            -H 'Host: ifctofds.example.org' 'http://127.0.0.1/hello?x=1')"
+          test "$code" = "308"
+          tr -d '\r' < "$headers" | grep -Fqx 'Location: https://ifctofds.example.org/hello?x=1'
+
+          # NGINX default server trả 444 (curl thấy 000), không chuyển hướng Host do client đặt.
+          for invalid_host in attacker.example.org ifctofds.example.org.attacker.test; do
+            code="$(curl --http1.1 --silent --noproxy '*' --max-time 5 \
+              --output /dev/null --write-out '%{http_code}' \
+              -H "Host: $invalid_host" http://127.0.0.1/hello || true)"
+            test "$code" = "000"
+          done
+          code="$(curl --http1.0 --silent --noproxy '*' --max-time 5 \
+            --output /dev/null --write-out '%{http_code}' \
+            -H 'Host:' http://127.0.0.1/hello || true)"
+          test "$code" = "000"
+
+          # Đúng SNI nhưng Host sai phải bị 421, không được proxy vào app.
+          code="$(curl --http1.1 --silent --noproxy '*' --max-time 5 \
+            --cacert "$IFCFDS_TLS_CERT_DIR/fullchain.pem" \
+            --resolve ifctofds.example.org:443:127.0.0.1 \
+            --output /dev/null --write-out '%{http_code}' \
+            -H 'Host: attacker.example.org' \
+            https://ifctofds.example.org/api/health || true)"
+          test "$code" = "421"
+
+          # SNI không khớp không được thiết lập kết nối TLS ngay cả khi client tin CA test.
+          if timeout 8s openssl s_client -connect 127.0.0.1:443 \
+            -servername attacker.example.org \
+            -CAfile "$IFCFDS_TLS_CERT_DIR/fullchain.pem" \
+            -verify_return_error -brief </dev/null >/tmp/ifctofds-unknown-sni.txt 2>&1; then
+            echo "Unexpected TLS handshake success for unknown SNI"
+            exit 1
+          fi
+
       - name: Verify production smoke CLI against HTTPS stack
         env:
           SSL_CERT_FILE: /tmp/ifctofds-tls/fullchain.pem
