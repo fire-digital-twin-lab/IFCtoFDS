@@ -1,0 +1,156 @@
+name: Release candidate OCI digest and attestation
+
+on:
+  workflow_dispatch:
+    inputs:
+      approve_candidate:
+        description: 'Xác nhận chạy preflight bảo mật và chỉ publish nếu không còn HIGH/CRITICAL'
+        required: true
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: release-candidate-main
+  cancel-in-progress: false
+
+jobs:
+  publish-candidate:
+    if: github.ref == 'refs/heads/main' && inputs.approve_candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: release-candidate
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      IMAGE_REPO: ghcr.io/fire-digital-twin-lab/ifctofds
+    steps:
+      - name: Checkout main source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build a single local candidate image
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-evidence
+          docker build --pull -t ifctofds:security .
+
+      - name: Generate SBOM for candidate bytes
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ifctofds:security
+          format: spdx-json
+          output-file: release-evidence/image.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Scan the exact same local candidate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ifctofds:security
+          format: json
+          output: release-evidence/vulnerabilities.json
+          scanners: vuln
+          ignore-unfixed: false
+          severity: HIGH,CRITICAL
+          version: v0.70.0
+          exit-code: '0'
+
+      - name: Enforce security gate BEFORE any registry access
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image_id="$(docker image inspect --format '{{.Id}}' ifctofds:security)"
+          python scripts/validate-release-security-evidence.py \
+            --sbom release-evidence/image.spdx.json \
+            --scan release-evidence/vulnerabilities.json \
+            --source-sha "$SOURCE_SHA" \
+            --image-id "$image_id" \
+            --output release-evidence/security-gate.json \
+            --enforce
+
+      - name: Authenticate to GHCR only after security PASS
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+
+      - name: Publish EXACT previously scanned image and record digest
+        id: push
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          reference="$IMAGE_REPO:sha-$SOURCE_SHA"
+          docker tag ifctofds:security "$reference"
+          # Không rebuild; docker push cùng local image đã được SBOM/Trivy kiểm định.
+          docker push "$reference" > /tmp/ifctofds-push-output.txt
+          digest="$(sed -nE 's/.*digest: (sha256:[0-9a-f]{64}).*/\1/p' /tmp/ifctofds-push-output.txt | tail -n 1)"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "OCI registry digest unavailable; do not promote this candidate" >&2
+            exit 1
+          fi
+          docker manifest inspect "$IMAGE_REPO@$digest" >/dev/null
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE_REPO@$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Sign provenance for the pushed OCI digest
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ghcr.io/fire-digital-twin-lab/ifctofds
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Record candidate publication separately from release approval
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          REGISTRY_DIGEST: ${{ steps.push.outputs.digest }}
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          summary = json.loads(Path("release-evidence/security-gate.json").read_text())
+          assert summary["security_gate"] == "PASS"
+          assert summary["security_policy"] == "REJECT_HIGH_AND_CRITICAL"
+          assert summary["source_sha"] == os.environ["SOURCE_SHA"]
+          artifact = {
+              "schema": 1,
+              "source_sha": summary["source_sha"],
+              "registry_image": "ghcr.io/fire-digital-twin-lab/ifctofds",
+              "registry_digest": os.environ["REGISTRY_DIGEST"],
+              "attestation_url": os.environ["ATTESTATION_URL"],
+              "scan_sha256": summary["scan_sha256"],
+              "sbom_sha256": summary["sbom_sha256"],
+              "release_approval": "NOT_GRANTED",
+              "production_deployed": False,
+          }
+          Path("release-evidence/candidate-publication.json").write_text(
+              json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Retain candidate evidence including blocked preflights
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-candidate-evidence
+          path: release-evidence/
+          if-no-files-found: warn
+          retention-days: 90
