@@ -109,3 +109,17 @@ def test_production_volume_restore_requires_isolated_new_volume_and_ci_drill():
     assert "docker compose -f compose.production.yml stop proxy app" in workflow
     assert "G12" in runbook and "INCOMPLETE" in runbook
     assert "down --volumes" in runbook
+
+
+def test_production_ci_runs_real_ifc_e2e_and_restart_without_deleting_jobs():
+    workflow = (ROOT / ".github" / "workflows" / "container.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "Verify real IFC conversion and persisted artifacts through HTTPS" in workflow
+    assert "scripts/production-conversion-e2e.py create" in workflow
+    assert "scripts/production-conversion-e2e.py verify" in workflow
+    assert "--fixture tests/baseline/fixtures/tiny.ifc" in workflow
+    assert "up -d --force-recreate --no-build app proxy" in workflow
+    assert "down --volumes" not in workflow.split(
+        "Verify real IFC conversion and persisted artifacts through HTTPS", 1
+    )[1].split("Verify secret rotation revokes old key", 1)[0]
