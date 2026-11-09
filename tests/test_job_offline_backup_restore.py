@@ -272,3 +272,26 @@ def test_restore_rejects_symlinked_existing_mount_root(tmp_path):
     with pytest.raises(OfflineBackupError, match="symbolic link"):
         restore_offline_backup(backup, linked, allow_empty_existing=True)
     assert list(real.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Quyền POSIX cho snapshot chỉ đọc")
+def test_restore_accepts_hash_verified_sqlite_snapshot_on_readonly_backup(tmp_path):
+    root, artifact = _store(tmp_path)
+    backup = tmp_path / "backup"
+    create_offline_backup(root, backup)
+    (backup / "jobs.sqlite3").chmod(0o400)
+    backup.chmod(0o500)
+    recovered = tmp_path / "restored-volume"
+    recovered.mkdir()
+    try:
+        result = restore_offline_backup(
+            backup, recovered, allow_empty_existing=True
+        )
+    finally:
+        backup.chmod(0o700)
+        (backup / "jobs.sqlite3").chmod(0o600)
+
+    assert result["verified"] is True
+    assert JobRepository(root=recovered).get("reference")["state"] == "COMPLETED"
+    assert (recovered / "job-reference" / "result.json").read_bytes() == artifact.read_bytes()
+    assert (recovered / ".restore-verified.json").is_file()
