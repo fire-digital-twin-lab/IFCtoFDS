@@ -16,6 +16,7 @@ import sys
 
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
+_CVE_ID = re.compile(r"^CVE-[0-9]{4}-[0-9]{4,}$")
 _EXPECTED_REF = "ifctofds:security"
 
 
@@ -70,6 +71,7 @@ def _check_scan(value: dict, image_id: str) -> dict:
     if scanned_id is not None and scanned_id != image_id:
         raise ReleaseEvidenceError("Scanned image ID differs from built image")
     counts = {severity: 0 for severity in ("UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL")}
+    identifiers: set[str] = set()
     for result in results:
         if not isinstance(result, dict):
             raise ReleaseEvidenceError("Invalid Trivy result")
@@ -83,7 +85,12 @@ def _check_scan(value: dict, image_id: str) -> dict:
             if severity not in counts or not vulnerability.get("VulnerabilityID"):
                 raise ReleaseEvidenceError("Invalid severity or missing vulnerability ID")
             counts[severity] += 1
-    return {"counts": counts, "image_id_verified": scanned_id == image_id}
+            identifiers.add(vulnerability["VulnerabilityID"])
+    return {
+        "counts": counts,
+        "image_id_verified": scanned_id == image_id,
+        "cve_ids": sorted(identifiers),
+    }
 
 
 def build_evidence(
@@ -93,11 +100,19 @@ def build_evidence(
     source_sha: str,
     image_id: str,
     enforce: bool = False,
+    deny_cves: tuple[str, ...] = (),
 ) -> dict:
     if not _SHA40.fullmatch(source_sha) or not _IMAGE_ID.fullmatch(image_id):
         raise ReleaseEvidenceError("Source SHA or local image ID has invalid format")
     count = _check_sbom(_read_json_object(sbom_path))
     scan = _check_scan(_read_json_object(scan_path), image_id)
+    if any(not _CVE_ID.fullmatch(cve) for cve in deny_cves):
+        raise ReleaseEvidenceError("Invalid CVE ID in deny-list")
+    present = sorted(set(deny_cves).intersection(scan["cve_ids"]))
+    if present:
+        # Gate nhỏ, có thể dùng trong chế độ EVIDENCE_ONLY: các CVE đã có
+        # bản vá cụ thể không được quay lại image. Không che giấu HIGH khác.
+        raise ReleaseEvidenceError("An explicitly denied CVE is present in image")
     blockers = scan["counts"]["HIGH"] + scan["counts"]["CRITICAL"]
     report = {
         "schema": 1,
@@ -110,6 +125,7 @@ def build_evidence(
         "vulnerabilities": scan["counts"],
         "scanner_image_id_verified": scan["image_id_verified"],
         "security_policy": "REJECT_HIGH_AND_CRITICAL" if enforce else "EVIDENCE_ONLY",
+        "denied_cve_ids": sorted(set(deny_cves)),
         "security_gate": "PASS" if enforce and not blockers else (
             "FAIL" if enforce else "NOT_ENFORCED"
         ),
@@ -132,6 +148,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--image-id", required=True)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--enforce", action="store_true")
+    parser.add_argument(
+        "--deny-cve", action="append", default=[],
+        help="Fail nếu một CVE đã có bản vá vẫn xuất hiện trong scan",
+    )
     args = parser.parse_args(argv)
     try:
         report = build_evidence(
@@ -140,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
             source_sha=args.source_sha,
             image_id=args.image_id,
             enforce=args.enforce,
+            deny_cves=tuple(args.deny_cve),
         )
         if args.output.exists():
             raise ReleaseEvidenceError("Evidence output already exists")
