@@ -140,6 +140,17 @@ jobs:
           grep -qi '^strict-transport-security: max-age=31536000' /tmp/ifctofds-headers.txt
           grep -qi '^x-content-type-options: nosniff' /tmp/ifctofds-headers.txt
 
+      - name: Verify production smoke CLI against HTTPS stack
+        env:
+          SSL_CERT_FILE: /tmp/ifctofds-tls/fullchain.pem
+          NO_PROXY: ifctofds.example.org
+          no_proxy: ifctofds.example.org
+        run: |
+          echo "127.0.0.1 ifctofds.example.org" | sudo tee -a /etc/hosts
+          python scripts/production-smoke.py \
+            --base-url https://ifctofds.example.org \
+            --api-key-file "$IFCFDS_API_KEY_FILE"
+
       - name: Container logs on failure
         if: failure()
         run: |
