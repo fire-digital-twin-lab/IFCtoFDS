@@ -175,3 +175,100 @@ def test_restore_rejects_traversal_in_directory_manifest(tmp_path):
     with pytest.raises(OfflineBackupError, match="Unsafe backup path"):
         restore_offline_backup(backup, restored)
     assert not restored.exists()
+
+
+def test_restore_into_explicitly_allowed_empty_mount_root(tmp_path):
+    root, _ = _store(tmp_path)
+    backup = tmp_path / "backup"
+    create_offline_backup(root, backup)
+    mounted_root = tmp_path / "empty-volume-root"
+    mounted_root.mkdir()
+
+    result = restore_offline_backup(
+        backup, mounted_root, allow_empty_existing=True
+    )
+    assert result["verified"] is True
+    assert result["restored_to"] == str(mounted_root)
+    stored = JobRepository(root=mounted_root).get("reference")
+    assert stored["directory"] == str(mounted_root / "job-reference")
+    marker = json.loads(
+        (mounted_root / ".restore-verified.json").read_text(encoding="utf-8")
+    )
+    assert marker["status"] == "OFFLINE_RESTORE_VERIFIED"
+    assert marker["job_count"] == 1
+    assert len(marker["source_manifest_sha256"]) == 64
+
+
+def test_existing_empty_directory_still_rejected_by_default(tmp_path):
+    root, _ = _store(tmp_path)
+    backup = tmp_path / "backup"
+    create_offline_backup(root, backup)
+    mounted_root = tmp_path / "empty-volume-root"
+    mounted_root.mkdir()
+
+    with pytest.raises(OfflineBackupError, match="must not exist"):
+        restore_offline_backup(backup, mounted_root)
+    assert list(mounted_root.iterdir()) == []
+
+
+def test_allow_empty_existing_never_overwrites_nonempty_volume(tmp_path):
+    root, _ = _store(tmp_path)
+    backup = tmp_path / "backup"
+    create_offline_backup(root, backup)
+    mounted_root = tmp_path / "existing-volume-root"
+    mounted_root.mkdir()
+    sentinel = mounted_root / "production-data"
+    sentinel.write_bytes(b"DO-NOT-OVERWRITE")
+
+    with pytest.raises(OfflineBackupError, match="explicitly allowed and empty"):
+        restore_offline_backup(backup, mounted_root, allow_empty_existing=True)
+    assert sentinel.read_bytes() == b"DO-NOT-OVERWRITE"
+    assert not (mounted_root / ".restore-verified.json").exists()
+
+
+def test_corrupt_manifest_does_not_touch_existing_empty_volume(tmp_path):
+    root, _ = _store(tmp_path)
+    backup = tmp_path / "backup"
+    create_offline_backup(root, backup)
+    (backup / "job-reference" / "result.json").write_bytes(b"TAMPERED")
+    mounted_root = tmp_path / "empty-volume-root"
+    mounted_root.mkdir()
+
+    with pytest.raises(OfflineBackupError, match="checksum or length"):
+        restore_offline_backup(backup, mounted_root, allow_empty_existing=True)
+    assert list(mounted_root.iterdir()) == []
+
+
+def test_restore_failure_leaves_no_completion_marker_on_new_volume(tmp_path, monkeypatch):
+    from ifc_to_fds.operations import offline_backup
+
+    root, _ = _store(tmp_path)
+    backup = tmp_path / "backup"
+    create_offline_backup(root, backup)
+    mounted_root = tmp_path / "empty-volume-root"
+    mounted_root.mkdir()
+
+    def fail_copy(*_args, **_kwargs):
+        raise OfflineBackupError("Injected restore I/O failure")
+
+    monkeypatch.setattr(offline_backup, "_copy_checked", fail_copy)
+    with pytest.raises(OfflineBackupError, match="Injected restore"):
+        restore_offline_backup(backup, mounted_root, allow_empty_existing=True)
+    assert not (mounted_root / ".restore-verified.json").exists()
+
+
+def test_restore_rejects_symlinked_existing_mount_root(tmp_path):
+    root, _ = _store(tmp_path)
+    backup = tmp_path / "backup"
+    create_offline_backup(root, backup)
+    real = tmp_path / "real-volume"
+    real.mkdir()
+    linked = tmp_path / "linked-volume"
+    try:
+        linked.symlink_to(real, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("Tạo symlink yêu cầu quyền đặc biệt trên runner này")
+
+    with pytest.raises(OfflineBackupError, match="symbolic link"):
+        restore_offline_backup(backup, linked, allow_empty_existing=True)
+    assert list(real.iterdir()) == []
