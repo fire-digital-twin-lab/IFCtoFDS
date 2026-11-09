@@ -306,11 +306,12 @@ def test_analysis_trend_is_invariant_under_positive_unit_scale(values):
 
     assert tiny.trend == reference.trend
     assert tiny.change_trend == reference.change_trend
-    assert tiny.coarse_to_medium_relative_to_finer == pytest.approx(
-        reference.coarse_to_medium_relative_to_finer
-    ) if reference.coarse_to_medium_relative_to_finer is not None else (
-        tiny.coarse_to_medium_relative_to_finer is None
-    )
+    if reference.coarse_to_medium_relative_to_finer is None:
+        assert tiny.coarse_to_medium_relative_to_finer is None
+    else:
+        assert tiny.coarse_to_medium_relative_to_finer == pytest.approx(
+            reference.coarse_to_medium_relative_to_finer
+        )
 
 
 def test_analysis_rejects_overflowed_deltas_instead_of_emitting_evidence():
