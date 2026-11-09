@@ -98,6 +98,10 @@ def build_evidence(
         raise ReleaseEvidenceError("Source SHA or local image ID has invalid format")
     count = _check_sbom(_read_json_object(sbom_path))
     scan = _check_scan(_read_json_object(scan_path), image_id)
+    if enforce and not scan["image_id_verified"]:
+        raise ReleaseEvidenceError(
+            "Release enforcement requires scanner verification of the exact image ID"
+        )
     blockers = scan["counts"]["HIGH"] + scan["counts"]["CRITICAL"]
     report = {
         "schema": 1,
