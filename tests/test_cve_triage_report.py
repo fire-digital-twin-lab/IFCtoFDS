@@ -153,3 +153,11 @@ def test_release_workflow_exports_triage_from_same_trivy_json():
     assert "--output release-evidence/cve-triage.json" in workflow
     assert "if: always()" in workflow
     assert "name: image-security-evidence" in workflow
+
+
+@pytest.mark.parametrize("invalid", ["", 0, {}, "wrong-type"])
+def test_empty_falsey_non_array_vulnerabilities_fail_closed(invalid):
+    scan = _scan()
+    scan["Results"][0]["Vulnerabilities"] = invalid
+    with pytest.raises(triage.TriageContractError, match="collection"):
+        _report(scan)
