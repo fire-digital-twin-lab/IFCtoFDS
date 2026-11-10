@@ -237,12 +237,17 @@ def inspect_source_dossier(path: str | Path) -> dict[str, Any]:
     source = Path(path)
     if not source.is_file() or source.suffix.lower() != ".ifc":
         raise ValueError("Expected a readable IFC file")
+    # Khóa identity trước/sau parse: không gắn dossier vào file đã thay đổi.
+    initial_size = source.stat().st_size
+    initial_sha = _sha256(source)
     model = ifcopenshell.open(str(source))
     unit_name, scale = get_length_unit_scale(model)
+    if source.stat().st_size != initial_size or _sha256(source) != initial_sha:
+        raise ValueError("Source IFC changed during inventory")
     return assemble_source_dossier(
         model,
-        sha256=_sha256(source),
-        size_bytes=source.stat().st_size,
+        sha256=initial_sha,
+        size_bytes=initial_size,
         length_unit=unit_name,
         unit_scale_to_meters=scale,
     )
