@@ -9,6 +9,7 @@ from typing import Any
 from .pipeline import convert, audit, save_artifacts
 from .core.inventory import extract_inventory
 from .core.source_dossier import inspect_source_dossier, write_source_dossier
+from .core.coordinate_preflight import inspect_coordinate_file, save_coordinate_preflight
 from .mapping.manifest import MappingManifest
 
 
@@ -84,6 +85,10 @@ def main(argv=None):
     p = commands.add_parser("source-dossier")
     p.add_argument("input_ifc", help="Private IFC input; never uploaded by this command")
     p.add_argument("-o", "--output", required=True, help="Private JSON destination, no overwrite")
+    p = commands.add_parser("coordinate-preflight")
+    p.add_argument("input_ifc", help="Private IFC input")
+    p.add_argument("-o", "--output", required=True, help="Private JSON destination, no overwrite")
+    p.add_argument("--max-products", type=int, default=25000)
     p = commands.add_parser("serve")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
@@ -170,6 +175,13 @@ def main(argv=None):
             write_source_dossier(args.output, dossier)
             # Không ghi đường dẫn/tên/GUID/tọa độ IFC riêng tư vào log.
             print("Source dossier: DRAFT; geometry/mapping NOT_EVALUATED")
+            return 0
+        if args.command == "coordinate-preflight":
+            report = inspect_coordinate_file(
+                args.input_ifc, max_products=args.max_products
+            )
+            save_coordinate_preflight(args.output, report)
+            print("Coordinate preflight: REVIEW_REQUIRED; geometry NOT_EVALUATED")
             return 0
         config = (
             json.loads(Path(args.config).read_text(encoding="utf-8"))
