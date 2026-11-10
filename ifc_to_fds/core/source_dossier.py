@@ -14,6 +14,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+import ifcopenshell
+
+from .units import get_length_unit_scale
+
 
 _REQUIRED_TYPES = (
     "IfcProject", "IfcSite", "IfcBuilding", "IfcBuildingStorey",
@@ -231,9 +235,6 @@ def assemble_source_dossier(
 
 def inspect_source_dossier(path: str | Path) -> dict[str, Any]:
     """Mở nguồn một lần, không dựng geometry/mesh, không lưu IFC vào artifact."""
-    import ifcopenshell
-    from .units import get_length_unit_scale
-
     source = Path(path)
     if not source.is_file() or source.suffix.lower() != ".ifc":
         raise ValueError("Expected a readable IFC file")
@@ -261,9 +262,11 @@ def write_source_dossier(output: str | Path, dossier: dict[str, Any]) -> None:
     payload = json.dumps(dossier, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     target.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    completed = False
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             stream.write(payload)
-    except BaseException:
-        target.unlink(missing_ok=True)
-        raise
+        completed = True
+    finally:
+        if not completed:
+            target.unlink(missing_ok=True)
