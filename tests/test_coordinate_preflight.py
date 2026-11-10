@@ -59,8 +59,13 @@ def _matrix(position=(0.0, 0.0, 0.0), angle_degrees=0.0):
 
 
 @pytest.fixture(autouse=True)
-def stub_ifc_placement_matrix(monkeypatch):
-    monkeypatch.setattr(cp, "get_local_placement", lambda p: p.matrix)
+def stub_ifc_placement_matrix(monkeypatch, request):
+    # Các bài integration phải sử dụng IfcOpenShell thật, không dùng mock.
+    if request.node.name not in (
+        "test_public_ifc_fixture_integration_preserves_private_output",
+        "test_cli_preflight_writes_redacted_report",
+    ):
+        monkeypatch.setattr(cp, "get_local_placement", lambda p: p.matrix)
 
 
 def _preflight(products, scale=1.0, limit=25000):
@@ -173,7 +178,6 @@ def test_extreme_unit_scale_overflow_is_not_categorized_as_finite():
 
 
 def test_public_ifc_fixture_integration_preserves_private_output(tmp_path, monkeypatch):
-    monkeypatch.undo()
     path = Path(__file__).resolve().parents[1] / "tests" / "baseline" / "fixtures" / "opening.ifc"
     report = cp.inspect_coordinate_file(path)
     assert report["ifc_schema"] == "IFC4"
@@ -187,7 +191,6 @@ def test_public_ifc_fixture_integration_preserves_private_output(tmp_path, monke
 def test_cli_preflight_writes_redacted_report(tiny_ifc, tmp_path, monkeypatch, capsys):
     from ifc_to_fds.cli import main
 
-    monkeypatch.undo()
     file_path, _, _ = tiny_ifc
     target = tmp_path / "coordinate-preflight.json"
     assert main(["coordinate-preflight", str(file_path), "-o", str(target)]) == 0
