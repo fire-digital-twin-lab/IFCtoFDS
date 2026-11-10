@@ -80,6 +80,9 @@ def main(argv=None):
     p = commands.add_parser("inventory")
     p.add_argument("input_ifc")
     p.add_argument("--json", action="store_true")
+    p = commands.add_parser("source-dossier")
+    p.add_argument("input_ifc", help="Private IFC input; never uploaded by this command")
+    p.add_argument("-o", "--output", required=True, help="Private JSON destination, no overwrite")
     p = commands.add_parser("serve")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
@@ -160,6 +163,14 @@ def main(argv=None):
                 if args.json
                 else f"{model.source.filename}: {len(model.elements)} IfcProduct entities"
             )
+            return 0
+        if args.command == "source-dossier":
+            from .core.source_dossier import inspect_source_dossier, write_source_dossier
+
+            dossier = inspect_source_dossier(args.input_ifc)
+            write_source_dossier(args.output, dossier)
+            # Không ghi đường dẫn/tên/GUID/tọa độ IFC riêng tư vào log.
+            print("Source dossier: DRAFT; geometry/mapping NOT_EVALUATED")
             return 0
         config = (
             json.loads(Path(args.config).read_text(encoding="utf-8"))
