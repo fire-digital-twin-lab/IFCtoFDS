@@ -9,6 +9,7 @@ from typing import Any
 from .pipeline import convert, audit, save_artifacts
 from .core.inventory import extract_inventory
 from .core.source_dossier import inspect_source_dossier, write_source_dossier
+from .core.coordinate_preflight import inspect_coordinate_file, save_coordinate_preflight
 from .core.opening_review import inspect_opening_review, save_opening_review
 from .mapping.manifest import MappingManifest
 
@@ -85,6 +86,10 @@ def main(argv=None):
     p = commands.add_parser("source-dossier")
     p.add_argument("input_ifc", help="Private IFC input; never uploaded by this command")
     p.add_argument("-o", "--output", required=True, help="Private JSON destination, no overwrite")
+    p = commands.add_parser("coordinate-preflight")
+    p.add_argument("input_ifc", help="Private IFC input")
+    p.add_argument("-o", "--output", required=True, help="Private JSON destination, no overwrite")
+    p.add_argument("--max-products", type=int, default=25000)
     p = commands.add_parser("opening-review")
     p.add_argument("input_ifc", help="Private IFC input")
     p.add_argument("-o", "--output", required=True, help="Private JSON, contains IFC identifiers")
@@ -175,10 +180,16 @@ def main(argv=None):
             # Không ghi đường dẫn/tên/GUID/tọa độ IFC riêng tư vào log.
             print("Source dossier: DRAFT; geometry/mapping NOT_EVALUATED")
             return 0
+        if args.command == "coordinate-preflight":
+            report = inspect_coordinate_file(
+                args.input_ifc, max_products=args.max_products
+            )
+            save_coordinate_preflight(args.output, report)
+            print("Coordinate preflight: REVIEW_REQUIRED; geometry NOT_EVALUATED")
+            return 0
         if args.command == "opening-review":
             report = inspect_opening_review(args.input_ifc)
             save_opening_review(args.output, report)
-            # Không in GlobalId/STEP ID/đường dẫn công trình vào log.
             print("Opening review: UNREVIEWED; air path NOT_EVALUATED")
             return 0
         config = (
