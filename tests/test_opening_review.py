@@ -130,7 +130,8 @@ def test_step_id_and_guids_preserved_only_in_private_output(tmp_path):
     assert "PRIVATE-4" in raw
     assert json.loads(raw) == data
     assert data["privacy_classification"] == "PRIVATE_SOURCE_IDENTIFIERS"
-    assert target.stat().st_mode & 0o077 == 0 if __import__("os").name == "posix" else True
+    if __import__("os").name == "posix":
+        assert target.stat().st_mode & 0o077 == 0
     with pytest.raises(FileExistsError):
         save_opening_review(target, {})
     assert json.loads(target.read_text(encoding="utf-8")) == data
