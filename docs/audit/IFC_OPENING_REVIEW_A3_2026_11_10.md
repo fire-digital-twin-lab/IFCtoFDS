@@ -20,7 +20,8 @@ Output `.json` dùng `O_EXCL`, không ghi đè và POSIX mode 0600; trên Window
 2. Liên kết các quan hệ bằng STEP ID của `IfcOpeningElement`; báo orphan/unknown opening, host/filling thiếu, duplicate relation.
 3. Không có `IfcRelFillsElement` → `NO_FILLING_RELATION`, **không** phải `OPEN`. Có filling dạng `IfcDoor` → `PHYSICAL_OPEN_CLOSE_STATE_NOT_PROVEN`, **không** phải `CLOSED`.
 4. Thiếu `IfcRelVoidsElement` hoặc representation → yêu cầu review; không tạo HOLE trong FDS.
-5. Mỗi opening có `human_review_status=UNREVIEWED`, `physical_state=UNKNOWN`, `airflow_connectivity=NOT_EVALUATED`, `fds_effective_geometry=NOT_EVALUATED`; toàn file có `review_approval=NOT_GRANTED`.
+5. Mỗi `IfcDoor` không được tham chiếu trong quan hệ filling hợp lệ được đưa vào `door_review_queue` riêng; đây không phải bằng chứng cửa thiếu hoặc trạng thái OPEN/CLOSED.
+6. Mỗi opening có `human_review_status=UNREVIEWED`, `physical_state=UNKNOWN`, `airflow_connectivity=NOT_EVALUATED`, `fds_effective_geometry=NOT_EVALUATED`; toàn file có `review_approval=NOT_GRANTED`.
 
 ## Điều kiện nghiệm thu
 
