@@ -295,6 +295,7 @@ def _serialize_planned_model(model, cell_size, hvac_network):
     lines.append("&SURF ID='GLASS', COLOR='SKY BLUE', TRANSPARENCY=0.5 /")
     lines.append("&SURF ID='STEEL', COLOR='DIM GRAY' /")
     lines.append("&SURF ID='WOOD', COLOR='SANDY BROWN' /")
+    lines.append("&SURF ID='HVAC', COLOR='LIGHT BLUE', DEFAULT=.FALSE. /")
     lines.append("")
 
     prim_counter = 0

@@ -18,7 +18,7 @@ JS_TARGETS = [
 
 PY_TARGETS = [
     "ifc_to_fds/validation/engine.py",
-    "ifc_to_fds/validation/golden.py",
+    "ifc_to_fds/validation/golden/__init__.py",
     "ifc_to_fds/domain/bim/model.py",
     "ifc_to_fds/domain/validation/model.py",
     "ifc_to_fds/application/use_cases/audit_conversion.py",
@@ -35,7 +35,11 @@ FIXTURE_TARGETS = [
 
 def count_lines(path: Path) -> dict:
     if not path.is_file():
-        return {"total_lines": 0, "code_lines": 0}
+        # Dynamic fallback for relocated modules
+        if path.name == "golden.py" and (path.parent / "golden/__init__.py").is_file():
+            path = path.parent / "golden/__init__.py"
+        else:
+            return {"total_lines": 0, "code_lines": 0}
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     code_lines = [l for l in lines if l.strip() and not l.strip().startswith(("#", "//", "/*", "*"))]
     return {

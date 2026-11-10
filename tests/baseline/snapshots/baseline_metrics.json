@@ -1,54 +1,54 @@
 {
   "javascript_files": {
     "js/app-controller.js": {
-      "total_lines": 1473,
-      "code_lines": 1302
+      "total_lines": 1823,
+      "code_lines": 1634
     },
     "js/viewer/scene-viewer.js": {
-      "total_lines": 1851,
-      "code_lines": 1570
+      "total_lines": 2119,
+      "code_lines": 1812
     },
     "js/ifc/ifc-adapter.js": {
-      "total_lines": 1980,
-      "code_lines": 1724
+      "total_lines": 2048,
+      "code_lines": 1792
     },
     "js/fds/fds-exporter.js": {
-      "total_lines": 1399,
-      "code_lines": 1119
+      "total_lines": 1463,
+      "code_lines": 1173
     },
     "css/app.css": {
       "total_lines": 1154,
       "code_lines": 983
     },
     "index.html": {
-      "total_lines": 726,
-      "code_lines": 666
+      "total_lines": 829,
+      "code_lines": 760
     }
   },
   "python_files": {
     "ifc_to_fds/validation/engine.py": {
-      "total_lines": 571,
-      "code_lines": 559
+      "total_lines": 772,
+      "code_lines": 755
     },
-    "ifc_to_fds/validation/golden.py": {
-      "total_lines": 0,
-      "code_lines": 0
+    "ifc_to_fds/validation/golden/__init__.py": {
+      "total_lines": 27,
+      "code_lines": 25
     },
     "ifc_to_fds/domain/bim/model.py": {
-      "total_lines": 148,
-      "code_lines": 122
+      "total_lines": 153,
+      "code_lines": 127
     },
     "ifc_to_fds/domain/validation/model.py": {
-      "total_lines": 206,
-      "code_lines": 177
+      "total_lines": 301,
+      "code_lines": 258
     },
     "ifc_to_fds/application/use_cases/audit_conversion.py": {
-      "total_lines": 268,
-      "code_lines": 257
+      "total_lines": 92,
+      "code_lines": 79
     },
     "ifc_to_fds/server.py": {
-      "total_lines": 353,
-      "code_lines": 301
+      "total_lines": 701,
+      "code_lines": 595
     }
   },
   "fixtures": {

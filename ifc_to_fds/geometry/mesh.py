@@ -10,6 +10,117 @@ from copy import deepcopy
 from ifc_to_fds.core.canonical import BoundingBox, TriangleMesh
 from .boolean import solid_boolean
 
+# Guard against trimesh zero-volume divide-by-zero bug (DEBT-06 / WP-P0-03)
+_orig_mass_properties = trimesh.triangles.mass_properties
+
+
+def _safe_mass_properties(
+    triangles, crosses=None, density=None, center_mass=None, skip_inertia=False
+):
+    with np.errstate(divide="ignore", invalid="ignore"):
+        result = _orig_mass_properties(
+            triangles,
+            crosses=crosses,
+            density=density,
+            center_mass=center_mass,
+            skip_inertia=skip_inertia,
+        )
+        if not np.all(np.isfinite(result.center_mass)):
+            t = np.asanyarray(triangles, dtype=np.float64)
+            result.center_mass = t.mean(axis=(0, 1)) if len(t) > 0 else np.zeros(3)
+        return result
+
+
+trimesh.triangles.mass_properties = _safe_mass_properties
+
+
+def safe_unit_normals(vectors, epsilon=1e-14, default=(0.0, 0.0, 1.0)):
+    """Computes unit normal vectors safely guarding against degenerate or zero-length inputs.
+
+    Parameters
+    ----------
+    vectors : array_like
+        A 3D vector or array of 3D vectors to normalize.
+    epsilon : float, optional
+        Threshold below which vector length is treated as degenerate (default: 1e-14).
+    default : tuple of float, optional
+        Default unit normal vector for degenerate inputs (default: (0.0, 0.0, 1.0)).
+
+    Returns
+    -------
+    ndarray
+        Array of normalized finite 3D vectors.
+    """
+    v = np.asarray(vectors, dtype=np.float64)
+    single = (v.ndim == 1)
+    if single:
+        v = v.reshape(1, -1)
+    if v.shape[-1] != 3:
+        raise ValueError(f"Expected 3D vectors with last dimension 3, got shape {v.shape}")
+
+    lengths = np.linalg.norm(v, axis=-1, keepdims=True)
+    mask = (lengths > epsilon) & np.isfinite(lengths)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        safe_lengths = np.where(mask, lengths, 1.0)
+        normalized = np.where(mask, v / safe_lengths, np.array(default, dtype=np.float64))
+
+    if single:
+        return normalized[0]
+    return normalized
+
+
+# Aliases for flexibility across validation and test callers
+safe_normalize_normals = safe_unit_normals
+safe_normalize = safe_unit_normals
+
+
+def compute_face_normals(mesh, epsilon=1e-14, default=(0.0, 0.0, 1.0)):
+    """Computes unit face normals for a mesh safely, preventing divide-by-zero on degenerate triangles.
+
+    Parameters
+    ----------
+    mesh : TriangleMesh, trimesh.Trimesh, or object with vertices and faces
+        The triangular mesh representation.
+    epsilon : float, optional
+        Threshold for degenerate cross product detection (default: 1e-14).
+    default : tuple of float, optional
+        Default unit normal for zero-area faces (default: (0.0, 0.0, 1.0)).
+
+    Returns
+    -------
+    ndarray
+        Array of shape (N, 3) containing finite unit normals.
+    """
+    if hasattr(mesh, "vertices") and hasattr(mesh, "faces"):
+        verts = np.asarray(mesh.vertices, dtype=np.float64)
+        faces = np.asarray(mesh.faces)
+    else:
+        raise ValueError("Mesh must provide 'vertices' and 'faces' attributes")
+
+    if len(faces) == 0:
+        return np.empty((0, 3), dtype=np.float64)
+    if len(verts) == 0:
+        return np.full((len(faces), 3), default, dtype=np.float64)
+
+    faces_arr = np.asarray(faces, dtype=np.int64)
+    if faces_arr.ndim != 2 or faces_arr.shape[1] != 3:
+        normals = np.full((len(faces), 3), default, dtype=np.float64)
+        for idx, f in enumerate(faces):
+            if len(f) == 3 and all(0 <= i < len(verts) for i in f):
+                p0, p1, p2 = verts[f[0]], verts[f[1]], verts[f[2]]
+                cross = np.cross(p1 - p0, p2 - p0)
+                normals[idx] = safe_unit_normals(cross, epsilon=epsilon, default=default)
+        return normals
+
+    p0 = verts[faces_arr[:, 0]]
+    p1 = verts[faces_arr[:, 1]]
+    p2 = verts[faces_arr[:, 2]]
+    cross = np.cross(p1 - p0, p2 - p0)
+    return safe_unit_normals(cross, epsilon=epsilon, default=default)
+
+
+compute_mesh_normals = compute_face_normals
+
 
 _intersection_evidence = ContextVar("intersection_evidence", default=None)
 _intersection_witness = ContextVar("intersection_witness", default=None)
@@ -286,7 +397,7 @@ def has_self_intersection(mesh, details=None):
             if len(set(faces[i]) & set(faces[j])) >= 2 and any(sides):
                 # Distinct planes with a shared edge intersect on that edge only.
                 continue
-            normal = np.cross(tri[1] - tri[0], tri[2] - tri[0])
+            normal = safe_unit_normals(np.cross(tri[1] - tri[0], tri[2] - tri[0]))
             if not any(sides):
                 from shapely.geometry import Polygon
 
