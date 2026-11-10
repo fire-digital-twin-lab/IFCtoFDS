@@ -73,7 +73,7 @@ def assemble_opening_review(
             continue
         fills[opening_id].append(rel)
         element = getattr(rel, "RelatedBuildingElement", None)
-        if element is not None and element.is_a("IfcDoor"):
+        if _entity_type(element) == "IfcDoor":
             door_id = _step_id(element)
             if door_id is not None:
                 linked_door_ids.add(door_id)
