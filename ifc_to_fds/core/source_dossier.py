@@ -34,6 +34,13 @@ _MEP_TYPES = (
     "IfcFan", "IfcDuctSegment", "IfcDamper", "IfcAirTerminal",
     "IfcDistributionPort", "IfcRelConnectsPorts",
 )
+# Chỉ giữ trong RAM các quan hệ cần phân tích. BREP/IfcFace lớn được đếm
+# rồi giải phóng, tránh nhân đôi hàng trăm nghìn entity wrapper trên IFC thật.
+_RELATION_TYPES = frozenset({
+    "IfcBuildingStorey", "IfcOpeningElement", "IfcDoor",
+    "IfcRelVoidsElement", "IfcRelFillsElement",
+    "IfcRelContainedInSpatialStructure", "IfcRelAggregates",
+})
 
 
 def _identity(entity: Any) -> int:
@@ -88,8 +95,15 @@ def assemble_source_dossier(
     ):
         raise ValueError("Invalid source identity or length unit")
 
-    by_type = {kind: tuple(ifc_file.by_type(kind)) for kind in _REQUIRED_TYPES}
-    counts = {kind.upper(): len(values) for kind, values in by_type.items()}
+    by_type = {
+        kind: tuple(ifc_file.by_type(kind)) for kind in _RELATION_TYPES
+    }
+    counts = {
+        kind.upper(): (
+            len(by_type[kind]) if kind in by_type else len(ifc_file.by_type(kind))
+        )
+        for kind in _REQUIRED_TYPES
+    }
 
     storeys = by_type["IfcBuildingStorey"]
     storey_ids = {_identity(s) for s in storeys}
