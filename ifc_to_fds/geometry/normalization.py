@@ -9,6 +9,7 @@ Independent readers must call this on their own freshly extracted IFC mesh.
 from collections import defaultdict
 import hashlib
 import json
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -17,8 +18,24 @@ from .mesh import inspect_mesh_quality
 
 
 NORMALIZATION_REVISION = "numerical-seams-8ulp-cap-1e-12-single-shell-winding-v1"
+ADAPTIVE_NORMALIZATION_REVISION = "adaptive-cad-1e-6-cap-1e-5-single-shell-winding-v1"
 MAX_DISPLACEMENT_M = 1e-12
 MAX_ULPS = 8
+CAD_TOLERANCE_M = 1e-6
+MAX_CAD_DISPLACEMENT_M = 1e-5
+
+
+def _compute_mesh_volume(vertices: np.ndarray, faces: np.ndarray) -> float:
+    if len(faces) == 0 or len(vertices) == 0:
+        return 0.0
+    triangles = vertices[faces] - vertices.mean(axis=0)
+    vol = float(
+        np.einsum(
+            "ij,ij->i", triangles[:, 0],
+            np.cross(triangles[:, 1], triangles[:, 2]),
+        ).sum() / 6.0
+    )
+    return abs(vol)
 
 
 def _digest(mesh):
@@ -106,17 +123,32 @@ def _orient_single_shell(vertices, faces):
     return output, None
 
 
-def normalize_source_mesh(mesh):
+def normalize_source_mesh(
+    mesh,
+    adaptive_cad: bool = False,
+    cad_tolerance: float = CAD_TOLERANCE_M,
+    max_tolerance: float = MAX_CAD_DISPLACEMENT_M,
+    min_volume_ratio: float = 0.999,
+    max_displacement: Optional[float] = None,
+):
     """Return ``(mesh, proof)`` without mutating the raw input.
 
     ``NORMALIZED`` proves only bounded triangle correspondence and the existing
     valid-solid predicates. It does not prove openings, self-intersection,
     enclosure, source fidelity, or solver behavior; those audits remain required.
     """
+    if max_displacement is not None and max_displacement > MAX_DISPLACEMENT_M:
+        adaptive_cad = True
+        cad_tolerance = max_displacement
+        max_tolerance = max(max_displacement, max_tolerance)
+
+    active_revision = ADAPTIVE_NORMALIZATION_REVISION if adaptive_cad else NORMALIZATION_REVISION
+    active_cap = max_tolerance if adaptive_cad else MAX_DISPLACEMENT_M
+
     quality = inspect_mesh_quality(mesh)
     digest = _digest(mesh)
     proof = dict(
-        revision=NORMALIZATION_REVISION,
+        revision=active_revision,
         status="NOT_NEEDED",
         reason="Raw extracted triangles already satisfy solid predicates",
         source_mesh_sha256=digest,
@@ -124,7 +156,7 @@ def normalize_source_mesh(mesh):
         raw_quality=quality,
         result_quality=quality,
         max_ulps=MAX_ULPS,
-        arithmetic_cap_m=MAX_DISPLACEMENT_M,
+        arithmetic_cap_m=active_cap,
         tolerance_m=0.0,
         max_vertex_displacement_m=0.0,
         vertices_merged=0,
@@ -154,7 +186,10 @@ def normalize_source_mesh(mesh):
     vertices = np.asarray(mesh.vertices, dtype=np.float64)
     faces = np.asarray(mesh.faces, dtype=np.int64)
     scale = max(1.0, float(np.abs(vertices).max()))
-    tolerance = min(float(np.spacing(scale)) * MAX_ULPS, MAX_DISPLACEMENT_M)
+    if adaptive_cad:
+        tolerance = min(max(float(np.spacing(scale)) * MAX_ULPS, cad_tolerance), max_tolerance)
+    else:
+        tolerance = min(float(np.spacing(scale)) * MAX_ULPS, MAX_DISPLACEMENT_M)
     proof["tolerance_m"] = tolerance
     output_vertices, output_faces = vertices, faces
     mapping = np.arange(len(vertices), dtype=np.int64)
@@ -186,6 +221,16 @@ def normalize_source_mesh(mesh):
         candidate_quality = inspect_mesh_quality(candidate)
     if not _solid(candidate_quality):
         return refuse("CANDIDATE_NOT_A_VALID_SOLID", candidate_quality)
+
+    if adaptive_cad:
+        raw_vol = _compute_mesh_volume(vertices, faces)
+        cand_vol = _compute_mesh_volume(output_vertices, output_faces)
+        if raw_vol > 1e-9:
+            vol_ratio = cand_vol / raw_vol
+            proof["volume_ratio"] = vol_ratio
+            if vol_ratio < min_volume_ratio or vol_ratio > (2.0 - min_volume_ratio):
+                return refuse("VOLUME_PRESERVATION_VIOLATED", candidate_quality)
+
     displacement = float(
         np.linalg.norm(vertices - output_vertices[mapping], axis=1).max()
     )
@@ -211,3 +256,44 @@ def normalize_source_mesh(mesh):
         faces_flipped=np.flatnonzero(np.any(output_faces != mapping[faces], axis=1)).tolist(),
     )
     return candidate, proof
+
+
+def normalize_element_geometry(
+    target: Any,
+    cad_tolerance: float = CAD_TOLERANCE_M,
+    max_tolerance: float = MAX_CAD_DISPLACEMENT_M,
+    min_volume_ratio: float = 0.999,
+) -> Tuple[Any, Dict[str, Any]]:
+    """Adaptive CAD tolerance normalization for elements or meshes.
+
+    Allows welding micro-gaps up to cad_tolerance (default 1e-6 m, capped at max_tolerance 1e-5 m)
+    from OpenCASCADE/IfcOpenShell triangulations, while strictly verifying volume preservation
+    (> 99.9%) and non-degeneracy.
+    """
+    if target is None:
+        return None, {"status": "NOT_APPLICABLE", "reason": "Target is None"}
+
+    is_element = hasattr(target, "mesh")
+    mesh_obj = target.mesh if is_element else target
+
+    if mesh_obj is None:
+        return target, {"status": "NOT_APPLICABLE", "reason": "No mesh on target"}
+
+    normalized_mesh, proof = normalize_source_mesh(
+        mesh_obj,
+        adaptive_cad=True,
+        cad_tolerance=cad_tolerance,
+        max_tolerance=max_tolerance,
+        min_volume_ratio=min_volume_ratio,
+    )
+
+    if is_element:
+        if proof["status"] in ("NORMALIZED", "NOT_NEEDED"):
+            target.mesh = normalized_mesh
+            if hasattr(target, "geometry_status"):
+                from ifc_to_fds.domain.bim import GeometryStatus
+                target.geometry_status = GeometryStatus.VALID
+        return target, proof
+
+    return normalized_mesh, proof
+

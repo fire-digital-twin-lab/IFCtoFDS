@@ -1,13 +1,33 @@
-"""Explicit source federation; no alignment by bounding boxes or GlobalId."""
-
+from typing import Optional, Sequence, Tuple
 import math
+from time import perf_counter
 
 import numpy as np
-from time import perf_counter
 from .inventory import extract_inventory
-from .canonical import MEPGraph
+from .canonical import MEPGraph, CanonicalModel
 from ifc_to_fds.geometry.mesh import bounds_for_vertices
 from ifc_to_fds.mep.mep_graph import extract_mep_graph
+
+
+def _translate_matrix_4x4(mat, dx: float, dy: float, dz: float):
+    if mat is None:
+        return None
+    is_numpy = isinstance(mat, np.ndarray)
+    arr = np.asarray(mat, dtype=float).reshape(4, 4)
+    T = np.eye(4, dtype=float)
+    T[0, 3] = -dx
+    T[1, 3] = -dy
+    T[2, 3] = -dz
+    new_arr = T @ arr
+    if is_numpy:
+        if mat.ndim == 1:
+            return new_arr.ravel()
+        return new_arr
+    elif isinstance(mat, list):
+        if len(mat) == 4 and isinstance(mat[0], (list, tuple)):
+            return new_arr.tolist()
+        return new_arr.ravel().tolist()
+    return new_arr.ravel().tolist()
 
 
 def load_sources(paths, source_options=None, reference=False):
@@ -148,14 +168,24 @@ def load_sources(paths, source_options=None, reference=False):
     )
 
     rebase_vec = options.get("rebase_vector")
-    if rebase_vec is None and result.model_bounds:
-        auto_rebase = options.get("auto_rebase_origin", True)
-        if (options.get("rebase_origin") or auto_rebase) and (
-            abs(result.model_bounds.xmin) > 1000.0 or abs(result.model_bounds.ymin) > 1000.0
+    auto_rebase = options.get("auto_rebase_origin", True) or bool(options.get("rebase_origin", False))
+    result, _ = rebase_model_to_origin(result, rebase_vector=rebase_vec, auto_rebase=auto_rebase)
+    return result
+
+
+def rebase_model_to_origin(
+    model: CanonicalModel,
+    rebase_vector: Optional[Sequence[float]] = None,
+    auto_rebase: bool = True,
+) -> Tuple[CanonicalModel, Tuple[float, float, float]]:
+    rebase_vec = rebase_vector
+    if rebase_vec is None and model.model_bounds:
+        if auto_rebase and (
+            abs(model.model_bounds.xmin) > 1000.0 or abs(model.model_bounds.ymin) > 1000.0
         ):
             rebase_vec = [
-                float(np.floor(result.model_bounds.xmin)),
-                float(np.floor(result.model_bounds.ymin)),
+                float(np.floor(model.model_bounds.xmin)),
+                float(np.floor(model.model_bounds.ymin)),
                 0.0,
             ]
         else:
@@ -174,10 +204,12 @@ def load_sources(paths, source_options=None, reference=False):
         ):
             raise ValueError("rebase_vector must be [x,y,z] finite numbers")
         rebase_vec = list(map(float, rebase_vec))
+    else:
+        rebase_vec = [0.0, 0.0, 0.0]
 
     if rebase_vec and any(abs(x) > 1e-6 for x in rebase_vec):
         dx, dy, dz = rebase_vec
-        for e in result.elements:
+        for e in model.elements:
             if e.mesh and e.mesh.vertices:
                 e.mesh.vertices = [[v[0] - dx, v[1] - dy, v[2] - dz] for v in e.mesh.vertices]
             if e.bounding_box:
@@ -194,6 +226,20 @@ def load_sources(paths, source_options=None, reference=False):
                 e.representation_bounds.ymax -= dy
                 e.representation_bounds.zmin -= dz
                 e.representation_bounds.zmax -= dz
+
+            # Update placement provenance
+            if hasattr(e, "placement") and isinstance(e.placement, dict):
+                if e.placement.get("effective_world") is not None:
+                    e.placement["effective_world"] = _translate_matrix_4x4(
+                        e.placement["effective_world"], dx, dy, dz
+                    )
+                if e.placement.get("model_to_common_world") is not None:
+                    e.placement["model_to_common_world"] = _translate_matrix_4x4(
+                        e.placement["model_to_common_world"], dx, dy, dz
+                    )
+            if hasattr(e, "transform") and e.transform is not None:
+                e.transform = _translate_matrix_4x4(e.transform, dx, dy, dz)
+
             for o in e.openings:
                 if o.mesh and o.mesh.vertices:
                     o.mesh.vertices = [[v[0] - dx, v[1] - dy, v[2] - dz] for v in o.mesh.vertices]
@@ -204,6 +250,16 @@ def load_sources(paths, source_options=None, reference=False):
                     o.bounding_box.ymax -= dy
                     o.bounding_box.zmin -= dz
                     o.bounding_box.zmax -= dz
+                if hasattr(o, "placement") and isinstance(o.placement, dict):
+                    if o.placement.get("effective_world") is not None:
+                        o.placement["effective_world"] = _translate_matrix_4x4(
+                            o.placement["effective_world"], dx, dy, dz
+                        )
+                    if o.placement.get("model_to_common_world") is not None:
+                        o.placement["model_to_common_world"] = _translate_matrix_4x4(
+                            o.placement["model_to_common_world"], dx, dy, dz
+                        )
+
             for port in e.ports:
                 if port.world_position:
                     port.world_position = [
@@ -211,16 +267,21 @@ def load_sources(paths, source_options=None, reference=False):
                         port.world_position[1] - dy,
                         port.world_position[2] - dz,
                     ]
-        if result.model_bounds:
-            result.model_bounds.xmin -= dx
-            result.model_bounds.xmax -= dx
-            result.model_bounds.ymin -= dy
-            result.model_bounds.ymax -= dy
-            result.model_bounds.zmin -= dz
-            result.model_bounds.zmax -= dz
+        if model.model_bounds:
+            model.model_bounds.xmin -= dx
+            model.model_bounds.xmax -= dx
+            model.model_bounds.ymin -= dy
+            model.model_bounds.ymax -= dy
+            model.model_bounds.zmin -= dz
+            model.model_bounds.zmax -= dz
 
-        result.source.rebase_vector = rebase_vec
-        for s in result.sources:
-            s.rebase_vector = rebase_vec
+        if hasattr(model, "source") and model.source is not None:
+            model.source.rebase_vector = rebase_vec
+        if hasattr(model, "sources") and model.sources:
+            for s in model.sources:
+                s.rebase_vector = rebase_vec
 
-    return result
+        return model, (dx, dy, dz)
+
+    return model, (0.0, 0.0, 0.0)
+
