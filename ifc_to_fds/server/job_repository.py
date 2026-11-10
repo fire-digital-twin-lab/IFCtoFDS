@@ -182,12 +182,14 @@ class JobRepository:
                 if k not in ("process", "directory") and not k.startswith("_")
             }
             directory = Path(job["directory"])
-            try:
-                snapshot["progress"] = json.loads(
-                    (directory / "progress.json").read_text(encoding="utf-8")
-                )
-            except (OSError, ValueError):
-                pass
+            progress_path = directory / "progress.json"
+            if progress_path.is_file():
+                try:
+                    snapshot["progress"] = json.loads(
+                        progress_path.read_text(encoding="utf-8")
+                    )
+                except (OSError, ValueError) as exc:
+                    logger.debug("Could not load progress.json for job %s: %s", jid, exc)
             if (directory / "diagnostics.json").is_file():
                 snapshot["diagnostics_url"] = f"/api/jobs/{jid}/diagnostics"
             return snapshot

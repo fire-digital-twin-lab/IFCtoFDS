@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 from scipy.spatial import cKDTree
 
+from ifc_to_fds.domain.bim import GeometryStatus
 from .mesh import inspect_mesh_quality
 
 
@@ -291,7 +292,6 @@ def normalize_element_geometry(
         if proof["status"] in ("NORMALIZED", "NOT_NEEDED"):
             target.mesh = normalized_mesh
             if hasattr(target, "geometry_status"):
-                from ifc_to_fds.domain.bim import GeometryStatus
                 target.geometry_status = GeometryStatus.VALID
         return target, proof
 
