@@ -63,6 +63,9 @@ def test_unfilled_void_is_reviewed_not_assumed_airflow_path():
     assert data["fill_relation_count"] == 1
     assert data["openings_with_fill_relation"] == 1
     assert data["openings_without_fill_relation"] == 1
+    assert data["door_count"] == 1
+    assert data["door_without_filling_relation_count"] == 0
+    assert data["door_review_queue"] == []
     queue = data["opening_review_queue"]
     assert [x["opening"]["step_id"] for x in queue] == [4, 5]
     assert "NO_FILLING_RELATION" not in queue[0]["review_reasons"]
@@ -120,6 +123,13 @@ def test_unnamed_or_missing_fill_cannot_be_deduced_from_door_count():
     assert result["opening_count"] == 2
     assert result["openings_without_fill_relation"] == 1
     assert "DOOR_NOT_LINKED" not in json.dumps(result)
+    assert result["door_count"] == 2
+    assert result["door_without_filling_relation_count"] == 1
+    door = result["door_review_queue"][0]
+    assert door["door"]["ifc_type"] == "IfcDoor"
+    assert door["reason"] == "DOOR_WITHOUT_IFC_FILLING_RELATION"
+    assert door["human_review_status"] == "UNREVIEWED"
+    assert door["physical_state"] == "UNKNOWN"
 
 
 def test_step_id_and_guids_preserved_only_in_private_output(tmp_path):
