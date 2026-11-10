@@ -58,6 +58,8 @@ def assemble_opening_review(
     unlinked_fills = 0
     void_relations = tuple(ifc_file.by_type("IfcRelVoidsElement"))
     fill_relations = tuple(ifc_file.by_type("IfcRelFillsElement"))
+    doors = tuple(ifc_file.by_type("IfcDoor"))
+    linked_door_ids: set[int] = set()
     for rel in void_relations:
         opening_id = _step_id(getattr(rel, "RelatedOpeningElement", None))
         if opening_id not in opening_by_id:
@@ -70,6 +72,11 @@ def assemble_opening_review(
             unlinked_fills += 1
             continue
         fills[opening_id].append(rel)
+        element = getattr(rel, "RelatedBuildingElement", None)
+        if element is not None and element.is_a("IfcDoor"):
+            door_id = _step_id(element)
+            if door_id is not None:
+                linked_door_ids.add(door_id)
 
     queue = []
     for opening_id in sorted(opening_by_id):
@@ -115,6 +122,19 @@ def assemble_opening_review(
         })
 
     count_with_fill = sum(bool(fills[oid]) for oid in opening_by_id)
+    unlinked_doors = sorted(
+        (door for door in doors if _step_id(door) not in linked_door_ids),
+        key=lambda door: _step_id(door) or 0,
+    )
+    door_review_queue = [
+        {
+            "door": _identifier(door),
+            "reason": "DOOR_WITHOUT_IFC_FILLING_RELATION",
+            "human_review_status": "UNREVIEWED",
+            "physical_state": "UNKNOWN",
+        }
+        for door in unlinked_doors
+    ]
     return {
         "schema_version": "1.0",
         "source_sha256": source_sha256,
@@ -125,6 +145,9 @@ def assemble_opening_review(
         "fill_relation_count": len(fill_relations),
         "openings_with_fill_relation": count_with_fill,
         "openings_without_fill_relation": len(opening_by_id) - count_with_fill,
+        "door_count": len(doors),
+        "door_without_filling_relation_count": len(unlinked_doors),
+        "door_review_queue": door_review_queue,
         "unlinked_void_relation_count": unlinked_voids,
         "unlinked_fill_relation_count": unlinked_fills,
         "opening_review_queue": queue,
