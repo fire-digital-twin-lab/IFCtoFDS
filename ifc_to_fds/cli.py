@@ -8,6 +8,7 @@ import sys
 from typing import Any
 from .pipeline import convert, audit, save_artifacts
 from .core.inventory import extract_inventory
+from .core.source_dossier import inspect_source_dossier, write_source_dossier
 from .mapping.manifest import MappingManifest
 
 
@@ -165,8 +166,6 @@ def main(argv=None):
             )
             return 0
         if args.command == "source-dossier":
-            from .core.source_dossier import inspect_source_dossier, write_source_dossier
-
             dossier = inspect_source_dossier(args.input_ifc)
             write_source_dossier(args.output, dossier)
             # Không ghi đường dẫn/tên/GUID/tọa độ IFC riêng tư vào log.
