@@ -1,5 +1,50 @@
 # IFCtoFDS — Sổ theo dõi nghiệm thu production
 
+## Checkpoint R1–R5 remediation, security evidence và scientific separation — 09/11/2026
+
+**Code main baseline đã xác minh:** `77f047f392fc4ac7fc3d4414df4cbc9087151ebb` sau merge PR #90. **Giới hạn:** bằng chứng dưới đây từ CI trên PR HEAD và một số main push; không khẳng định đã triển khai staging/prod.
+
+| Phần việc | PR đã merge (squash SHA trên main) | Chứng cứ / verdict scoped |
+|---|---|---|
+| R1 NGINX Host/SNI | #84 — `2e5a55406c63a0d802427b91dfa9cfb450db4d3e` | canonical redirect, reject forged Host/SNI, Container CI PASS |
+| R2 non-root API key | #85 — `fab1cbbf84fb96b7137ed90e03405cf12037af6d` | `root:10001/0640` mount, deny unauthorized UID, rotation/revoke key, CI PASS |
+| R3 offline backup/restore | #86 — `6c8d00ad823b006971f1e8ca8dda7820a8515366` | SQLite + artifact hash restore vào named volume mới, không ghi đè, CI PASS; **G12 staging NOT_RUN** |
+| R4 IFC E2E | #87 — `8528c0cc3493e14d19ae01c78adfa334f124bfa3` | tiny IFC qua HTTPS, job terminal, `MAPPING_VERIFIED` scoped, artifact SHA sau restart; CI PASS, **science INCONCLUSIVE** |
+| R5a image SBOM/Trivy | #88 — `4dd621cf28fa74f633ae8c2e9d6ebf581a636f03` | image SBOM, scanner JSON, ImageID/hash evidence, CI PASS; **release approval NOT_GRANTED** |
+| R5b Trixie base pin | #89 — `83340f0ecfd620affe4fe84dcd6e658d4ef3f419` | runtime image Python 3.12.16 Trixie pinned OCI index digest; 4 PR workflows PASS |
+| R5c apt/zlib CVE patches | #90 — `77f047f392fc4ac7fc3d4414df4cbc9087151ebb` | 4 PR workflows PASS; Trivy PR scan **0 CRITICAL/47 HIGH**, 11 CVE IDs, ba CVE đã vá không còn trong scan |
+
+- R5d sổ CVE tự động: PR #91 **đang review/chạy CI**, chưa merge ở thời điểm checkpoint. Trivy artifact PR #91 đã được kiểm tra: 47 HIGH findings thuộc 11 CVEs, mỗi entry `UNREVIEWED`, `human_review=REQUIRED`, `security_release_verdict=NO_GO`. Không suy diễn PASS trước khi đầy đủ CI và merge.
+- Bản quét R5b trước vá: **0 CRITICAL/51 HIGH**; R5c sau vá: **0 CRITICAL/47 HIGH**, ba CVE có `FixedVersion` mục tiêu được loại khỏi scanner; số liệu tính theo package findings, không phải số lỗ hổng có thể khai thác độc lập.
+- **Security release gate = NO_GO/INCONCLUSIVE:** 47 HIGH chưa được triage/phê duyệt, image GHCR promotion theo immutable digest + attestation chưa triển khai, required branch checks/protected release environment cần repo admin. Không được coi report-only `image-security` SUCCESS là strict security PASS.
+- **Operational gate:** G11 staging NOT_RUN; G12 DR staging NOT_RUN dù CI backup/restore PASS; G13 rollback NOT_RUN; G14 alert drill INCONCLUSIVE; G15 actual production deployment NOT_RUN. Chưa có baseline capacity/RPO/RTO từ host mục tiêu.
+- **Scientific gate:** `EV-GEO-001=FAIL`; scoped `MESH-SENS-P4C2A-001=PASS/E2` chỉ phản ánh minimal pinned-FDS execution; `MESH-LOCAL-001=INCONCLUSIVE`; B1/B2 application reference chưa được duyệt và P4c2b readiness NOT_READY. Không gắn `SIMULATION_VERIFIED` khi chưa có independent application V&V.
+
+**Release verdict:** `NOT_PRODUCTION_READY`. **Hành động tiếp:** đóng CI PR #91, xử lý 47 HIGH qua evidence/reviewer (không auto-waiver), chuẩn bị GHCR digest/artifact attestation và staging/DR/rollback/monitoring drills; scientific track tách riêng.
+
+---
+
+
+
+## Checkpoint cơ chế triển khai production và smoke HTTPS — 09/11/2026
+
+**PR:** #80 đã merge bằng squash, main commit 4a5029e9040ba15927c25444595126c19e5f6bd9; final PR HEAD 87594f8d67a167efa6cdaa246e4997f6c41bb875.
+**Phạm vi:** Workbench + Verified Mapping/API single-instance. Không mở rộng phạm vi scientific validation.
+
+- Production container contract PR run #42607250010: SUCCESS; Docker build, Compose, startup thiếu API key fail-closed, NGINX/TLS, auth/header probes và CLI smoke HTTPS thực tế đều PASS.
+- Source quality PR run #42607250070: SUCCESS; 976 passed, 16 deselected, 121 warnings, coverage 87%.
+- Conversion PR run #42607250004: SUCCESS; Linux/Windows Python 3.10–3.13, JavaScript, browser, pinned FDS integration.
+- Sau merge main@4a5029e: Container run #42608206469 SUCCESS; Source Quality #42608206539 và Conversion #42608206468 còn IN_PROGRESS tại thời điểm ghi checkpoint, chưa được đánh dấu PASS.
+- Đã sửa lỗi smoke parse trang Workbench HTML như JSON, loại API key khỏi command-line arguments, chặn redirect, chỉ chấp nhận HTTPS origin, đọc secret file và chạy chính production smoke CLI trong CI. Targeted regression: 5 passed.
+- Không thay đổi IFC, geometry, FDS, physics hoặc scientific verification semantics. MESH-SENS-P4C2A-001 chỉ PASS/E2 trong scoped minimal solver integration; MESH-LOCAL-001 và overall scientific/application verdict vẫn INCONCLUSIVE.
+- B1/B2 P4c2b reference hiện DRAFT, schema 0.4.0, chưa có approved simulation domain, MAPPING_VERIFIED hay external IFC hash evidence đầy đủ; readiness NOT_READY, không tự tạo/phê duyệt nguồn dữ liệu.
+- G11 staging NOT_RUN; G12 backup/restore DR NOT_RUN; G13 rollback NOT_RUN; G14 runtime monitoring alert drill chưa có evidence; G15 production deploy NOT_RUN. G09/G10 scientific và G16 sign-off còn mở.
+- Release verdict: NOT_PRODUCTION_READY. Không cấp SIMULATION_VERIFIED.
+
+**Next work package:** kiểm chứng main CI hậu merge; chuẩn bị staging TLS/monitoring/backup-restore/rollback drill theo release SHA và thu thập approved B1/B2 external scientific reference trước khi chạy P4c2b.
+
+---
+
 
 ## Checkpoint P4c2a executed pinned-FDS grid study + DEVC provenance — 08/11/2026
 
