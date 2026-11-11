@@ -11,6 +11,10 @@ from .core.inventory import extract_inventory
 from .core.source_dossier import inspect_source_dossier, write_source_dossier
 from .core.coordinate_preflight import inspect_coordinate_file, save_coordinate_preflight
 from .core.opening_review import inspect_opening_review, save_opening_review
+from .core.spatial_boundary_review import (
+    inspect_spatial_boundary_review,
+    save_spatial_boundary_review,
+)
 from .mapping.manifest import MappingManifest
 
 
@@ -91,6 +95,9 @@ def main(argv=None):
     p.add_argument("-o", "--output", required=True, help="Private JSON destination, no overwrite")
     p.add_argument("--max-products", type=int, default=25000)
     p = commands.add_parser("opening-review")
+    p.add_argument("input_ifc", help="Private IFC input")
+    p.add_argument("-o", "--output", required=True, help="Private JSON, contains IFC identifiers")
+    p = commands.add_parser("spatial-boundary-review")
     p.add_argument("input_ifc", help="Private IFC input")
     p.add_argument("-o", "--output", required=True, help="Private JSON, contains IFC identifiers")
     p = commands.add_parser("serve")
@@ -191,6 +198,11 @@ def main(argv=None):
             report = inspect_opening_review(args.input_ifc)
             save_opening_review(args.output, report)
             print("Opening review: UNREVIEWED; air path NOT_EVALUATED")
+            return 0
+        if args.command == "spatial-boundary-review":
+            report = inspect_spatial_boundary_review(args.input_ifc)
+            save_spatial_boundary_review(args.output, report)
+            print("Spatial boundary review: UNREVIEWED; airflow NOT_EVALUATED")
             return 0
         config = (
             json.loads(Path(args.config).read_text(encoding="utf-8"))
