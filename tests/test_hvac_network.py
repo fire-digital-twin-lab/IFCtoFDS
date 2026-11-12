@@ -181,3 +181,22 @@ def test_real_fds_accepts_connected_network(connected_ifc, tmp_path, vent_endpoi
     gate, _ = solver_gates(text, AuditConfig(solver_executable=executable,
                           solver_evidence_directory=str(tmp_path / "solver")))
     assert gate.status == "PASS", gate.model_dump()
+
+
+def test_world_hvac_vent_is_rebased_with_ports_and_domain(connected_ifc, tmp_path):
+    path, config = connected_ifc
+    config["simulation_domain"].update(xmin=1)
+    config["simulation_domain_coordinate_frame"] = "WORLD"
+    config["rebase_vector"] = [5, 2, 3]
+    original = prepare([str(path)], {"simulation_domain": config["simulation_domain"]})
+    endpoint_port = next(p for e in original.elements for p in e.ports if p.world_position[0] == 1)
+    config["decisions"][endpoint_port.owner_key]["hvac"]["endpoints"][endpoint_port.port_key] = {
+        "kind": "VENT", "coordinate_frame": "WORLD", "vent_xb": [1, 1, 1, 1.4, 2, 2.3],
+    }
+
+    result = convert([str(path)], config, tmp_path / "conversion")
+    parsed = parse_fds(result["fds_text"])
+    vents = [r for r in parsed.records if r.kind == "VENT"]
+    assert len(vents) == 1
+    assert vents[0].values["XB"] == pytest.approx([-4, -4, -1, -0.6, -1, -0.7])
+    assert result["report"]["gates"]["hvac"]["status"] == "PASS"

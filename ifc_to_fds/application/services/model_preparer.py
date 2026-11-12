@@ -36,14 +36,7 @@ def prepare_model(
         raw_box = BoundingBox.model_validate(scope_raw["bounding_box"])
         if coord_frame == "WORLD":
             scope_raw["coordinate_frame"] = "REBASED"
-            scope_raw["bounding_box"] = BoundingBox(
-                xmin=raw_box.xmin - dx,
-                xmax=raw_box.xmax - dx,
-                ymin=raw_box.ymin - dy,
-                ymax=raw_box.ymax - dy,
-                zmin=raw_box.zmin - dz,
-                zmax=raw_box.zmax - dz,
-            ).model_dump()
+            scope_raw["bounding_box"] = raw_box.translated(-dx, -dy, -dz).model_dump()
 
     scope = SpatialScope.model_validate(scope_raw)
     if scope.storeys or scope.bounding_box:
@@ -63,14 +56,7 @@ def prepare_model(
         if has_rebase and domain_frame is None:
             raise ValueError("simulation_domain_coordinate_frame is required when the IFC model is rebased")
         if has_rebase and domain_frame == "WORLD":
-            domain_box = BoundingBox(
-                xmin=domain_box.xmin - dx,
-                xmax=domain_box.xmax - dx,
-                ymin=domain_box.ymin - dy,
-                ymax=domain_box.ymax - dy,
-                zmin=domain_box.zmin - dz,
-                zmax=domain_box.zmax - dz,
-            )
+            domain_box = domain_box.translated(-dx, -dy, -dz)
         model.simulation_domain = domain_box
         model.domain_origin = "EXPLICIT_CONFIGURATION"
     elif not scope.storeys and not scope.bounding_box:

@@ -68,6 +68,7 @@ class WorkerRunner:
                 base_text = base.fds_text
                 mapping_plan = base.mapping_plan
                 base_manifest = base.manifest
+                scenario = scenario.in_base_frame(base_manifest.configuration.get("rebase_vector"))
                 bundle = emit_fire_scenario(
                     mapping_plan=mapping_plan,
                     bundle_sha256=base_manifest.bundle_sha256,

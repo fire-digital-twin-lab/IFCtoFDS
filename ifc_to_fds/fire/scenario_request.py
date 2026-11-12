@@ -30,6 +30,7 @@ class ScenarioRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     schema_version: Literal[1] = 1
+    coordinate_frame: Literal["WORLD", "REBASED"] = "REBASED"
     scenario_id: str | None = None
     bundle_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     ev_selections: list[EVSelection] = Field(min_length=1)
@@ -39,6 +40,22 @@ class ScenarioRequest(BaseModel):
     mesh_plan: LocalMeshPlanRequest | None = None
     energy_budget: EnergyBudget | None = None
     require_quantitative_hf: StrictBool = False
+
+    def in_base_frame(self, rebase_vector):
+        """Đưa tọa độ tuyệt đối của kịch bản về hệ trục của deck đã kiểm định."""
+        if self.coordinate_frame == "REBASED":
+            return self
+
+        offset = rebase_vector if rebase_vector is not None else (0.0, 0.0, 0.0)
+        payload = self.model_dump(mode="python")
+        for selection in [*payload["ev_selections"], *payload["devices"]]:
+            selection["position"] = tuple(
+                value - shift for value, shift in zip(selection["position"], offset, strict=True)
+            )
+            if selection.get("floor_z_m") is not None:
+                selection["floor_z_m"] -= offset[2]
+        payload["coordinate_frame"] = "REBASED"
+        return self.model_validate(payload)
 
     @field_validator("require_quantitative_hf")
     @classmethod

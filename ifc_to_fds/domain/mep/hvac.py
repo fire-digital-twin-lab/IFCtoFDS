@@ -10,12 +10,13 @@ class EndpointSpec(BaseModel):
     kind: Literal["AMBIENT", "VENT"]
     vent_xb: tuple[float, float, float, float, float, float] | None = None
     loss: tuple[float, float] = (1.0, 1.0)
+    coordinate_frame: Literal["WORLD", "REBASED"] | None = None
 
     @model_validator(mode="after")
     def validate_boundary(self):
         if any(x < 0 for x in self.loss):
             raise ValueError("Endpoint losses must be nonnegative")
-        if self.kind == "AMBIENT" and self.vent_xb is not None:
+        if self.kind == "AMBIENT" and (self.vent_xb is not None or self.coordinate_frame is not None):
             raise ValueError("AMBIENT endpoint cannot have a CFD vent")
         if self.kind == "VENT":
             if self.vent_xb is None:
