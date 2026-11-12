@@ -1,4 +1,4 @@
-"""FDS 6.11.1 SMV obstruction indices for static OBST on disjoint meshes.
+"""FDS 6.11.1 SMV obstruction indices for static OBST and a simple static HOLE.
 
 Format reference: firemodels/fds FDS-6.11.1 Source/dump.f90, SMV OBST
 section. Physical bounds come from TRNX/Y/Z at the solver's integer indices,
@@ -11,6 +11,9 @@ import numpy as np
 from ifc_to_fds.geometry.mesh import bounds_for_vertices, is_axis_aligned_box
 from .acceptance import GateResult, GateStatus
 from .parser import parse_fds
+
+
+EFFECTIVE_ADAPTER_VERSION = "smv-obst-static-hole-6.11.1-v2"
 
 
 def check_opening_grid_alignment(opening_mesh, host_bounds, parsed):
@@ -78,17 +81,17 @@ def check_opening_grid_alignment(opening_mesh, host_bounds, parsed):
     }
 
 
-def effective_obstructions(fds_text, smv_text):
+def effective_obstructions(fds_text, smv_text, *, solver_version="6.11.1"):
     parsed = parse_fds(fds_text)
     if parsed.errors or parsed.unsupported:
         return GateResult(
             status=GateStatus.INCONCLUSIVE,
             reason="Unsupported FDS syntax for effective audit",
         )
-    if any(r.kind in ("GEOM", "HOLE", "VENT") for r in parsed.records):
+    if any(r.kind in ("GEOM", "VENT") for r in parsed.records):
         return GateResult(
             status=GateStatus.INCONCLUSIVE,
-            reason="GEOM cut-cell and HOLE/VENT effective output adapters are not implemented",
+            reason="GEOM cut-cell and VENT effective output adapters are not implemented",
         )
     meshes = [r for r in parsed.records if r.kind == "MESH"]
     if not meshes:
@@ -97,6 +100,14 @@ def effective_obstructions(fds_text, smv_text):
             reason="No MESH namelists found in FDS input",
         )
     obstructions = [r for r in parsed.primitives if r.kind == "OBST"]
+    holes = [r for r in parsed.primitives if r.kind == "HOLE"]
+    if holes:
+        if solver_version != "6.11.1":
+            return GateResult(
+                status=GateStatus.INCONCLUSIVE,
+                reason="Static HOLE SMV adapter requires FDS 6.11.1",
+            )
+        return _effective_static_hole(parsed, meshes, obstructions, holes, smv_text)
     if any("DEVC_ID" in r.values or "CTRL_ID" in r.values for r in obstructions):
         return GateResult(status=GateStatus.INCONCLUSIVE, reason="Dynamic obstruction occupancy is unsupported")
     expected = {r.id: r.values["XB"] for r in obstructions}
@@ -148,57 +159,195 @@ def _box_volume(box):
     return math.prod(max(0.0, box[i + 1] - box[i]) for i in (0, 2, 4))
 
 
-def _effective_mesh(mesh, lines, expected, evidence):
+def _grid_aligned_box(record, grids):
+    indices = []
+    for i, coordinate in enumerate(record.values["XB"]):
+        matches = np.flatnonzero(np.abs(np.asarray(grids[i // 2]) - coordinate) <= 1e-7)
+        if len(matches) != 1:
+            raise ValueError(f"Static HOLE audit requires grid-aligned bounds: {record.id}")
+        indices.append(int(matches[0]))
+    if _box_volume(indices) <= 0:
+        raise ValueError(f"Static HOLE audit requires a positive-volume box: {record.id}")
+    return indices
+
+
+def _on_exterior_mesh_face(indices, grids):
+    flat = [i for i in (0, 2, 4) if indices[i] == indices[i + 1]]
+    if len(flat) != 1:
+        return False
+    i = flat[0]
+    return indices[i] in (0, len(grids[i // 2]) - 1)
+
+
+def _effective_static_hole(parsed, meshes, obstructions, holes, smv_text):
+    lines = smv_text.splitlines()
+    evidence = {
+        "adapter_version": EFFECTIVE_ADAPTER_VERSION,
+        "smv_sha256": hashlib.sha256(smv_text.encode()).hexdigest(),
+        "smv_lines": len(lines),
+    }
+    times = [r.values.get("T_END") for r in parsed.records if r.kind == "TIME"]
+    if len(meshes) != 1 or len(obstructions) != 1 or len(holes) != 1 or times != [[0]]:
+        return GateResult(
+            status=GateStatus.INCONCLUSIVE,
+            reason="Static HOLE proof requires a setup run with one mesh, wall and opening",
+            evidence=evidence,
+        )
+    wall, hole = obstructions[0], holes[0]
+    if (
+        not wall.id
+        or set(wall.values) - {"ID", "XB"}
+        or set(hole.values) - {"ID", "XB"}
+    ):
+        return GateResult(
+            status=GateStatus.INCONCLUSIVE,
+            reason="Static HOLE parameters are outside the reviewed obstruction subset",
+            evidence=evidence,
+        )
     try:
-        grids = []
-        for axis, tag in enumerate(("TRNX", "TRNY", "TRNZ")):
-            starts = [i for i, line in enumerate(lines) if line.strip() == tag]
-            if len(starts) != 1:
-                raise ValueError("Missing or multiple SMV coordinate grids")
-            start = starts[0] + 1
-            count = int(lines[start])
-            start += 1 + count
-            n = int(mesh.values["IJK"][axis]) + 1
-            grid = []
-            for index, line in enumerate(lines[start : start + n]):
-                fields = line.split()
-                if int(fields[0]) != index:
-                    raise ValueError("Unexpected SMV grid index")
-                grid.append(float(fields[1]))
+        grids, rows = _read_mesh_obstructions(meshes[0], lines)
+        host = _grid_aligned_box(wall, grids)
+        cut = _grid_aligned_box(hole, grids)
+        axes = [
+            i for i in (0, 2, 4) if cut[i] < host[i] and host[i + 1] < cut[i + 1]
+        ]
+        if len(axes) != 1:
+            raise ValueError("Static HOLE must cut through exactly one wall axis")
+        normal = axes[0]
+        tangents = [i for i in (0, 2, 4) if i != normal]
+        for i in tangents:
+            # A cut may reach a wall edge only at the exterior mesh boundary.
+            # An internal coincident edge can retain a flow-blocking thin face.
+            last = len(grids[i // 2]) - 1
             if (
-                len(grid) != n
-                or not np.isfinite(grid).all()
-                or np.any(np.diff(grid) <= 0)
+                cut[i] < host[i] or cut[i + 1] > host[i + 1]
+                or (cut[i] == host[i] and host[i] != 0)
+                or (cut[i + 1] == host[i + 1] and host[i + 1] != last)
             ):
-                raise ValueError("Invalid SMV coordinates")
-            grids.append(grid)
-        for axis, grid in enumerate(grids):
-            domain = mesh.values["XB"]
-            if not np.allclose(
-                grid, np.linspace(domain[2 * axis], domain[2 * axis + 1], len(grid)),
-                atol=1e-7, rtol=0,
-            ):
-                raise ValueError("Nonuniform/unmatched solver grid is unsupported")
-        starts = [i for i, line in enumerate(lines) if line.strip() == "OBST"]
+                raise ValueError("Static HOLE opening meets an unsupported wall edge")
+        passage = _intersection(host, cut)
+    except (ValueError, IndexError) as exc:
+        return GateResult(status=GateStatus.INCONCLUSIVE, reason=str(exc), evidence=evidence)
+
+    pieces = [indices for _, indices in rows]
+    if not pieces or any(label != wall.id for label, _ in rows):
+        return GateResult(
+            status=GateStatus.FAIL,
+            reason="Static HOLE solver obstruction inventory differs from input wall",
+            evidence=evidence,
+        )
+    boundary_faces = [piece for piece in pieces if _box_volume(piece) == 0]
+    # The supported single mesh has no VENT or periodic boundary. A wall
+    # fragment on an exterior face changes no interior gas-to-gas face.
+    if any(not _on_exterior_mesh_face(piece, grids) for piece in boundary_faces):
+        return GateResult(
+            status=GateStatus.INCONCLUSIVE,
+            reason="Thin internal obstruction requires separate face occupancy evidence",
+            evidence=evidence,
+        )
+    occupied = sum(_box_volume(piece) for piece in pieces)
+    expected = _box_volume(host) - _box_volume(passage)
+    evidence["static_hole"] = dict(
+        wall_id=wall.id,
+        opening_id=hole.id,
+        through_axis="XYZ"[normal // 2],
+        wall_indices=host,
+        passage_indices=passage,
+        obstruction_pieces=pieces,
+        domain_boundary_faces=boundary_faces,
+        effective_wall_cells=occupied,
+        expected_wall_cells=expected,
+    )
+    if (
+        occupied != expected
+        or any(_intersection(piece, host) != piece for piece in pieces)
+        or any(_box_volume(_intersection(piece, passage)) > 0 for piece in pieces)
+        or any(
+            _box_volume(_intersection(left, right)) > 0
+            for i, left in enumerate(pieces)
+            for right in pieces[i + 1:]
+        )
+    ):
+        return GateResult(
+            status=GateStatus.FAIL,
+            reason="Solver cells differ from the wall minus the through-opening",
+            evidence=evidence,
+        )
+    evidence["static_hole"]["open_area_m2"] = math.prod(
+        grids[i // 2][passage[i + 1]] - grids[i // 2][passage[i]] for i in tangents
+    )
+    return GateResult(
+        status=GateStatus.PASS,
+        reason="Static wall and through-opening occupancy verified from solver SMV indices",
+        evidence=evidence,
+    )
+
+
+def _read_mesh_obstructions(mesh, lines):
+    grids = []
+    for axis, tag in enumerate(("TRNX", "TRNY", "TRNZ")):
+        starts = [i for i, line in enumerate(lines) if line.strip() == tag]
         if len(starts) != 1:
-            raise ValueError("Missing or multiple SMV OBST tables")
+            raise ValueError("Missing or multiple SMV coordinate grids")
         start = starts[0] + 1
         count = int(lines[start])
-        start += 1
+        start += 1 + count
+        n = int(mesh.values["IJK"][axis]) + 1
+        grid = []
+        for index, line in enumerate(lines[start : start + n]):
+            fields = line.split()
+            if int(fields[0]) != index:
+                raise ValueError("Unexpected SMV grid index")
+            grid.append(float(fields[1]))
+        if (
+            len(grid) != n
+            or not np.isfinite(grid).all()
+            or np.any(np.diff(grid) <= 0)
+        ):
+            raise ValueError("Invalid SMV coordinates")
+        grids.append(grid)
+    for axis, grid in enumerate(grids):
+        domain = mesh.values["XB"]
+        if not np.allclose(
+            grid, np.linspace(domain[2 * axis], domain[2 * axis + 1], len(grid)),
+            atol=1e-7, rtol=0,
+        ):
+            raise ValueError("Nonuniform/unmatched solver grid is unsupported")
+    starts = [i for i, line in enumerate(lines) if line.strip() == "OBST"]
+    if len(starts) != 1:
+        raise ValueError("Missing or multiple SMV OBST tables")
+    start = starts[0] + 1
+    count = int(lines[start])
+    start += 1
+    if count < 0 or start + 2 * count > len(lines):
+        raise ValueError("Invalid SMV obstruction count")
+    rows = []
+    for i in range(count):
+        _, marker, label = lines[start + i].partition("!")
+        indices = [int(v) for v in lines[start + count + i].split()[:6]]
+        if not marker or not label.strip() or len(indices) != 6:
+            raise ValueError("Ambiguous SMV obstruction identity")
+        if any(
+            indices[2 * axis + side] < 0
+            or indices[2 * axis + side] >= len(grids[axis])
+            for axis in range(3)
+            for side in range(2)
+        ):
+            raise ValueError("SMV obstruction index outside coordinate grid")
+        if any(indices[2 * axis] > indices[2 * axis + 1] for axis in range(3)):
+            raise ValueError("Reversed SMV obstruction index bounds")
+        rows.append((label.strip(), indices))
+    return grids, rows
+
+
+def _effective_mesh(mesh, lines, expected, evidence):
+    try:
+        grids, rows = _read_mesh_obstructions(mesh, lines)
         actual = {}
-        for i in range(count):
-            _, marker, label = lines[start + i].partition("!")
-            indices = [int(v) for v in lines[start + count + i].split()[:6]]
-            if not marker or len(indices) != 6 or label.strip() in actual:
+        for pid, indices in rows:
+            if pid in actual:
                 raise ValueError("Ambiguous SMV obstruction identity")
-            if any(
-                indices[2 * axis + side] < 0
-                or indices[2 * axis + side] >= len(grids[axis])
-                for axis in range(3)
-                for side in range(2)
-            ):
-                raise ValueError("SMV obstruction index outside coordinate grid")
-            actual[label.strip()] = [
+            actual[pid] = [
                 grids[axis][indices[2 * axis + side]]
                 for axis in range(3)
                 for side in range(2)
