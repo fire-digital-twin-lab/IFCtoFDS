@@ -13,6 +13,7 @@ Designed by Challenger 2 to empirically test:
    - Snapshot URL verification for generated diagnostics artifacts.
 """
 
+from contextlib import closing
 import json
 import multiprocessing
 import os
@@ -25,6 +26,7 @@ import time
 from typing import List, Optional, Tuple
 import pytest
 
+from ifc_to_fds.adapters import sqlite_wal
 from ifc_to_fds.server.job_repository import JobRepository
 
 
@@ -83,6 +85,28 @@ def _mp_worker_task(db_root_str: str, worker_id: int, num_jobs: int) -> Tuple[in
 # ---------------------------------------------------------------------------
 # Test Cases
 # ---------------------------------------------------------------------------
+
+
+def test_wal_initialization_retries_after_sqlite_releases_an_exclusive_lock(tmp_path, monkeypatch):
+    database = tmp_path / "journal.sqlite3"
+    with closing(sqlite3.connect(str(database))) as holder, closing(
+        sqlite3.connect(str(database), timeout=0)
+    ) as contender:
+        holder.execute("CREATE TABLE example (id INTEGER)")
+        holder.commit()
+        holder.execute("BEGIN EXCLUSIVE")
+        retries = []
+
+        def release_lock(delay):
+            retries.append(delay)
+            holder.commit()
+
+        monkeypatch.setattr(sqlite_wal, "sleep", release_lock)
+        sqlite_wal.enable_wal(contender)
+        assert len(retries) == 1
+
+    with closing(sqlite3.connect(str(database))) as reopened:
+        assert reopened.execute("PRAGMA journal_mode;").fetchone()[0] == "wal"
 
 
 def test_sqlite_wal_multi_process_concurrency(tmp_path):
