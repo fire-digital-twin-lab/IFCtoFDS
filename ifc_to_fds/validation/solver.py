@@ -11,7 +11,7 @@ import platform
 import psutil
 from ifc_to_fds.diagnostics import operation
 from .acceptance import GateResult, GateStatus
-from .effective import effective_obstructions
+from .effective import EFFECTIVE_ADAPTER_VERSION, effective_obstructions
 from .solver_discovery import resolve_solver_executable
 
 
@@ -55,7 +55,7 @@ def solver_gates(fds_text, config):
     path = resolution.executable
     evidence = dict(
         required_version=config.solver_version,
-        adapter_version="obst-single-mesh-0.5.0",
+        adapter_version=EFFECTIVE_ADAPTER_VERSION,
         platform=platform.platform(),
         configuration_sha256=hashlib.sha256(
             config.model_dump_json().encode()
@@ -185,7 +185,9 @@ def solver_gates(fds_text, config):
             smv = list(directory.glob("*.smv"))
             if len(smv) == 1:
                 effective = effective_obstructions(
-                    fds_text, smv[0].read_text(encoding="utf-8", errors="replace")
+                    fds_text,
+                    smv[0].read_text(encoding="utf-8", errors="replace"),
+                    solver_version=config.solver_version,
                 )
                 effective.evidence.update(
                     fds_sha256=evidence["fds_sha256"],
