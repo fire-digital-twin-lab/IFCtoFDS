@@ -3,13 +3,15 @@
 import math
 import numpy as np
 import trimesh
-from fractions import Fraction
+from functools import lru_cache
+from shapely.geometry import Polygon
 from contextvars import ContextVar
 from contextlib import contextmanager
 import hashlib
 from copy import deepcopy
 from ifc_to_fds.core.canonical import BoundingBox, TriangleMesh
 from .boolean import solid_boolean
+from .predicates import ExactTrianglePredicates
 
 # Guard against trimesh zero-volume divide-by-zero bug (DEBT-06 / WP-P0-03)
 _orig_mass_properties = trimesh.triangles.mass_properties
@@ -346,13 +348,18 @@ def has_self_intersection(mesh, details=None):
         return False
     tree = tm.triangles_tree
     faces = np.asarray(mesh.faces)
+    predicates = ExactTrianglePredicates(tm.vertices, faces)
+    normals = tm.face_normals
+    projected_axes = ((1, 2), (0, 2), (0, 1))
+    projections = np.argmax(np.abs(normals), axis=1)
     shell_labels = None
     shells = None
+    shell_vertices = None
     contacts = {}
     unresolved_contacts = {}
 
     def build_shells():
-        nonlocal shell_labels, shells
+        nonlocal shell_labels, shells, shell_vertices
         if shells is None:
             shell_labels = trimesh.graph.connected_component_labels(
                 tm.face_adjacency, node_count=len(triangles)
@@ -363,43 +370,17 @@ def has_self_intersection(mesh, details=None):
                 tm.submesh(groups, only_watertight=False, repair=False)
                 if len(groups) > 1 else [tm]
             )
+            shell_vertices = [np.unique(faces[group]) for group in groups]
 
-    def plane_side(triangle, point):
-        for axis in range(3):
-            if triangle[0, axis] == triangle[1, axis] == triangle[2, axis]:
-                # Axis-aligned planes have an exact binary64 sign comparison.
-                return int(point[axis] > triangle[0, axis]) - int(
-                    point[axis] < triangle[0, axis]
-                )
-        vectors = np.asarray(
-            [triangle[1] - triangle[0], triangle[2] - triangle[0], point - triangle[0]]
-        )
-        a, b, c = vectors
-        terms = [
-            a[0] * b[1] * c[2],
-            a[1] * b[2] * c[0],
-            a[2] * b[0] * c[1],
-            -a[2] * b[1] * c[0],
-            -a[1] * b[0] * c[2],
-            -a[0] * b[2] * c[1],
-        ]
-        value = sum(terms)
-        error = sum(abs(x) for x in terms) * np.finfo(float).eps * 16
-        if abs(value) > error:
-            return 1 if value > 0 else -1
-        # Exact arithmetic over the original binary64 coordinates, including
-        # subtraction. A distance epsilon cannot establish coplanarity.
-        origin = [Fraction(float(x)) for x in triangle[0]]
-        a, b, c = [
-            [Fraction(float(x)) - o for x, o in zip(p, origin)]
-            for p in (triangle[1], triangle[2], point)
-        ]
-        exact = (
-            a[0] * (b[1] * c[2] - b[2] * c[1])
-            - a[1] * (b[0] * c[2] - b[2] * c[0])
-            + a[2] * (b[0] * c[1] - b[1] * c[0])
-        )
-        return (exact > 0) - (exact < 0)
+    @lru_cache(maxsize=4096)
+    def side_of_shell(face, component):
+        side = 0
+        for vertex in shell_vertices[component]:
+            candidate = predicates.plane_side(face, vertex)
+            if candidate and side and candidate != side:
+                return 0
+            side = side or candidate
+        return side
 
     def classify_shell_contact(i, j, projected_area=None):
         build_shells()
@@ -415,21 +396,14 @@ def has_self_intersection(mesh, details=None):
             np.any(left.bounds[1] <= right.bounds[0])
             or np.any(right.bounds[1] <= left.bounds[0])
         )
-        if projected_area is not None and not separated:
+        if projected_area and not separated:
             if (
-                projected_area > 0 and left.is_volume and right.is_volume
-                and np.dot(tm.face_normals[i], tm.face_normals[j]) > 0
+                left.is_volume and right.is_volume and np.dot(normals[i], normals[j]) > 0
             ):
                 # Same outward normals imply a common material neighbourhood
                 # just inside both shells, across the positive-area patch.
                 return False
-            plane = triangles[i]
-            left_sides = {plane_side(plane, point) for point in left.vertices}
-            right_sides = {plane_side(plane, point) for point in right.vertices}
-            separated = (
-                left_sides <= {-1, 0} and right_sides <= {0, 1}
-                or left_sides <= {0, 1} and right_sides <= {-1, 0}
-            )
+            separated = side_of_shell(i, pair[0]) * side_of_shell(i, pair[1]) == -1
         info = dict(triangles=[int(i), int(j)], components=list(pair))
         if projected_area is not None:
             info["projected_area_m2"] = float(projected_area)
@@ -442,100 +416,29 @@ def has_self_intersection(mesh, details=None):
             )
         return True
 
-    def segment_hit(start, end, triangle):
-        direction = end - start
-        edge1, edge2 = triangle[1] - triangle[0], triangle[2] - triangle[0]
-        h = np.cross(direction, edge2)
-        det = np.dot(edge1, h)
-        q = np.cross(start - triangle[0], edge1)
-        numerators = np.asarray(
-            [np.dot(start - triangle[0], h), np.dot(direction, q), np.dot(edge2, q)]
-        )
-        bound = (
-            64
-            * np.finfo(float).eps
-            * max(
-                float(
-                    np.linalg.norm(edge1)
-                    * np.linalg.norm(edge2)
-                    * np.linalg.norm(direction)
-                ),
-                float(np.max(np.abs(numerators))),
-                np.finfo(float).tiny,
-            )
-        )
-        if abs(det) > bound:
-            u, v, t = numerators / det
-            margin = bound / abs(det)
-            if min(u, v, t, 1 - t, 1 - u - v) > margin:
-                return 3  # Transverse hit strictly inside the triangle.
-            if min(u, v, t, 1 - t, 1 - u - v) < -margin:
-                return 0
-
-        # Uncertain ratios use exact rational predicates, not widened barycentric
-        # tolerances. The endpoint rule is strict as in the original traversal.
-        def vector(p):
-            return tuple(Fraction(float(x)) for x in p)
-
-        def sub(a, b):
-            return tuple(x - y for x, y in zip(a, b))
-
-        def cross(a, b):
-            return (
-                a[1] * b[2] - a[2] * b[1],
-                a[2] * b[0] - a[0] * b[2],
-                a[0] * b[1] - a[1] * b[0],
-            )
-
-        def dot(a, b):
-            return sum(x * y for x, y in zip(a, b))
-
-        p0, p1, p2 = map(vector, triangle)
-        origin = vector(start)
-        direction = sub(vector(end), origin)
-        edge1, edge2, offset = sub(p1, p0), sub(p2, p0), sub(origin, p0)
-        h, q = cross(direction, edge2), cross(offset, edge1)
-        determinant = dot(edge1, h)
-        if not determinant:
-            return 0
-        u, v, t = (
-            dot(offset, h) / determinant,
-            dot(direction, q) / determinant,
-            dot(edge2, q) / determinant,
-        )
-        margin = min(u, v, 1 - u - v)
-        if margin < 0 or not 0 <= t <= 1:
-            return 0
-        if t in (0, 1):
-            return 1  # A shared endpoint is a contact candidate across shells.
-        return 2 + int(margin > 0)
-
     for i, tri in enumerate(triangles):
         bounds = np.r_[tri.min(axis=0), tri.max(axis=0)]
+        shared_candidates = set(faces[i])
         for j in tree.intersection(bounds):
             if j <= i:
                 continue
             if contacts and tuple(sorted((shell_labels[i], shell_labels[j]))) in contacts:
                 continue  # The separating half-spaces cover every pair of faces.
-            other = triangles[j]
-            sides = [plane_side(tri, p) for p in other]
-            reverse_sides = [plane_side(other, p) for p in tri]
+            sides = [predicates.plane_side(i, v) for v in faces[j]]
+            if all(s > 0 for s in sides) or all(s < 0 for s in sides):
+                continue
+            reverse_sides = [predicates.plane_side(j, v) for v in faces[i]]
             if (
-                all(s > 0 for s in sides)
-                or all(s < 0 for s in sides)
-                or all(s > 0 for s in reverse_sides)
+                all(s > 0 for s in reverse_sides)
                 or all(s < 0 for s in reverse_sides)
             ):
                 continue
-            if len(set(faces[i]) & set(faces[j])) >= 2 and any(sides):
+            if any(sides) and len(shared_candidates.intersection(faces[j])) >= 2:
                 # Distinct planes with a shared edge intersect on that edge only.
                 continue
-            normal = safe_unit_normals(np.cross(tri[1] - tri[0], tri[2] - tri[0]))
             if not any(sides):
-                from shapely.geometry import Polygon
-
-                axes = [x for x in range(3) if x != np.argmax(np.abs(normal))]
-                patch = Polygon(tri[:, axes]).intersection(Polygon(other[:, axes]))
+                axes = projected_axes[projections[i]]
+                patch = Polygon(tri[:, axes]).intersection(Polygon(triangles[j][:, axes]))
                 if not patch.is_empty:
                     area = patch.area
                     if not classify_shell_contact(i, j, area) and area > 0:
@@ -546,9 +449,9 @@ def has_self_intersection(mesh, details=None):
                 # plane or lies in it. Neither case can give a transverse hit.
                 hit = 0
                 if reverse_sides[a] != reverse_sides[b]:
-                    hit = segment_hit(tri[a], tri[b], other)
+                    hit = predicates.segment_hit(faces[i, a], faces[i, b], j)
                 if hit != 3 and sides[a] != sides[b]:
-                    hit = max(hit, segment_hit(other[a], other[b], tri))
+                    hit = max(hit, predicates.segment_hit(faces[j, a], faces[j, b], i))
                 if hit == 3 or (hit and not classify_shell_contact(i, j) and hit == 2):
                     return witness("TRIANGLE_CROSSING", triangles=[int(i), int(j)])
     build_shells()
@@ -603,7 +506,7 @@ def self_intersection_evidence(mesh):
         hit = has_self_intersection(mesh)
         result = {
             "status": "CONFIRMED" if hit else "CLEAN",
-            "method": "adaptive-exact-plane/triangle-crossing/manifold-components-v2",
+            "method": "dyadic-integer-plane/triangle-crossing/manifold-components-v3",
         }
         if details:
             result["witness"] = details

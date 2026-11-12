@@ -1,6 +1,24 @@
 import pytest
 from ifc_to_fds.domain.bim import TriangleMesh
 from ifc_to_fds.geometry.mesh import has_self_intersection
+from ifc_to_fds.geometry.predicates import ExactTrianglePredicates
+
+
+def test_exact_dyadic_predicates_keep_barycentric_signs_across_axis_scales():
+    x, y, z = 2.0**500, 2.0**-500, 2.0**-900
+    kernel = ExactTrianglePredicates(
+        [
+            (0.0, 0.0, 0.0), (x, 0.0, 0.0), (0.0, y, 0.0),
+            (x / 4, y / 4, -z), (x / 4, y / 4, z),
+            (x / 2, y / 2, -z), (x / 2, y / 2, z),
+            (x / 4, y / 4, 0.0),
+        ],
+        [(0, 1, 2)],
+    )
+    assert [kernel.plane_side(0, vertex) for vertex in (3, 4, 7)] == [-1, 1, 0]
+    assert kernel.segment_hit(3, 4, 0) == 3
+    assert kernel.segment_hit(5, 6, 0) == 2
+    assert kernel.segment_hit(7, 4, 0) == 1
 
 
 def test_close_parallel_sloping_triangles_are_not_coplanar():
