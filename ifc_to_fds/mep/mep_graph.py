@@ -134,6 +134,9 @@ def extract_mep_graph(model, file):
             if world is not None and owner.placement.get("status") == "CONFIRMED":
                 owner_matrix = np.asarray(owner.placement["ifc_local_to_model"]).reshape(4, 4)
                 local = owner_matrix[:3, :3].T @ (world - owner_matrix[:3, 3])
+            elif world is not None and owner.placement.get("status") == "MISSING":
+                # Một chủ sở hữu phi hình học có thể dùng hệ tọa độ kỹ thuật gốc.
+                local = world.copy()
         else:
             graph.issues.append(f"Port placement missing: {key(port)}")
         ref = PortReference(

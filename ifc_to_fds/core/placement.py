@@ -19,6 +19,12 @@ def _unit_direction(values, size):
     vector = np.asarray(values, dtype=float)
     if vector.shape != (size,) or not np.isfinite(vector).all():
         raise ValueError("Invalid IFC direction ratios")
+    # Giữ cùng kết quả binary64 cho hướng thông thường và tránh tràn
+    # hoặc hụt dưới khi tỷ lệ hướng nằm ngoài miền tính norm trực tiếp.
+    with np.errstate(over="ignore", under="ignore"):
+        length = np.linalg.norm(vector)
+    if np.isfinite(length) and length >= np.sqrt(np.finfo(float).tiny):
+        return vector / length
     scale = np.max(np.abs(vector))
     if scale == 0:
         raise ValueError("IFC direction must be nonzero")
@@ -46,7 +52,9 @@ def axis_placement_matrix(placement):
         if length <= 16 * np.finfo(float).eps:
             raise ValueError("IFC Axis and RefDirection are parallel or numerically unresolved")
         y /= length
-        rotation = np.column_stack((np.cross(y, z), y, z))
+        # Nếu hai hướng đã vuông góc, phép chiếu bảo toàn hướng tham chiếu.
+        x = reference if np.dot(z, reference) == 0 else np.cross(y, z)
+        rotation = np.column_stack((x, y, z))
     else:
         raise ValueError(f"Unsupported IFC axis placement: {placement.is_a()}")
 
