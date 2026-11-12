@@ -42,6 +42,13 @@ class BoundingBox(BaseModel):
     def to_xb(self) -> List[float]:
         return [self.xmin, self.xmax, self.ymin, self.ymax, self.zmin, self.zmax]
 
+    def translated(self, dx: float, dy: float, dz: float) -> BoundingBox:
+        return BoundingBox(
+            xmin=self.xmin + dx, xmax=self.xmax + dx,
+            ymin=self.ymin + dy, ymax=self.ymax + dy,
+            zmin=self.zmin + dz, zmax=self.zmax + dz,
+        )
+
     def contains_point(self, x: float, y: float, z: float, tol: float = 1e-4) -> bool:
         return (
             (self.xmin - tol <= x <= self.xmax + tol)

@@ -1,9 +1,9 @@
 """Source-qualified MEP relationships, placements and coverage."""
 
 import numpy as np
-import ifcopenshell.util.placement
 import ifcopenshell.util.element
 from ifc_to_fds.core.canonical import MEPGraph, MEPSystem, MEPConnection, PortReference
+from ifc_to_fds.core.placement import get_local_placement
 from .classifier import classify_mep_element, MEP_TYPES
 from ifc_to_fds.diagnostics import operation
 
@@ -122,17 +122,21 @@ def extract_mep_graph(model, file):
             continue
         local = world = None
         if port.ObjectPlacement:
-            placement = ifcopenshell.util.placement.get_local_placement(
-                port.ObjectPlacement
-            )
-            world = placement[:3, 3] * source.unit_scale_to_meters
-            owner_ifc = file.by_id(owner.step_id)
-            owner_matrix = ifcopenshell.util.placement.get_local_placement(
-                owner_ifc.ObjectPlacement
-            )
-            local = (np.linalg.inv(owner_matrix) @ np.r_[placement[:3, 3], 1.0])[
-                :3
-            ] * source.unit_scale_to_meters
+            try:
+                placement = get_local_placement(port.ObjectPlacement)
+                with np.errstate(over="ignore"):
+                    world = placement[:3, 3] * source.unit_scale_to_meters
+                if not np.isfinite(world).all():
+                    raise ValueError("Nonfinite port translation in metres")
+            except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                world = None
+                graph.issues.append(f"Port placement unverified: {key(port)} ({exc})")
+            if world is not None and owner.placement.get("status") == "CONFIRMED":
+                owner_matrix = np.asarray(owner.placement["ifc_local_to_model"]).reshape(4, 4)
+                local = owner_matrix[:3, :3].T @ (world - owner_matrix[:3, 3])
+            elif world is not None and owner.placement.get("status") == "MISSING":
+                # Một chủ sở hữu phi hình học có thể dùng hệ tọa độ kỹ thuật gốc.
+                local = world.copy()
         else:
             graph.issues.append(f"Port placement missing: {key(port)}")
         ref = PortReference(

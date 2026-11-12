@@ -290,12 +290,12 @@ def main(argv=None):
         if args.storey:
             config.setdefault("scope", {})["storeys"] = args.storey
         if args.bbox:
-            bbox_dict: dict[str, Any] = dict(
+            scope = config.setdefault("scope", {})
+            scope["bounding_box"] = dict(
                 zip(("xmin", "xmax", "ymin", "ymax", "zmin", "zmax"), args.bbox)
             )
             if getattr(args, "coordinate_frame", None):
-                bbox_dict["coordinate_frame"] = args.coordinate_frame
-            config.setdefault("scope", {})["bounding_box"] = bbox_dict
+                scope["coordinate_frame"] = args.coordinate_frame
         if args.common_coordinates:
             config.setdefault("sources", {})["common_coordinates"] = True
         if args.solver:

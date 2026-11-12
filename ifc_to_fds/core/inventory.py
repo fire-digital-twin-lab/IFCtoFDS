@@ -5,11 +5,11 @@ structures, property sets, and relationships in the source IFC model.
 """
 
 import hashlib
+import math
 import os
 from typing import Any, Dict, List, Optional, Tuple
 import ifcopenshell
 import ifcopenshell.util.element
-import ifcopenshell.util.placement
 from ifc_to_fds.diagnostics import operation
 
 from .canonical import (
@@ -22,7 +22,7 @@ from .canonical import (
     StoreyReference,
 )
 from .units import get_length_unit_scale
-from .placement import extract_placement
+from .placement import extract_placement, get_local_placement
 
 
 def compute_file_sha256(file_path: str) -> str:
@@ -147,16 +147,16 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     for s in ifc_file.by_type("IfcBuildingStorey"):
         elevation = None
         if s.ObjectPlacement:
-            elevation = (
-                float(
-                    ifcopenshell.util.placement.get_local_placement(s.ObjectPlacement)[
-                        2, 3
-                    ]
-                )
-                * unit_scale
-            )
+            try:
+                placement = get_local_placement(s.ObjectPlacement)
+            except (AttributeError, RuntimeError, TypeError, ValueError):
+                placement = None
+            if placement is not None and math.hypot(*placement[2, :2]) <= 1e-8:
+                elevation = float(placement[2, 3]) * unit_scale
         elif s.Elevation is not None:
             elevation = float(s.Elevation) * unit_scale
+        if elevation is not None and not math.isfinite(elevation):
+            elevation = None
         storey_refs.append(
             StoreyReference(
                 building_id=building_and_path(s)[0],

@@ -2,7 +2,7 @@
 
 import hashlib
 import math
-from ifc_to_fds.domain.mep.hvac import DuctSpec, HvacDuct, HvacNetworkPlan, HvacNode
+from ifc_to_fds.domain.mep.hvac import DuctSpec, EndpointSpec, HvacDuct, HvacNetworkPlan, HvacNode
 from ifc_to_fds.domain.mapping.enums import MappingStrategy
 from ifc_to_fds.domain.scope import ScopeDecision
 
@@ -63,9 +63,16 @@ def build_hvac_network(model):
             raise ValueError("Internal HVAC junction cannot be AMBIENT or VENT")
         if len(attached) > 10:
             raise ValueError("FDS HVAC nodes support at most ten ducts")
+        boundary = boundaries[0] if boundaries else None
+        if boundary is not None and boundary.vent_xb is not None and boundary.coordinate_frame == "WORLD":
+            offsets = model.source.rebase_vector
+            boundary = EndpointSpec(
+                kind="VENT", loss=boundary.loss, coordinate_frame="REBASED",
+                vent_xb=tuple(v - offsets[i // 2] for i, v in enumerate(boundary.vent_xb)),
+            )
         node = HvacNode(id=node_id, port_keys=keys, entity_keys=sorted({owners[k] for k in keys}),
                         xyz=ports[keys[0]].world_position, duct_ids=attached,
-                        boundary=boundaries[0] if boundaries else None)
+                        boundary=boundary)
         if node.boundary and node.boundary.kind == "VENT":
             xb = node.boundary.vent_xb
             domain = model.simulation_domain

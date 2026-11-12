@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Any
 
 import ifcopenshell
-from ifcopenshell.util.placement import get_local_placement
 import numpy as np
 
 from .inventory import compute_file_sha256
+from .placement import get_local_placement
 from .source_dossier import write_source_dossier
 from .units import get_length_unit_scale
 
@@ -71,9 +71,9 @@ def _classify_local_placement(placement: Any, scale: float) -> tuple[str, float 
         )
     ):
         return "NON_RIGID", None
-    # IfcOpenShell placement có translation ở đơn vị IFC; đổi sang mét đúng
-    # một lần. Không đổi scale lên basis rotation và không áp rebase lần hai.
-    abs_translation = np.abs(matrix[:3, 3] * scale)
+    # Chỉ đổi phần tịnh tiến từ đơn vị IFC sang mét.
+    with np.errstate(over="ignore"):
+        abs_translation = np.abs(matrix[:3, 3] * scale)
     if not bool(np.isfinite(abs_translation).all()):
         return "NONFINITE_TRANSLATION_M", None
     return "READABLE_RIGID", float(np.max(abs_translation))

@@ -5,6 +5,8 @@ from time import perf_counter
 import numpy as np
 from .inventory import extract_inventory
 from .canonical import MEPGraph, CanonicalModel
+from .georeferencing import declared_map_frame, require_matching_map_frames
+from .placement import federate_placement, is_rigid_transform
 from ifc_to_fds.geometry.mesh import bounds_for_vertices
 from ifc_to_fds.mep.mep_graph import extract_mep_graph
 
@@ -43,6 +45,7 @@ def load_sources(paths, source_options=None, reference=False):
     models = []
     hashes = set()
     transforms = options.get("transforms", {})
+    common_map_frame = None
     for index, path in enumerate(paths):
         started = perf_counter()
         model, file = extract_inventory(str(path))
@@ -50,6 +53,14 @@ def load_sources(paths, source_options=None, reference=False):
         if model.source.source_id in hashes:
             raise ValueError("Duplicate source file content")
         hashes.add(model.source.source_id)
+        value = transforms.get(model.source.source_id, transforms.get(str(index)))
+        if len(paths) > 1 and value is None:
+            if not options.get("common_coordinates"):
+                raise ValueError(f"Missing transform for source {index}")
+            frame = declared_map_frame(file, model.source.unit_scale_to_meters)
+            require_matching_map_frames(common_map_frame, frame)
+            if frame is not None:
+                common_map_frame = frame
         model = extract_mep_graph(model, file)
         mep_done = perf_counter()
         if reference:
@@ -67,24 +78,14 @@ def load_sources(paths, source_options=None, reference=False):
             mep_s=mep_done - parsed,
             geometry_s=perf_counter() - mep_done,
         )
-        value = transforms.get(model.source.source_id, transforms.get(str(index)))
-        if len(paths) > 1 and not options.get("common_coordinates") and value is None:
-            raise ValueError(f"Missing transform for source {index}")
         matrix = np.asarray(
             value if value is not None else np.eye(4), dtype=float
         ).reshape(4, 4)
-        if (
-            not np.isfinite(matrix).all()
-            or not np.allclose(matrix[3], [0, 0, 0, 1])
-            or not np.allclose(matrix[:3, :3].T @ matrix[:3, :3], np.eye(3), atol=1e-8)
-            or np.linalg.det(matrix[:3, :3]) < 0
-        ):
+        if not is_rigid_transform(matrix):
             raise ValueError(
                 "Source transform must be a finite rigid transform, without reflection or scale"
             )
         model.source.world_transform = matrix.ravel().tolist()
-        from .placement import federate_placement
-
         for e in model.elements:
             federate_placement(e, matrix)
             for opening in e.openings:
@@ -96,7 +97,7 @@ def load_sources(paths, source_options=None, reference=False):
                     opening.placement["effective_world"] = (
                         (matrix @ local).ravel().tolist()
                     )
-        if not np.allclose(matrix, np.eye(4)):
+        if not np.array_equal(matrix, np.eye(4)):
             for e in model.elements:
                 for mesh in [e.mesh, *[o.mesh for o in e.openings]]:
                     if mesh and len(mesh.vertices) > 0:
@@ -128,7 +129,7 @@ def load_sources(paths, source_options=None, reference=False):
                         ).tolist()
             # Arbitrarily rotated floor planes cannot be represented by a Z interval.
             for storey in model.storey_references:
-                if not np.allclose(matrix[2, :3], [0, 0, 1]):
+                if math.hypot(*matrix[2, :2]) > 1e-8:
                     storey.elevation_m = None
                 elif storey.elevation_m is not None:
                     storey.elevation_m += matrix[2, 3]
@@ -179,17 +180,15 @@ def rebase_model_to_origin(
     auto_rebase: bool = True,
 ) -> Tuple[CanonicalModel, Tuple[float, float, float]]:
     rebase_vec = rebase_vector
-    if rebase_vec is None and model.model_bounds:
-        if auto_rebase and (
-            abs(model.model_bounds.xmin) > 1000.0 or abs(model.model_bounds.ymin) > 1000.0
-        ):
-            rebase_vec = [
-                float(np.floor(model.model_bounds.xmin)),
-                float(np.floor(model.model_bounds.ymin)),
-                0.0,
-            ]
-        else:
-            rebase_vec = [0.0, 0.0, 0.0]
+    if rebase_vec is None and auto_rebase and model.model_bounds:
+        xmin, xmax, ymin, ymax, zmin, zmax = model.model_bounds.to_xb()
+        far_xy = max(abs(xmin), abs(xmax), abs(ymin), abs(ymax)) > 1000.0
+        far_z = max(abs(zmin), abs(zmax)) > 1000.0
+        rebase_vec = [
+            float(math.floor(xmin)) if far_xy else 0.0,
+            float(math.floor(ymin)) if far_xy else 0.0,
+            float(math.floor(zmin)) if far_z else 0.0,
+        ]
 
     if rebase_vec is not None:
         if (
@@ -213,19 +212,9 @@ def rebase_model_to_origin(
             if e.mesh and e.mesh.vertices:
                 e.mesh.vertices = [[v[0] - dx, v[1] - dy, v[2] - dz] for v in e.mesh.vertices]
             if e.bounding_box:
-                e.bounding_box.xmin -= dx
-                e.bounding_box.xmax -= dx
-                e.bounding_box.ymin -= dy
-                e.bounding_box.ymax -= dy
-                e.bounding_box.zmin -= dz
-                e.bounding_box.zmax -= dz
+                e.bounding_box = e.bounding_box.translated(-dx, -dy, -dz)
             if e.representation_bounds:
-                e.representation_bounds.xmin -= dx
-                e.representation_bounds.xmax -= dx
-                e.representation_bounds.ymin -= dy
-                e.representation_bounds.ymax -= dy
-                e.representation_bounds.zmin -= dz
-                e.representation_bounds.zmax -= dz
+                e.representation_bounds = e.representation_bounds.translated(-dx, -dy, -dz)
 
             # Update placement provenance
             if hasattr(e, "placement") and isinstance(e.placement, dict):
@@ -244,12 +233,7 @@ def rebase_model_to_origin(
                 if o.mesh and o.mesh.vertices:
                     o.mesh.vertices = [[v[0] - dx, v[1] - dy, v[2] - dz] for v in o.mesh.vertices]
                 if o.bounding_box:
-                    o.bounding_box.xmin -= dx
-                    o.bounding_box.xmax -= dx
-                    o.bounding_box.ymin -= dy
-                    o.bounding_box.ymax -= dy
-                    o.bounding_box.zmin -= dz
-                    o.bounding_box.zmax -= dz
+                    o.bounding_box = o.bounding_box.translated(-dx, -dy, -dz)
                 if hasattr(o, "placement") and isinstance(o.placement, dict):
                     if o.placement.get("effective_world") is not None:
                         o.placement["effective_world"] = _translate_matrix_4x4(
@@ -267,19 +251,18 @@ def rebase_model_to_origin(
                         port.world_position[1] - dy,
                         port.world_position[2] - dz,
                     ]
-        if model.model_bounds:
-            model.model_bounds.xmin -= dx
-            model.model_bounds.xmax -= dx
-            model.model_bounds.ymin -= dy
-            model.model_bounds.ymax -= dy
-            model.model_bounds.zmin -= dz
-            model.model_bounds.zmax -= dz
+        for storey in model.storey_references:
+            if storey.elevation_m is not None:
+                storey.elevation_m -= dz
+        for field in ("model_bounds", "simulation_domain", "exported_bounds"):
+            bounds = getattr(model, field)
+            if bounds is not None:
+                setattr(model, field, bounds.translated(-dx, -dy, -dz))
 
-        if hasattr(model, "source") and model.source is not None:
-            model.source.rebase_vector = rebase_vec
-        if hasattr(model, "sources") and model.sources:
-            for s in model.sources:
-                s.rebase_vector = rebase_vec
+        total_rebase = [a + b for a, b in zip(model.source.rebase_vector, rebase_vec)]
+        model.source.rebase_vector = total_rebase
+        for source in model.sources:
+            source.rebase_vector = total_rebase.copy()
 
         return model, (dx, dy, dz)
 
