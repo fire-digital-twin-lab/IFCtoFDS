@@ -11,6 +11,7 @@ from ifc_to_fds.validation.metrics import compare_solids
 from ifc_to_fds.validation.preflight import (
     comparison_summary,
     source_topology_blockers,
+    source_topology_detail,
     source_topology_preflight,
 )
 
@@ -115,28 +116,6 @@ class GeometryChecker:
                     status = GateStatus.INCONCLUSIVE
                 reasons.append(f"{p.kind} effective semantics not supported")
 
-        def topology_detail(element, issue):
-            reason = issue.get("reason", "SOURCE_TOPOLOGY_NOT_ACCEPTED")
-            if reason == "SELF_INTERSECTION":
-                witness = issue.get("self_intersection", {}).get("witness", {})
-                return (
-                    f"Source self-intersection confirmed: entity={element.entity_key}, "
-                    f"STEP={element.step_id}, GlobalId={element.global_id}, "
-                    f"IFC type={element.ifc_type}; witness={witness}"
-                )
-            if reason == "SELF_INTERSECTION_UNCERTAIN":
-                evidence = issue.get("self_intersection", {})
-                return (
-                    f"Source self-intersection could not be resolved: entity={element.entity_key}, "
-                    f"STEP={element.step_id}, GlobalId={element.global_id}, "
-                    f"IFC type={element.ifc_type}; evidence={evidence}"
-                )
-            return (
-                f"Unsupported source geometry: entity={element.entity_key}, STEP={element.step_id}, "
-                f"GlobalId={element.global_id}, IFC type={element.ifc_type}; "
-                f"source mesh quality={issue.get('mesh_quality', {})}; {element.mapping_rationale}"
-            )
-
         for e in model.elements:
             key = e.entity_key
             if e.scope_decision == ScopeDecision.OUT_OF_SCOPE:
@@ -154,7 +133,7 @@ class GeometryChecker:
                 continue
             issue = blockers.get(key)
             if issue is not None and config and config.fail_fast_on_source_errors:
-                detail = topology_detail(e, issue)
+                detail = source_topology_detail(e, issue)
                 if issue.get("status") == "FAIL":
                     status = GateStatus.FAIL
                     findings.append(

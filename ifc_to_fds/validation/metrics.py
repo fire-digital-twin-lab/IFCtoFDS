@@ -221,7 +221,11 @@ class SolidCandidateIndex:
 
 def passage_metrics(reference_meshes, output_meshes, opening):
     """Compare entire free volumes, including source door/window fills and blockers."""
+    if not opening or not valid_solid(opening):
+        raise ValueError("Opening solid is missing or invalid")
     void = as_trimesh(opening)
+    void_volume = float(void.volume)
+    roundoff = 256 * np.finfo(float).eps * void_volume
 
     def free_volume(meshes):
         pieces = []
@@ -243,17 +247,29 @@ def passage_metrics(reference_meshes, output_meshes, opening):
         return solid_boolean([void, *pieces], "difference")
 
     a, b = free_volume(reference_meshes), free_volume(output_meshes)
-    intersection = (
-        solid_boolean([a, b], "intersection") if len(a.faces) and len(b.faces) else None
-    )
-    overlap = float(intersection.volume) if intersection is not None else 0.0
+    va, vb = float(a.volume), float(b.volume)
+    if any(
+        not np.isfinite(volume)
+        or volume > void_volume + roundoff
+        or (len(mesh.faces) and (volume <= 0 or not mesh.is_volume))
+        for mesh, volume in ((a, va), (b, vb))
+    ):
+        raise RuntimeError("Free-volume Boolean returned an invalid volume")
+    if np.array_equal(a.vertices, b.vertices) and np.array_equal(a.faces, b.faces):
+        # A △ A = ∅. The independently computed oriented surfaces
+        # match exactly, even when the Boolean backend loses cells on A ∩ A.
+        overlap = va
+    elif len(a.faces) and len(b.faces):
+        overlap = float(solid_boolean([a, b], "intersection").volume)
+        if not np.isfinite(overlap) or not -roundoff <= overlap <= min(va, vb) + roundoff:
+            raise RuntimeError("Free-volume intersection violates volume bounds")
+        overlap = min(va, vb, max(0.0, overlap))
+    else:
+        overlap = 0.0
     return dict(
-        source_free_volume_m3=float(a.volume),
-        output_free_volume_m3=float(b.volume),
-        normalized_symmetric_difference=max(
-            0.0, float(a.volume + b.volume - 2 * overlap)
-        )
-        / max(float(void.volume), 1e-12),
-        source_free_components=len(a.split()) if len(a.faces) else 0,
-        output_free_components=len(b.split()) if len(b.faces) else 0,
+        source_free_volume_m3=va,
+        output_free_volume_m3=vb,
+        normalized_symmetric_difference=(va + vb - 2 * overlap) / void_volume,
+        source_free_components=len(a.split(only_watertight=False, repair=False)) if len(a.faces) else 0,
+        output_free_components=len(b.split(only_watertight=False, repair=False)) if len(b.faces) else 0,
     )

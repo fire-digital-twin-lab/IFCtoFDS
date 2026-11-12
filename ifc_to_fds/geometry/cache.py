@@ -21,7 +21,7 @@ def cached_geometry(model, file):
         source=model.source.file_hash_sha256,
         engine=ifcopenshell.version,
         schema=SCHEMA_VERSION,
-        extraction_revision="source-numerical-seams-8ulp-cap-1e-12-v5",
+        extraction_revision="source-numerical-seams-8ulp-cap-1e-12-vertex-links-v6",
         world=True,
         metres=True,
         weld=True,
