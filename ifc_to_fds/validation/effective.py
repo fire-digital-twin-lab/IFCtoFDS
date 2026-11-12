@@ -13,7 +13,7 @@ from .acceptance import GateResult, GateStatus
 from .parser import parse_fds
 
 
-EFFECTIVE_ADAPTER_VERSION = "smv-obst-static-hole-6.11.1-v1"
+EFFECTIVE_ADAPTER_VERSION = "smv-obst-static-hole-6.11.1-v2"
 
 
 def check_opening_grid_alignment(opening_mesh, host_bounds, parsed):
@@ -171,6 +171,14 @@ def _grid_aligned_box(record, grids):
     return indices
 
 
+def _on_exterior_mesh_face(indices, grids):
+    flat = [i for i in (0, 2, 4) if indices[i] == indices[i + 1]]
+    if len(flat) != 1:
+        return False
+    i = flat[0]
+    return indices[i] in (0, len(grids[i // 2]) - 1)
+
+
 def _effective_static_hole(parsed, meshes, obstructions, holes, smv_text):
     lines = smv_text.splitlines()
     evidence = {
@@ -207,10 +215,16 @@ def _effective_static_hole(parsed, meshes, obstructions, holes, smv_text):
             raise ValueError("Static HOLE must cut through exactly one wall axis")
         normal = axes[0]
         tangents = [i for i in (0, 2, 4) if i != normal]
-        if any(
-            not host[i] < cut[i] < cut[i + 1] < host[i + 1] for i in tangents
-        ):
-            raise ValueError("Static HOLE opening must be inside the wall cross-section")
+        for i in tangents:
+            # A cut may reach a wall edge only at the exterior mesh boundary.
+            # An internal coincident edge can retain a flow-blocking thin face.
+            last = len(grids[i // 2]) - 1
+            if (
+                cut[i] < host[i] or cut[i + 1] > host[i + 1]
+                or (cut[i] == host[i] and host[i] != 0)
+                or (cut[i + 1] == host[i + 1] and host[i + 1] != last)
+            ):
+                raise ValueError("Static HOLE opening meets an unsupported wall edge")
         passage = _intersection(host, cut)
     except (ValueError, IndexError) as exc:
         return GateResult(status=GateStatus.INCONCLUSIVE, reason=str(exc), evidence=evidence)
@@ -222,11 +236,13 @@ def _effective_static_hole(parsed, meshes, obstructions, holes, smv_text):
             reason="Static HOLE solver obstruction inventory differs from input wall",
             evidence=evidence,
         )
-    # A zero-thickness internal face may block flow without occupying a cell.
-    if any(_box_volume(piece) == 0 for piece in pieces):
+    boundary_faces = [piece for piece in pieces if _box_volume(piece) == 0]
+    # The supported single mesh has no VENT or periodic boundary. A wall
+    # fragment on an exterior face changes no interior gas-to-gas face.
+    if any(not _on_exterior_mesh_face(piece, grids) for piece in boundary_faces):
         return GateResult(
             status=GateStatus.INCONCLUSIVE,
-            reason="Thin solver obstruction requires separate face occupancy evidence",
+            reason="Thin internal obstruction requires separate face occupancy evidence",
             evidence=evidence,
         )
     occupied = sum(_box_volume(piece) for piece in pieces)
@@ -238,6 +254,7 @@ def _effective_static_hole(parsed, meshes, obstructions, holes, smv_text):
         wall_indices=host,
         passage_indices=passage,
         obstruction_pieces=pieces,
+        domain_boundary_faces=boundary_faces,
         effective_wall_cells=occupied,
         expected_wall_cells=expected,
     )

@@ -13,6 +13,7 @@ STATIC_HOLE = (
     "&HOLE ID='window', XB=0.3,0.7,0.3,0.7,0.2,0.6 /\n"
     "&TAIL /\n"
 )
+FLOOR_HOLE = STATIC_HOLE.replace("0.3,0.7,0.2,0.6", "0.3,0.7,0,0.6")
 
 
 def test_effective_static_hole_is_proved_from_all_solver_pieces():
@@ -43,6 +44,9 @@ def test_effective_static_hole_is_proved_from_all_solver_pieces():
         STATIC_HOLE, smv.replace(rows[3], "4 6 3 7 0 1")
     ).status == "FAIL"
     assert effective_obstructions(
+        STATIC_HOLE, smv.replace(rows[3], "4 6 3 7 4 4")
+    ).status == "INCONCLUSIVE"
+    assert effective_obstructions(
         STATIC_HOLE.replace("0.3,0.7,0.2,0.6", "0.34,0.7,0.2,0.6"), smv
     ).status == "INCONCLUSIVE"
     assert effective_obstructions(
@@ -52,23 +56,31 @@ def test_effective_static_hole_is_proved_from_all_solver_pieces():
 
 
 @pytest.mark.solver
-def test_pinned_fds_static_hole_matches_analytic_occupancy(tmp_path):
+@pytest.mark.parametrize(
+    ("deck", "wall_cells", "open_area", "boundary_face_count"),
+    [(STATIC_HOLE, 168, 0.16, 0), (FLOOR_HOLE, 152, 0.24, 1)],
+    ids=["interior-window", "floor-level-door"],
+)
+def test_pinned_fds_static_hole_matches_analytic_occupancy(
+    tmp_path, deck, wall_cells, open_area, boundary_face_count,
+):
     from ifc_to_fds.validation.acceptance import AuditConfig
     from ifc_to_fds.validation.solver import solver_gates
 
-    solver, effective = solver_gates(STATIC_HOLE, AuditConfig(
+    solver, effective = solver_gates(deck, AuditConfig(
         solver_executable=os.environ["IFCFDS_SOLVER"],
         solver_evidence_directory=str(tmp_path),
     ))
     assert solver.status == "PASS", solver.reason
     assert effective.status == "PASS", effective.reason
     hole = effective.evidence["static_hole"]
-    assert hole["effective_wall_cells"] == 168
-    assert hole["open_area_m2"] == pytest.approx(0.16)
+    assert hole["effective_wall_cells"] == wall_cells
+    assert hole["open_area_m2"] == pytest.approx(open_area)
+    assert len(hole["domain_boundary_faces"]) == boundary_face_count
     smv = next(tmp_path.glob("*/*.smv")).read_text()
     mutated, count = re.subn(r"(?m)^ +4 +6 +0 +3 +0 +10(?= )", " 4 6 0 4 0 10", smv)
     assert count == 1
-    assert effective_obstructions(STATIC_HOLE, mutated).status == "FAIL"
+    assert effective_obstructions(deck, mutated).status == "FAIL"
 
 
 def smv_for_box(pid, indices):
