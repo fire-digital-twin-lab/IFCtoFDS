@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..sqlite_wal import enable_wal
 from .result_contract import validate_job_result
 from .evidence_index import verify_evidence_index
 
@@ -51,8 +52,7 @@ class JobRepository:
         if not self._db_path:
             return
         with self._get_connection() as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute(f"PRAGMA synchronous={_synchronous_mode()};")
+            enable_wal(conn)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
