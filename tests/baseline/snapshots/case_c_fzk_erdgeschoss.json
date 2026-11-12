@@ -2561,7 +2561,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:17468",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -2627,7 +2627,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19199",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -2639,7 +2639,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19504",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -2797,7 +2797,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23024",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -2809,7 +2809,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23944",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -2821,7 +2821,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27013",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -2875,7 +2875,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27833",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -2887,7 +2887,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:28113",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -2943,7 +2943,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31818",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -2955,7 +2955,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32098",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -3009,7 +3009,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32829",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -3021,7 +3021,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33109",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -3033,7 +3033,7 @@
     },
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33389",
-      "mapping_status": "DEVIATED",
+      "mapping_status": "INCONCLUSIVE",
       "mapping_strategy": "GEOM",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
@@ -4126,18 +4126,22 @@
     "traceability": "PASS",
     "scope": "PASS",
     "geometry": "FAIL",
-    "openings": "FAIL",
+    "structural_completeness": "PASS",
+    "air_path": "PASS",
+    "openings": "PASS",
     "mep": "PASS",
     "representation": "PASS",
     "boundary": "PASS",
     "domain": "INCONCLUSIVE",
+    "hvac": "NOT_APPLICABLE",
+    "mesh_resolution": "NOT_APPLICABLE",
     "solver": "NOT_RUN",
     "effective_geometry": "NOT_RUN",
     "geometry_preservation": "FAIL",
     "placement": "PASS",
     "golden_reference_parity": "NOT_APPLICABLE"
   },
-  "findings_count": 47,
+  "findings_count": 4,
   "findings": [
     {
       "category": "geometry",
@@ -4148,86 +4152,8 @@
     {
       "category": "geometry",
       "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:17468",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:17468: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19199",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19199: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19504",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19504: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23024",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23024: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23944",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23944: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27013",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27013: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27833",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27833: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:28113",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:28113: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31079",
       "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31079: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31818",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31818: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32098",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32098: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32829",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32829: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33109",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33109: invalid solid comparison: Se"
-    },
-    {
-      "category": "geometry",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33389",
-      "title": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33389: invalid solid comparison: Se"
     },
     {
       "category": "geometry_preservation",
@@ -4238,190 +4164,10 @@
     {
       "category": "geometry_preservation",
       "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:17040",
-      "title": "Invalid saved opening:17106: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:17468",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:18698",
-      "title": "Invalid saved opening:18768: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:18698",
-      "title": "Invalid saved opening:18836: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19199",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19504",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
-      "title": "Invalid saved opening:22039: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
-      "title": "Invalid saved opening:22107: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
-      "title": "Invalid saved opening:22174: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23024",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23944",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27013",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27421",
-      "title": "Invalid saved opening:27487: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27421",
-      "title": "Invalid saved opening:27555: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27421",
-      "title": "Invalid saved opening:27622: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27833",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:28113",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
       "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31079",
       "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31470",
-      "title": "Invalid saved opening:31539: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31470",
-      "title": "Invalid saved opening:31607: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31818",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32098",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32407",
-      "title": "Invalid saved opening:32483: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32407",
-      "title": "Invalid saved opening:32551: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32407",
-      "title": "Invalid saved opening:32618: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32829",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33109",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "geometry_preservation",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33389",
-      "title": "Invalid saved solid: Self-intersecting solid"
-    },
-    {
-      "category": "openings",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:21966",
-      "title": "Opening passage changed, including fills/blockers: 04RcXu1mKxpGnJw_7oRBLn"
-    },
-    {
-      "category": "openings",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31470",
-      "title": "Opening passage changed, including fills/blockers: 2OW0PH61vS77xxyX1o74u8"
-    },
-    {
-      "category": "openings",
-      "severity": "P1",
-      "element_id": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31470",
-      "title": "Opening passage changed, including fills/blockers: 2cFXkmvNz6q8TXoCpAWu5Y"
     }
   ],
   "geometry_package_sha256": "43eb399bf105286b824d557acb98eb51dcc6df27e5652f3b0df04820a02b44df",
-  "manifest_csv_sha256": "a4a7c53c99640cce862ca7be6547549d49a38128f2963c1d47b1ceeece3a0a87"
+  "manifest_csv_sha256": "f085dbf7ff8b69b40a7c35df938a444f1540ceebdbc3af3cdb2fd1630a5abc6e"
 }

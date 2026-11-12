@@ -32,7 +32,7 @@ def source_topology_preflight(model) -> Dict[str, Dict[str, Any]]:
             continue
 
         quality = inspect_mesh_quality(element.mesh)
-        if not valid_solid(element.mesh):
+        if not (quality["finite"] and quality["is_closed_manifold"] and quality["positive_volume"]):
             evidence[element.entity_key] = {
                 "status": "FAIL",
                 "reason": "INVALID_SOLID",
@@ -41,17 +41,20 @@ def source_topology_preflight(model) -> Dict[str, Dict[str, Any]]:
             continue
 
         intersection = self_intersection_evidence(element.mesh)
+        witness_kind = intersection.get("witness", {}).get("kind")
         if intersection["status"] == "CONFIRMED":
+            invalid_winding = witness_kind == "SHELL_WINDING_MISMATCH"
             evidence[element.entity_key] = {
                 "status": "FAIL",
-                "reason": "SELF_INTERSECTION",
+                "reason": "INVALID_SHELL_WINDING" if invalid_winding else "SELF_INTERSECTION",
                 "mesh_quality": quality,
                 "self_intersection": intersection,
             }
         elif intersection["status"] == "UNCERTAIN":
+            contact = witness_kind in {"COMPONENT_BOUNDARY_CONTACT", "COMPONENT_BOUNDARY_UNRESOLVED"}
             evidence[element.entity_key] = {
                 "status": "INCONCLUSIVE",
-                "reason": "SELF_INTERSECTION_UNCERTAIN",
+                "reason": "SHELL_CONTACT" if contact else "SELF_INTERSECTION_UNCERTAIN",
                 "mesh_quality": quality,
                 "self_intersection": intersection,
             }
@@ -62,6 +65,27 @@ def source_topology_preflight(model) -> Dict[str, Dict[str, Any]]:
                 "self_intersection": intersection,
             }
     return evidence
+
+
+def source_topology_detail(element, issue):
+    identity = (
+        f"entity={element.entity_key}, STEP={element.step_id}, GlobalId={element.global_id}, "
+        f"IFC type={element.ifc_type}"
+    )
+    intersection = issue.get("self_intersection", {})
+    reason = issue.get("reason")
+    if reason == "SELF_INTERSECTION":
+        return f"Source self-intersection confirmed: {identity}; witness={intersection.get('witness', {})}"
+    if reason == "SELF_INTERSECTION_UNCERTAIN":
+        return f"Source self-intersection could not be resolved: {identity}; evidence={intersection}"
+    if reason == "SHELL_CONTACT":
+        return f"Source shell contact requires verified union: {identity}; evidence={intersection}"
+    if reason == "INVALID_SHELL_WINDING":
+        return f"Invalid source shell winding: {identity}; witness={intersection.get('witness', {})}"
+    return (
+        f"Unsupported source geometry: {identity}; "
+        f"source mesh quality={issue.get('mesh_quality', {})}; {element.mapping_rationale}"
+    )
 
 
 def source_topology_blockers(evidence: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:

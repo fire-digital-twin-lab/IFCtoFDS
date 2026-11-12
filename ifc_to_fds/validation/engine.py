@@ -16,6 +16,7 @@ from .effective import check_opening_grid_alignment
 from .preflight import (
     comparison_summary,
     source_topology_blockers,
+    source_topology_detail,
     source_topology_preflight,
 )
 from .metrics import (
@@ -516,24 +517,7 @@ def run_independent_validation(
             continue
         issue = topology_blockers.get(key)
         if issue is not None and config.fail_fast_on_source_errors:
-            if issue.get("reason") == "SELF_INTERSECTION":
-                detail = (
-                    f"Source self-intersection confirmed: entity={key}, STEP={e.step_id}, "
-                    f"GlobalId={e.global_id}, IFC type={e.ifc_type}; "
-                    f"witness={issue.get('self_intersection', {}).get('witness', {})}"
-                )
-            elif issue.get("reason") == "SELF_INTERSECTION_UNCERTAIN":
-                detail = (
-                    f"Source self-intersection could not be resolved: entity={key}, "
-                    f"STEP={e.step_id}, GlobalId={e.global_id}, IFC type={e.ifc_type}; "
-                    f"evidence={issue.get('self_intersection', {})}"
-                )
-            else:
-                detail = (
-                    f"Unsupported source geometry: entity={key}, STEP={e.step_id}, "
-                    f"GlobalId={e.global_id}, IFC type={e.ifc_type}; "
-                    f"source mesh quality={issue.get('mesh_quality', {})}; {e.mapping_rationale}"
-                )
+            detail = source_topology_detail(e, issue)
             if issue.get("status") == "FAIL":
                 finding("geometry", detail, key)
                 report.element_statuses[key] = "UNSUPPORTED"

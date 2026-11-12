@@ -1,5 +1,6 @@
 """Regression for fail-closed source self-intersection topology preflight."""
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -185,3 +186,94 @@ def test_uncertain_self_intersection_blocks_dependents_without_becoming_fail(
     assert report.gates["air_path"].status == GateStatus.NOT_RUN
     assert report.gates["openings"].status == GateStatus.NOT_RUN
     assert report.gates["solver"].status == GateStatus.NOT_RUN
+
+
+def test_two_closed_vertex_fans_sharing_one_index_are_non_manifold(box_model):
+    first = trimesh.creation.box()
+    second = first.copy()
+    second.apply_translation([1, 1, 1])
+    combined = trimesh.util.concatenate([first, second])
+    combined.merge_vertices()
+    assert combined.is_watertight  # The edge incidence test alone accepts this.
+    assert len(combined.vertices) == 15
+    model = box_model
+    element = model.elements[0]
+    element.mesh = TriangleMesh(
+        vertices=combined.vertices.tolist(), faces=combined.faces.tolist()
+    )
+
+    issue = preflight.source_topology_preflight(model)[element.entity_key]
+    assert issue["status"] == "FAIL"
+    assert issue["reason"] == "INVALID_SOLID"
+    assert issue["mesh_quality"]["non_manifold_vertices"] == 1
+    assert issue["mesh_quality"]["non_manifold_edges"] == 0
+
+
+@pytest.mark.parametrize("sloping", [False, True])
+def test_shells_touching_at_a_face_are_unresolved_without_positive_volume_overlap(
+    box_model, sloping
+):
+    first = trimesh.creation.box()
+    second = first.copy()
+    second.apply_translation([1, 0.25, 0])
+    combined = trimesh.util.concatenate([first, second])
+    if sloping:
+        # A dyadic shear/rotation makes the contact plane non-axis-aligned.
+        combined.vertices = combined.vertices @ np.array(
+            [[1, 1, 0], [-1, 1, 0], [0, 0, 1]]
+        )
+    model = box_model
+    element = model.elements[0]
+    element.mesh = TriangleMesh(
+        vertices=combined.vertices.tolist(), faces=combined.faces.tolist()
+    )
+
+    issue = preflight.source_topology_preflight(model)[element.entity_key]
+    assert issue["status"] == "INCONCLUSIVE"
+    assert issue["reason"] == "SHELL_CONTACT"
+    assert issue["self_intersection"]["witness"]["kind"] == "COMPONENT_BOUNDARY_CONTACT"
+
+
+def test_contact_does_not_hide_penetration_by_a_third_shell(box_model):
+    first = trimesh.creation.box()
+    second = first.copy()
+    second.apply_translation([1, 0, 0])
+    third = first.copy()
+    third.apply_translation([0.5, 0.25, 0.25])
+    combined = trimesh.util.concatenate([first, second, third])
+    element = box_model.elements[0]
+    element.mesh = TriangleMesh(
+        vertices=combined.vertices.tolist(), faces=combined.faces.tolist()
+    )
+
+    issue = preflight.source_topology_preflight(box_model)[element.entity_key]
+    assert issue["status"] == "FAIL"
+    assert issue["self_intersection"]["witness"]["kind"] == "TRIANGLE_CROSSING"
+
+
+@pytest.mark.parametrize("outside", [False, True])
+def test_cavity_requires_an_enclosing_shell_and_alternating_winding(box_model, outside):
+    outer = trimesh.creation.box(extents=[6, 6, 6])
+    cavity = trimesh.creation.box(extents=[4, 4, 4])
+    cavity.invert()
+    if outside:
+        cavity.apply_translation([10, 0, 0])
+    # A solid island inside the empty cavity is legal, despite being inside
+    # the bounding surface of another positive shell.
+    island = trimesh.creation.box(extents=[1, 1, 1])
+    if outside:
+        island.apply_translation([20, 0, 0])
+    combined = trimesh.util.concatenate([outer, cavity, island])
+    element = box_model.elements[0]
+    element.mesh = TriangleMesh(
+        vertices=combined.vertices.tolist(), faces=combined.faces.tolist()
+    )
+    assert combined.volume == pytest.approx(216 - 64 + 1)
+
+    issue = preflight.source_topology_preflight(box_model)[element.entity_key]
+    if outside:
+        assert issue["status"] == "FAIL"
+        assert issue["reason"] == "INVALID_SHELL_WINDING"
+        assert issue["self_intersection"]["witness"]["kind"] == "SHELL_WINDING_MISMATCH"
+    else:
+        assert issue["status"] == "PASS"

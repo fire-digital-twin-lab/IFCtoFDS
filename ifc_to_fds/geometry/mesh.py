@@ -1,5 +1,6 @@
 """Mesh inspection without repairs or bounding-box substitutes."""
 
+import math
 import numpy as np
 import trimesh
 from fractions import Fraction
@@ -158,6 +159,23 @@ def bounds_for_vertices(vertices):
     )
 
 
+def _disconnected_vertex_links(faces, edge_ids):
+    """Count vertices whose incident triangles form more than one closed fan."""
+    # Directed edges are ordered by local face edge: 0→1, 1→2, 2→0.
+    # Join equal corners (face, vertex) across opposite half-edges.
+    face_count = len(faces)
+    first, second = np.argsort(edge_ids, kind="stable").reshape(-1, 2).T
+    corner_count = 3 * face_count
+    connections = np.column_stack((
+        np.r_[first, second],
+        (np.r_[second, first] + face_count) % corner_count,
+    ))
+    labels = trimesh.graph.connected_component_labels(connections, node_count=corner_count)
+    _, representatives = np.unique(labels, return_index=True)
+    _, fan_counts = np.unique(faces.T.ravel()[representatives], return_counts=True)
+    return int(np.count_nonzero(fan_counts > 1))
+
+
 def inspect_mesh_quality(mesh):
     result = dict(
         degenerate_faces=0,
@@ -197,8 +215,8 @@ def inspect_mesh_quality(mesh):
         )
         _, occurrences = np.unique(directed, axis=0, return_counts=True)
         result["inconsistent_edges"] = int(np.sum(occurrences - 1))
-        _, occurrences = np.unique(
-            np.sort(directed, axis=1), axis=0, return_counts=True
+        _, edge_ids, occurrences = np.unique(
+            np.sort(directed, axis=1), axis=0, return_inverse=True, return_counts=True
         )
         result["open_edges"] = int(np.count_nonzero(occurrences == 1))
         result["non_manifold_edges"] = int(np.count_nonzero(occurrences > 2))
@@ -216,7 +234,12 @@ def inspect_mesh_quality(mesh):
         )
     )
     if result["is_closed_manifold"]:
-        result["positive_volume"] = int(as_trimesh(mesh).volume > 1e-12)
+        disconnected = _disconnected_vertex_links(faces, edge_ids)
+        if disconnected:
+            result["non_manifold_vertices"] = disconnected
+            result["is_closed_manifold"] = 0
+        else:
+            result["positive_volume"] = int(as_trimesh(mesh).volume > 1e-12)
     return result
 
 
@@ -264,6 +287,49 @@ def intersects_box(mesh, bounds):
     return hit.volume > 1e-12
 
 
+def _shell_winding_at_point(shell, point):
+    """Evaluate the signed solid-angle sum away from the boundary."""
+    rays = shell.triangles - point
+    lengths = np.linalg.norm(rays, axis=-1)
+    if not np.isfinite(lengths).all() or np.any(lengths == 0):
+        raise RuntimeError("Shell containment query is numerically unresolved")
+    a, b, c = (rays / lengths[..., None]).transpose(1, 0, 2)
+    triple = np.einsum("ij,ij->i", a, np.cross(b, c))
+    denominator = 1 + np.einsum("ij,ij->i", a, b + c) + np.einsum("ij,ij->i", b, c)
+    roundoff = 64 * np.finfo(float).eps
+    if np.any((np.abs(triple) <= roundoff) & (denominator <= roundoff)):
+        raise RuntimeError("Shell containment query is too close to a triangle")
+    winding = math.fsum(np.arctan2(triple, denominator)) / (2 * math.pi)
+    integer = round(winding)
+    if abs(integer) > 1 or abs(winding - integer) > 1e-8:
+        raise RuntimeError("Shell solid-angle sum is unresolved")
+    return integer
+
+
+def _shell_winding_mismatch(shells):
+    volumes = [shell.volume for shell in shells]
+    if not np.isfinite(volumes).all() or any(volume == 0 for volume in volumes):
+        raise RuntimeError("Shell has no resolved signed volume")
+    mismatches = []
+    for i, shell in enumerate(shells):
+        depth = 0
+        for j, container in enumerate(shells):
+            if not (
+                np.all(container.bounds[0] < shell.bounds[0])
+                and np.all(container.bounds[1] > shell.bounds[1])
+            ):
+                continue
+            winding = _shell_winding_at_point(container, shell.vertices[0])
+            if winding and (winding > 0) != (volumes[j] > 0):
+                raise RuntimeError("Shell signed volume and winding disagree")
+            depth += abs(winding)
+        if (volumes[i] > 0) != (depth % 2 == 0):
+            mismatches.append(dict(
+                component=i, containment_depth=depth, signed_volume_m3=float(volumes[i]),
+            ))
+    return mismatches
+
+
 def has_self_intersection(mesh, details=None):
     """Compatibility predicate. Numerical/backend uncertainty raises, never FAILs."""
     if details is None:
@@ -276,8 +342,27 @@ def has_self_intersection(mesh, details=None):
 
     tm = as_trimesh(mesh)
     triangles = tm.triangles
+    if not len(triangles):
+        return False
     tree = tm.triangles_tree
     faces = np.asarray(mesh.faces)
+    shell_labels = None
+    shells = None
+    contacts = {}
+    unresolved_contacts = {}
+
+    def build_shells():
+        nonlocal shell_labels, shells
+        if shells is None:
+            shell_labels = trimesh.graph.connected_component_labels(
+                tm.face_adjacency, node_count=len(triangles)
+            )
+            # Keep source triangles and edge-connected components intact.
+            groups = trimesh.grouping.group(shell_labels)
+            shells = (
+                tm.submesh(groups, only_watertight=False, repair=False)
+                if len(groups) > 1 else [tm]
+            )
 
     def plane_side(triangle, point):
         for axis in range(3):
@@ -316,6 +401,47 @@ def has_self_intersection(mesh, details=None):
         )
         return (exact > 0) - (exact < 0)
 
+    def classify_shell_contact(i, j, projected_area=None):
+        build_shells()
+        pair = tuple(sorted((int(shell_labels[i]), int(shell_labels[j]))))
+        if pair[0] == pair[1]:
+            return False
+        left, right = (shells[index] for index in pair)
+        if not all(s.is_watertight and s.is_winding_consistent for s in (left, right)):
+            return False
+        if pair in contacts:
+            return True
+        separated = bool(
+            np.any(left.bounds[1] <= right.bounds[0])
+            or np.any(right.bounds[1] <= left.bounds[0])
+        )
+        if projected_area is not None and not separated:
+            if (
+                projected_area > 0 and left.is_volume and right.is_volume
+                and np.dot(tm.face_normals[i], tm.face_normals[j]) > 0
+            ):
+                # Same outward normals imply a common material neighbourhood
+                # just inside both shells, across the positive-area patch.
+                return False
+            plane = triangles[i]
+            left_sides = {plane_side(plane, point) for point in left.vertices}
+            right_sides = {plane_side(plane, point) for point in right.vertices}
+            separated = (
+                left_sides <= {-1, 0} and right_sides <= {0, 1}
+                or left_sides <= {0, 1} and right_sides <= {-1, 0}
+            )
+        info = dict(triangles=[int(i), int(j)], components=list(pair))
+        if projected_area is not None:
+            info["projected_area_m2"] = float(projected_area)
+        if separated:
+            contacts[pair] = dict(kind="COMPONENT_BOUNDARY_CONTACT", **info)
+            unresolved_contacts.pop(pair, None)
+        else:
+            unresolved_contacts.setdefault(
+                pair, dict(kind="COMPONENT_BOUNDARY_UNRESOLVED", **info)
+            )
+        return True
+
     def segment_hit(start, end, triangle):
         direction = end - start
         edge1, edge2 = triangle[1] - triangle[0], triangle[2] - triangle[0]
@@ -342,9 +468,9 @@ def has_self_intersection(mesh, details=None):
             u, v, t = numerators / det
             margin = bound / abs(det)
             if min(u, v, t, 1 - t, 1 - u - v) > margin:
-                return True
+                return 3  # Transverse hit strictly inside the triangle.
             if min(u, v, t, 1 - t, 1 - u - v) < -margin:
-                return False
+                return 0
 
         # Uncertain ratios use exact rational predicates, not widened barycentric
         # tolerances. The endpoint rule is strict as in the original traversal.
@@ -371,19 +497,26 @@ def has_self_intersection(mesh, details=None):
         h, q = cross(direction, edge2), cross(offset, edge1)
         determinant = dot(edge1, h)
         if not determinant:
-            return False
+            return 0
         u, v, t = (
             dot(offset, h) / determinant,
             dot(direction, q) / determinant,
             dot(edge2, q) / determinant,
         )
-        return 0 < t < 1 and u >= 0 and v >= 0 and u + v <= 1
+        margin = min(u, v, 1 - u - v)
+        if margin < 0 or not 0 <= t <= 1:
+            return 0
+        if t in (0, 1):
+            return 1  # A shared endpoint is a contact candidate across shells.
+        return 2 + int(margin > 0)
 
     for i, tri in enumerate(triangles):
         bounds = np.r_[tri.min(axis=0), tri.max(axis=0)]
         for j in tree.intersection(bounds):
             if j <= i:
                 continue
+            if contacts and tuple(sorted((shell_labels[i], shell_labels[j]))) in contacts:
+                continue  # The separating half-spaces cover every pair of faces.
             other = triangles[j]
             sides = [plane_side(tri, p) for p in other]
             reverse_sides = [plane_side(other, p) for p in tri]
@@ -402,23 +535,35 @@ def has_self_intersection(mesh, details=None):
                 from shapely.geometry import Polygon
 
                 axes = [x for x in range(3) if x != np.argmax(np.abs(normal))]
-                area = Polygon(tri[:, axes]).intersection(Polygon(other[:, axes])).area
-                if area > 0:
-                    return witness("COPLANAR_FACE_OVERLAP", triangles=[int(i), int(j)], projected_area_m2=float(area))
-                # Exact coplanarity and zero projected area prove no interior
-                # overlap. Segment/triangle ratios are singular on this plane.
+                patch = Polygon(tri[:, axes]).intersection(Polygon(other[:, axes]))
+                if not patch.is_empty:
+                    area = patch.area
+                    if not classify_shell_contact(i, j, area) and area > 0:
+                        return witness("COPLANAR_FACE_OVERLAP", triangles=[int(i), int(j)], projected_area_m2=float(area))
                 continue
             for a, b in ((0, 1), (1, 2), (2, 0)):
-                if segment_hit(tri[a], tri[b], other) or segment_hit(
-                    other[a], other[b], tri
-                ):
+                # An edge with equal endpoint signs stays on one side of the
+                # plane or lies in it. Neither case can give a transverse hit.
+                hit = 0
+                if reverse_sides[a] != reverse_sides[b]:
+                    hit = segment_hit(tri[a], tri[b], other)
+                if hit != 3 and sides[a] != sides[b]:
+                    hit = max(hit, segment_hit(other[a], other[b], tri))
+                if hit == 3 or (hit and not classify_shell_contact(i, j) and hit == 2):
                     return witness("TRIANGLE_CROSSING", triangles=[int(i), int(j)])
-    # Trimesh's default split repairs holes. Inspection must preserve source
-    # topology and must not depend on an optional repair backend (networkx).
-    components = tm.split(only_watertight=False, repair=False)
-    if len(components) > 1:
-        for i, component in enumerate(components):
-            for j, other in enumerate(components[i + 1 :], i + 1):
+    build_shells()
+    mixed_winding = (
+        len(shells) > 1 and tm.is_watertight and tm.is_winding_consistent
+        and any(shell.volume <= 0 for shell in shells)
+    )
+    if mixed_winding and not (contacts or unresolved_contacts):
+        mismatches = _shell_winding_mismatch(shells)
+        return witness("SHELL_WINDING_MISMATCH", shells=mismatches) if mismatches else False
+    if len(shells) > 1 and not mixed_winding:
+        for i, component in enumerate(shells):
+            for j, other in enumerate(shells[i + 1 :], i + 1):
+                if (i, j) in contacts:
+                    continue
                 if np.any(component.bounds[1] <= other.bounds[0]) or np.any(
                     other.bounds[1] <= component.bounds[0]
                 ):
@@ -427,6 +572,11 @@ def has_self_intersection(mesh, details=None):
                     volume = solid_boolean([component, other], "intersection").volume
                     if volume > 0:
                         return witness("COMPONENT_VOLUME_OVERLAP", components=[i, j], volume_m3=float(volume))
+    if contacts or unresolved_contacts:
+        contact = next(iter((unresolved_contacts or contacts).values()))
+        if details is not None:
+            details.update(contact)
+        raise RuntimeError("Component boundary contact requires a verified solid union")
     return False
 
 
@@ -453,15 +603,21 @@ def self_intersection_evidence(mesh):
         hit = has_self_intersection(mesh)
         result = {
             "status": "CONFIRMED" if hit else "CLEAN",
-            "method": "adaptive-exact-plane/triangle-crossing/manifold-components-v1",
+            "method": "adaptive-exact-plane/triangle-crossing/manifold-components-v2",
         }
         if details:
             result["witness"] = details
     except Exception as exc:
         result = {"status": "UNCERTAIN", "reason": str(exc)}
+        if details:
+            result["witness"] = details
     finally:
         _intersection_witness.reset(token)
-    if cache is not None and key is not None and result["status"] != "UNCERTAIN":
+    deterministic = (
+        result["status"] != "UNCERTAIN"
+        or details.get("kind") == "COMPONENT_BOUNDARY_CONTACT"
+    )
+    if cache is not None and key is not None and deterministic:
         if len(cache) >= 4096:
             cache.pop(next(iter(cache)))
         cache[key] = deepcopy(result)
