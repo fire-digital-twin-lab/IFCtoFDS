@@ -92,20 +92,45 @@ def test_fitting_rejects_unreviewed_loss_or_incomplete_forward_order(fitting_ifc
 
 
 @pytest.mark.solver
-def test_pinned_fds_loads_reviewed_loss_in_passive_ifc_network(fitting_ifc, tmp_path):
+@pytest.mark.parametrize("flow_sign, expected_k", [(1, 2.8), (-1, 5.0)])
+def test_pinned_fds_uses_directional_loss_and_conserves_flow(fitting_ifc, tmp_path, flow_sign, expected_k):
     config, fitting_key = _configuration(fitting_ifc, "REDUCER")
+    for key, decision in config["decisions"].items():
+        if key != fitting_key:
+            decision["hvac"]["volume_flow_m3_s"] = 0.25 * flow_sign
     text, _ = serialize_fds(prepare([str(fitting_ifc)], config))
     parsed = parse_fds(text)
     duct = next(r for r in parsed.operational_records
                 if r.values.get("TYPE_ID") == ["DUCT"] and r.source.get("entity_key") == fitting_key)
+    driver = next(r for r in parsed.operational_records
+                  if r.values.get("TYPE_ID") == ["DUCT"] and r.id != duct.id)
+    node_a, node_b = duct.values["NODE_ID"]
     head = next(r for r in parsed.records if r.kind == "HEAD")
     time = next(r for r in parsed.records if r.kind == "TIME")
     start, end = time.text_span
-    text = text[:start] + "&TIME T_END=0.02, DT=0.02 /" + text[end:]
-    text = text.replace("&TAIL", f"&DEVC ID='k_observed', QUANTITY='DUCT LOSS', DUCT_ID='{duct.id}' /\n&TAIL")
+    text = text[:start] + "&TIME T_END=0.5, DT=0.025 /" + text[end:]
+    driver_flow = f"VOLUME_FLOW={0.25 * flow_sign}"
+    assert text.count(driver_flow) == 1
+    text = text.replace(driver_flow, driver_flow + ", TAU_VF=0")
+    text = text.replace("&TAIL", (
+        f"&DEVC ID='k', QUANTITY='DUCT LOSS', DUCT_ID='{duct.id}' /\n"
+        f"&DEVC ID='q_fitting', QUANTITY='DUCT VOLUME FLOW', DUCT_ID='{duct.id}' /\n"
+        f"&DEVC ID='q_driver', QUANTITY='DUCT VOLUME FLOW', DUCT_ID='{driver.id}' /\n"
+        f"&DEVC ID='rho', QUANTITY='DUCT DENSITY', DUCT_ID='{duct.id}' /\n"
+        f"&DEVC ID='rho_driver', QUANTITY='DUCT DENSITY', DUCT_ID='{driver.id}' /\n"
+        f"&DEVC ID='pa', QUANTITY='NODE PRESSURE', NODE_ID='{node_a}' /\n"
+        f"&DEVC ID='pb', QUANTITY='NODE PRESSURE', NODE_ID='{node_b}' /\n&TAIL"
+    ))
     solver, _ = solver_gates(text, AuditConfig(
         solver_executable=os.environ.get("IFCFDS_SOLVER"), solver_evidence_directory=str(tmp_path / "solver"),
     ))
     assert solver.status == "PASS", solver.reason
     series = load_fds_device_series(Path(solver.evidence["directory"]), head.values["CHID"][0])
-    assert series["k_observed"].values[-1] == pytest.approx((2.8 + 5.0) / 2)
+    latest = {key: values.values[-1] for key, values in series.items()}
+    assert latest["k"] == pytest.approx(expected_k)
+    assert latest["q_fitting"] == pytest.approx(0.25 * flow_sign, rel=0.002)
+    assert latest["rho"] * latest["q_fitting"] == pytest.approx(
+        latest["rho_driver"] * latest["q_driver"], rel=0.002,
+    )
+    expected_drop = 0.5 * latest["rho"] * expected_k * (latest["q_fitting"] / 0.125) ** 2
+    assert flow_sign * (latest["pa"] - latest["pb"]) == pytest.approx(expected_drop, rel=0.01, abs=0.04)
