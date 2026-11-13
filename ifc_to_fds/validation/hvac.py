@@ -24,6 +24,14 @@ def hvac_errors(parsed):
             values = duct.values.get(field)
             if values is not None and (len(values) != 1 or isinstance(values[0], bool) or not isinstance(values[0], (int, float)) or not math.isfinite(values[0]) or values[0] <= 0):
                 bad(duct, f"{field} must be a finite positive number")
+        losses = duct.values.get("LOSS")
+        if losses is not None and (
+            len(losses) != 2 or any(
+                type(value) not in (int, float) or not math.isfinite(value) or value < 0
+                for value in losses
+            )
+        ):
+            bad(duct, "LOSS requires finite nonnegative forward and reverse coefficients")
         if not any(duct.values.get(k) for k in ("AREA", "DIAMETER")):
             bad(duct, "DUCT requires AREA or DIAMETER")
     assigned_vents = set()

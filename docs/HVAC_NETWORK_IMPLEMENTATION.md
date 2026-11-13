@@ -50,6 +50,12 @@ Các khóa trong ví dụ là chỗ cần thay bằng `entity_key` và `port_key
 
 VENT phải là hình chữ nhật có diện tích dương, trùng một mặt OBST được hỗ trợ hoặc mặt biên MESH, và chứa tọa độ port. Hệ thống sinh VENT có `SURF_ID='HVAC'` rồi liên kết NODE bằng `VENT_ID`. Không tự đặt đầu bị thiếu dữ liệu thành AMBIENT.
 
+### Cút và côn hai cổng
+
+Với `IfcDuctFitting` có `PredefinedType=BEND` hoặc `TRANSITION`, khai báo `hvac.fitting` tương ứng `ELBOW` hoặc `REDUCER`, hai `forward_port_keys` theo chiều thuận, hai hệ số `k`, hai `reference_areas_m2` và `source` của số liệu đã duyệt. Khai báo thêm `length_m` theo tim tuyến và tiết diện đại diện của `DUCT`. `REDUCER` dùng tổn thất đã duyệt và không cộng ma sát từ tiết diện đại diện.
+
+Với cùng lưu lượng $Q$, tổn thất $\Delta p=\rho K(Q/A)^2/2$ được giữ khi đổi cơ sở tiết diện theo $K_{FDS}=K_{ref}(A_{FDS}/A_{ref})^2$. Tính riêng cho hai chiều và xuất `LOSS` theo đúng thứ tự `NODE_ID`. Tiết diện đại diện 0,125 m², hệ số thuận 0,7 tại 0,0625 m² và hệ số nghịch 5,0 tại 0,125 m² cho `LOSS=2.8,5.0`. [FDS User Guide, mục 10.2.1](https://pages.nist.gov/fds/manuals.html)
+
 ## Ví dụ chạy được
 
 [Thư mục mẫu](evidence/hvac-network-v1/) có IFC tổng hợp, quyết định, cấu hình, FDS và kết quả audit. Đây là ví dụ mạng có hai đầu AMBIENT để kiểm tra topology, không phải một thiết kế hút khói công trình. Muốn trao đổi khí với không gian CFD cần cấu hình VENT phù hợp.
@@ -82,7 +88,7 @@ Scenario còn kiểm tra xe nằm trong miền đã xác minh, dùng công suấ
 ## Ranh giới hỗ trợ hiện tại
 
 - Hỗ trợ operational adapter cho `IfcDuctSegment` và `IfcFlowSegment` có phân loại thông gió/hút khói, hai port nguồn và quan hệ nối tường minh. Không tự biến ống nước PCCC thành ống gió.
-- Chưa tự chuyển co/fitting, fan, damper, aircoil hoặc filter thành mô hình vận hành. Nếu chọn HVAC cho các loại chưa hỗ trợ, hệ thống trả lỗi rõ ràng.
+- Cút và côn hai cổng dùng số liệu tổn thất đã duyệt. Tee, fan, damper, aircoil và filter cần mô hình riêng.
 - Chưa tự trích và xác nhận đầy đủ thông số thủy lực từ IFC profile/property sets; người dùng cung cấp thông số có thẩm định. Không dùng kích thước hiển thị thay cho dữ liệu còn thiếu.
 - VENT ghép vào GEOM chưa được hỗ trợ. Điều khiển cửa dạng GEOM hoặc lịch nhiều sự kiện trên cùng cửa hiện bị từ chối thay vì tạo file có hành vi không chắc chắn.
 - FDS initialization đã được kiểm tra. Chưa thao tác nhập file trực tiếp vào ứng dụng PyroSim hay xác nhận lưu lượng/áp suất hút khói công trình thực tế.

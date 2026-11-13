@@ -7,6 +7,7 @@ from ifc_to_fds.domain.mapping.enums import MappingStrategy
 from ifc_to_fds.domain.scope import ScopeDecision
 
 PORT_POSITION_TOLERANCE_M = 0.001
+_FITTING_TYPES = {"BEND": "ELBOW", "TRANSITION": "REDUCER"}
 
 
 def build_hvac_network(model):
@@ -17,11 +18,18 @@ def build_hvac_network(model):
     ports, owners, specs = {}, {}, {}
     for e in selected:
         declared_type = (e.type_class or e.ifc_type).upper().removesuffix("TYPE")
-        if declared_type not in ("IFCDUCTSEGMENT", "IFCFLOWSEGMENT") or e.mep_category not in ("VENTILATION", "SMOKE_EXTRACT"):
-            raise ValueError(f"HVAC requires a ventilation duct segment; fittings/fans need a dedicated operational adapter: {e.entity_key}")
+        if declared_type not in ("IFCDUCTSEGMENT", "IFCFLOWSEGMENT", "IFCDUCTFITTING") or e.mep_category not in ("VENTILATION", "SMOKE_EXTRACT"):
+            raise ValueError(f"HVAC requires a ventilation duct segment or a supported reviewed fitting: {e.entity_key}")
         if e.decision.get("action") != "HVAC" or not e.decision.get("hvac"):
             raise ValueError(f"HVAC requires reviewed duct parameters and endpoint boundaries: {e.entity_key}")
-        specs[e.entity_key] = DuctSpec.model_validate(e.decision["hvac"])
+        spec = DuctSpec.model_validate(e.decision["hvac"])
+        specs[e.entity_key] = spec
+        if declared_type == "IFCDUCTFITTING":
+            expected = _FITTING_TYPES.get((e.predefined_type or "").upper())
+            if expected is None or spec.fitting is None or spec.fitting.kind != expected:
+                raise ValueError(f"HVAC requires a reviewed fitting matching IFC BEND or TRANSITION: {e.entity_key}")
+        elif spec.fitting is not None:
+            raise ValueError(f"Reviewed fitting parameters require an IFC duct fitting: {e.entity_key}")
         if len(e.ports) != 2:
             raise ValueError(f"HVAC duct requires exactly two source ports: {e.entity_key}")
         for p in e.ports:
@@ -30,6 +38,8 @@ def build_hvac_network(model):
             ports[p.port_key], owners[p.port_key] = p, e.entity_key
         if set(specs[e.entity_key].endpoints) - {p.port_key for p in e.ports}:
             raise ValueError(f"Unknown endpoint port in HVAC configuration: {e.entity_key}")
+        if spec.fitting is not None and set(spec.fitting.forward_port_keys) != {p.port_key for p in e.ports}:
+            raise ValueError(f"Reviewed fitting forward order must reference both IFC ports: {e.entity_key}")
     parent = {key: key for key in ports}
 
     def find(key):
@@ -97,8 +107,9 @@ def build_hvac_network(model):
         length = spec.length_m if spec.length_m is not None else distance
         if length <= 0 or length + 0.001 < distance:
             raise ValueError("HVAC length must be positive and cannot be shorter than the port chord")
-        ordered_ports = e.ports
-        if len(e.ports) == 2:
+        if spec.fitting is not None:
+            ordered_ports = [ports[key] for key in spec.fitting.forward_port_keys]
+        else:
             def port_flow_order(p):
                 direction = (getattr(p, "flow_direction", None) or "").upper()
                 return 0 if direction == "SINK" else 1 if direction == "SOURCE" else 0.5
