@@ -10,12 +10,13 @@ import math
 import numpy as np
 from ifc_to_fds.geometry.mesh import bounds_for_vertices, is_axis_aligned_box
 from .acceptance import GateResult, GateStatus
+from .effective_door import door_timers, verify_door_timeline
 from .effective_vent import verify_open_vents
 from .parser import parse_fds
 from .smv import grid_bounds, read_mesh_obstructions
 
 
-EFFECTIVE_ADAPTER_VERSION = "smv-effective-6.11.1-v3"
+EFFECTIVE_ADAPTER_VERSION = "smv-effective-6.11.1-v4"
 
 
 def check_opening_grid_alignment(opening_mesh, host_bounds, parsed):
@@ -122,8 +123,15 @@ def effective_obstructions(fds_text, smv_text, *, solver_version="6.11.1"):
                 reason="Static HOLE SMV adapter requires FDS 6.11.1",
             )
         return _effective_static_hole(parsed, meshes, obstructions, holes, smv_text)
-    if any("DEVC_ID" in r.values or "CTRL_ID" in r.values for r in obstructions):
-        return GateResult(status=GateStatus.INCONCLUSIVE, reason="Dynamic obstruction occupancy is unsupported")
+    dynamic = any("DEVC_ID" in r.values or "CTRL_ID" in r.values for r in obstructions)
+    timing = None
+    if dynamic:
+        if solver_version != "6.11.1" or len(meshes) != 1 or vents:
+            return GateResult(status=GateStatus.INCONCLUSIVE, reason="Door timing requires one FDS 6.11.1 mesh without VENT")
+        try:
+            timing = door_timers(parsed, meshes[0], obstructions)
+        except ValueError as exc:
+            return GateResult(status=GateStatus.INCONCLUSIVE, reason=str(exc))
     expected = {r.id: r.values["XB"] for r in obstructions}
     lines = smv_text.splitlines()
     evidence = {
@@ -136,7 +144,7 @@ def effective_obstructions(fds_text, smv_text, *, solver_version="6.11.1"):
         starts = [0]  # Legacy single-mesh SMV fixture without a GRID heading.
     if len(starts) != len(meshes):
         return GateResult(status=GateStatus.INCONCLUSIVE, reason="SMV mesh sections do not match FDS input", evidence=evidence)
-    if vents:
+    if vents or timing is not None:
         try:
             grid_data = read_mesh_obstructions(meshes[0], lines)
         except (ValueError, IndexError) as exc:
@@ -146,6 +154,8 @@ def effective_obstructions(fds_text, smv_text, *, solver_version="6.11.1"):
             return result
         mesh_id = meshes[0].id or "1"
         evidence["mesh_obstructions"] = {mesh_id: evidence["effective_bounds"]}
+        if timing is not None:
+            return verify_door_timeline(lines, grid_data, timing, evidence)
         return verify_open_vents(meshes[0], vents, lines, grid_data, evidence)
     domains = [mesh.values["XB"] for mesh in meshes]
     for i, left in enumerate(domains):
