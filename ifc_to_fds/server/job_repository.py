@@ -8,6 +8,8 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
+from ifc_to_fds.adapters.sqlite_wal import enable_wal
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,8 +30,6 @@ class JobRepository:
             raise RuntimeError("Database not initialized")
         conn = sqlite3.connect(str(self._db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
-        # Configure SQLite PRAGMAs on every connection
-        conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA busy_timeout = 10000;")
         conn.execute("PRAGMA synchronous = NORMAL;")
         return conn
@@ -39,6 +39,7 @@ class JobRepository:
             return
         with self._lock:
             with self._get_connection() as conn:
+                enable_wal(conn)
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS jobs (
                         id TEXT PRIMARY KEY,
