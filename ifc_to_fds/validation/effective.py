@@ -16,7 +16,7 @@ from .parser import parse_fds
 from .smv import grid_bounds, read_mesh_obstructions
 
 
-EFFECTIVE_ADAPTER_VERSION = "smv-effective-6.11.1-v4"
+EFFECTIVE_ADAPTER_VERSION = "smv-effective-6.11.1-v5"
 
 
 def check_opening_grid_alignment(opening_mesh, host_bounds, parsed):
@@ -218,6 +218,47 @@ def _on_exterior_mesh_face(indices, grids):
     return indices[i] in (0, len(grids[i // 2]) - 1)
 
 
+def _static_hole_meshes(meshes, lines):
+    starts = [i for i, line in enumerate(lines) if line.split(maxsplit=1)[:1] == ["GRID"]]
+    if len(meshes) == 1:
+        grids, rows = read_mesh_obstructions(meshes[0], lines)
+        return grids, {meshes[0].id or "1": rows}, None
+    if len(starts) != 2 or any(not mesh.id for mesh in meshes):
+        raise ValueError("Static HOLE requires two identified SMV mesh sections")
+    mesh_rows = []
+    for mesh, start, stop in zip(meshes, starts, starts[1:] + [len(lines)]):
+        if lines[start].split(maxsplit=1)[1].strip() != mesh.id:
+            raise ValueError("SMV GRID identity differs from MESH order")
+        grids, rows = read_mesh_obstructions(mesh, lines[start:stop])
+        mesh_rows.append((grids, rows, mesh.id))
+
+    a, b = (item[0] for item in mesh_rows)
+    different = [axis for axis in range(3) if a[axis] != b[axis]]
+    if len(different) != 1:
+        raise ValueError("Static HOLE meshes must share one full conforming face")
+    axis = different[0]
+    low, high = sorted(mesh_rows, key=lambda item: item[0][axis][0])
+    lower, upper = low[0][axis], high[0][axis]
+    if lower[-1] != upper[0] or not math.isclose(
+        (lower[-1] - lower[0]) / (len(lower) - 1),
+        (upper[-1] - upper[0]) / (len(upper) - 1),
+        rel_tol=1e-8, abs_tol=1e-10,
+    ):
+        raise ValueError("Static HOLE meshes require contiguous equal-spacing grids")
+
+    seam = len(lower) - 1
+    merged = list(low[0])
+    merged[axis] = lower + upper[1:]
+    return merged, {low[2]: low[1], high[2]: high[1]}, (2 * axis, seam, high[2])
+
+
+def _section_area(indices, grids, normal):
+    return math.prod(
+        grids[i // 2][indices[i + 1]] - grids[i // 2][indices[i]]
+        for i in (0, 2, 4) if i != normal
+    )
+
+
 def _effective_static_hole(parsed, meshes, obstructions, holes, smv_text):
     lines = smv_text.splitlines()
     evidence = {
@@ -226,10 +267,10 @@ def _effective_static_hole(parsed, meshes, obstructions, holes, smv_text):
         "smv_lines": len(lines),
     }
     times = [r.values.get("T_END") for r in parsed.records if r.kind == "TIME"]
-    if len(meshes) != 1 or len(obstructions) != 1 or len(holes) != 1 or times != [[0]]:
+    if len(meshes) not in (1, 2) or len(obstructions) != 1 or len(holes) != 1 or times != [[0]]:
         return GateResult(
             status=GateStatus.INCONCLUSIVE,
-            reason="Static HOLE proof requires a setup run with one mesh, wall and opening",
+            reason="Static HOLE proof requires a setup run with one wall and opening on up to two meshes",
             evidence=evidence,
         )
     wall, hole = obstructions[0], holes[0]
@@ -244,7 +285,7 @@ def _effective_static_hole(parsed, meshes, obstructions, holes, smv_text):
             evidence=evidence,
         )
     try:
-        grids, rows = read_mesh_obstructions(meshes[0], lines)
+        grids, mesh_rows, interface = _static_hole_meshes(meshes, lines)
         host = _grid_aligned_box(wall, grids)
         cut = _grid_aligned_box(hole, grids)
         axes = [
@@ -265,19 +306,30 @@ def _effective_static_hole(parsed, meshes, obstructions, holes, smv_text):
             ):
                 raise ValueError("Static HOLE opening meets an unsupported wall edge")
         passage = _intersection(host, cut)
+        if interface is not None:
+            axis, seam, _ = interface
+            if not passage[axis] < seam < passage[axis + 1]:
+                raise ValueError("Static HOLE must cross the shared mesh face")
     except (ValueError, IndexError) as exc:
         return GateResult(status=GateStatus.INCONCLUSIVE, reason=str(exc), evidence=evidence)
 
-    pieces = [indices for _, indices in rows]
-    if not pieces or any(label != wall.id for label, _ in rows):
+    if not any(mesh_rows.values()) or any(
+        label != wall.id for rows in mesh_rows.values() for label, _ in rows
+    ):
         return GateResult(
             status=GateStatus.FAIL,
             reason="Static HOLE solver obstruction inventory differs from input wall",
             evidence=evidence,
         )
+    high_axis, seam, high_mesh = interface or (None, 0, None)
+    pieces = [
+        [value + (seam if mesh_id == high_mesh and i - i % 2 == high_axis else 0)
+         for i, value in enumerate(indices)]
+        for mesh_id, rows in mesh_rows.items() for _, indices in rows
+    ]
     boundary_faces = [piece for piece in pieces if _box_volume(piece) == 0]
-    # The supported single mesh has no VENT or periodic boundary. A wall
-    # fragment on an exterior face changes no interior gas-to-gas face.
+    # An exterior fragment changes no interior gas-to-gas face. A fragment
+    # at a mesh interface is internal to the combined domain.
     if any(not _on_exterior_mesh_face(piece, grids) for piece in boundary_faces):
         return GateResult(
             status=GateStatus.INCONCLUSIVE,
@@ -312,9 +364,19 @@ def _effective_static_hole(parsed, meshes, obstructions, holes, smv_text):
             reason="Solver cells differ from the wall minus the through-opening",
             evidence=evidence,
         )
-    evidence["static_hole"]["open_area_m2"] = math.prod(
-        grids[i // 2][passage[i + 1]] - grids[i // 2][passage[i]] for i in tangents
-    )
+    opening_evidence = evidence["static_hole"]
+    opening_evidence["open_area_m2"] = _section_area(passage, grids, normal)
+    if interface is not None:
+        axis, seam, _ = interface
+        opening_evidence["mesh_obstructions"] = {
+            mesh_id: [indices for _, indices in local_rows]
+            for mesh_id, local_rows in mesh_rows.items()
+        }
+        opening_evidence["interface"] = {
+            "normal_axis": "XYZ"[axis // 2],
+            "coordinate_m": grids[axis // 2][seam],
+            "open_area_m2": _section_area(passage, grids, axis),
+        }
     return GateResult(
         status=GateStatus.PASS,
         reason="Static wall and through-opening occupancy verified from solver SMV indices",
