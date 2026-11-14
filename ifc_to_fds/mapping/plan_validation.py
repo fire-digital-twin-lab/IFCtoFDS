@@ -7,8 +7,9 @@ from ifc_to_fds.geometry.mesh import (
     is_axis_aligned_box,
     valid_solid,
 )
+from ifc_to_fds.geometry.rectilinear import is_obstruction_box_set
 from .boundary import POLICY, EXACT_POLICY, eligible_bounds, exact_bounds
-from .policy import NON_OBSTACLE_TYPES, validate_decisions
+from .policy import NON_OBSTACLE_TYPES, _openings_are_cut, validate_decisions
 
 
 def planned_model(model, plan):
@@ -108,10 +109,10 @@ def planned_model(model, plan):
                 for a, b in zip(e.bounding_box.to_xb(), source_bounds.to_xb())
             ):
                 reject("source bounds do not match source mesh")
-            if d.strategy == MappingStrategy.OBST and (
-                e.openings or not is_axis_aligned_box(e.mesh)
+            if d.strategy == MappingStrategy.OBST and not (
+                (not e.openings and is_axis_aligned_box(e.mesh)) or (is_obstruction_box_set(e.mesh) and _openings_are_cut(e))
             ):
-                reject("OBST requires an opening-free axis-aligned source solid")
+                reject("OBST requires an axis-aligned box or a rectilinear solid that decomposes into boxes")
             expected = source_bounds
             domain = plan.simulation_domain
             crosses = domain and any(

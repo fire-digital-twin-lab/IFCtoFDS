@@ -2,6 +2,7 @@
 
 from ifc_to_fds.core.canonical import MappingStrategy, MappingStatus, ScopeDecision, GeometryStatus
 from ifc_to_fds.geometry.mesh import is_axis_aligned_box, valid_solid
+from ifc_to_fds.geometry.rectilinear import box_sets_enabled, is_obstruction_box_set
 from ifc_to_fds.diagnostics import operation
 from ifc_to_fds.mep.classifier import MEP_TYPES
 
@@ -101,6 +102,19 @@ def validate_decisions(decisions):
             )
 
 
+def _openings_are_cut(element):
+    """Every opening has a valid solid and shares no volume with the host mesh (the void is subtracted)."""
+    from ifc_to_fds.validation.metrics import opening_residual
+
+    try:
+        return all(
+            o.mesh and valid_solid(o.mesh) and opening_residual([element.mesh], o.mesh) <= 1e-6
+            for o in element.openings
+        )
+    except (ValueError, RuntimeError):
+        return False
+
+
 def determine_element_strategy(
     element, force_all_geom=False, include_review_solids=False
 ):
@@ -144,13 +158,11 @@ def determine_element_strategy(
         return MappingStrategy.NONE
     if not element.mesh or not valid_solid(element.mesh):
         return MappingStrategy.NONE
-    if (
-        not force_all_geom
-        and element.boundary_policy != "SOURCE_SOLID_DOMAIN_INTERSECTION"
-        and not element.openings
-        and is_axis_aligned_box(element.mesh)
-    ):
-        return MappingStrategy.OBST
+    if not force_all_geom and element.boundary_policy != "SOURCE_SOLID_DOMAIN_INTERSECTION":
+        if not element.openings and is_axis_aligned_box(element.mesh):
+            return MappingStrategy.OBST
+        if box_sets_enabled() and is_obstruction_box_set(element.mesh) and _openings_are_cut(element):
+            return MappingStrategy.OBST  # rectilinear host, e.g. a wall whose openings are really open
     return MappingStrategy.GEOM
 
 

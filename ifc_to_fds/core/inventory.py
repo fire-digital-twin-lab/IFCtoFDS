@@ -99,6 +99,20 @@ def open_ifc(file_path):
 SOFTWARE_DEFAULT_SITE = ((42, 21, 31, 181945), (-71, -3, -24, -263305))
 
 
+@operation("IFC_READ")
+def require_scope_for_multi_site(path):
+    """Several IfcSite entities usually mean merged level systems; the caller must pick storeys."""
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"IFC file not found: {path}")
+    ifc = open_ifc(path)
+    sites, storeys = len(ifc.by_type("IfcSite")), len(ifc.by_type("IfcBuildingStorey"))
+    if sites > 1:
+        raise ValueError(
+            f"Model has {sites} IfcSite entities and {storeys} storeys (often several merged level "
+            "systems); select scope.storeys (CLI: --storey) or scope.bounding_box"
+        )
+
+
 def extract_georeference(ifc_file):
     """Record IfcMapConversion/IfcProjectedCRS (IFC4+). The simulation frame is unchanged."""
     if ifc_file.schema == "IFC2X3":

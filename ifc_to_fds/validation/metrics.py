@@ -13,6 +13,9 @@ from ifc_to_fds.geometry.mesh import (
 )
 
 
+PLANE_TOLERANCE = 1e-9
+
+
 class SelfIntersectionError(ValueError):
     def __init__(self, evidence, operand):
         self.evidence = {**evidence, "operand": operand}
@@ -67,12 +70,15 @@ def same_surface_partition(a, b):
     for key in left:
         pieces = left[key] + right[key]
         _, normal, distance, axis = pieces[0]
-        if any(not np.array_equal(n, normal) or d != distance for _, n, d, _ in pieces):
+        # The same plane written by two triangulations differs by float noise, never by more than
+        # PLANE_TOLERANCE (a nanometre); a real shift is far larger and is rejected here.
+        if any(not np.allclose(n, normal, rtol=0, atol=PLANE_TOLERANCE) or abs(d - distance) > PLANE_TOLERANCE
+               for _, n, d, _ in pieces):
             return False
         axes = [i for i in range(3) if i != axis]
         one = unary_union([Polygon(t[:, axes]) for t, _, _, _ in left[key]])
         two = unary_union([Polygon(t[:, axes]) for t, _, _, _ in right[key]])
-        if not one.equals(two):
+        if one.symmetric_difference(two).area > PLANE_TOLERANCE * max(1.0, one.length):
             return False
     return True
 

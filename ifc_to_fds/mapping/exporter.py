@@ -19,6 +19,7 @@ from ifc_to_fds.core.canonical import (
 )
 from ifc_to_fds.domain.mapping import MappingPlan
 from .manifest import MappingManifest, build_manifest
+from ifc_to_fds.geometry.rectilinear import box_set_for, is_obstruction_box_set
 from ifc_to_fds.geometry.mesh import (
     bounds_for_vertices,
     valid_solid,
@@ -319,7 +320,9 @@ def _serialize_planned_model(model, cell_size, hvac_network):
             raise ValueError(f"Invalid emitting geometry: {elem.entity_key}")
         if strategy in (MappingStrategy.VOXEL, MappingStrategy.OBST_HOLE):
             raise ValueError(f"Unverified mapping strategy: {strategy.value}")
-        if strategy == MappingStrategy.OBST and not is_axis_aligned_box(elem.mesh):
+        if strategy == MappingStrategy.OBST and not (
+            is_axis_aligned_box(elem.mesh) or is_obstruction_box_set(elem.mesh)
+        ):
             raise ValueError(f"OBST lacks geometric equivalence: {elem.entity_key}")
         if (
             strategy == MappingStrategy.EXCLUDED_APPROVED
@@ -328,14 +331,19 @@ def _serialize_planned_model(model, cell_size, hvac_network):
             continue
 
         if strategy == MappingStrategy.OBST and elem.bounding_box:
-            prim_counter += 1
-            prim_id = f"OBST_{prim_counter}_{clean_fds_id(elem.name, 'obs')}"
-            elem.fds_primitive_ids.append(prim_id)
-
-            lines.append(format_source_comment(elem))
-            lines.append(
-                f"&OBST ID='{prim_id}', XB={format_xb((elem.representation_bounds or elem.bounding_box).to_xb())}, SURF_ID='{surface_for_element(elem)}' /"
+            # One box, or the exact box cover of a rectilinear host (wall with openings).
+            boxes = (
+                [(elem.representation_bounds or elem.bounding_box).to_xb()]
+                if is_axis_aligned_box(elem.mesh)
+                else box_set_for(elem.mesh)
             )
+            for xb in boxes:
+                prim_counter += 1
+                prim_id = f"OBST_{prim_counter}_{clean_fds_id(elem.name, 'obs')}"
+                elem.fds_primitive_ids.append(prim_id)
+
+                lines.append(format_source_comment(elem))
+                lines.append(f"&OBST ID='{prim_id}', XB={format_xb(xb)}, SURF_ID='{surface_for_element(elem)}' /")
 
         elif (
             strategy == MappingStrategy.GEOM
