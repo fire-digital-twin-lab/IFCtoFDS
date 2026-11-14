@@ -33,10 +33,12 @@ rejects bounding box substitution for invalid or open geometries:
    rather than producing unverified or dangerously fabricated FDS geometries.
 """
 
+import os
 from typing import Any, List, Optional
 import numpy as np
 import ifcopenshell
 import ifcopenshell.geom
+from ifcopenshell.util.shape import get_shape_matrix
 from ifc_to_fds.diagnostics import operation, progress
 
 from ifc_to_fds.core.canonical import (
@@ -46,6 +48,7 @@ from ifc_to_fds.core.canonical import (
     TriangleMesh,
     GeometryStatus,
 )
+from .component_union import fuse_overlapping_components
 from .mesh import bounds_for_vertices, inspect_mesh_quality, as_trimesh, valid_solid
 from .normalization import normalize_source_mesh
 
@@ -64,8 +67,6 @@ def create_geom_settings(linear_deflection: float = 0.0001, local: bool = False)
 
 def instancing_enabled() -> bool:
     """IFCFDS_GEOMETRY_INSTANCING=0 selects per-instance world tessellation (the reference mode)."""
-    import os
-
     return os.environ.get("IFCFDS_GEOMETRY_INSTANCING", "1") != "0"
 
 
@@ -96,8 +97,6 @@ def world_mesh_from_shape(shape, cache) -> TriangleMesh:
         vertices = np.asarray(geom.verts, dtype=np.float64).reshape(-1, 3) if geom.verts else np.empty((0, 3))
         faces = np.asarray(geom.faces, dtype=np.int32).reshape(-1, 3) if geom.faces else np.empty((0, 3), np.int32)
         entry = cache[geom.id] = (vertices, faces)
-    from ifcopenshell.util.shape import get_shape_matrix
-
     world, faces = transformed_mesh_arrays(entry[0], entry[1], get_shape_matrix(shape))
     return TriangleMesh(vertices=world.tolist(), faces=faces.tolist())
 
@@ -152,8 +151,6 @@ def prepare_source_mesh(mesh):
     if mesh is None:
         return None, {"extraction_failed": True, "repair_applied": False}
     mesh, proof = normalize_source_mesh(mesh)
-    from .component_union import fuse_overlapping_components
-
     mesh, union = fuse_overlapping_components(mesh)
     if union and union["status"] == "APPLIED":
         proof = dict(proof, result_quality=inspect_mesh_quality(mesh))

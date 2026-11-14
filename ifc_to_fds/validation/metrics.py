@@ -5,6 +5,7 @@ import trimesh
 from ifc_to_fds.geometry.boolean import solid_boolean
 from ifc_to_fds.geometry.mesh import (
     as_trimesh,
+    mesh_digest,
     mesh_volume,
     valid_solid,
     is_axis_aligned_box,
@@ -226,8 +227,6 @@ def _same_meshes(left, right):
         return True
     if len(left) != len(right):
         return False
-    from ifc_to_fds.geometry.mesh import mesh_digest
-
     return sorted(map(mesh_digest, left)) == sorted(map(mesh_digest, right)) and None not in map(mesh_digest, left)
 
 

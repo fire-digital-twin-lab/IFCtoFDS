@@ -18,6 +18,7 @@ Any failed check returns the source mesh unchanged, so the element stays blocked
 import hashlib
 
 import numpy as np
+from trimesh.proximity import closest_point
 
 from ifc_to_fds.domain.bim import TriangleMesh
 
@@ -91,8 +92,6 @@ def _oracle(fused, components, boxes, seed):
     disagree = np.nonzero(in_union != in_any)[0]
     near = 0
     if len(disagree):
-        from trimesh.proximity import closest_point
-
         _, distance, _ = closest_point(fused, points[disagree])
         near = int(np.count_nonzero(distance <= ORACLE_BOUNDARY_M))
     return dict(samples=len(points), inside=int(in_union.sum()), mismatches=len(disagree) - near, near_boundary=near)
@@ -119,7 +118,7 @@ def _fuse(mesh):
     volumes = [mesh_volume(c) for c in components]
     try:
         fused_tm = solid_boolean(components, "union")
-    except Exception:
+    except (RuntimeError, ValueError):
         return mesh, None  # no usable union: the element keeps its source mesh and finding
     union_volume = mesh_volume(fused_tm)
     overlap = sum(volumes) - union_volume

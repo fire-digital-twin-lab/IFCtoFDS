@@ -5,6 +5,8 @@ import trimesh
 from contextvars import ContextVar
 from contextlib import contextmanager
 import hashlib
+import os
+from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 from ifc_to_fds.core.canonical import BoundingBox, TriangleMesh
 from .boolean import solid_boolean
@@ -791,16 +793,13 @@ def prefetch_self_intersection(meshes, min_faces=2000, workers=None):
         todo.append((key, mesh))
     if len(todo) < 2:
         return
-    import os
-    from concurrent.futures import ProcessPoolExecutor
-
     count = min(len(todo), workers or max(1, (os.cpu_count() or 2) - 1), 4)
     try:
         with ProcessPoolExecutor(max_workers=count) as pool:
             for (key, _), result in zip(todo, pool.map(_raw_self_intersection_evidence, [m for _, m in todo])):
                 if result["status"] != "UNCERTAIN":
                     _cache_store(cache, key, deepcopy(result))
-    except Exception:  # pragma: no cover - environment without usable process pools
+    except (OSError, RuntimeError):  # no usable process pool (BrokenProcessPool is a RuntimeError)
         return
 
 
