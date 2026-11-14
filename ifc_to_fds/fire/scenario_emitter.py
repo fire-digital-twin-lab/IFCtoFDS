@@ -63,6 +63,9 @@ class EVSelection(BaseModel):
     floor_z_m: Optional[float] = None
     ground_clearance_m: Optional[float] = Field(default=None, gt=0)
     battery_geometry: Optional[BatteryPack] = None
+    # Measured heat release (time after ignition s, HRR kW) replayed as the RAMP instead of a t-squared curve.
+    hrr_curve_kw: Optional[List[Tuple[float, float]]] = None
+    hrr_curve_source: Optional[str] = None
 
     @field_validator("dimensions")
     @classmethod
@@ -73,6 +76,29 @@ class EVSelection(BaseModel):
             if len(v) != 3 or any(d <= 0.0 or not math.isfinite(d) for d in v):
                 raise ValueError("EV dimensions (dx, dy, dz) must be strictly positive (> 0.0)")
         return v
+
+    @model_validator(mode="after")
+    def validate_hrr_curve(self) -> "EVSelection":
+        if self.hrr_curve_kw is None:
+            if self.hrr_curve_source is not None:
+                raise ValueError("hrr_curve_source given without hrr_curve_kw")
+            return self
+        source = (self.hrr_curve_source or "").strip()
+        if not source or len(source) > 300 or any(ord(c) < 32 for c in source):
+            raise ValueError("A measured HRR curve needs a one-line source (citation or test report, max 300 chars)")
+        times = [t for t, _ in self.hrr_curve_kw]
+        powers = [q for _, q in self.hrr_curve_kw]
+        if len(times) < 2 or times[0] != 0:
+            raise ValueError("HRR curve needs at least two points and must start at t=0 (ignition)")
+        if any(b - a < 0.001 for a, b in zip(times, times[1:])):
+            raise ValueError("HRR curve times must increase by at least 1 ms")
+        if any(q < 0 for q in powers) or max(powers) <= 0:
+            raise ValueError("HRR curve values must be nonnegative with a positive peak")
+        peak_mw = max(powers) / 1000.0
+        if self.peak_hrr_mw is not None and not math.isclose(self.peak_hrr_mw, peak_mw, rel_tol=1e-9):
+            raise ValueError("peak_hrr_mw contradicts the peak of hrr_curve_kw")
+        self.peak_hrr_mw = peak_mw
+        return self
 
     @model_validator(mode="after")
     def validate_geometry_contract(self) -> "EVSelection":
@@ -447,50 +473,61 @@ def emit_fire_scenario(
         obst_id = clean_fds_id(f"OBST_EV_{idx}")
         vent_id = clean_fds_id(f"VENT_BURNER_{idx}")
 
-        # Standard T-squared RAMP calculation: Q(t) = 1055 * (t / t_alpha)^2 (kW)
-        # At peak: Q_peak = 1055 * (t_growth / t_alpha)^2 => t_growth = t_alpha * sqrt(Q_peak / 1055)
         t_delay = round(ev.ignition_delay_s, 2)
-        t_alpha = (preset.t_alpha_s[0] + preset.t_alpha_s[1]) / 2.0
         q_peak_kw = actual_peak_hrr * 1000.0
-        t_growth = max(1.0, t_alpha * math.sqrt(max(0.001, q_peak_kw / 1055.0)))
-        t_plateau = max(1.0, t_growth / 2.0)
-        t_decay = max(1.0, t_growth)
-
-        # Energy balance (MJ)
-        integral_factor_s = (1.0 / 3.0) * t_growth + t_plateau + 0.5 * t_decay
-        e_total_mj = (q_peak_kw * integral_factor_s) / 1000.0
-        battery_mj = actual_kwh * 3.6
-
-        lines.append(f"! Fire Curve: {ramp_id} (delay={t_delay:.2f}s, growth={t_growth:.2f}s via standard t^2 Q=1055*(t/t_alpha)^2)")
-        lines.append(f"! Energy balance: total fire curve energy = {e_total_mj:.1f} MJ, nominal battery pack = {battery_mj:.1f} MJ")
-        if t_delay > 0:
-            lines.append(f"&RAMP ID='{ramp_id}', T=0.00, F=0.0 /")
-            lines.append(f"&RAMP ID='{ramp_id}', T={t_delay:.2f}, F=0.0 /")
+        if ev.hrr_curve_kw is not None:
+            curve = ev.hrr_curve_kw
+            e_total_mj = sum((t2 - t1) * (q1 + q2) / 2 for (t1, q1), (t2, q2) in zip(curve, curve[1:])) / 1000.0
+            lines.append(f"! Fire Curve: {ramp_id} replays a measured HRR curve ({len(curve)} points, delay={t_delay:.2f}s)")
+            lines.append(f"! HRR curve source: {ev.hrr_curve_source.strip()}")
+            lines.append(f"! Energy balance: total fire curve energy = {e_total_mj:.1f} MJ, nominal battery pack = {actual_kwh * 3.6:.1f} MJ")
+            if t_delay > 0:
+                lines.append(f"&RAMP ID='{ramp_id}', T=0.000, F=0.000000 /")
+            for t, q in curve:
+                lines.append(f"&RAMP ID='{ramp_id}', T={t_delay + t:.3f}, F={q / q_peak_kw:.6f} /")
         else:
-            lines.append(f"&RAMP ID='{ramp_id}', T=0.00, F=0.0 /")
+            # Standard T-squared RAMP calculation: Q(t) = 1055 * (t / t_alpha)^2 (kW)
+            # At peak: Q_peak = 1055 * (t_growth / t_alpha)^2 => t_growth = t_alpha * sqrt(Q_peak / 1055)
+            t_alpha = (preset.t_alpha_s[0] + preset.t_alpha_s[1]) / 2.0
+            t_growth = max(1.0, t_alpha * math.sqrt(max(0.001, q_peak_kw / 1055.0)))
+            t_plateau = max(1.0, t_growth / 2.0)
+            t_decay = max(1.0, t_growth)
 
-        prev_t = round(t_delay, 2) if t_delay > 0 else 0.0
-        num_ramp_points = 20
-        for i in range(1, num_ramp_points + 1):
-            frac = i / float(num_ramp_points)
-            t_curr = round(t_delay + frac * t_growth, 2)
-            if t_curr <= prev_t:
-                t_curr = round(prev_t + 0.01, 2)
-            prev_t = t_curr
-            f_curr = frac * frac
-            lines.append(f"&RAMP ID='{ramp_id}', T={t_curr:.2f}, F={f_curr:.4f} /")
+            # Energy balance (MJ)
+            integral_factor_s = (1.0 / 3.0) * t_growth + t_plateau + 0.5 * t_decay
+            e_total_mj = (q_peak_kw * integral_factor_s) / 1000.0
+            battery_mj = actual_kwh * 3.6
 
-        # Plateau
-        t_plateau_end = round(max(prev_t + 0.01, t_delay + t_growth + t_plateau), 2)
-        lines.append(f"&RAMP ID='{ramp_id}', T={t_plateau_end:.2f}, F=1.0000 /")
-        prev_t = t_plateau_end
+            lines.append(f"! Fire Curve: {ramp_id} (delay={t_delay:.2f}s, growth={t_growth:.2f}s via standard t^2 Q=1055*(t/t_alpha)^2)")
+            lines.append(f"! Energy balance: total fire curve energy = {e_total_mj:.1f} MJ, nominal battery pack = {battery_mj:.1f} MJ")
+            if t_delay > 0:
+                lines.append(f"&RAMP ID='{ramp_id}', T=0.00, F=0.0 /")
+                lines.append(f"&RAMP ID='{ramp_id}', T={t_delay:.2f}, F=0.0 /")
+            else:
+                lines.append(f"&RAMP ID='{ramp_id}', T=0.00, F=0.0 /")
 
-        # Decay
-        t_decay_mid = round(max(prev_t + 0.01, t_plateau_end + 0.5 * t_decay), 2)
-        lines.append(f"&RAMP ID='{ramp_id}', T={t_decay_mid:.2f}, F=0.5000 /")
-        prev_t = t_decay_mid
-        t_decay_end = round(max(prev_t + 0.01, t_plateau_end + t_decay), 2)
-        lines.append(f"&RAMP ID='{ramp_id}', T={t_decay_end:.2f}, F=0.0000 /")
+            prev_t = round(t_delay, 2) if t_delay > 0 else 0.0
+            num_ramp_points = 20
+            for i in range(1, num_ramp_points + 1):
+                frac = i / float(num_ramp_points)
+                t_curr = round(t_delay + frac * t_growth, 2)
+                if t_curr <= prev_t:
+                    t_curr = round(prev_t + 0.01, 2)
+                prev_t = t_curr
+                f_curr = frac * frac
+                lines.append(f"&RAMP ID='{ramp_id}', T={t_curr:.2f}, F={f_curr:.4f} /")
+
+            # Plateau
+            t_plateau_end = round(max(prev_t + 0.01, t_delay + t_growth + t_plateau), 2)
+            lines.append(f"&RAMP ID='{ramp_id}', T={t_plateau_end:.2f}, F=1.0000 /")
+            prev_t = t_plateau_end
+
+            # Decay
+            t_decay_mid = round(max(prev_t + 0.01, t_plateau_end + 0.5 * t_decay), 2)
+            lines.append(f"&RAMP ID='{ramp_id}', T={t_decay_mid:.2f}, F=0.5000 /")
+            prev_t = t_decay_mid
+            t_decay_end = round(max(prev_t + 0.01, t_plateau_end + t_decay), 2)
+            lines.append(f"&RAMP ID='{ramp_id}', T={t_decay_end:.2f}, F=0.0000 /")
 
         # FDS 6.11.1 burner surfaces use HRRPUA/RAMP_Q; fuel chemistry is
         # selected by the supported simple-chemistry REAC contract. The historical
