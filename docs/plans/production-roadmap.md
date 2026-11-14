@@ -10,8 +10,9 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 # Phần A — Trạng thái
 
 ## A1. Git
-- Nhánh làm việc `feat/production-m0-geometry-ready`, đã push, là PR #109 vào `main` (`ff91299`). Mọi giai đoạn trước đều đã gộp vào nhánh này; các worktree tạm đã được gỡ.
-- Commit trên nhánh từ M2 trở đi viết tiếng Việt, không ghi công Claude (xem `AGENTS.md`). 21 commit tiếng Anh cũ hơn giữ nguyên theo quyết định của người dùng.
+- PR #109 (`feat/production-m0-geometry-ready`) được merge vào `main` bằng merge commit để giữ nguyên các mã commit nêu ở A2; nhánh đã xóa sau merge. Công việc tiếp theo làm trên nhánh mới từ `main`, mỗi mục một PR nhỏ.
+- Commit từ M2 trở đi viết tiếng Việt, không ghi công Claude (xem `AGENTS.md`). 21 commit tiếng Anh cũ hơn giữ nguyên theo quyết định của người dùng.
+- Bàn giao và kế hoạch kiểm thử: [production-handover.md](production-handover.md), [real-world-test-plan.md](real-world-test-plan.md).
 
 ## A2. Đã xong (suite mặc định sạch tại từng commit)
 | Mốc | Commit | Kết quả chính |
