@@ -70,7 +70,7 @@ Mục tiêu: một kỹ sư PCCC đưa IFC tầng hầm thật vào CLI hoặc w
    Fixture: hai hộp chạm mặt (CLEAN), lệch 1 nm, xuyên, lồng nhau, cavity (bảng 2.2 báo cáo).
 - [x] 5.2 Đường xử lý lỗi nguồn thật: dùng cơ chế `decisions` sẵn có (`mapping/policy.py:validate_decisions`) thêm action duyệt `ACCEPT_SOURCE_DEFECT` có lý do + witness hash, để kỹ sư chấp nhận có ghi vết thay vì sửa tay IFC. Report liệt kê rõ phần tử nào được duyệt.
 - [x] 5.3 Đo lại 3 IFC mẫu + tầng hầm: số witness theo loại trước/sau; mỗi witness còn lại phải được 1 người kiểm bằng mắt (ghi kết quả vào `docs/evidence`).
-- [ ] 5.4 **Hợp nhất thành phần chồng lấn của cùng cấu kiện** (phát hiện ở 5.3, xem `docs/evidence/production-roadmap/phase5-topology.md`): FZK 16/18 và Duplex 22/58 phần tử bị chặn vì khung/kính/thanh chồng lấn thật ≥ 1 mm. Hợp nhất (union) các thành phần trước khi so sánh và xuất, giữ chứng minh tương đương với tham chiếu cũng là union; hoặc duyệt từng ca bằng `accepted_source_defects`.
+- [x] 5.4 **Hợp nhất thành phần chồng lấn của cùng cấu kiện** (phát hiện ở 5.3, xem `docs/evidence/production-roadmap/phase5-topology.md`): FZK 16/18 và Duplex 22/58 phần tử bị chặn vì khung/kính/thanh chồng lấn thật ≥ 1 mm. Hợp nhất (union) các thành phần trước khi so sánh và xuất, giữ chứng minh tương đương với tham chiếu cũng là union; hoặc duyệt từng ca bằng `accepted_source_defects`.
 **Cổng 5 (CHƯA ĐẠT, cần 5.4):** tiny/opening fixture `MAPPING_VERIFIED`; với tầng hầm thật: mọi finding còn lại là lỗi nguồn thật đã được người xác nhận, hoặc được duyệt qua decision → đạt `MAPPING_VERIFIED`.
 
 ## Giai đoạn 6 — Hình học hiệu dụng cấp solver (2–3 tuần)

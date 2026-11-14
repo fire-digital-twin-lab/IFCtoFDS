@@ -27,3 +27,22 @@ hoặc duyệt từng ca bằng `accepted_source_defects` (5.2). Việc hợp nh
 
 Giới hạn đã biết: giao thể tích giữa các thành phần qua Manifold trả 0 cho 15/18 phần tử FZK dù độ sâu xuyên ≥ 1 mm
 (các thành phần không phải `is_volume`); phép đo này không dùng được làm bằng chứng không chồng lấn.
+
+## 5.4 Hợp nhất thành phần chồng lấn (`geometry/component_union.py`)
+
+Hợp nhất (Manifold union) các thành phần chồng lấn của cùng một cấu kiện, chỉ chấp nhận khi có bằng chứng không dựa vào kernel Boolean:
+mỗi thành phần là thể tích kín; kết quả là solid hợp lệ không tự giao cắt; `max(V_i) ≤ V(union) ≤ Σ V_i`;
+và oracle lấy mẫu bằng generalized winding number (Jacobson 2013) khớp giữa "trong union" và "trong bất kỳ thành phần".
+Lỗi bất kỳ → giữ mesh gốc, cấu kiện vẫn bị chặn và lý do ghi trong `geometry_diagnostics.component_union`.
+`passage_metrics` giờ chứng minh hai tập vật cản bằng nhau (cùng byte, hộp trục, hoặc phân hoạch mặt phẳng) trước khi dùng Boolean.
+
+| Mô hình | DEVIATED trước → sau | MATCHED trước → sau | Verdict |
+|---|---|---|---|
+| FZK-Haus | 16 → 2 | 63 → 77 | REJECTED |
+| Duplex | 31 → 7 | 117 → 141 | REJECTED |
+| Institute | 283 → 0 | 149 → 432 | REJECTED (4 phần tử UNSUPPORTED, 265 REVIEW_REQUIRED) |
+
+Lỗi còn lại hầu hết là hình học nguồn không phải solid hợp lệ (UNSUPPORTED) hoặc phần tử chờ duyệt (REVIEW_REQUIRED), không còn do chồng lấn.
+Chưa giải quyết: finding `representation` ("Manifest openings differs from independent policy", Duplex STEP 197) xuất hiện lúc có lúc không
+chỉ khi dùng cache hình học mặc định dùng chung; không tái hiện với cache riêng. Nghi ngờ cache cũ; cần điều tra.
+Institute khi cache ấm: 69 s (mục tiêu 60 s) vì hợp nhất thêm thời gian hình học.

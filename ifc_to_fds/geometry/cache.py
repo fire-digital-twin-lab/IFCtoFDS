@@ -9,6 +9,7 @@ import ifcopenshell
 from ifc_to_fds.core.canonical import CanonicalModel, SCHEMA_VERSION, TriangleMesh
 from ifc_to_fds.core.canonical import GeometryStatus
 from .mesh import bounds_for_vertices
+from .component_union import UNION_METHOD
 from .engine import process_model_geometry, opening_diagnostic
 from .storage import DiskPackage, write_package
 from ifc_to_fds.diagnostics import operation
@@ -22,6 +23,7 @@ def cached_geometry(model, file):
         engine=ifcopenshell.version,
         schema=SCHEMA_VERSION,
         extraction_revision="source-numerical-seams-8ulp-cap-1e-12-v5",
+        component_union=UNION_METHOD,
         world=True,
         metres=True,
         weld=True,

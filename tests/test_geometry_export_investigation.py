@@ -163,7 +163,9 @@ def test_duplex_geometry_evaluation_rejects_unverified_architectural_sample():
 
     # The pipeline records categorized findings (open coverings classified as semantic;
     # non-manifold railings and envelope leaks reported).
-    assert 115 <= len(findings) <= 225
+    # Overlapping sub-solids of one product are fused (component_union), which removed
+    # findings that were caused by frame/glass overlap rather than by a real defect.
+    assert 100 <= len(findings) <= 225
 
     # Categorized findings include geometry and air path
     categories = {f.get("category") for f in findings}

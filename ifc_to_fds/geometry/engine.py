@@ -111,6 +111,11 @@ def prepare_source_mesh(mesh):
     if mesh is None:
         return None, {"extraction_failed": True, "repair_applied": False}
     mesh, proof = normalize_source_mesh(mesh)
+    from .component_union import fuse_overlapping_components
+
+    mesh, union = fuse_overlapping_components(mesh)
+    if union and union["status"] == "APPLIED":
+        proof = dict(proof, result_quality=inspect_mesh_quality(mesh))
     quality = proof["result_quality"]
     mesh.is_closed_manifold = bool(quality["is_closed_manifold"])
     mesh.has_consistent_normals = quality["inconsistent_edges"] == 0
@@ -119,6 +124,8 @@ def prepare_source_mesh(mesh):
         repair_applied=False, numerical_normalization_applied=proof["status"] == "NORMALIZED",
         raw_quality=proof["raw_quality"], normalization=proof,
     )
+    if union:
+        diagnostics["component_union"] = union
     return mesh, diagnostics
 
 

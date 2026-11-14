@@ -221,17 +221,40 @@ class SolidCandidateIndex:
 
 
 def _same_meshes(left, right):
-    """True when both obstacle lists hold byte-identical meshes in the same order."""
+    """True when both obstacle lists hold the same byte-identical meshes, in any order."""
     if left is right:
         return True
-    return len(left) == len(right) and all(
-        a is b
-        or (
-            np.array_equal(np.asarray(a.vertices, dtype=float), np.asarray(b.vertices, dtype=float))
-            and np.array_equal(np.asarray(a.faces), np.asarray(b.faces))
-        )
-        for a, b in zip(left, right)
-    )
+    if len(left) != len(right):
+        return False
+    from ifc_to_fds.geometry.mesh import mesh_digest
+
+    return sorted(map(mesh_digest, left)) == sorted(map(mesh_digest, right)) and None not in map(mesh_digest, left)
+
+
+def _proven_same_obstacles(left, right):
+    """Exact proof that two obstacle lists occupy the same space, in any order.
+
+    Each obstacle must pair with one on the other side having identical bounds and
+    either identical bytes, both being exact axis-aligned boxes, or an exactly equal
+    planar surface partition. Without such a proof, Booleans measure the difference.
+    """
+    if _same_meshes(left, right):
+        return True
+    if len(left) != len(right):
+        return False
+    remaining = [(m, as_trimesh(m)) for m in right]
+    for a in left:
+        ta = as_trimesh(a)
+        for k, (b, tb) in enumerate(remaining):
+            if np.array_equal(ta.bounds, tb.bounds) and (
+                (is_axis_aligned_box(a, tolerance=0.0) and is_axis_aligned_box(b, tolerance=0.0))
+                or same_surface_partition(ta, tb)
+            ):
+                remaining.pop(k)
+                break
+        else:
+            return False
+    return True
 
 
 def passage_metrics(reference_meshes, output_meshes, opening):
@@ -262,8 +285,8 @@ def passage_metrics(reference_meshes, output_meshes, opening):
 
     reference, output = obstacles(reference_meshes), obstacles(output_meshes)
     a = free_volume(reference)
-    if _same_meshes(reference, output):
-        # A set compared with itself cannot differ. The Boolean A∩A is not exact
+    if _proven_same_obstacles(reference, output):
+        # Proven-equal obstacles leave the same passage. The Boolean A∩A is not exact
         # for coincident faces (it lost 1.8-5.4% volume on FZK-Haus), so skip it.
         components = len(a.split()) if len(a.faces) else 0
         return dict(
