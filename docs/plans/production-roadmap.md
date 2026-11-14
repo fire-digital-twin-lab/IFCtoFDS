@@ -25,7 +25,8 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 | M1 | `a498915`…`855f096` | Phần tử tham chiếu không bị chặn; ngưỡng thể tích chồng lấn số học; chặn nhiều IfcSite; sửa đường dẫn cache dài |
 | M2 | `426a96f`, `61a1738` | Hộp phủ OBST (mặc định bật); `air_path` chính xác; `effective_geometry` theo phần tử, đọc VENT và OBST điều khiển từ SMV; gate `passage_resolution` |
 | M3 (một phần) | `8800f92` | Phụ kiện hai cổng và quạt lưu lượng cố định từ thông số đã duyệt; tổn áp FDS khớp tính tay 0,5% |
-| Dọn dẹp + M4 (một phần) | xem commit sau `cd87896` | Bỏ mã chết, gom tên gate về một chỗ; phát lại đường HRR đo và kiểm chứng bằng FDS |
+| Dọn dẹp + M4 (một phần) | `76bd48f`, `87a7430` | Bỏ mã chết, gom tên gate về một chỗ; phát lại đường HRR đo và kiểm chứng bằng FDS |
+| M5.1, M5.3, M5.4 | `92ac39b` | `TMPDIR` trên volume (upload 2×150 MiB: lỗi 400 → 202, đo bằng Docker); diễn tập backup/restore trên job thật; image `solver` có FDS 6.11.1 Linux ghim hash, probe đạt trong container với cờ production |
 
 ## A3. Đang bị chặn (chờ đầu vào, không tự suy)
 | Mục | Chặn bởi | Cần gì | Đã chuẩn bị sẵn |
@@ -41,6 +42,8 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 | M4.1 preset xe | B-ext 4 | số đo cháy nguyên xe được phép dùng (HRR theo thời gian, năng lượng pin) | có thể phát lại thẳng đường đo (M4.2) |
 | M4.3 HF/HCN | B-ext 4 | yield nguyên xe | — |
 | M4.4 biên truyền nhiệt | nguồn tính chất vật liệu | tính chất bê tông/thép có trích nguồn | — |
+| M5.2 job dài (C) | M1.7 và chạy C qua API | RSS đỉnh, timeout scheduler, khởi động lại giữa chừng | `scripts/production-conversion-e2e.py` đã có; cần `--storey` của C |
+| Bước CI mới (upload 2×150 MiB, job `solver-image`) | chưa chạy trên CI | chờ kết quả lần push `92ac39b` | cả hai đã chạy cục bộ bằng Docker |
 | M5.5–M5.7 | các mốc trên + kỹ sư review | QoI nghiệm thu (B-ext 5) | — |
 
 ## A4. Vấn đề mở khác
