@@ -1,4 +1,6 @@
 # Kế hoạch đưa IFCtoFDS lên production
+
+> **Tiến độ mới nhất và việc đang dở: xem [production-roadmap-handover.md](production-roadmap-handover.md).**
 Phạm vi đã chốt: **mapping + HVAC vận hành + cháy xe điện**, chạy được qua **CLI và Web/API (Docker Compose)**, nghiệm thu cuối trên **IFC tầng hầm thật** của dự án.
 
 ## Context
