@@ -131,8 +131,9 @@ Lỗi suite "đã biết" tại thời điểm viết: 3 test cache ở A4.5 (s�
 
 ## M2 — Hình học hiệu dụng cấp solver (2–3 tuần)
 
-- [ ] **M2.0 Có FDS.** Cài FDS 6.11.1 trên máy dự án (Windows) hoặc dùng WSL; `-m solver` chạy được tại chỗ. Xác nhận job `solver` của CI đang xanh.
-- [ ] **M2.1 `OBST_SET` cho tường trực giao có lỗ.**
+- [x] **M2.0 Có FDS.** *(`python scripts/install-fds.py` cài bản ghim hash vào `.deps/` (gitignore, không cài hệ thống); `IFCFDS_SOLVER=<.deps/.../fds_openmp.exe> pytest -m solver`: 11 test solver đạt trên máy dự án.)* Cài FDS 6.11.1 trên máy dự án (Windows) hoặc dùng WSL; `-m solver` chạy được tại chỗ. Xác nhận job `solver` của CI đang xanh.
+- [~] **M2.1 Hộp phủ cho tường trực giao có lỗ.** *(XONG, MẶC ĐỊNH TẮT: `geometry/rectilinear.py`; thay vì thêm enum `OBST_SET` đã tổng quát hóa `OBST` thành một hoặc nhiều `&OBST`. Chỉ nhận solid MỘT vỏ, lỗ phải được chứng minh đã trừ khỏi host (`_openings_are_cut`, không bao giờ lấp lỗ), và hộp phủ phải qua chính `compare_solids` của cổng kiểm định (bề mặt trùng, cùng số vỏ). Cửa/cửa sổ nhiều thành phần giữ `GEOM`. Bật bằng `IFCFDS_OBST_BOX_SETS=1`. LÝ DO TẮT: trên FZK tầng trệt, một tường 4 hộp làm cổng `air_path` đổi PASS → FAIL (rò 1,15 m³, khoang 4 → 2) dù hình học đã chứng minh đúng; Boolean của Manifold tự mâu thuẫn trên các mặt trùng nhau (V(ref−fds)=0,18 m³ nhưng V(fds−ref)=0). Cũng nới `same_surface_partition` sang sai số 1 nm (trước đây hai cách chia tam giác của cùng một mặt không bao giờ được chứng minh trùng).)*
+- [ ] **M2.5 Làm `air_path` đáng tin trên mặt trùng nhau** *(chặn việc bật M2.1 mặc định)*: thay phép Boolean Manifold trên các mặt trùng bằng so sánh lưới ô trực giao hoặc winding number như `component_union`; test: hộp phủ của FZK tầng trệt phải cho cùng verdict PASS. Sau đó bật `OBST` nhiều hộp mặc định và đo % OBST trên A.
   `mapping/policy.py` thêm chiến lược; `mapping/exporter.py` xuất nhiều `&OBST` cho một phần tử; `plan_validation.py`, manifest, parser nhận nhiều primitive cho một entity.
   Thuật toán: mesh là đa diện trực giao (mọi pháp tuyến song song trục) → lưới từ tọa độ đỉnh duy nhất → giữ ô có tâm trong solid (winding number, hàm đã có ở `component_union.winding_numbers`) → gộp tham lam thành hộp.
   Chứng minh: `compare_solids(mesh nguồn, [các hộp])` phải `surface_proven`. Không chứng minh được → giữ `GEOM`.
@@ -140,7 +141,7 @@ Lỗi suite "đã biết" tại thời điểm viết: 3 test cache ở A4.5 (s�
   Đo: % vật cản OBST/OBST_SET trên A.
 - [ ] **M2.2 Cổng hiệu dụng theo phần tử.** `validation/effective.py`: `GEOM` → `INCONCLUSIVE` riêng phần tử đó, không phải cả deck; hỗ trợ `VENT` phẳng trên mặt OBST/biên mesh (đọc sau snap từ `.smv`); `OBST` có `CTRL_ID` kiểm ở hai trạng thái.
 - [ ] **M2.3 Cổng độ phân giải lối thông.** Cửa/khe trên đường khói < 2 ô hoặc vách bị collapse → `FAIL` có tên phần tử và bước lưới đề xuất.
-- [ ] **M2.4 Chạy thật.** A: `convert --solver <fds>` với `T_END=0`; lưu bằng chứng tổng hợp.
+- [~] **M2.4 Chạy thật.** *(FZK: `solver` PASS, FDS 6.11.1 khởi tạo thành công trên deck sinh từ IFC (19 s tổng), nhưng `effective_geometry` INCONCLUSIVE vì deck có GEOM. Chưa chạy trên A (cần `--solver`; A còn 22 cửa UNSUPPORTED nên verdict vẫn REJECTED).)*  A: `convert --solver <fds>` với `T_END=0`; lưu bằng chứng tổng hợp.
 - **Cổng M2:** A: solver `PASS`; `effective_geometry` `PASS` cho mọi OBST/VENT; ≥ 90% vật cản là OBST/OBST_SET; phần GEOM còn lại có danh sách review.
 
 ## M3 — HVAC vận hành trên C (3–4 tuần; cần đầu vào B-ext 1–3)
