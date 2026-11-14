@@ -95,6 +95,10 @@ def open_ifc(file_path):
     return ifcopenshell.open(file_path)
 
 
+# Revit's built-in site (Boston); authoring tools write it when no real location was set.
+SOFTWARE_DEFAULT_SITE = ((42, 21, 31, 181945), (-71, -3, -24, -263305))
+
+
 def extract_georeference(ifc_file):
     """Record IfcMapConversion/IfcProjectedCRS (IFC4+). The simulation frame is unchanged."""
     if ifc_file.schema == "IFC2X3":
@@ -114,6 +118,9 @@ def extract_georeference(ifc_file):
             scale=conversion.Scale,
             rotation_deg=math.degrees(math.atan2(ordinate or 0.0, 1.0 if abscissa is None else abscissa)),
         )
+    for site in ifc_file.by_type("IfcSite"):
+        if (site.RefLatitude and tuple(site.RefLatitude), site.RefLongitude and tuple(site.RefLongitude)) == SOFTWARE_DEFAULT_SITE:
+            return dict(status="SOFTWARE_DEFAULT_SITE_LOCATION", crs=None)
     return None
 
 
@@ -148,6 +155,7 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
         unit_length_name=unit_name,
         unit_scale_to_meters=unit_scale,
         georeference=extract_georeference(ifc_file),
+        ifc_site_count=len(ifc_file.by_type("IfcSite")),
     )
 
     def ancestry(item):

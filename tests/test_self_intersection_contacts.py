@@ -153,3 +153,13 @@ def test_vectorised_penetration_depth_matches_scalar_definition():
         want = min(d.max(), -d.min()) if d.max() > 0 > d.min() else 0.0
         assert got[k] == pytest.approx(want, abs=1e-15)
     assert (_penetration_depths(a[:1] * 0, b[:1]) == 0).all()  # degenerate triangle: no depth, no crash
+
+
+def test_component_overlap_volume_below_cad_precision_is_numerical_contact():
+    """Boolean noise around touching components (volume ~1e-17) is not an overlap; a real one still is."""
+    thin = ((0, 0, 0), (1, 0.001, 0.001))
+    nearly = _boxes(thin, ((1 - 1e-8, 0, 0), (2, 0.001, 0.001)))  # overlap volume 1e-14 m3
+    evidence = self_intersection_evidence(nearly)
+    assert evidence["status"] == "CLEAN" and evidence["numerical_contact"]["face_pairs"] >= 1
+    real = _boxes(((0, 0, 0), (1, 1, 1)), ((0.9, 0, 0), (2, 1, 1)))  # 0.1 m3
+    assert self_intersection_evidence(real)["status"] == "CONFIRMED"

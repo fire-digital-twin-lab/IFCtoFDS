@@ -667,6 +667,14 @@ def run_independent_validation(
                 )
             except Exception as exc:
                 unknown("openings", f"{opening.opening_global_id}: {exc}", key)
+    comparable = [
+        e for e in model.elements
+        if e.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
+        and e.scope_decision != ScopeDecision.OUT_OF_SCOPE
+    ]
+    if comparable and not completed_comparisons and not stop_solid_checks and report.gates["geometry"].status == GateStatus.PASS:
+        report.gates["geometry"].status = GateStatus.INCONCLUSIVE
+        report.gates["geometry"].reason = "No solid comparison completed; the FDS text held nothing to compare"
     if not opening_count and report.gates["openings"].status == GateStatus.PASS:
         report.gates["openings"] = GateResult(
             status=GateStatus.NOT_APPLICABLE,

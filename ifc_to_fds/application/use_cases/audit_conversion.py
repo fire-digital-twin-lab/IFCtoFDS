@@ -86,6 +86,19 @@ class AuditConversionUseCase:
         # Re-finalize after independent source integrity, MEP and golden
         # reference gates. A research label derived from an earlier verdict
         # must not outlive a later INCONCLUSIVE/REJECTED golden-reference gate.
+        for source in model.sources or [model.source]:
+            if (source.georeference or {}).get("status") == "SOFTWARE_DEFAULT_SITE_LOCATION":
+                report.findings.append(
+                    Finding(
+                        id=f"INF-{len(report.findings) + 1:04}",
+                        severity=Severity.P2,
+                        category="georeference",
+                        title="Site location is the authoring tool's default",
+                        detail=f"{source.filename}: IfcSite coordinates are a software default and no IfcMapConversion "
+                        "exists, so the model has no reliable geographic position.",
+                        element_id="",
+                    )
+                )
         for key in stale:
             report.findings.append(
                 Finding(

@@ -26,6 +26,12 @@ def prepare_model(
 
     scope_start = perf_counter()
     scope_raw = dict(configuration.get("scope", {}) or {})
+    sites = max((s.ifc_site_count for s in model.sources or [model.source]), default=0)
+    if sites > 1 and not (scope_raw.get("storeys") or scope_raw.get("bounding_box")):
+        raise ValueError(
+            f"Model has {sites} IfcSite entities and {len(model.storey_references)} storeys (often several "
+            "merged level systems); select scope.storeys (CLI: --storey) or scope.bounding_box"
+        )
     coord_frame = scope_raw.get("coordinate_frame") or configuration.get("coordinate_frame")
     if coord_frame not in (None, "WORLD", "REBASED"):
         raise ValueError(f"Invalid coordinate_frame: {coord_frame!r}, must be 'WORLD' or 'REBASED'")

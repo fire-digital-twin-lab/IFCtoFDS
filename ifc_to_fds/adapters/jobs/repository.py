@@ -47,17 +47,18 @@ class JobRepository:
         conn.execute(f"PRAGMA synchronous={_synchronous_mode()};")
         return conn
 
-    def _init_db_when_unlocked(self, attempts: int = 120) -> None:
+    def _init_db_when_unlocked(self, wait_s: float = 60.0) -> None:
         """Several processes (server, workers) may create the same new database at once.
 
         SQLite fails the journal-mode switch with 'database is locked' without honouring the
         busy timeout, so wait and retry; any other error is raised at once.
         """
-        for attempt in range(attempts):
+        deadline = time.monotonic() + wait_s  # a time budget: each try may itself wait the 30 s busy timeout
+        while True:
             try:
                 return self._init_db()
             except sqlite3.OperationalError as exc:
-                if "locked" not in str(exc).lower() or attempt == attempts - 1:
+                if "locked" not in str(exc).lower() or time.monotonic() >= deadline:
                     raise
                 time.sleep(0.5)
 

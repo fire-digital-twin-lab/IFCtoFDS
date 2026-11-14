@@ -140,3 +140,18 @@ def test_uncertain_self_intersection_blocks_dependents_without_becoming_fail(
     assert report.gates["air_path"].status == GateStatus.NOT_RUN
     assert report.gates["openings"].status == GateStatus.NOT_RUN
     assert report.gates["solver"].status == GateStatus.NOT_RUN
+
+
+def test_reference_only_element_is_not_scanned_and_blocks_nothing(box_model, monkeypatch):
+    """Strategy NONE is never exported to FDS, so its self-intersection must not stop later gates."""
+    model = _overlapping_closed_boxes(box_model)
+    element = model.elements[0]
+    element.mapping_strategy = MappingStrategy.NONE
+    element.simulation_role = "REFERENCE_GEOMETRY"
+    monkeypatch.setattr(preflight, "self_intersection_evidence",
+                        lambda mesh: pytest.fail("reference-only mesh was scanned"))
+    issue = preflight.source_topology_preflight(model)[element.entity_key]
+    assert issue["status"] == "PASS" and issue["reason"] == "REFERENCE_ONLY"
+    report = run_independent_validation(
+        model, _minimal_fds(), config=AuditConfig(fail_fast_on_source_errors=True))
+    assert report.gates["solver"].reason != "Source topology preflight did not authorize solver execution"

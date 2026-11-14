@@ -470,6 +470,8 @@ NUMERICAL_CONTACT_AREA_M2 = 1e-10
 # A transversal crossing where each triangle reaches past the other's plane by less
 # than the IFC precision is contact noise, not material overlap.
 NUMERICAL_PENETRATION_M = 1e-5
+# Two components overlapping by less than this (1 mm^3, i.e. 1e-5 m deep over ~1e-4 m^2) are touching.
+NUMERICAL_OVERLAP_VOLUME_M3 = 1e-9
 
 
 # Skip coplanar pairs a float separating-axis test proves cannot overlap. Only used when
@@ -710,6 +712,11 @@ def has_self_intersection(mesh, details=None, classify_contacts=False, contacts=
                     continue
                 if component.is_volume and other.is_volume:
                     volume = mesh_volume(solid_boolean([component, other], "intersection"))
+                    if volume > 0 and classify_contacts and volume < NUMERICAL_OVERLAP_VOLUME_M3:
+                        if contacts is not None:
+                            entry = contacts.setdefault("numerical_contact", {"face_pairs": 0, "area_m2": 0.0})
+                            entry["face_pairs"] += 1
+                        continue
                     if volume > 0:
                         return witness("COMPONENT_VOLUME_OVERLAP", components=[i, j], volume_m3=float(volume))
     return False

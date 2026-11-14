@@ -108,7 +108,7 @@ def cached_geometry(model, file):
     try:
         directory.mkdir(parents=True, exist_ok=True)
         write_package(model, path)
-        temporary = directory / (key + "." + uuid.uuid4().hex + ".tmp")
+        temporary = directory / (uuid.uuid4().hex + ".tmp")  # short: Windows MAX_PATH is 260
         temporary.write_text(
             model.model_dump_json(
                 exclude={

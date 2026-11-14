@@ -252,26 +252,14 @@ def test_empty_fds_text_is_rejected_not_crash(box_model):
         assert report.gates[name].status == "NOT_RUN", name
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Engine reports FAIL/PASS instead of INCONCLUSIVE ('Incomplete diagnostic "
-        "artifact') on empty FDS text; that was ValidationRunner-only behaviour. "
-        "Overall verdict is REJECTED (fail closed), see test above."
-    ),
-)
-def test_empty_fds_text_all_gates_inconclusive(box_model):
-    """Original runner pin: every FDS-dependent gate must be INCONCLUSIVE (not PASS/FAIL)."""
+def test_empty_fds_text_never_certifies_geometry(box_model):
+    """No solid could be compared, so the geometry gate must not say PASS; the verdict stays fail-closed."""
     from ifc_to_fds.domain.validation.model import GateStatus
 
     report = run_independent_validation(box_model, "", build_manifest(box_model, ""))
-    for name in (
-        "syntax", "domain", "traceability", "scope", "geometry",
-        "structural_completeness", "air_path", "openings", "mep",
-        "representation", "boundary", "solver",
-    ):
-        assert report.gates[name].status == GateStatus.INCONCLUSIVE, name
-        assert "Incomplete diagnostic artifact" in report.gates[name].reason, name
+    assert report.gates["geometry"].status == GateStatus.INCONCLUSIVE
+    assert "No solid comparison completed" in report.gates["geometry"].reason
+    assert report.status.value == "REJECTED"  # syntax and traceability fail closed
 
 
 def test_parser_whitelists_fire_namelists_and_surf_combustion_properties():
