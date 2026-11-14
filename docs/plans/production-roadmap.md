@@ -38,20 +38,20 @@ Mục tiêu: một kỹ sư PCCC đưa IFC tầng hầm thật vào CLI hoặc w
 **Cổng 1:** `convert` CLI chạy trên tiny + FZK từ tiến trình mới; FZK không còn finding openings với A vs A; toàn suite xanh.
 
 ## Giai đoạn 2 — Tốc độ (1–1,5 tuần) — song song được với Giai đoạn 3
-- [ ] 2.1 **Viết lại phần lõi `has_self_intersection`** (`ifc_to_fds/geometry/mesh.py:267-430`), giữ nguyên hợp đồng (CLEAN/CONFIRMED + witness kind):
+- [x] 2.1 **Viết lại phần lõi `has_self_intersection`** (`ifc_to_fds/geometry/mesh.py:267-430`), giữ nguyên hợp đồng (CLEAN/CONFIRMED + witness kind):
    a. Gom cặp ứng viên một lần (giữ R-tree `tm.triangles_tree`), loại `j<=i`.
    b. Bộ lọc dấu `orient3d` **vector hóa numpy** cho mọi cặp, cùng cận sai số hiện có (`sum|terms|·eps·16`).
    c. Lối tắt chính xác: điểm trùng bit một đỉnh tam giác → dấu 0; đoạn có đầu mút trùng đỉnh tam giác → không cắt (đã đo: 0 khác biệt trên 81 mesh FZK).
    d. Đường chính xác dùng **số nguyên có scale chung 2^k** thay `Fraction` (đo: 31,8 → 4,4 µs, cùng dấu); phép toán còn lại trong vòng lặp dùng float/tuple Python thay numpy 3 phần tử (15,5 → 0,5 µs).
    Test: property test so phiên bản mới với hàm cũ (giữ hàm cũ trong test làm oracle) trên mesh ngẫu nhiên + toàn bộ mesh của 3 IFC mẫu → cùng kết quả và cùng loại witness.
-- [ ] 2.2 **Kiểm chất lượng mesh một lần**: memo `inspect_mesh_quality` theo byte mesh trong `mesh_evidence_scope` có sẵn (`mesh.py:130`) — cùng cơ chế cache của self-intersection, không thêm cơ chế mới. Đo: Institute 21.581 lần gọi → ≈ số mesh.
-- [ ] 2.3 Chạy `scripts/verdict-snapshot.py` → so với baseline Giai đoạn 0: **phải trùng 100%**.
+- [x] 2.2 **Kiểm chất lượng mesh một lần**: memo `inspect_mesh_quality` theo byte mesh trong `mesh_evidence_scope` có sẵn (`mesh.py:130`) — cùng cơ chế cache của self-intersection, không thêm cơ chế mới. Đo: Institute 21.581 lần gọi → ≈ số mesh.
+- [x] 2.3 Chạy `scripts/verdict-snapshot.py` → so với baseline Giai đoạn 0: **phải trùng 100%**.
 **Cổng 2:** trên máy dự án: FZK ≤ 12 s, Institute ≤ 60 s (mục tiêu ước lượng, ghi lại số thật); verdict snapshot trùng baseline.
 
 ## Giai đoạn 3 — Dọn kiến trúc (3–4 ngày) — song song với Giai đoạn 2
 - [ ] 3.1 **Một đường validation.** Xóa `ifc_to_fds/validation/runner.py`, `Container.get_validation_runner`, và 7 checker chỉ runner dùng: `syntax, traceability, geometry, openings, mep, representation, domain` (+ export trong `checkers/__init__.py`); chuyển/xóa test tương ứng (9 file test tham chiếu). Giữ `structural, air_path, hvac, mesh_resolution, scope, boundary, solver` (engine/mapping đang import). Trước khi xóa: rà test của 7 checker, test nào kiểm hành vi mà `engine.py` chưa có test → viết lại nhắm `run_independent_validation`.
 - [ ] 3.2 **Một JobRepository.** So `server/job_repository.py` với `adapters/jobs/repository.py`; hành vi nào của commit #98 chỉ có ở bản sao (vd `reconcile_orphaned_jobs`) thì chuyển sang bản thật hoặc xác nhận `JobService._reconcile_startup_jobs` đã bao. Trỏ `tests/test_challenger_p1.py`, `test_empirical_p1_03_challenge.py`, `test_p1_fixes.py` sang bản thật. Xóa thư mục `ifc_to_fds/server/` (shim `SourceFileLoader`).
-- [ ] 3.3 Bỏ monkey patch toàn cục `trimesh.triangles.mass_properties` (`mesh.py:13-34`): chỉ dùng trong helper cục bộ nơi cần.
+- [x] 3.3 Bỏ monkey patch toàn cục `trimesh.triangles.mass_properties` (`mesh.py:13-34`): chỉ dùng trong helper cục bộ nơi cần.
 - [ ] 3.4 Test kiến trúc (`tests/test_architecture_contracts.py`): thêm kiểm "không có hai module cùng tên `JobRepository`", và import cold của từng package con (bắt vòng import sớm).
 **Cổng 3:** suite xanh; giảm ≈1.400 dòng; API khởi động và chạy job tiny qua `JobService` thật.
 

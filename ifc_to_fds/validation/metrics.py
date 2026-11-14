@@ -5,6 +5,7 @@ import trimesh
 from ifc_to_fds.geometry.boolean import solid_boolean
 from ifc_to_fds.geometry.mesh import (
     as_trimesh,
+    mesh_volume,
     valid_solid,
     is_axis_aligned_box,
     self_intersection_evidence,
@@ -114,7 +115,7 @@ def compare_solids(reference, outputs):
             comparison_method="EXACT_ORIENTED_TRIANGLES",
         )
     intersection = solid_boolean([a, b], "intersection")
-    vi = max(0.0, float(intersection.volume))
+    vi = max(0.0, mesh_volume(intersection))
     union = float(a.volume + b.volume - vi)
     # Corresponding triangles give a direct bound over entire surfaces. For
     # different triangulations sampled distance detects defects but cannot prove PASS.
@@ -167,7 +168,7 @@ def opening_residual(hosts, opening):
             raise ValueError("Invalid host solid")
         residual += max(
             0.0,
-            float(solid_boolean([as_trimesh(host), void], "intersection").volume),
+            mesh_volume(solid_boolean([as_trimesh(host), void], "intersection")),
         )
     return residual / max(float(void.volume), 1e-12)
 
@@ -253,7 +254,7 @@ def passage_metrics(reference_meshes, output_meshes, opening):
             if not valid_solid(mesh):
                 raise ValueError("Invalid obstacle near source opening")
             intersection = solid_boolean([void, tm], "intersection")
-            if intersection.volume > 1e-12:
+            if mesh_volume(intersection) > 1e-12:
                 pieces.append(intersection)
         if not pieces:
             return void
@@ -276,7 +277,7 @@ def passage_metrics(reference_meshes, output_meshes, opening):
     intersection = (
         solid_boolean([a, b], "intersection") if len(a.faces) and len(b.faces) else None
     )
-    overlap = float(intersection.volume) if intersection is not None else 0.0
+    overlap = mesh_volume(intersection) if intersection is not None else 0.0
     return dict(
         source_free_volume_m3=float(a.volume),
         output_free_volume_m3=float(b.volume),

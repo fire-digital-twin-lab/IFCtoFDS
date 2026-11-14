@@ -26,6 +26,7 @@ from ifc_to_fds.domain.bim import BoundingBox, TriangleMesh
 from ifc_to_fds.geometry.boolean import solid_boolean
 from ifc_to_fds.geometry.mesh import (
     as_trimesh,
+    mesh_volume,
     box_mesh,
     self_intersection_evidence,
     valid_solid,
@@ -214,7 +215,7 @@ def prove_mesh_clearance_from_box(
             "GEOM containment boolean unavailable after exact surface SAT"
         ) from exc
 
-    overlap_volume = max(0.0, float(intersection.volume))
+    overlap_volume = max(0.0, mesh_volume(intersection))
     if overlap_volume > 1e-12:
         return {
             "status": "CLEARANCE_VIOLATION",

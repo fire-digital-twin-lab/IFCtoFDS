@@ -20,6 +20,8 @@ from ifc_to_fds.geometry.mesh import (
     as_trimesh,
     compute_face_normals,
     compute_mesh_normals,
+    mesh_volume,
+    safe_center_mass,
     safe_normalize,
     safe_normalize_normals,
     safe_unit_normals,
@@ -262,9 +264,9 @@ def test_trimesh_zero_volume_mass_properties_no_divide_by_zero():
     with warnings.catch_warnings(record=True) as recorded:
         warnings.simplefilter("always")
 
-        vol = tm.volume
+        vol = mesh_volume(tm)
         assert np.isclose(vol, 0.0)
-        cm = tm.center_mass
+        cm = safe_center_mass(tm)
         assert np.isfinite(cm).all()
         # Center of mass should be the triangle centroid [1/3, 1/3, 0]
         assert np.allclose(cm, [1 / 3, 1 / 3, 0.0])
