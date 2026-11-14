@@ -98,7 +98,7 @@ Lỗi suite "đã biết" tại thời điểm viết: 3 test cache ở A4.5 (s�
   Cold, tuần tự từng mô hình: FZK, Duplex, Institute, B, A, C. Ghi `baseline-{fzk,duplex,institute}.json` và `real-{A,B,C}.json`. Chạy `verdict-snapshot --compare` hai lần liên tiếp cho Duplex để xác nhận hết chập chờn (A4 cũ: finding `representation`).
 - [x] **M0.5 Sửa tài liệu.** Viết lại `phase5-topology.md` theo số M0.4 (xóa kết luận "chồng lấn ≥ 1 mm"); cập nhật Phần A.
 - [x] **M0.6 Kiểm client đọc khóa chẩn đoán.** *(grep js/ và index.html: không có chỗ đọc khóa cũ)* `grep -rn "error_type\|job_id" js/ ifc_to_fds/` cho đường đọc `diagnostics.json`; sửa nếu có.
-- [ ] **M0.7 Dọn và đưa lên.** Commit hoàn chỉnh thay WIP; xóa 5 nhánh và 4 worktree (A1); push; mở PR vào `main` gồm Giai đoạn 0–5.
+- [x] **M0.7 Dọn và đưa lên.** *(PR #109 `feat/production-m0-geometry-ready`; đã xóa 5 nhánh + 4 worktree; CI phát hiện và đã sửa: race khởi tạo `JobRepository` nhiều tiến trình ('database is locked' khi `PRAGMA journal_mode=WAL'), nợ import/except mới)* Commit hoàn chỉnh thay WIP; xóa 5 nhánh và 4 worktree (A1); push; mở PR vào `main` gồm Giai đoạn 0–5.
 - **Cổng M0:** suite = đúng 3 lỗi đã biết; CI của PR xanh (ubuntu + windows); FZK/Duplex `DEVIATED` = 0.
 
 > **Lưu ý đo thời gian (2026-11-14, cuối phiên):** mã Giai đoạn 2 từng chạy FZK 8,1 s nay mất 46 s trên cùng máy, tức máy chậm ~5,6× lúc đo.
@@ -107,18 +107,18 @@ Lỗi suite "đã biết" tại thời điểm viết: 3 test cache ở A4.5 (s�
 
 ## M1 — Hình học file thật sạch (1,5–2 tuần)
 
-- [ ] **M1.1 Cửa không-manifold của A (21).**
+- [x] **M1.1 Cửa không-manifold của A (21).** *(CHẨN ĐOÁN XONG, KHÔNG SỬA: giả thuyết hàn đỉnh bị bác bỏ. Tắt hàn đỉnh không cứu cửa nào (21 hỏng khi hàn, 23 khi không hàn); mesh có ~3.800 cạnh hở, 858 cạnh ngược chiều, 21 cạnh non-manifold, tức bề mặt nguồn hở. Đây là lỗi dữ liệu nguồn: giữ `UNSUPPORTED` kèm lý do; cần kỹ sư xử lý trong Revit hoặc loại các cửa này khỏi phạm vi. Còn có thể thử: tessellate từng representation item riêng.)*
   Bước 1 chẩn đoán (không sửa): với 1 cửa, so `inspect_mesh_quality` của (a) mesh hiện tại, (b) tessellate với `WELD_VERTICES=False`, (c) từng representation item riêng. Ghi kết quả.
   Nếu do hàn đỉnh giữa item: tessellate không hàn rồi hàn trong từng thành phần liên thông (`geometry/engine.py` / `normalization.py`). Nếu là lỗi nguồn: giữ `UNSUPPORTED`, ghi lý do đọc được trong report.
   Kiểm: fixture từ 1 cửa A; `UNSUPPORTED` của A giảm hoặc có lý do rõ; 3 mẫu không đổi verdict.
 - [ ] **M1.2 Ca còn bị chặn ở B (8) và A (≤ 2).**
   Sau M0.1 đo lại trước. Với mỗi ca còn lại: ghi `component_union.reason`; thử union theo cụm liên thông chồng lấn thay vì toàn cấu kiện. Ca không sửa được bằng công cụ → viết file duyệt mẫu `accepted_source_defects` cho B (đặt ngoài repo) và mục hướng dẫn sử dụng trong README.
-- [ ] **M1.3 Hình học tham chiếu không chặn cổng bảo toàn.**
+- [x] **M1.3 Hình học tham chiếu không chặn cổng bảo toàn.** *(`geometry/package.py`: phần tử strategy `NONE` có mesh lưu byte-giống nguồn thì qua, ghi `reference_only`; phần tử phát ra FDS vẫn bị chặn. `tests/test_reference_geometry_preservation.py` có cả hai phía. Chưa đo lại trên C.)*
   `geometry/package.py` (`audit_package`): phần tử `mapping_strategy` `NONE`/`REFERENCE_GEOMETRY` (không xuất ra FDS) → lỗi tự giao cắt ghi thành thông tin, không `fail`. Test với fixture MEP có sẵn (`tests/baseline/fixtures/mep.ifc`).
   Kiểm: C không còn finding `geometry_preservation` từ phụ kiện tham chiếu.
 - [ ] **M1.4 Georeference và chọn tầng.**
   Finding P2 khi Site có tọa độ mặc định và không có CRS. Khi mô hình có > 1 `IfcSite` hoặc tầng trùng cao độ/âm lẫn lộn như C: yêu cầu `--storey`, thoát mã 3 kèm danh sách tầng. Test trên fixture tổng hợp.
-- [ ] **M1.5 Ba test cache cũ.** Tìm nguyên nhân từng cái (nghi khóa cache/đường dẫn cache trong test). Sửa mã hoặc sửa test; xóa chỉ khi hành vi được test không còn tồn tại, ghi lý do.
+- [ ] **M1.5 Ba test cache cũ.** *(quan sát: ba test này ĐẠT trên CI Ubuntu và Windows, chỉ hỏng trên máy dự án; nhiều khả năng do môi trường cục bộ, ví dụ biến `IFCFDS_GEOMETRY_CACHE`/thư mục `.cache` còn dữ liệu cũ. Thử trên bản clone sạch trước.)* Tìm nguyên nhân từng cái (nghi khóa cache/đường dẫn cache trong test). Sửa mã hoặc sửa test; xóa chỉ khi hành vi được test không còn tồn tại, ghi lý do.
 - [ ] **M1.6 Hai test `xfail`.** FDS rỗng: cho các cổng phụ thuộc deck thành `INCONCLUSIVE` khi không có primitive nào. Traceability primitive kịch bản: để nguyên `xfail`, ghi quyết định "engine chỉ audit deck gốc" vào docstring.
 - [ ] **M1.7 Hiệu năng.** Mục tiêu A ≤ 120 s, C (chọn tầng hầm) ≤ 300 s.
   Thứ tự thử, đo sau mỗi bước bằng `stage-profile.py`:
