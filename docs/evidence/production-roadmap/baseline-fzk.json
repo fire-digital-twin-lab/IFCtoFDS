@@ -115,11 +115,11 @@
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:59753": "MATCHED",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:60012": "MATCHED",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:60579": "SEMANTIC_ONLY",
-    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:66459": "DEVIATED",
+    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:66459": "MATCHED",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:67536": "MATCHED",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:67828": "MATCHED",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:68400": "SEMANTIC_ONLY",
-    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:74280": "DEVIATED",
+    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:74280": "MATCHED",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:75347": "MATCHED",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:75775": "SEMANTIC_ONLY",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:76112": "SEMANTIC_ONLY",
@@ -129,31 +129,28 @@
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:77636": "SEMANTIC_ONLY"
   },
   "findings_by_gate": {
-    "geometry": 3,
-    "geometry_preservation": 5
+    "geometry": 1,
+    "geometry_preservation": 3
   },
   "records": 127,
   "source": "AC20-FZK-Haus.ifc",
   "stage_timings_s": {
-    "audit_s": 11.27,
-    "geometry_s": 0.16,
-    "independent_source_reread_s": 6.03,
-    "mapping_s": 0.3,
+    "audit_s": 19.38,
+    "geometry_s": 12.05,
+    "independent_source_reread_s": 11.04,
+    "mapping_s": 0.44,
     "mep_s": 0.0,
-    "package_audit_s": 1.82,
-    "package_write_s": 0.16,
+    "package_audit_s": 1.97,
+    "package_write_s": 0.37,
     "parity_s": 0.01,
-    "parse_s": 0.28,
-    "prepare_s": 0.73,
+    "parse_s": 0.34,
+    "prepare_s": 12.84,
     "scope_s": 0.0,
-    "serialize_s": 0.31,
+    "serialize_s": 0.54,
     "solver_s": 0.0,
-    "validation_s": 3.17
+    "validation_s": 5.86
   },
   "status": "REJECTED",
-  "wall_s": 12.38,
-  "witness_kinds": {
-    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:66459": "TRIANGLE_CROSSING",
-    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:74280": "TRIANGLE_CROSSING"
-  }
+  "wall_s": 32.83,
+  "witness_kinds": {}
 }

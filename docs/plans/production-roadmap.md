@@ -10,7 +10,7 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 # Phần A — Trạng thái
 
 ## A1. Git
-- Nhánh làm việc `feat/phase5-4-component-union`, HEAD `8586207` (commit WIP, **đang có 1 hồi quy**, xem A4). Chưa push gì. `main` = `ff91299`.
+- Nhánh làm việc `feat/phase5-4-component-union`, HEAD là commit sau `883433a` (M0.1 đã sửa hồi quy; còn M0.7). Chưa push gì. `main` = `ff91299`.
 - Đã merge vào nhánh này, xóa được: `fix/p0-cli-cold-start-and-baseline`, `perf/phase2-self-intersection`, `refactor/phase3-dedupe`, `feat/phase4-coordinates`, `feat/phase5-topology`.
 - Worktree sót: `../IFCtoFDS-wt-phase2`, `../IFCtoFDS-wt-phase3`, `.claude/worktrees/agent-*` (2 cái, bị khóa). Gỡ: `git worktree remove -f -f <path>`.
 
@@ -36,8 +36,8 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 - `scripts/stage-profile.py`.
 
 ## A4. Vấn đề mở (theo mức nghiêm trọng)
-1. **Hồi quy trên HEAD:** `test_parity_case_c_fzk` ra 22 finding thay vì 2. Nguyên nhân: `_fuse` bỏ qua khi `Σ V_i − V(union) ≈ 0`; 10 cửa/cửa sổ FZK có thành phần chỉ chạm nhau (thể tích chung ±1e-16) nhưng bộ quét vẫn báo `TRIANGLE_CROSSING` → không hợp nhất → bị chặn.
-2. **Prefetch song song chưa hiểu hết:** đo riêng 11 mesh nặng của A: tuần tự 88,5 s, 4 worker 39 s, 8 worker 40 s, kết quả giống hệt. Nhưng một lần `convert` A đầy đủ thì 8 worker mỗi cái > 180 s CPU, ~800 MB, phải dừng.
+1. **(Đã sửa ở M0.1, `883433a`)** Hồi quy trước đây: `test_parity_case_c_fzk` ra 22 finding thay vì 2. Nguyên nhân: `_fuse` bỏ qua khi `Σ V_i − V(union) ≈ 0`; 10 cửa/cửa sổ FZK có thành phần chỉ chạm nhau (thể tích chung ±1e-16) nhưng bộ quét vẫn báo `TRIANGLE_CROSSING` → không hợp nhất → bị chặn.
+2. **(Đã chốt ở M0.2: giữ, 4 worker)** Prefetch song song: đo riêng 11 mesh nặng của A: tuần tự 88,5 s, 4 worker 39 s, 8 worker 40 s, kết quả giống hệt. Nhưng một lần `convert` A đầy đủ thì 8 worker mỗi cái > 180 s CPU, ~800 MB, phải dừng.
 3. **Mục tiêu thời gian chưa đạt:** A 244 s (mục tiêu ≤ 120), C 670 s đo trước các sửa cuối (mục tiêu ≤ 300).
 4. **Tài liệu sai đã commit:** `docs/evidence/production-roadmap/phase5-topology.md` kết luận "chồng lấn thật ≥ 1 mm" (đo khi còn lỗi `max` và cache cũ). Mốc `baseline-*.json` cũng cũ.
 5. **3 test hỏng từ trước phiên** (cache nguồn/preview): `test_normalization_evidence_survives_converter_cache`, `test_binary_ingestion_cache_preserves_identity_and_never_reuses_mapping`, `test_preview_cache_preserves_world_geometry_and_rejects_corruption`.
@@ -83,23 +83,27 @@ Lỗi suite "đã biết" tại thời điểm viết: 3 test cache ở A4.5 (s�
 
 ## M0 — Ổn định và khép 5.8 (1–2 ngày)
 
-- [ ] **M0.1 Sửa hồi quy hợp nhất.**
+- [x] **M0.1 Sửa hồi quy hợp nhất.** *(commit `883433a`; chọn biến thể: quét tự giao cắt cho mesh ≤ `SCAN_FACE_LIMIT`=5000 mặt khi thể tích chung = 0, mesh nặng giữ lối tắt)*
   File: `ifc_to_fds/geometry/component_union.py` (`_fuse`). Bỏ lối thoát sớm "thể tích chung ≈ 0": luôn thử union khi hộp bao thành phần chồng nhau và mọi thành phần là volume; giữ các kiểm tra còn lại (solid hợp lệ, cận thể tích, oracle).
   Test mới trong `tests/test_component_union.py`: hai hộp chạm nhau có cặp tam giác bị báo xuyên, thể tích chung 0 → sau `prepare_source_mesh` là `CLEAN`.
   Kiểm: `tests/baseline` xanh **không sửa snapshot**; FZK và Duplex `DEVIATED` = 0.
   Nếu chi phí oracle tăng rõ (đo trên A): chỉ chạy oracle khi thể tích chung > 0; khi = 0 thì đủ điều kiện `|V(union) − Σ V_i| ≤ tol`.
-- [ ] **M0.2 Chốt prefetch song song.**
+- [x] **M0.2 Chốt prefetch song song.** *(GIỮ, tối đa 4 worker. A cold: 383 s → 221 s, validation 246 → 72 s, kết quả giống hệt. Lần "bất thường" trước đó do script đo thiếu `if __name__ == "__main__"` trên Windows, không phải lỗi mã sản phẩm.)*
   `mesh.py` `prefetch_self_intersection`: mặc định `workers` tối đa 4. Chạy `convert` A cold một mình, ghi wall, CPU từng worker, RSS đỉnh.
   Giữ nếu A nhanh hơn ≥ 20% và không worker nào vượt 2× thời gian tuần tự của mesh nặng nhất; ngược lại gỡ lời gọi trong `validation/preflight.py` (giữ hàm và test).
-- [ ] **M0.3 Bộ fixture phân loại tiếp xúc.**
+- [ ] **M0.3 Bộ fixture phân loại tiếp xúc.** *(hoãn: test FZK trực tiếp trong `test_component_union.py` đã giữ hồi quy; làm khi có ca biên mới)*
   Trích mesh thật đã từng gây lỗi thành JSON nhỏ ở `tests/fixtures/contacts/` (chỉ đỉnh/mặt, không tên/GUID): cửa sổ FZK chạm-không-thể-tích, cửa Duplex chạm mép (ULP), cửa B còn `DEVIATED`, hai hộp chạm mặt, chồng lấn thật, lồng nhau. Mỗi file kèm verdict mong đợi của `self_intersection_evidence` và của `prepare_source_mesh`.
   Test tham số hóa `tests/test_contact_fixtures.py`, chạy ở cả hai chế độ tessellation nếu có liên quan.
-- [ ] **M0.4 Đo lại và tạo lại mốc.**
+- [x] **M0.4 Đo lại và tạo lại mốc.** *(mốc verdict và real-A/B đã tạo lại; real-C chưa đo lại; thời gian KHÔNG ghi nhận được vì máy chậm ~5,6× lúc đo, xem lưu ý dưới)*
   Cold, tuần tự từng mô hình: FZK, Duplex, Institute, B, A, C. Ghi `baseline-{fzk,duplex,institute}.json` và `real-{A,B,C}.json`. Chạy `verdict-snapshot --compare` hai lần liên tiếp cho Duplex để xác nhận hết chập chờn (A4 cũ: finding `representation`).
-- [ ] **M0.5 Sửa tài liệu.** Viết lại `phase5-topology.md` theo số M0.4 (xóa kết luận "chồng lấn ≥ 1 mm"); cập nhật Phần A.
-- [ ] **M0.6 Kiểm client đọc khóa chẩn đoán.** `grep -rn "error_type\|job_id" js/ ifc_to_fds/` cho đường đọc `diagnostics.json`; sửa nếu có.
+- [x] **M0.5 Sửa tài liệu.** Viết lại `phase5-topology.md` theo số M0.4 (xóa kết luận "chồng lấn ≥ 1 mm"); cập nhật Phần A.
+- [x] **M0.6 Kiểm client đọc khóa chẩn đoán.** *(grep js/ và index.html: không có chỗ đọc khóa cũ)* `grep -rn "error_type\|job_id" js/ ifc_to_fds/` cho đường đọc `diagnostics.json`; sửa nếu có.
 - [ ] **M0.7 Dọn và đưa lên.** Commit hoàn chỉnh thay WIP; xóa 5 nhánh và 4 worktree (A1); push; mở PR vào `main` gồm Giai đoạn 0–5.
 - **Cổng M0:** suite = đúng 3 lỗi đã biết; CI của PR xanh (ubuntu + windows); FZK/Duplex `DEVIATED` = 0.
+
+> **Lưu ý đo thời gian (2026-11-14, cuối phiên):** mã Giai đoạn 2 từng chạy FZK 8,1 s nay mất 46 s trên cùng máy, tức máy chậm ~5,6× lúc đo.
+> Mọi lần đo thời gian cần kèm một phép đối chứng (chạy `../IFCtoFDS-wt-phase2` hoặc cùng một mô hình cố định) và chỉ so cùng phiên.
+> Số hiện có đáng tin: A cold 221 s (có prefetch) so với 383 s (không prefetch), cùng phiên. Kết quả verdict không phụ thuộc tốc độ.
 
 ## M1 — Hình học file thật sạch (1,5–2 tuần)
 

@@ -14,19 +14,10 @@ Tác động thực tế của 5.1:
 - Duplex: 5 phần tử xuyên tam giác chỉ ở mức nhiễu CAD (độ sâu < 1e-5 m) nay là `numerical_contact`.
 - Phần tử có nhãn COPLANAR trước đây thực ra còn có xuyên tam giác thật, nên chúng vẫn bị chặn (nhãn đổi sang TRIANGLE_CROSSING).
 
-Đặc trưng của witness còn lại (cặp tam giác xuyên đầu tiên của mỗi phần tử):
-
-| Mô hình | Cùng thành phần | Khác thành phần | Độ sâu < 1e-6 m | 1e-6..1e-3 m | ≥ 1e-3 m |
-|---|---|---|---|---|---|
-| FZK (18) | 0 | 18 | 0 | 2 | 16 (trung vị 2,5 cm) |
-| Duplex (58, trước khi lọc) | 0 | 58 | 36 | 0 | 22 |
-
-Kết luận: phần lớn lỗi còn lại là **các thành phần của cùng một cấu kiện chồng lấn thật** (khung và kính cửa, thanh lan can),
-không phải nhiễu số. Muốn hết bị từ chối cần hợp nhất (union) các thành phần chồng lấn trước khi so sánh và xuất,
-hoặc duyệt từng ca bằng `accepted_source_defects` (5.2). Việc hợp nhất là bước 5.4 trong roadmap.
-
-Giới hạn đã biết: giao thể tích giữa các thành phần qua Manifold trả 0 cho 15/18 phần tử FZK dù độ sâu xuyên ≥ 1 mm
-(các thành phần không phải `is_volume`); phép đo này không dùng được làm bằng chứng không chồng lấn.
+**Đính chính (M0, 2026-11-14).** Bản đầu của phần này kết luận "phần lớn lỗi còn lại là chồng lấn thật ≥ 1 mm giữa khung và kính".
+Kết luận đó **sai**: phép đo dùng độ sâu `max` của hai chiều, trong khi tam giác lớn luôn cắt mặt phẳng của tam giác nhỏ rất sâu
+nên mọi cặp chạm mép đều trông như xuyên sâu. Sau khi sửa (lấy `min`, xem `geometry/mesh.py`) và dọn cache hình học cũ,
+các phần tử đó là tiếp xúc, không phải chồng lấn. Bảng độ sâu witness trước đây đã bị bỏ.
 
 ## 5.4 Hợp nhất thành phần chồng lấn (`geometry/component_union.py`)
 
@@ -36,13 +27,11 @@ và oracle lấy mẫu bằng generalized winding number (Jacobson 2013) khớp 
 Lỗi bất kỳ → giữ mesh gốc, cấu kiện vẫn bị chặn và lý do ghi trong `geometry_diagnostics.component_union`.
 `passage_metrics` giờ chứng minh hai tập vật cản bằng nhau (cùng byte, hộp trục, hoặc phân hoạch mặt phẳng) trước khi dùng Boolean.
 
-| Mô hình | DEVIATED trước → sau | MATCHED trước → sau | Verdict |
+| Mô hình | DEVIATED (đầu Giai đoạn 5 → nay) | MATCHED | Verdict |
 |---|---|---|---|
-| FZK-Haus | 16 → 2 | 63 → 77 | REJECTED |
-| Duplex | 31 → 7 | 117 → 141 | REJECTED |
-| Institute | 283 → 0 | 149 → 432 | REJECTED (4 phần tử UNSUPPORTED, 265 REVIEW_REQUIRED) |
+| FZK-Haus | 16 → 0 | 63 → 79 | REJECTED (1 UNSUPPORTED, 2 REVIEW_REQUIRED) |
+| Duplex | 36 → 0 | 117 → 148 | REJECTED (43 UNSUPPORTED, 24 REVIEW_REQUIRED) |
+| Institute | 283 → 0 | 149 → 432 | REJECTED (4 UNSUPPORTED, 265 REVIEW_REQUIRED) |
 
 Lỗi còn lại hầu hết là hình học nguồn không phải solid hợp lệ (UNSUPPORTED) hoặc phần tử chờ duyệt (REVIEW_REQUIRED), không còn do chồng lấn.
-Chưa giải quyết: finding `representation` ("Manifest openings differs from independent policy", Duplex STEP 197) xuất hiện lúc có lúc không
-chỉ khi dùng cache hình học mặc định dùng chung; không tái hiện với cache riêng. Nghi ngờ cache cũ; cần điều tra.
-Institute khi cache ấm: 69 s (mục tiêu 60 s) vì hợp nhất thêm thời gian hình học.
+Đã giải quyết: finding `representation` chập chờn ở Duplex do cache hình học cũ (chữ ký cache không gồm mã xử lý); nay chữ ký có dấu vân tay mã (`cache.code_fingerprint`).

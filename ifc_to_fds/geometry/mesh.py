@@ -774,7 +774,8 @@ def prefetch_self_intersection(meshes, min_faces=2000, workers=None):
     The evidence is a pure function of the mesh bytes, so the cached results equal what
     sequential calls would produce. Does nothing outside mesh_evidence_scope(), when fewer than
     two heavy meshes need work, or if worker processes cannot be used (callers then compute
-    sequentially as before).
+    sequentially as before). On Windows the workers re-import the entry script, so any script
+    that calls this needs an `if __name__ == "__main__"` guard (the CLI and job runner have one).
     """
     cache = _intersection_evidence.get()
     if cache is None:
@@ -793,7 +794,7 @@ def prefetch_self_intersection(meshes, min_faces=2000, workers=None):
     import os
     from concurrent.futures import ProcessPoolExecutor
 
-    count = min(len(todo), workers or max(1, (os.cpu_count() or 2) - 1), 8)
+    count = min(len(todo), workers or max(1, (os.cpu_count() or 2) - 1), 4)
     try:
         with ProcessPoolExecutor(max_workers=count) as pool:
             for (key, _), result in zip(todo, pool.map(_raw_self_intersection_evidence, [m for _, m in todo])):
