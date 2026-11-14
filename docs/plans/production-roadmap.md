@@ -1,6 +1,6 @@
 # IFCtoFDS — kế hoạch hoàn thiện production (bản 2)
 
-Cập nhật 2026-11-14. File này **thay thế** kế hoạch bản 1 và file bàn giao cũ (cả hai còn trong lịch sử git, commit `356eb42`).
+Cập nhật 2026-11-15. File này **thay thế** kế hoạch bản 1 và file bàn giao cũ (cả hai còn trong lịch sử git, commit `356eb42`).
 Đây là nguồn sự thật duy nhất: trạng thái ở Phần A, việc phải làm ở Phần B. Đánh dấu `[x]` khi một bước xong **và đã qua cổng kiểm tra của nó**.
 
 Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua CLI và Web/API (Docker Compose); nghiệm thu trên IFC thật của dự án.
@@ -10,42 +10,45 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 # Phần A — Trạng thái
 
 ## A1. Git
-- Nhánh làm việc `feat/phase5-4-component-union`, HEAD là commit sau `883433a` (M0.1 đã sửa hồi quy; còn M0.7). Chưa push gì. `main` = `ff91299`.
-- Đã merge vào nhánh này, xóa được: `fix/p0-cli-cold-start-and-baseline`, `perf/phase2-self-intersection`, `refactor/phase3-dedupe`, `feat/phase4-coordinates`, `feat/phase5-topology`.
-- Worktree sót: `../IFCtoFDS-wt-phase2`, `../IFCtoFDS-wt-phase3`, `.claude/worktrees/agent-*` (2 cái, bị khóa). Gỡ: `git worktree remove -f -f <path>`.
+- Nhánh làm việc `feat/production-m0-geometry-ready`, đã push, là PR #109 vào `main` (`ff91299`). Mọi giai đoạn trước đều đã gộp vào nhánh này; các worktree tạm đã được gỡ.
+- Commit trên nhánh từ M2 trở đi viết tiếng Việt, không ghi công Claude (xem `AGENTS.md`). 21 commit tiếng Anh cũ hơn giữ nguyên theo quyết định của người dùng.
 
-## A2. Đã xong (đã commit, suite sạch tại từng commit)
-| Giai đoạn cũ | Commit | Kết quả |
+## A2. Đã xong (suite mặc định sạch tại từng commit)
+| Mốc | Commit | Kết quả chính |
 |---|---|---|
-| 0–1 Nền đo, lỗi chặn | `e3d8592` | CLI `convert` chạy từ tiến trình mới; lối mở A△A = 0 khi hai vế giống nhau; khóa `scope.coordinate_frame`; `scripts/verdict-snapshot.py`; marker `slow`, `private`; CI có bước convert cold |
-| 2 Tốc độ | `392d8e0` | `has_self_intersection` vector hóa + số nguyên chính xác; memo `inspect_mesh_quality`; bỏ monkey patch trimesh. FZK 34→8 s, Institute 148→42 s |
-| 3 Kiến trúc | `73e214d` | Xóa `ValidationRunner` + 7 checker, xóa `ifc_to_fds/server/`; sửa crash khởi động lại `JobService`; test import cold từng module |
-| 4 Tọa độ | `b24650b` | `is_rigid_rotation` + chuỗi placement chuẩn IFC; từ chối đơn vị không về mét SI; rebase dịch cao độ tầng và trục Z; `SourceMetadata.georeference` |
-| 5.1–5.3 Tô-pô | `ff4be54` | Phân loại `contact` / `numerical_contact`; `accepted_source_defects` (cấu hình + `--accepted-source-defects`), gắn SHA-256 mesh |
-| 5.4 Hợp nhất | `f0e06cf` | `geometry/component_union.py`: union thành phần chồng lấn, chứng minh bằng thể tích + oracle winding number; `passage_metrics` chứng minh tập vật cản bằng nhau |
+| 0–1 | `e3d8592` | CLI `convert` chạy từ tiến trình mới; lối mở A△A = 0; khóa `scope.coordinate_frame`; `verdict-snapshot.py`; marker `slow`, `private` |
+| 2 Tốc độ | `392d8e0` | `has_self_intersection` vector hóa + số nguyên chính xác; FZK 34→8 s, Institute 148→42 s |
+| 3 Kiến trúc | `73e214d` | Một đường kiểm định, một `JobRepository`, bỏ `ifc_to_fds/server/` |
+| 4 Tọa độ | `b24650b` | Placement cứng chuẩn IFC, đơn vị về mét SI, rebase cao độ tầng và trục Z, georeference |
+| 5 Tô-pô | `ff4be54`, `f0e06cf` | `contact`/`numerical_contact`, `accepted_source_defects`, hợp nhất thành phần chồng lấn |
+| M0 | `883433a`, `4bb570e` | Hồi quy hợp nhất sửa xong; prefetch 4 worker; mốc verdict tạo lại |
+| M1 | `a498915`…`855f096` | Phần tử tham chiếu không bị chặn; ngưỡng thể tích chồng lấn số học; chặn nhiều IfcSite; sửa đường dẫn cache dài |
+| M2 | `426a96f`, `61a1738` | Hộp phủ OBST (mặc định bật); `air_path` chính xác; `effective_geometry` theo phần tử, đọc VENT và OBST điều khiển từ SMV; gate `passage_resolution` |
+| M3 (một phần) | `8800f92` | Phụ kiện hai cổng và quạt lưu lượng cố định từ thông số đã duyệt; tổn áp FDS khớp tính tay 0,5% |
+| Dọn dẹp + M4 (một phần) | xem commit sau `cd87896` | Bỏ mã chết, gom tên gate về một chỗ; phát lại đường HRR đo và kiểm chứng bằng FDS |
 
-## A3. Dở dang: bước 5.8 hiệu năng (commit WIP `8586207`)
-Đã có trong mã, test riêng đạt:
-- Prefilter tách trục cho cặp đồng phẳng (`mesh.py`, `COPLANAR_PREFILTER`).
-- `inspect_mesh_quality` dùng khóa cạnh int64.
-- Tessellation instanced, mặc định bật (`IFCFDS_GEOMETRY_INSTANCING=0` = chế độ cũ); native A 76→19 s.
-- Độ sâu xuyên lấy `min` hai chiều (sửa lỗi `max` của 5.1; `DEVIATED` FZK/Duplex về 0 khi đo ở thời điểm đó).
-- Chữ ký cache hình học gồm dấu vân tay mã (`cache.code_fingerprint`).
-- Hợp nhất quyết định bằng thể tích; không tự quét kết quả.
-- `prefetch_self_intersection` (song song theo tiến trình) gọi từ `preflight.py`.
-- `scripts/stage-profile.py`.
+## A3. Đang bị chặn (chờ đầu vào, không tự suy)
+| Mục | Chặn bởi | Cần gì | Đã chuẩn bị sẵn |
+|---|---|---|---|
+| M1.7 mục tiêu thời gian | đòn bẩy kỹ thuật còn mở | không cần đầu vào; làm khi ưu tiên | A 211–253 s (mục tiêu 120), C 477 s (mục tiêu 300) |
+| M2.4 `effective_geometry` PASS trên A | quyết định kỹ thuật | chọn: đọc cut-cell GEOM từ SMV, hoặc quay mô hình theo từng cánh, hoặc chấp nhận xấp xỉ bậc thang | A 0% OBST vì mọi tường/sàn không thẳng trục; gate đã liệt kê 546 GEOM theo tên |
+| M3.1 phân loại phụ kiện | người dùng duyệt bảng họ → loại | xác nhận 7 họ của C: cút 182, chuyển tiết diện vuông–tròn 100, côn 78, gót giày 60, đầu bịt 34, Y 16, tê 8 | phụ kiện hai cổng đã biên dịch được khi có K và chiều dài |
+| M3.2 phạm vi hệ thống | B-ext 2 | nghĩa PAD/CEAD/OAD-FAD/RAD/TEAD; hệ nào hút khói, cấp bù | cơ chế `decisions` đã có |
+| M3.3/M3.4 tê, Y, gót giày (84 cái của C) | chưa có tổn thất nút | hệ số `LOSS(I,J)` đã duyệt cho từng nhánh | lỗi rõ ràng thay vì đoán |
+| M3.5 đầu cuối → biên | B-ext 3 | lưu lượng thiết kế từng miệng, K, đường cong quạt (C không có đối tượng quạt) | VENT/AMBIENT đã hỗ trợ |
+| M3.6(b) bảo toàn khối lượng ở tê | phụ thuộc M3.3 | như trên | (a) và (c) đã đạt với FDS |
+| Ma sát ống chữ nhật trong FDS | quyết định kỹ thuật | có hiệu chỉnh tổn thất cho ống chữ nhật không (FDS thấp hơn khoảng 18% với 0,5×0,3 m) | gate `hvac` báo finding P2 |
+| M4.1 preset xe | B-ext 4 | số đo cháy nguyên xe được phép dùng (HRR theo thời gian, năng lượng pin) | có thể phát lại thẳng đường đo (M4.2) |
+| M4.3 HF/HCN | B-ext 4 | yield nguyên xe | — |
+| M4.4 biên truyền nhiệt | nguồn tính chất vật liệu | tính chất bê tông/thép có trích nguồn | — |
+| M5.5–M5.7 | các mốc trên + kỹ sư review | QoI nghiệm thu (B-ext 5) | — |
 
-## A4. Vấn đề mở (theo mức nghiêm trọng)
-1. **(Đã sửa ở M0.1, `883433a`)** Hồi quy trước đây: `test_parity_case_c_fzk` ra 22 finding thay vì 2. Nguyên nhân: `_fuse` bỏ qua khi `Σ V_i − V(union) ≈ 0`; 10 cửa/cửa sổ FZK có thành phần chỉ chạm nhau (thể tích chung ±1e-16) nhưng bộ quét vẫn báo `TRIANGLE_CROSSING` → không hợp nhất → bị chặn.
-2. **(Đã chốt ở M0.2: giữ, 4 worker)** Prefetch song song: đo riêng 11 mesh nặng của A: tuần tự 88,5 s, 4 worker 39 s, 8 worker 40 s, kết quả giống hệt. Nhưng một lần `convert` A đầy đủ thì 8 worker mỗi cái > 180 s CPU, ~800 MB, phải dừng.
-3. **Mục tiêu thời gian chưa đạt:** A 244 s (mục tiêu ≤ 120), C 670 s đo trước các sửa cuối (mục tiêu ≤ 300).
-4. **Tài liệu sai đã commit:** `docs/evidence/production-roadmap/phase5-topology.md` kết luận "chồng lấn thật ≥ 1 mm" (đo khi còn lỗi `max` và cache cũ). Mốc `baseline-*.json` cũng cũ.
-5. **3 test hỏng từ trước phiên** (cache nguồn/preview): `test_normalization_evidence_survives_converter_cache`, `test_binary_ingestion_cache_preserves_identity_and_never_reuses_mapping`, `test_preview_cache_preserves_world_geometry_and_rejects_corruption`.
-6. **2 test `xfail` nghiêm ngặt** (từ Giai đoạn 3): FDS rỗng → geometry `PASS`; traceability coi primitive kịch bản cháy là bất ngờ.
-7. Giai đoạn 3 đổi hành vi server: job QUEUED → FAILED khi khởi động lại; khóa file chẩn đoán `name`/`jobId`. Chưa kiểm client (JS) có đọc khóa cũ.
-8. Cổng `air_path` nhạy với nhiễu ~1e-15 (Duplex: hốc 9/8 ↔ 8/9 giữa hai chế độ tessellation).
-9. **Chưa có FDS trên máy dự án** → chưa cổng solver nào chạy thật.
-10. `test_sqlite_wal_multi_process_concurrency` từng "database is locked" một lần khi tải nặng.
+## A4. Vấn đề mở khác
+1. 2 test `xfail` nghiêm ngặt từ Giai đoạn 3: FDS rỗng → geometry `PASS`; traceability coi primitive kịch bản cháy là bất ngờ.
+2. Giai đoạn 3 đổi hành vi server (job QUEUED → FAILED khi khởi động lại); chưa kiểm client JS có đọc khóa chẩn đoán cũ.
+3. `air_path` vẫn dùng Boolean khi có phần tử vỏ bao lệch; khi đó có thể INCONCLUSIVE.
+4. `test_sqlite_wal_multi_process_concurrency` từng báo "database is locked" một lần khi máy tải nặng (đã thêm thử lại có thời hạn).
+5. Ổ đĩa dự án có 26 thư mục job cũ trong `.jobs/` (ngoài git) do server/test để lại; xóa tay nếu cần dung lượng.
 
 ## A5. Dữ liệu thật (ngoài repo, không commit; trong repo chỉ dùng bí danh và số tổng hợp)
 Thư mục `D:\User\HUCE\NCKH\Resources\IFC_Tòa nhà\`. Cả ba IFC2X3, placement hợp lệ 100%, không có CRS; vị trí Site là mặc định phần mềm dựng.
@@ -54,7 +57,7 @@ Thư mục `D:\User\HUCE\NCKH\Resources\IFC_Tòa nhà\`. Cả ba IFC2X3, placeme
 |---|---|---|---|
 | Nội dung | hầm 2 tầng, 793 sản phẩm, mm | một tầng, 279 sản phẩm, mm | tổng hợp + MEP, 5.641 sản phẩm, **foot** |
 | Đặc điểm | 356 tường, 177 lỗ, 546/583 phần tử là GEOM; 21 cửa không-manifold | cửa, tường kính, lan can | 63 tầng (hai hệ cao độ trộn), 296 ống gió chữ nhật, 38 ống mềm, 588 ống nước, 478 phụ kiện, 130 đầu cuối, 68 hệ thống (SPR, PAD, CEAD, OAD/FAD, RAD, TEAD), 534 cổng `SOURCEANDSINK` |
-| Lần đo cuối | 244 s; 22 UNSUPPORTED, 15 REVIEW, 2 DEVIATED | 14 s; 8 DEVIATED | 670 s; 1.722 phần tử `NONE`, 89 finding bảo toàn, 4 UNSUPPORTED |
+| Lần đo cuối | 253 s cache lạnh kèm solver (M2.4); 22 UNSUPPORTED (cửa lỗi nguồn) | 14 s; 8 DEVIATED | 670 s; 1.722 phần tử `NONE`, 89 finding bảo toàn, 4 UNSUPPORTED |
 | Verdict | REJECTED | REJECTED | REJECTED |
 
 A và B lệch nhau > 1.000 km trên trục Y sau khi đọc: không tự ghép được.
@@ -65,6 +68,7 @@ A và B lệch nhau > 1.000 km trên trục Y sau khi đọc: không tự ghép 
 - Đo cold: đặt `IFCFDS_GEOMETRY_CACHE` tới thư mục mới ngoài repo. **Không chạy hai phép đo cùng lúc** (đã gây số đo sai trong phiên trước).
 - So verdict: `scripts/verdict-snapshot.py <ifc> --compare docs/evidence/production-roadmap/baseline-<n>.json`.
 - Profile: `scripts/stage-profile.py <ifc> -o <out.json>`.
+- Solver: `python scripts/install-fds.py` (FDS 6.11.1 vào `.deps/`), rồi `IFCFDS_SOLVER=<.deps/.../fds_openmp.exe> python -m pytest -q -m solver`.
 - Kết quả chạy file thật ghi ra ngoài repo.
 
 ---
@@ -156,11 +160,11 @@ Lỗi suite "đã biết" tại thời điểm viết: 3 test cache ở A4.5 (s�
 
 ## M4 — Cháy xe điện (3–4 tuần; cần đầu vào B-ext 4)
 
-- [ ] **M4.1 Preset.** Thêm `e-moped`/`e-motorbike`, sửa `auto-nmc` trong `reference-cases/ev-library/` theo số đo whole-vehicle; mỗi preset có citation, miền áp dụng.
-- [ ] **M4.2 Replay đường HRR đo** (CSV → `RAMP`) trong `fire/scenario_emitter.py`.
-- [ ] **M4.3 HF/HCN.** Xác minh cú pháp với FDS User's Guide 6.11.1 và chạy setup **trước khi viết mã**; yield từ dữ liệu nguyên xe.
-- [ ] **M4.4 Biên truyền nhiệt.** `MATL` + `SURF` có `MATL_ID`/`THICKNESS` cho bê tông/thép, tính chất có nguồn.
-- [ ] **M4.5 Kiểm chứng.** Ca 1 xe khoang nhỏ: `_hrr.csv` khớp `RAMP` ±5%; năng lượng khớp `assess_scenario_physics`.
+- [ ] **M4.1 Preset.** Thêm `e-moped`/`e-motorbike`, sửa `auto-nmc` trong `reference-cases/ev-library/` theo số đo whole-vehicle; mỗi preset có citation, miền áp dụng. *(BỊ CHẶN: cần B-ext 4. Trong lúc chờ, số đo được phép dùng có thể phát lại thẳng bằng M4.2.)*
+- [x] **M4.2 Replay đường HRR đo** (CSV → `RAMP`) trong `fire/scenario_emitter.py`. *(XONG: `EVSelection.hrr_curve_kw` (thời gian sau đánh lửa s, HRR kW) cùng `hrr_curve_source` bắt buộc một dòng. Từ chối đường không bắt đầu ở t=0, thời gian không tăng, giá trị âm, hoặc `peak_hrr_mw` mâu thuẫn; đỉnh suy từ đường đo và vẫn phải nằm trong miền của preset. RAMP phát đúng từng điểm (có độ trễ đánh lửa); `assess_scenario_physics` đọc lại năng lượng từ deck. Việc đọc tệp CSV để dựng danh sách điểm là của phía gọi.)*
+- [ ] **M4.3 HF/HCN.** Xác minh cú pháp với FDS User's Guide 6.11.1 và chạy setup **trước khi viết mã**; yield từ dữ liệu nguyên xe. *(BỊ CHẶN: cần B-ext 4.)*
+- [ ] **M4.4 Biên truyền nhiệt.** `MATL` + `SURF` có `MATL_ID`/`THICKNESS` cho bê tông/thép, tính chất có nguồn. *(BỊ CHẶN: cần nguồn tính chất vật liệu được duyệt.)*
+- [~] **M4.5 Kiểm chứng.** Ca 1 xe khoang nhỏ: `_hrr.csv` khớp `RAMP` ±5%; năng lượng khớp `assess_scenario_physics`. *(XONG trên ca tổng hợp với FDS 6.11.1, `tests/test_hrr_curve_replay.py` (`-m solver`): năng lượng 8,402 MJ so với 8,4 MJ (0,02%); trung bình vùng đỉnh 45–80 s 119,98 kW so với 120 kW; đạt nửa đỉnh ở 21 s so với 20 s. ĐIỀU CHỈNH TIÊU CHÍ: HRR tức thời của FDS dao động khoảng ±10% do rối và trễ khoảng 1 s so với nhiên liệu cấp vào, nên so từng điểm ±5% không có ý nghĩa vật lý; test so năng lượng (±1%), trung bình vùng đỉnh (±5%) và thời điểm. CHƯA: ca trên A, cần preset và vị trí xe.)*
 - **Cổng M4:** kịch bản 1 xe máy điện + 1 ô tô trên A chạy tới `T_END`; báo cáo nêu miền áp dụng và bất định.
 
 ## M5 — Vận hành API và nghiệm thu (2–3 tuần; phần API làm song song từ sau M1)
