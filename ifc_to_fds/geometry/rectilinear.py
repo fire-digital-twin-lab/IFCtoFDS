@@ -9,8 +9,11 @@ import os
 
 import numpy as np
 
+from ifc_to_fds.core.canonical import BoundingBox
+from ifc_to_fds.validation.metrics import compare_solids
+
 from .component_union import winding_numbers
-from .mesh import as_trimesh, mesh_digest, mesh_volume
+from .mesh import as_trimesh, box_mesh, mesh_digest, mesh_volume
 
 AXIS_TOLERANCE = 1e-9
 MAX_BOXES = 64  # more boxes than this is no better than a cut-cell surface
@@ -87,11 +90,6 @@ def rectilinear_boxes(mesh, max_cells=200_000):
 
 def _cover_is_proven(mesh, boxes):
     """Accept a cover only when the audit's own comparison would: same surface, same shell count."""
-    from ifc_to_fds.core.canonical import BoundingBox  # local: geometry must not import validation at load time
-    from ifc_to_fds.validation.metrics import compare_solids
-
-    from .mesh import box_mesh
-
     pieces = [box_mesh(BoundingBox(xmin=b[0], xmax=b[1], ymin=b[2], ymax=b[3], zmin=b[4], zmax=b[5])) for b in boxes]
     try:
         m = compare_solids(mesh, pieces)

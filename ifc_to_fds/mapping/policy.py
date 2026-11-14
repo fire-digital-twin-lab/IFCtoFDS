@@ -5,6 +5,7 @@ from ifc_to_fds.geometry.mesh import is_axis_aligned_box, valid_solid
 from ifc_to_fds.geometry.rectilinear import box_sets_enabled, is_obstruction_box_set
 from ifc_to_fds.diagnostics import operation
 from ifc_to_fds.mep.classifier import MEP_TYPES
+from ifc_to_fds.validation.metrics import opening_residual
 
 MEP_PREFIXES = (
     "IFCDUCT",
@@ -104,8 +105,6 @@ def validate_decisions(decisions):
 
 def _openings_are_cut(element):
     """Every opening has a valid solid and shares no volume with the host mesh (the void is subtracted)."""
-    from ifc_to_fds.validation.metrics import opening_residual
-
     try:
         return all(
             o.mesh and valid_solid(o.mesh) and opening_residual([element.mesh], o.mesh) <= 1e-6
