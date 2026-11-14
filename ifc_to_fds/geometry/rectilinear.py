@@ -10,7 +10,7 @@ import os
 import numpy as np
 
 from ifc_to_fds.core.canonical import BoundingBox
-from ifc_to_fds.validation.metrics import compare_solids
+from ifc_to_fds.validation.metrics import compare_solids, is_exact_match
 
 from .component_union import winding_numbers
 from .mesh import as_trimesh, box_mesh, mesh_digest, mesh_volume
@@ -31,9 +31,8 @@ _cache = {}
 
 
 def box_sets_enabled():
-    """Opt-in (IFCFDS_OBST_BOX_SETS=1): the air_path gate's Boolean is unreliable on touching boxes,
-    so a proven cover can still flip its verdict. Enable once that gate is fixed (plan M2.5)."""
-    return os.environ.get("IFCFDS_OBST_BOX_SETS") == "1"
+    """On by default; IFCFDS_OBST_BOX_SETS=0 restores one GEOM surface per host with openings."""
+    return os.environ.get("IFCFDS_OBST_BOX_SETS") != "0"
 
 
 def is_obstruction_box_set(mesh):
@@ -95,9 +94,4 @@ def _cover_is_proven(mesh, boxes):
         m = compare_solids(mesh, pieces)
     except (ValueError, RuntimeError):
         return False
-    return bool(
-        m["surface_proven"]
-        and m["solid_iou"] > 1 - 1e-9
-        and m["relative_volume_error"] < 1e-9
-        and m["reference_components"] == m["output_components"]
-    )
+    return is_exact_match(m)

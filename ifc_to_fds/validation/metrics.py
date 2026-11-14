@@ -83,6 +83,16 @@ def same_surface_partition(a, b):
     return True
 
 
+def is_exact_match(m):
+    """True when a `compare_solids` result proves the two solids equal (no tolerance beyond float noise)."""
+    return bool(
+        m["surface_proven"]
+        and m["solid_iou"] > 1 - 1e-9
+        and m["relative_volume_error"] < 1e-9
+        and m["reference_components"] == m["output_components"]
+    )
+
+
 def compare_solids(reference, outputs):
     if (
         not valid_solid(reference)

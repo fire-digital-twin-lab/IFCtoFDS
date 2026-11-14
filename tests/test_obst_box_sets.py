@@ -9,7 +9,8 @@ from ifc_to_fds.pipeline import convert
 OPENING = str(Path(__file__).parent / "baseline" / "fixtures" / "opening.ifc")
 
 
-def test_box_sets_are_off_by_default(tmp_path):
+def test_box_sets_can_be_switched_off(tmp_path, monkeypatch):
+    monkeypatch.setenv("IFCFDS_OBST_BOX_SETS", "0")
     result = convert([OPENING], output_directory=tmp_path)
     assert "&GEOM" in result["fds_text"]
     wall = next(r for r in result["manifest"]["records"] if r["ifc_type"] == "IfcWall")

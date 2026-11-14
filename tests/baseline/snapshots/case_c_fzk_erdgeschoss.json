@@ -230,10 +230,10 @@
       "name": "Wand-Int-ERDG-3",
       "storey": "Erdgeschoss",
       "scope_decision": "IN_SCOPE",
-      "mapping_strategy": "GEOM",
+      "mapping_strategy": "OBST",
       "simulation_role": "PASSIVE_OBSTACLE",
       "operational_status": "NOT_APPLICABLE",
-      "fds_representation": "GEOM",
+      "fds_representation": "OBST",
       "review_status": "NOT_REQUIRED",
       "boundary_treatment": "NOT_APPLICABLE",
       "boundary_policy": null,
@@ -242,7 +242,10 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_12_Wand-Int-ERDG-3"
+        "OBST_12_Wand-Int-ERDG-3",
+        "OBST_13_Wand-Int-ERDG-3",
+        "OBST_14_Wand-Int-ERDG-3",
+        "OBST_15_Wand-Int-ERDG-3"
       ]
     },
     {
@@ -440,7 +443,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "OBST_13_Wand-Int-ERDG-5"
+        "OBST_16_Wand-Int-ERDG-5"
       ]
     },
     {
@@ -537,7 +540,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_14_Wand-Ext-ERDG-1"
+        "GEOM_17_Wand-Ext-ERDG-1"
       ]
     },
     {
@@ -615,7 +618,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_18_EG-Fenster-6"
+        "GEOM_21_EG-Fenster-6"
       ]
     },
     {
@@ -636,7 +639,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_19_EG-Fenster-7"
+        "GEOM_22_EG-Fenster-7"
       ]
     },
     {
@@ -678,7 +681,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_15_Wand-Ext-ERDG-4"
+        "GEOM_18_Wand-Ext-ERDG-4"
       ]
     },
     {
@@ -756,7 +759,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_20_EG-Fenster-4"
+        "GEOM_23_EG-Fenster-4"
       ]
     },
     {
@@ -777,7 +780,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_21_EG-Fenster-5"
+        "GEOM_24_EG-Fenster-5"
       ]
     },
     {
@@ -819,7 +822,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_16_Wand-Ext-ERDG-3"
+        "GEOM_19_Wand-Ext-ERDG-3"
       ]
     },
     {
@@ -878,7 +881,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_22_EG-Fenster-8"
+        "GEOM_25_EG-Fenster-8"
       ]
     },
     {
@@ -899,7 +902,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_23_EG-Fenster-9"
+        "GEOM_26_EG-Fenster-9"
       ]
     },
     {
@@ -920,7 +923,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_17_Wand-Ext-ERDG-2"
+        "GEOM_20_Wand-Ext-ERDG-2"
       ]
     },
     {
@@ -998,7 +1001,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_24_EG-Fenster-1"
+        "GEOM_27_EG-Fenster-1"
       ]
     },
     {
@@ -1019,7 +1022,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_25_EG-Fenster-2"
+        "GEOM_28_EG-Fenster-2"
       ]
     },
     {
@@ -1040,7 +1043,7 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_26_EG-Fenster-3"
+        "GEOM_29_EG-Fenster-3"
       ]
     },
     {
@@ -2596,11 +2599,14 @@
     {
       "entity_key": "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:18698",
       "mapping_status": "MATCHED",
-      "mapping_strategy": "GEOM",
+      "mapping_strategy": "OBST",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_12_Wand-Int-ERDG-3"
+        "OBST_12_Wand-Int-ERDG-3",
+        "OBST_13_Wand-Int-ERDG-3",
+        "OBST_14_Wand-Int-ERDG-3",
+        "OBST_15_Wand-Int-ERDG-3"
       ],
       "openings_count": 2,
       "ports_count": 0
@@ -2708,7 +2714,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "OBST_13_Wand-Int-ERDG-5"
+        "OBST_16_Wand-Int-ERDG-5"
       ],
       "openings_count": 0,
       "ports_count": 0
@@ -2760,7 +2766,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_14_Wand-Ext-ERDG-1"
+        "GEOM_17_Wand-Ext-ERDG-1"
       ],
       "openings_count": 3,
       "ports_count": 0
@@ -2802,7 +2808,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_18_EG-Fenster-6"
+        "GEOM_21_EG-Fenster-6"
       ],
       "openings_count": 0,
       "ports_count": 0
@@ -2814,7 +2820,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_19_EG-Fenster-7"
+        "GEOM_22_EG-Fenster-7"
       ],
       "openings_count": 0,
       "ports_count": 0
@@ -2838,7 +2844,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_15_Wand-Ext-ERDG-4"
+        "GEOM_18_Wand-Ext-ERDG-4"
       ],
       "openings_count": 3,
       "ports_count": 0
@@ -2880,7 +2886,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_20_EG-Fenster-4"
+        "GEOM_23_EG-Fenster-4"
       ],
       "openings_count": 0,
       "ports_count": 0
@@ -2892,7 +2898,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_21_EG-Fenster-5"
+        "GEOM_24_EG-Fenster-5"
       ],
       "openings_count": 0,
       "ports_count": 0
@@ -2916,7 +2922,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_16_Wand-Ext-ERDG-3"
+        "GEOM_19_Wand-Ext-ERDG-3"
       ],
       "openings_count": 2,
       "ports_count": 0
@@ -2948,7 +2954,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_22_EG-Fenster-8"
+        "GEOM_25_EG-Fenster-8"
       ],
       "openings_count": 0,
       "ports_count": 0
@@ -2960,7 +2966,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_23_EG-Fenster-9"
+        "GEOM_26_EG-Fenster-9"
       ],
       "openings_count": 0,
       "ports_count": 0
@@ -2972,7 +2978,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_17_Wand-Ext-ERDG-2"
+        "GEOM_20_Wand-Ext-ERDG-2"
       ],
       "openings_count": 3,
       "ports_count": 0
@@ -3014,7 +3020,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_24_EG-Fenster-1"
+        "GEOM_27_EG-Fenster-1"
       ],
       "openings_count": 0,
       "ports_count": 0
@@ -3026,7 +3032,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_25_EG-Fenster-2"
+        "GEOM_28_EG-Fenster-2"
       ],
       "openings_count": 0,
       "ports_count": 0
@@ -3038,7 +3044,7 @@
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_26_EG-Fenster-3"
+        "GEOM_29_EG-Fenster-3"
       ],
       "openings_count": 0,
       "ports_count": 0
@@ -3801,10 +3807,10 @@
   "mep_systems_count": 0,
   "mep_connections_count": 0,
   "fds_summary": {
-    "obst_count": 4,
-    "geom_count": 22,
+    "obst_count": 8,
+    "geom_count": 21,
     "mesh_count": 0,
-    "total_primitives": 26
+    "total_primitives": 29
   },
   "fds_primitives": [
     {
@@ -3821,19 +3827,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_12_Wand-Int-ERDG-3",
-      "xb": [
-        0.3,
-        7.41,
-        5.75,
-        5.99,
-        0.0,
-        2.5
-      ]
-    },
-    {
-      "kind": "GEOM",
-      "id": "GEOM_14_Wand-Ext-ERDG-1",
+      "id": "GEOM_17_Wand-Ext-ERDG-1",
       "xb": [
         0.0,
         0.3,
@@ -3845,7 +3839,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_15_Wand-Ext-ERDG-4",
+      "id": "GEOM_18_Wand-Ext-ERDG-4",
       "xb": [
         0.0,
         12.0,
@@ -3857,7 +3851,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_16_Wand-Ext-ERDG-3",
+      "id": "GEOM_19_Wand-Ext-ERDG-3",
       "xb": [
         11.7,
         12.0,
@@ -3869,7 +3863,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_17_Wand-Ext-ERDG-2",
+      "id": "GEOM_20_Wand-Ext-ERDG-2",
       "xb": [
         0.0,
         12.0,
@@ -3881,7 +3875,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_18_EG-Fenster-6",
+      "id": "GEOM_21_EG-Fenster-6",
       "xb": [
         0.12,
         0.195,
@@ -3893,7 +3887,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_19_EG-Fenster-7",
+      "id": "GEOM_22_EG-Fenster-7",
       "xb": [
         0.12,
         0.195,
@@ -3905,7 +3899,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_20_EG-Fenster-4",
+      "id": "GEOM_23_EG-Fenster-4",
       "xb": [
         1.79,
         3.79,
@@ -3917,7 +3911,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_21_EG-Fenster-5",
+      "id": "GEOM_24_EG-Fenster-5",
       "xb": [
         8.21,
         10.21,
@@ -3929,7 +3923,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_22_EG-Fenster-8",
+      "id": "GEOM_25_EG-Fenster-8",
       "xb": [
         11.805,
         11.88,
@@ -3941,7 +3935,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_23_EG-Fenster-9",
+      "id": "GEOM_26_EG-Fenster-9",
       "xb": [
         11.805,
         11.88,
@@ -3953,7 +3947,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_24_EG-Fenster-1",
+      "id": "GEOM_27_EG-Fenster-1",
       "xb": [
         1.05,
         3.05,
@@ -3965,7 +3959,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_25_EG-Fenster-2",
+      "id": "GEOM_28_EG-Fenster-2",
       "xb": [
         4.66,
         6.66,
@@ -3977,7 +3971,7 @@
     },
     {
       "kind": "GEOM",
-      "id": "GEOM_26_EG-Fenster-3",
+      "id": "GEOM_29_EG-Fenster-3",
       "xb": [
         8.795,
         10.795,
@@ -4085,7 +4079,55 @@
     },
     {
       "kind": "OBST",
-      "id": "OBST_13_Wand-Int-ERDG-5",
+      "id": "OBST_12_Wand-Int-ERDG-3",
+      "xb": [
+        0.3,
+        1.6075,
+        5.75,
+        5.99,
+        0.0,
+        2.5
+      ]
+    },
+    {
+      "kind": "OBST",
+      "id": "OBST_13_Wand-Int-ERDG-3",
+      "xb": [
+        1.6075,
+        7.41,
+        5.75,
+        5.99,
+        2.01,
+        2.5
+      ]
+    },
+    {
+      "kind": "OBST",
+      "id": "OBST_14_Wand-Int-ERDG-3",
+      "xb": [
+        2.4925,
+        5.2175,
+        5.75,
+        5.99,
+        0.0,
+        2.01
+      ]
+    },
+    {
+      "kind": "OBST",
+      "id": "OBST_15_Wand-Int-ERDG-3",
+      "xb": [
+        6.1025,
+        7.41,
+        5.75,
+        5.99,
+        0.0,
+        2.01
+      ]
+    },
+    {
+      "kind": "OBST",
+      "id": "OBST_16_Wand-Int-ERDG-5",
       "xb": [
         0.3,
         3.8,
@@ -4157,5 +4199,5 @@
     }
   ],
   "geometry_package_sha256": "f1cb79a8ddccc7610c56c67c26a5dcc2b29e1268fe71ab18093cb663621f611c",
-  "manifest_csv_sha256": "b592d045c6c31b8b96f0fb4743c0643f21bc1d78526bc66889e0d7a29c421825"
+  "manifest_csv_sha256": "65c185e6f13209b5f476d8a0e124023363068946a63d2c6576ee78b942aa6982"
 }

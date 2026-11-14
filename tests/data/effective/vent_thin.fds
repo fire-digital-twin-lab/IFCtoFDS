@@ -1,0 +1,7 @@
+&HEAD CHID='vent_thin' /
+&MESH IJK=10,10,10, XB=0,2,0,2,0,2 /
+&TIME T_END=0 /
+&SURF ID='S', COLOR='RED' /
+&OBST ID='O1', XB=0.52,1.08,0.52,1.48,0,1 /
+&VENT ID='V_THIN', XB=0.62,0.68,0.52,1.48,1,1, SURF_ID='S' /
+&TAIL /

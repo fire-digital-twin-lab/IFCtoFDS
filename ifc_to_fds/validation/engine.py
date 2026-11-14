@@ -12,6 +12,7 @@ from .acceptance import (
     Severity,
 )
 from .parser import parse_fds
+from .passage_resolution import PassageResolutionChecker
 from .effective import check_opening_grid_alignment
 from .preflight import (
     comparison_summary,
@@ -20,6 +21,7 @@ from .preflight import (
 )
 from .metrics import (
     compare_solids,
+    is_exact_match,
     opening_residual,
     passage_metrics,
     SolidCandidateIndex,
@@ -728,10 +730,13 @@ def run_independent_validation(
         manifest=manifest,
         parsed_fds=parsed,
         config=config,
+        exact_elements=frozenset(
+            k for k in completed_comparisons if k not in comparison_deviations and is_exact_match(report.metrics[k])
+        ),
     )
     from .checkers.hvac import HvacNetworkChecker
     from .checkers.mesh_resolution import MeshResolutionChecker
-    for checker in (HvacNetworkChecker(), MeshResolutionChecker()):
+    for checker in (HvacNetworkChecker(), MeshResolutionChecker(), PassageResolutionChecker()):
         outcome = checker.check(validation_ctx)
         report.gates[outcome.gate_name] = outcome.result
         report.findings.extend(outcome.findings)

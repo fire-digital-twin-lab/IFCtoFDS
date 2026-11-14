@@ -136,7 +136,7 @@ class ConversionResult(ResultShape):
                 raise ValueError("Verified mapping has incomplete mandatory gate evidence")
             simulation_gates = {
                 "solver", "effective_geometry", "physics",
-                "scenario", "mesh_resolution", "operational_model",
+                "scenario", "mesh_resolution", "passage_resolution", "operational_model",
             }
             required_mapping = [
                 gate for name, gate in self.gates.items()

@@ -110,6 +110,8 @@ class ValidationContext(BaseModel):
     config: AuditConfig | None = None
     geometry_package: Any | None = None
     parsed_fds: Any | None = None
+    # entity keys whose emitted solids the geometry comparison proved equal to the source
+    exact_elements: frozenset = frozenset()
 
     _parser: ClassVar[Optional[Callable[[str], Any]]] = None
 
@@ -194,6 +196,7 @@ class AcceptanceReport(BaseModel):
             "physics",
             "scenario",
             "mesh_resolution",
+            "passage_resolution",
             "operational_model",
         }
         required = [

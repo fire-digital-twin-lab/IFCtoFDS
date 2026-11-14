@@ -13,6 +13,7 @@ from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
 from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, Severity
 from ifc_to_fds.geometry.boolean import solid_boolean
 from ifc_to_fds.geometry.mesh import as_trimesh, box_mesh, valid_solid
+from ifc_to_fds.validation.passage_resolution import ENCLOSURE_TYPES
 
 
 def _volume(mesh):
@@ -21,13 +22,6 @@ def _volume(mesh):
         return float(mesh.volume) if mesh and hasattr(mesh, "volume") else 0.0
 
 
-ENCLOSURE_TYPES = {
-    "IFCWALL",
-    "IFCWALLSTANDARDCASE",
-    "IFCCURTAINWALL",
-    "IFCSLAB",
-    "IFCROOF",
-}
 
 
 class AirPathTopologyChecker:
@@ -118,6 +112,20 @@ class AirPathTopologyChecker:
                     )
                 ],
                 metrics={"air_path": {"enclosure_elements_count": len(enclosure_elements), "emitted_count": 0}},
+            )
+
+        if not unprovenanced_solids and enclosure_keys <= set(getattr(context, "exact_elements", ())):
+            # Equal solids have equal free space and equal leakage (zero). Manifold's Boolean is unreliable
+            # on the coincident faces this produces (negative leak volumes), so do not run it.
+            return CheckerOutcome(
+                gate_name=self.name,
+                result=GateResult(
+                    status=GateStatus.PASS,
+                    reason=f"Enclosure preserved exactly: all {len(enclosure_elements)} enclosure solids proven equal to the source; no leak is possible.",
+                    evidence={"enclosure_count": len(enclosure_elements), "method": "ALL_ENCLOSURES_PROVEN_EQUAL", "leak_volume_m3": 0.0},
+                ),
+                findings=[],
+                metrics={"air_path": {"enclosure_count": len(enclosure_elements), "method": "ALL_ENCLOSURES_PROVEN_EQUAL", "leak_volume_m3": 0.0}},
             )
 
         try:
