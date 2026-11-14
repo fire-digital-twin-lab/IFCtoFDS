@@ -1,6 +1,7 @@
 """Face contact between solids is not a self-intersection; real overlap still is."""
 
 import numpy as np
+import pytest
 import trimesh
 
 from ifc_to_fds.domain.bim import TriangleMesh
@@ -74,3 +75,81 @@ def test_deep_crossing_stays_a_witness():
     assert evidence["status"] == "CONFIRMED"
     assert evidence["witness"]["kind"] == "TRIANGLE_CROSSING"
     assert self_intersection_evidence(_two_triangles(1e-4))["status"] == "CONFIRMED"
+
+
+def test_coplanar_prefilter_changes_no_evidence(monkeypatch):
+    """The separating-axis prefilter only skips pairs that cannot overlap; evidence is identical."""
+    import numpy as np
+
+    from ifc_to_fds.geometry import mesh as mesh_module
+
+    rng = np.random.default_rng(7)
+    cases = [
+        _boxes(((0, 0, 0), (1, 1, 1)), ((1, 0, 0), (2, 1, 1))),
+        _boxes(((0, 0, 0), (1, 1, 1)), ((1, 0.5, 0), (2, 1.5, 1)), ((0, 1, 0), (1, 2, 1))),
+        _boxes(((0, 0, 0), (2, 2, 2)), ((0.5, 0.5, 1), (1, 1, 2))),
+        _boxes(((0, 0, 0), (1, 1, 1)), ((0.2, 0.2, 0.5), (0.8, 0.8, 1))),
+        _two_triangles(1e-7),
+    ]
+    for _ in range(12):
+        lo = rng.integers(0, 3, 3).astype(float)
+        cases.append(_boxes((tuple(lo), tuple(lo + 1)), (tuple(lo + rng.integers(-1, 2, 3)), tuple(lo + rng.integers(-1, 2, 3) + 2))))
+    for mesh in cases:
+        monkeypatch.setattr(mesh_module, "COPLANAR_PREFILTER", False)
+        plain = self_intersection_evidence(mesh)
+        monkeypatch.setattr(mesh_module, "COPLANAR_PREFILTER", True)
+        assert self_intersection_evidence(mesh) == plain
+
+
+def test_coplanar_prefilter_skips_touching_pairs(monkeypatch):
+    """Touching faces never reach the per-pair polygon intersection."""
+    import shapely.geometry
+
+    calls = []
+    real = shapely.geometry.Polygon
+    monkeypatch.setattr(shapely.geometry, "Polygon", lambda *a, **k: calls.append(1) or real(*a, **k))
+    strip = _boxes(*[((k, 0, 0), (k + 1, 1, 1)) for k in range(4)])  # four boxes in a row, faces touching
+    evidence = self_intersection_evidence(strip)
+    assert evidence["status"] == "CLEAN" and evidence["contact"]["face_pairs"] > 0
+    assert len(calls) <= 2 * evidence["contact"]["face_pairs"]  # only genuinely overlapping pairs
+
+
+def _poke(depth):
+    """A small triangle standing on a big one, its tip `depth` metres below the big triangle's plane.
+
+    The big triangle spans both sides of the small one's plane, so only the small
+    triangle's reach through the big one is the material overlap.
+    """
+    return TriangleMesh(
+        vertices=[[0, 0, 0], [4, 0, 0], [0, 4, 0], [1, 1, 1.0], [1.5, 1, 1.0], [1.25, 1.0, -depth]],
+        faces=[[0, 1, 2], [3, 4, 5]],
+    )
+
+
+def test_tip_poking_through_by_less_than_cad_precision_is_numerical_contact():
+    for depth in (1e-14, 1e-12, 1e-8, 5e-6):
+        evidence = self_intersection_evidence(_poke(depth))
+        assert evidence["status"] == "CLEAN" and evidence["numerical_contact"]["face_pairs"] == 1, depth
+
+
+def test_tip_poking_through_by_more_than_cad_precision_is_confirmed():
+    for depth in (1e-4, 0.01, 0.5):
+        assert self_intersection_evidence(_poke(depth))["status"] == "CONFIRMED", depth
+
+
+def test_vectorised_penetration_depth_matches_scalar_definition():
+    import numpy as np
+
+    from ifc_to_fds.geometry.mesh import _penetration_depths
+
+    rng = np.random.default_rng(11)
+    a = rng.normal(size=(300, 3, 3))
+    b = rng.normal(size=(300, 3, 3))
+    b[:50] = a[:50] + rng.normal(scale=1e-9, size=(50, 3, 3))  # near-coplanar pairs
+    got = _penetration_depths(a, b)
+    for k in range(len(a)):
+        n = np.cross(a[k][1] - a[k][0], a[k][2] - a[k][0])
+        d = (b[k] - a[k][0]) @ (n / np.linalg.norm(n))
+        want = min(d.max(), -d.min()) if d.max() > 0 > d.min() else 0.0
+        assert got[k] == pytest.approx(want, abs=1e-15)
+    assert (_penetration_depths(a[:1] * 0, b[:1]) == 0).all()  # degenerate triangle: no depth, no crash

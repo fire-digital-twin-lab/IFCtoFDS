@@ -8,6 +8,7 @@ from ifc_to_fds.domain.scope.model import ScopeDecision
 from ifc_to_fds.geometry.mesh import (
     inspect_mesh_quality,
     mesh_digest,
+    prefetch_self_intersection,
     self_intersection_evidence,
     valid_solid,
 )
@@ -23,6 +24,16 @@ def source_topology_preflight(model) -> Dict[str, Dict[str, Any]]:
     """
 
     evidence: Dict[str, Dict[str, Any]] = {}
+    # Heavy meshes are independent of each other: scan them in parallel, then the loop below reads the cache.
+    prefetch_self_intersection(
+        e.mesh
+        for e in model.elements
+        if e.role == "PHYSICAL"
+        and e.scope_decision in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+        and e.mesh
+        and len(e.mesh.faces) >= 2000
+        and valid_solid(e.mesh)
+    )
     for element in model.elements:
         if (
             element.role != "PHYSICAL"

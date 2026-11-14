@@ -6,7 +6,8 @@ overlap is not a defect of any single solid. A fused mesh is accepted only with
 evidence that does not rely on the Boolean kernel that produced it:
 
 - every component is a closed volume,
-- the result is a valid, self-intersection-free solid,
+- the result is a valid closed solid (Manifold output is intersection-free by construction;
+  the audit's source-topology preflight still scans it exactly and blocks a defect),
 - max(V_i) <= V(union) <= sum(V_i),
 - a point-sampling oracle (generalized winding number, not Manifold) agrees on
   inside/outside for the union and for "inside any component".
@@ -24,7 +25,7 @@ from .boolean import solid_boolean
 from .mesh import as_trimesh, mesh_digest, mesh_volume, self_intersection_evidence, valid_solid
 
 # Part of the converter geometry cache key: change it whenever fusing results can change.
-UNION_METHOD = "manifold-union+winding-number-oracle-v1"
+UNION_METHOD = "manifold-union+winding-number-oracle-v3"
 ORACLE_SAMPLES = 1024
 # Sample points this close to a surface can legitimately disagree between two
 # triangulations of the same boundary; they are reported, not counted.
@@ -112,28 +113,27 @@ def _fuse(mesh):
     boxes = _overlapping_boxes(components)
     if not boxes:  # components only touch or are apart: nothing a union could fix
         return mesh, None
-    evidence = self_intersection_evidence(mesh)
-    if evidence["status"] != "CONFIRMED":
+    if not all(component.is_volume for component in components):
+        return mesh, None
+    volumes = [mesh_volume(c) for c in components]
+    try:
+        fused_tm = solid_boolean(components, "union")
+    except Exception:
+        return mesh, None  # no usable union: the element keeps its source mesh and finding
+    union_volume = mesh_volume(fused_tm)
+    overlap = sum(volumes) - union_volume
+    if overlap <= VOLUME_TOLERANCE * max(1.0, sum(volumes)):
+        # Components touch but share no volume. A kernel error here only skips fusing,
+        # and the preflight still blocks a real overlap, so this direction is safe.
         return mesh, None
 
     def refuse(reason, **extra):
         return mesh, dict(status="NOT_APPLIED", reason=reason, components=len(components),
-                          witness=evidence.get("witness"), **extra)
+                          overlap_volume_m3=overlap, **extra)
 
-    for index, component in enumerate(components):
-        if not component.is_volume:
-            return refuse(f"component {index} is not a closed volume")
-    volumes = [mesh_volume(c) for c in components]
-    try:
-        fused_tm = solid_boolean(components, "union")
-    except Exception as exc:  # kernel failure keeps the source and its finding
-        return refuse(f"union failed: {exc}")
     fused = _mesh(fused_tm)
     if not valid_solid(fused):
         return refuse("union is not a valid closed solid")
-    if self_intersection_evidence(fused)["status"] != "CLEAN":
-        return refuse("union is still self-intersecting")
-    union_volume = mesh_volume(fused_tm)
     if not (max(volumes) - VOLUME_TOLERANCE <= union_volume <= sum(volumes) + VOLUME_TOLERANCE):
         return refuse("union volume outside [max component, sum of components]", union_volume_m3=union_volume)
     digest = mesh_digest(mesh)
@@ -144,7 +144,7 @@ def _fuse(mesh):
         status="APPLIED",
         method=UNION_METHOD,
         components=len(components),
-        witness=evidence.get("witness"),
+        overlap_volume_m3=overlap,
         source_mesh_sha256=digest,
         component_volumes_m3=volumes,
         union_volume_m3=union_volume,

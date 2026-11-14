@@ -187,14 +187,22 @@ def _compute_mesh_quality(mesh):
     if verts.ndim != 2 or verts.shape[1:] != (3,) or not np.isfinite(verts).all():
         result["finite"] = 0
         return result
-    triangles = [face for face in mesh.faces if len(face) == 3]
-    result["invalid_indices"] = len(mesh.faces) - len(triangles)
-    # Filter before int64 conversion; arbitrarily large Python indices remain
-    # invalid input instead of overflowing the accelerated path.
-    usable = [f for f in triangles if all(0 <= i < len(verts) for i in f)]
-    result["invalid_indices"] += len(triangles) - len(usable)
-    if usable:
-        faces = np.asarray(usable, dtype=np.int64)
+    faces = None
+    try:  # fast path: a rectangular, in-range int array (the normal case)
+        array = np.asarray(mesh.faces, dtype=np.int64)
+        if array.ndim == 2 and array.shape[1] == 3 and array.size and array.min() >= 0 and array.max() < len(verts):
+            faces = array
+    except (ValueError, TypeError, OverflowError):
+        pass
+    if faces is None:
+        triangles = [face for face in mesh.faces if len(face) == 3]
+        result["invalid_indices"] = len(mesh.faces) - len(triangles)
+        # Filter before int64 conversion; arbitrarily large Python indices remain
+        # invalid input instead of overflowing the accelerated path.
+        usable = [f for f in triangles if all(0 <= i < len(verts) for i in f)]
+        result["invalid_indices"] += len(triangles) - len(usable)
+        faces = np.asarray(usable, dtype=np.int64) if usable else None
+    if faces is not None:
         a, b, c = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
         repeated = (
             (faces[:, 0] == faces[:, 1])
@@ -209,11 +217,11 @@ def _compute_mesh_quality(mesh):
         directed = np.concatenate(
             (faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])
         )
-        _, occurrences = np.unique(directed, axis=0, return_counts=True)
+        n = np.int64(len(verts))  # one int64 key per edge: np.unique on 1-D is far faster than axis=0
+        _, occurrences = np.unique(directed[:, 0] * n + directed[:, 1], return_counts=True)
         result["inconsistent_edges"] = int(np.sum(occurrences - 1))
-        _, occurrences = np.unique(
-            np.sort(directed, axis=1), axis=0, return_counts=True
-        )
+        ends = np.sort(directed, axis=1)
+        _, occurrences = np.unique(ends[:, 0] * n + ends[:, 1], return_counts=True)
         result["open_edges"] = int(np.count_nonzero(occurrences == 1))
         result["non_manifold_edges"] = int(np.count_nonzero(occurrences > 2))
     result["is_closed_manifold"] = int(
@@ -462,14 +470,39 @@ NUMERICAL_CONTACT_AREA_M2 = 1e-10
 NUMERICAL_PENETRATION_M = 1e-5
 
 
-def _penetration_depth(a, b):
-    """How far triangle b reaches past the plane of a on its shorter side (0 if it does not cross)."""
-    normal = np.cross(a[1] - a[0], a[2] - a[0])
-    length = float(np.linalg.norm(normal))
-    if length == 0.0:
-        return 0.0
-    d = (b - a[0]) @ (normal / length)
-    return float(min(d.max(), -d.min())) if d.max() > 0 > d.min() else 0.0
+# Skip coplanar pairs a float separating-axis test proves cannot overlap. Only used when
+# classifying contacts: a pair skipped overlaps by less than COPLANAR_SEPARATION_M, i.e. by
+# an area far below NUMERICAL_CONTACT_AREA_M2, so classification is unchanged.
+COPLANAR_PREFILTER = True
+COPLANAR_SEPARATION_M = 1e-12
+
+
+def _coplanar_separated(a, b, axes):
+    """Boolean per pair: triangles a, b (n,3,3) with 2D axes (n,2) provably do not overlap."""
+    pa = np.take_along_axis(a, axes[:, None, :], axis=2)
+    pb = np.take_along_axis(b, axes[:, None, :], axis=2)
+    separated = np.zeros(len(a), dtype=bool)
+    for own, other in ((pa, pb), (pb, pa)):
+        u, v = own[:, 1] - own[:, 0], own[:, 2] - own[:, 0]
+        orientation = np.sign(u[:, 0] * v[:, 1] - u[:, 1] * v[:, 0])
+        for k in range(3):
+            edge = own[:, (k + 1) % 3] - own[:, k]
+            normal = np.stack((-edge[:, 1], edge[:, 0]), axis=1) * orientation[:, None]
+            gap = ((other - own[:, k, None, :]) * normal[:, None, :]).sum(axis=2).max(axis=1)
+            # gap is scaled by |edge|; compare against the same scaling of the tolerance.
+            separated |= gap <= COPLANAR_SEPARATION_M * np.linalg.norm(edge, axis=1)
+    return separated
+
+
+def _penetration_depths(a, b):
+    """For triangle arrays (n,3,3): how far b reaches past the plane of a on its shorter side (0 if not crossing)."""
+    normal = np.cross(a[:, 1] - a[:, 0], a[:, 2] - a[:, 0])
+    length = np.linalg.norm(normal, axis=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        unit = np.where(length[:, None] > 0, normal / length[:, None], 0.0)
+    d = ((b - a[:, :1]) * unit[:, None, :]).sum(axis=2)
+    high, low = d.max(axis=1), d.min(axis=1)
+    return np.where((high > 0) & (low < 0), np.minimum(high, -low), 0.0)
 
 
 _contact_sink = ContextVar("contact_sink", default=None)
@@ -506,6 +539,11 @@ def has_self_intersection(mesh, details=None, classify_contacts=False, contacts=
     boxes = np.hstack((triangles.min(axis=1), triangles.max(axis=1)))
     flat_axis = _first_flat_axis(triangles)
     exact = _ExactPredicates(tm.vertices)
+    # The two axes kept when a triangle is projected onto its own plane (dropping the dominant normal axis).
+    drop_axis = np.abs(
+        safe_unit_normals(np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]))
+    ).argmax(axis=1)
+    plane_axes = np.array([[a for a in range(3) if a != d] for d in range(3)])[drop_axis]
 
     def resolve(group, plane, points):
         for m, x in enumerate(group):
@@ -559,6 +597,13 @@ def has_self_intersection(mesh, details=None, classify_contacts=False, contacts=
             if shared and nonzero:
                 continue
             events.append((not nonzero, i, j))
+        if classify_contacts and COPLANAR_PREFILTER and any(e[0] for e in events):
+            flat = [k for k, e in enumerate(events) if e[0]]
+            ii = np.array([events[k][1] for k in flat])
+            jj = np.array([events[k][2] for k in flat])
+            drop = _coplanar_separated(triangles[ii], triangles[jj], plane_axes[ii])
+            skipped = {flat[k] for k in np.nonzero(drop)[0]}
+            events = [e for k, e in enumerate(events) if k not in skipped]
         crossing = [(i, j) for coplanar, i, j in events if not coplanar]
         verdicts = iter(())
         if crossing:
@@ -581,13 +626,17 @@ def has_self_intersection(mesh, details=None, classify_contacts=False, contacts=
                 .reshape(-1, 6)
                 .tolist()
             )
+        depths = iter(())
+        if classify_contacts and crossing:
+            # The smaller of the two reaches is the real overlap: a big triangle always spans both
+            # sides of a small one's plane, so the larger value says nothing about contact.
+            depths = iter(np.minimum(_penetration_depths(a, b), _penetration_depths(b, a)).tolist())
         for coplanar, i, j in events:
             tri, other = triangles[i], triangles[j]
             if coplanar:
                 from shapely.geometry import Polygon
 
-                normal = safe_unit_normals(np.cross(tri[1] - tri[0], tri[2] - tri[0]))
-                axes = [x for x in range(3) if x != np.argmax(np.abs(normal))]
+                axes = plane_axes[i].tolist()
                 area = Polygon(tri[:, axes]).intersection(Polygon(other[:, axes])).area
                 if area > 0 and classify_contacts:
                     facing = float(
@@ -613,6 +662,7 @@ def has_self_intersection(mesh, details=None, classify_contacts=False, contacts=
                 # overlap. Segment/triangle ratios are singular on this plane.
                 continue
             row = next(verdicts)
+            depth = next(depths, None)
             fi, fj = face_ids[i], face_ids[j]
             crossed = False
             for e, (p, q) in enumerate(_EDGES):
@@ -626,9 +676,7 @@ def has_self_intersection(mesh, details=None, classify_contacts=False, contacts=
                 if crossed:
                     break
             if crossed:
-                if classify_contacts and max(
-                    _penetration_depth(tri, other), _penetration_depth(other, tri)
-                ) < NUMERICAL_PENETRATION_M:
+                if depth is not None and depth < NUMERICAL_PENETRATION_M:
                     if contacts is not None:
                         entry = contacts.setdefault("numerical_contact", {"face_pairs": 0, "area_m2": 0.0})
                         entry["face_pairs"] += 1
@@ -718,6 +766,41 @@ def self_intersection_evidence(mesh):
         if rule and rule.get("defect") == result.get("witness", {}).get("kind"):
             return {**result, "status": "ACCEPTED_DEFECT", "mesh_sha256": digest, "review": rule.get("review")}
     return result
+
+
+def prefetch_self_intersection(meshes, min_faces=2000, workers=None):
+    """Compute evidence for several heavy meshes in worker processes and store it in the scope cache.
+
+    The evidence is a pure function of the mesh bytes, so the cached results equal what
+    sequential calls would produce. Does nothing outside mesh_evidence_scope(), when fewer than
+    two heavy meshes need work, or if worker processes cannot be used (callers then compute
+    sequentially as before).
+    """
+    cache = _intersection_evidence.get()
+    if cache is None:
+        return
+    todo, seen = [], set()
+    for mesh in meshes:
+        if len(mesh.faces) < min_faces:
+            continue
+        key = _mesh_key(mesh, "self-intersection")
+        if key is None or key in cache or key in seen:
+            continue
+        seen.add(key)
+        todo.append((key, mesh))
+    if len(todo) < 2:
+        return
+    import os
+    from concurrent.futures import ProcessPoolExecutor
+
+    count = min(len(todo), workers or max(1, (os.cpu_count() or 2) - 1), 8)
+    try:
+        with ProcessPoolExecutor(max_workers=count) as pool:
+            for (key, _), result in zip(todo, pool.map(_raw_self_intersection_evidence, [m for _, m in todo])):
+                if result["status"] != "UNCERTAIN":
+                    _cache_store(cache, key, deepcopy(result))
+    except Exception:  # pragma: no cover - environment without usable process pools
+        return
 
 
 def _raw_self_intersection_evidence(mesh):

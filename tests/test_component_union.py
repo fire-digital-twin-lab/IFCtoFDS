@@ -70,3 +70,46 @@ def test_fusion_is_deterministic():
     first, a = fuse_overlapping_components(mesh)
     second, b = fuse_overlapping_components(mesh.model_copy(deep=True))
     assert mesh_digest(first) == mesh_digest(second) and a == b
+
+
+def test_nothing_to_fuse_never_runs_a_self_intersection_scan(monkeypatch):
+    """Deciding that no component overlaps another must not scan every triangle pair of the mesh."""
+    from ifc_to_fds.geometry import component_union
+
+    def forbidden(mesh):
+        raise AssertionError("self-intersection scan on the unfused mesh")
+
+    monkeypatch.setattr(component_union, "self_intersection_evidence", forbidden)
+    touching = _boxes(((0, 0, 0), (1, 1, 1)), ((1, 0, 0), (2, 1, 1)))
+    assert component_union.fuse_overlapping_components(touching) == (touching, None)
+    # An overlap is detected from volumes alone; only the fused result is then proven clean.
+    monkeypatch.undo()
+    overlapping = _boxes(((0, 0, 0), (1, 1, 1)), ((0.5, 0.25, 0.25), (1.5, 0.75, 0.75)))
+    assert component_union.fuse_overlapping_components(overlapping)[1]["status"] == "APPLIED"
+
+
+def test_overlap_volume_is_reported():
+    mesh = _boxes(((0, 0, 0), (1, 1, 1)), ((0.5, 0.25, 0.25), (1.5, 0.75, 0.75)))
+    _, proof = fuse_overlapping_components(mesh)
+    assert abs(proof["overlap_volume_m3"] - 0.125) < 1e-9
+
+
+def test_fusing_does_not_scan_its_own_result(monkeypatch):
+    """The fused mesh is proven by volumes and the winding oracle; the audit's preflight scans it once."""
+    from ifc_to_fds.geometry import component_union
+
+    scans = []
+    real = component_union.self_intersection_evidence
+    monkeypatch.setattr(component_union, "self_intersection_evidence", lambda m: scans.append(1) or real(m))
+    mesh = _boxes(((0, 0, 0), (1, 1, 1)), ((0.5, 0.25, 0.25), (1.5, 0.75, 0.75)))
+    fused, proof = component_union.fuse_overlapping_components(mesh)
+    assert proof["status"] == "APPLIED" and not scans
+    assert self_intersection_evidence(fused)["status"] == "CLEAN"  # what the audit does next
+
+
+def test_union_that_a_scan_would_reject_is_still_caught_by_the_audit():
+    """A refused or defective fuse leaves a mesh the preflight blocks; nothing is silently accepted."""
+    from ifc_to_fds.geometry.component_union import fuse_overlapping_components as fuse
+
+    bad = TriangleMesh(vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], faces=[[0, 1, 2]])  # not a solid
+    assert fuse(bad) == (bad, None)

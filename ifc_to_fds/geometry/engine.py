@@ -50,15 +50,56 @@ from .mesh import bounds_for_vertices, inspect_mesh_quality, as_trimesh, valid_s
 from .normalization import normalize_source_mesh
 
 
-def create_geom_settings(linear_deflection: float = 0.0001) -> Any:
+def create_geom_settings(linear_deflection: float = 0.0001, local: bool = False) -> Any:
     settings: Any = ifcopenshell.geom.settings()
-    # Apply standard settings for world coordinate triangulated meshes
-    settings.set(settings.USE_WORLD_COORDS, True)
+    # World coordinates by default. local=True tessellates each representation once, in its
+    # own frame (shared by all instances); world_mesh_from_shape applies the placement.
+    settings.set(settings.USE_WORLD_COORDS, not local)
     settings.set(settings.APPLY_DEFAULT_MATERIALS, False)
     settings.set(settings.WELD_VERTICES, True)
     settings.set("convert-back-units", False)
     settings.set("mesher-linear-deflection", linear_deflection)
     return settings
+
+
+def instancing_enabled() -> bool:
+    """IFCFDS_GEOMETRY_INSTANCING=0 selects per-instance world tessellation (the reference mode)."""
+    import os
+
+    return os.environ.get("IFCFDS_GEOMETRY_INSTANCING", "1") != "0"
+
+
+def _iteration_settings_and_converter():
+    if instancing_enabled():
+        cache = {}
+        return create_geom_settings(local=True), lambda shape: world_mesh_from_shape(shape, cache)
+    return create_geom_settings(), lambda shape: mesh_from_geometry(shape.geometry)
+
+
+def transformed_mesh_arrays(vertices, faces, matrix):
+    """Apply a 4x4 placement in float64; a mirroring matrix reverses winding to keep normals outward."""
+    world = vertices @ matrix[:3, :3].T + matrix[:3, 3]
+    if np.linalg.det(matrix[:3, :3]) < 0:
+        faces = faces[:, ::-1]
+    return world, faces
+
+
+def world_mesh_from_shape(shape, cache) -> TriangleMesh:
+    """World-coordinate mesh of one iterator shape made with local=True settings.
+
+    cache maps geometry id -> local (vertices, faces); identical representations (e.g.
+    the same door type placed many times) are converted from the native buffer once.
+    """
+    geom = shape.geometry
+    entry = cache.get(geom.id)
+    if entry is None:
+        vertices = np.asarray(geom.verts, dtype=np.float64).reshape(-1, 3) if geom.verts else np.empty((0, 3))
+        faces = np.asarray(geom.faces, dtype=np.int32).reshape(-1, 3) if geom.faces else np.empty((0, 3), np.int32)
+        entry = cache[geom.id] = (vertices, faces)
+    from ifcopenshell.util.shape import get_shape_matrix
+
+    world, faces = transformed_mesh_arrays(entry[0], entry[1], get_shape_matrix(shape))
+    return TriangleMesh(vertices=world.tolist(), faces=faces.tolist())
 
 
 def mesh_from_geometry(geom) -> TriangleMesh:
@@ -164,17 +205,17 @@ def process_model_geometry(
     import os
 
     shapes = {}
+    iteration_settings, to_mesh = _iteration_settings_and_converter()
     try:
         products = [e for e in canonical_model.elements if e.has_3d_geometry]
         iterator = ifcopenshell.geom.iterator(
-            settings, ifc_file, min(4, os.cpu_count() or 1),
+            iteration_settings, ifc_file, min(4, os.cpu_count() or 1),
             include=[ifc_file.by_id(e.step_id) for e in products],
         ) if products else None
         if iterator and iterator.initialize():
             while True:
                 shape: Any = iterator.get()
-                g = shape.geometry
-                shapes[shape.id] = mesh_from_geometry(g)
+                shapes[shape.id] = to_mesh(shape)
                 if len(shapes) % 16 == 0:
                     progress("IFC_GEOMETRY", "RUNNING", completed=len(shapes), total=len(products))
                 if not iterator.next():
@@ -273,10 +314,11 @@ def process_reference_geometry(model, ifc_file):
         if completed % 16 == 0 or completed == total:
             progress("IFC_GEOMETRY", "RUNNING", completed=completed, total=total)
 
+    iteration_settings, to_mesh = _iteration_settings_and_converter()
     try:
         iterator = (
             ifcopenshell.geom.iterator(
-                settings, ifc_file, min(4, os.cpu_count() or 1),
+                iteration_settings, ifc_file, min(4, os.cpu_count() or 1),
                 include=[ifc_file.by_id(step) for step in pending],
             ) if pending else None
         )
@@ -285,7 +327,7 @@ def process_reference_geometry(model, ifc_file):
                 shape = iterator.get()
                 element = pending.get(shape.id)
                 if element is not None:
-                    assign(element, mesh_from_geometry(shape.geometry))
+                    assign(element, to_mesh(shape))
                     pending.pop(shape.id)
                 if not iterator.next():
                     break

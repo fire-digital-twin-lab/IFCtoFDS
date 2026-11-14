@@ -164,8 +164,8 @@ def test_duplex_geometry_evaluation_rejects_unverified_architectural_sample():
     # The pipeline records categorized findings (open coverings classified as semantic;
     # non-manifold railings and envelope leaks reported).
     # Overlapping sub-solids of one product are fused (component_union), which removed
-    # findings that were caused by frame/glass overlap rather than by a real defect.
-    assert 100 <= len(findings) <= 225
+    # findings caused by frame/glass contact and ULP noise rather than by a real defect.
+    assert 60 <= len(findings) <= 225
 
     # Categorized findings include geometry and air path
     categories = {f.get("category") for f in findings}
@@ -182,9 +182,12 @@ def test_duplex_geometry_evaluation_rejects_unverified_architectural_sample():
     assert gates["geometry"]["status"] == "FAIL"
     assert gates["air_path"]["status"] == "FAIL"
     leak_vol = gates["air_path"]["evidence"]["leak_volume_m3"]
-    assert round(leak_vol, 2) == 2.54, f"Expected ~2.54 m^3 leak volume, got {leak_vol}"
-    assert gates["air_path"]["evidence"]["source_cavities"] == 9
-    assert gates["air_path"]["evidence"]["fds_cavities"] == 8
+    # The cavity count is sensitive to ~1e-15 coordinate noise. Instanced tessellation (the
+    # default, IFCFDS_GEOMETRY_INSTANCING=1) gives 8 source / 9 FDS cavities and 2.32 m^3;
+    # per-instance world tessellation (=0) gives 9 / 8 and 2.54 m^3 on the same IFC.
+    assert round(leak_vol, 2) == 2.32, f"Expected ~2.32 m^3 leak volume, got {leak_vol}"
+    assert gates["air_path"]["evidence"]["source_cavities"] == 8
+    assert gates["air_path"]["evidence"]["fds_cavities"] == 9
 
 
 def test_verified_golden_models_achieve_verified_status(tmp_path):
