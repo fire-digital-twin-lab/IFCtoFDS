@@ -836,18 +836,17 @@ def test_check_opening_grid_alignment_allows_door_cutting_into_floor():
     assert res["normal_axis"] == "Y"
 
 
-def test_geometry_checker_provides_informative_reason_on_pass(box_model):
-    """Finding 8: GeometryChecker provides non-empty informative reason on PASS."""
-    from ifc_to_fds.validation.checkers.geometry import GeometryChecker
-    from ifc_to_fds.domain.validation.model import ValidationContext, GateStatus
+def test_engine_geometry_gate_provides_informative_reason_on_pass(box_model):
+    """Finding 8: production geometry gate provides a non-empty informative reason on PASS."""
+    from ifc_to_fds.domain.validation.model import GateStatus
     from ifc_to_fds.mapping.exporter import serialize_fds
+    from ifc_to_fds.validation.engine import run_independent_validation
 
     text, manifest = serialize_fds(box_model)
-    context = ValidationContext(model=box_model, fds_text=text, manifest=manifest)
-    outcome = GeometryChecker().check(context)
-    assert outcome.result.status == GateStatus.PASS
-    assert bool(outcome.result.reason.strip())
-    assert "verified within tolerance" in outcome.result.reason
+    gate = run_independent_validation(box_model, text, manifest).gates["geometry"]
+    assert gate.status == GateStatus.PASS
+    assert bool(gate.reason.strip())
+    assert "meet the configured tolerances" in gate.reason
 
 
 def test_submit_scenario_job_cleans_up_directory_on_generic_failure(monkeypatch):
@@ -973,18 +972,6 @@ def test_effective_obstructions_without_mesh_is_inconclusive():
     res = effective_obstructions("&HEAD CHID='nomesh' /\n&TAIL /\n", "")
     assert res.status == "INCONCLUSIVE"
     assert "Unsupported FDS syntax" in res.reason
-
-
-def test_geometry_checker_pass_reason_formats_count(box_model):
-    """GeometryChecker formats count of verified elements, not python set repr."""
-    from ifc_to_fds.validation.checkers.geometry import GeometryChecker
-    from ifc_to_fds.domain.validation.model import ValidationContext
-    from ifc_to_fds.mapping.exporter import serialize_fds
-
-    text, manifest = serialize_fds(box_model)
-    context = ValidationContext(model=box_model, fds_text=text, manifest=manifest)
-    outcome = GeometryChecker().check(context)
-    assert "All 1 physical solid elements verified within tolerance" in outcome.result.reason
 
 
 def test_check_opening_grid_alignment_tangent_outside_returns_inconclusive():

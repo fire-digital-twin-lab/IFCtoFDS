@@ -291,9 +291,15 @@ class JobService:
                         error="Process terminated unexpectedly during server restart",
                         finished=now,
                     )
-                    self._terminal_diagnostic(
-                        recovered, "AbortError", "Process terminated unexpectedly during server restart"
-                    )
+                    try:
+                        self._terminal_diagnostic(
+                            recovered, "AbortError", "Process terminated unexpectedly during server restart"
+                        )
+                    except OSError:
+                        # e.g. job directory already gone: must not abort service boot.
+                        logger.exception(
+                            "Cannot write startup diagnostic for job %s; failing it without one", jid
+                        )
                     try:
                         self.repository.set_durable(jid, recovered)
                     except JobPersistenceError:
