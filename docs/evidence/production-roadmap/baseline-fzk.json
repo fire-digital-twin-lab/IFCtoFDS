@@ -130,27 +130,27 @@
   },
   "findings_by_gate": {
     "geometry": 1,
-    "geometry_preservation": 3
+    "geometry_preservation": 1
   },
   "records": 127,
   "source": "AC20-FZK-Haus.ifc",
   "stage_timings_s": {
-    "audit_s": 19.38,
-    "geometry_s": 12.05,
-    "independent_source_reread_s": 11.04,
-    "mapping_s": 0.44,
+    "audit_s": 8.18,
+    "geometry_s": 1.03,
+    "independent_source_reread_s": 4.3,
+    "mapping_s": 0.11,
     "mep_s": 0.0,
-    "package_audit_s": 1.97,
-    "package_write_s": 0.37,
+    "package_audit_s": 0.99,
+    "package_write_s": 0.18,
     "parity_s": 0.01,
-    "parse_s": 0.34,
-    "prepare_s": 12.84,
+    "parse_s": 0.25,
+    "prepare_s": 1.55,
     "scope_s": 0.0,
-    "serialize_s": 0.54,
+    "serialize_s": 0.18,
     "solver_s": 0.0,
-    "validation_s": 5.86
+    "validation_s": 2.6
   },
   "status": "REJECTED",
-  "wall_s": 32.83,
+  "wall_s": 9.96,
   "witness_kinds": {}
 }

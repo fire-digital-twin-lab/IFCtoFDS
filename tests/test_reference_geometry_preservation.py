@@ -43,3 +43,16 @@ def test_emitted_element_with_self_intersection_still_fails_preservation(tiny_if
     report, wall = _audit(tiny_ifc, tmp_path, MappingStrategy.GEOM, "PASSIVE_OBSTACLE")
     assert report.gates["geometry_preservation"].status == "FAIL"
     assert any(f.element_id == wall.entity_key for f in report.findings)
+
+
+def test_identical_reference_mesh_is_not_compared_or_scanned(tiny_ifc, tmp_path, monkeypatch):
+    """Proving a reference mesh preserved is a byte comparison; the exact scan must not run for it."""
+    from ifc_to_fds.geometry import package
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("compare_solids ran for a byte-identical reference-only mesh")
+
+    monkeypatch.setattr(package, "compare_solids", forbidden)
+    report, wall = _audit(tiny_ifc, tmp_path, MappingStrategy.NONE, "REFERENCE_GEOMETRY")
+    assert wall.geometry_preservation == "PRESERVED"
+    assert report.metrics[wall.entity_key]["preserved:solid"]["reference_only"] is True

@@ -155,7 +155,6 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
         unit_length_name=unit_name,
         unit_scale_to_meters=unit_scale,
         georeference=extract_georeference(ifc_file),
-        ifc_site_count=len(ifc_file.by_type("IfcSite")),
     )
 
     def ancestry(item):

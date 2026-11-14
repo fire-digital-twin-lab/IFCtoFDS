@@ -25,7 +25,6 @@ def _with_sites(tmp_path, n, **coords):
 def test_software_default_site_location_is_marked_unreliable(tmp_path):
     model, _ = extract_inventory(_with_sites(tmp_path, 1, **REVIT_DEFAULT))
     assert model.source.georeference["status"] == "SOFTWARE_DEFAULT_SITE_LOCATION"
-    assert model.source.ifc_site_count == 1
     other, _ = extract_inventory(_with_sites(tmp_path, 1, RefLatitude=(21, 1, 0, 0), RefLongitude=(105, 50, 0, 0)))
     assert other.source.georeference is None
 
@@ -43,3 +42,14 @@ def test_several_sites_require_an_explicit_scope(tmp_path):
         prepare_model([path], {})
     prepare_model([path], {"scope": {"storeys": ["Ground"]}})  # an explicit scope is accepted
     prepare_model([_with_sites(tmp_path, 1)], {})  # one site needs none
+
+
+def test_scope_guard_fails_before_any_geometry_is_built(tmp_path, monkeypatch):
+    from ifc_to_fds.application.services import model_preparer
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("geometry/inventory work started before the scope check")
+
+    monkeypatch.setattr(model_preparer, "load_sources", forbidden)
+    with pytest.raises(ValueError, match="IfcSite"):
+        prepare_model([_with_sites(tmp_path, 3)], {})

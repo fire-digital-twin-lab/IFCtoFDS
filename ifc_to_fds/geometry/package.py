@@ -182,7 +182,13 @@ def audit_package(model, package, report, config):
                 preserved = False
                 continue
             try:
-                metrics = compare_solids(source, [TriangleMesh.model_validate(output)])
+                saved = TriangleMesh.model_validate(output)
+                if e.mapping_strategy == MappingStrategy.NONE and mesh_digest(source) == mesh_digest(saved):
+                    # Never exported to FDS, so a source defect cannot reach the solver: preservation is a
+                    # byte comparison, and the exact self-intersection scan (costly on MEP) is not needed.
+                    report.metrics.setdefault(e.entity_key, {})[f"preserved:{label}"] = {"reference_only": True}
+                    continue
+                metrics = compare_solids(source, [saved])
                 report.metrics.setdefault(e.entity_key, {})[f"preserved:{label}"] = (
                     metrics
                 )
@@ -197,12 +203,6 @@ def audit_package(model, package, report, config):
                     report.metrics.setdefault(e.entity_key, {})[f"preserved:{label}"] = {
                         "self_intersection": exc.evidence
                     }
-                    # Not exported to FDS, so a source defect cannot reach the solver; preservation
-                    # only needs the saved mesh to be byte-identical to the re-read source.
-                    saved = TriangleMesh.model_validate(output)
-                    if e.mapping_strategy == MappingStrategy.NONE and mesh_digest(source) == mesh_digest(saved):
-                        report.metrics[e.entity_key][f"preserved:{label}"]["reference_only"] = True
-                        continue
                 fail(e.entity_key, f"Invalid saved {label}: {exc}")
                 preserved = False
             except Exception as exc:

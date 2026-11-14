@@ -1,6 +1,7 @@
 """Application service for preparing canonical models with spatial scope and mapping plan."""
 
 from time import perf_counter
+import ifcopenshell
 from typing import Any, Dict, List
 from ifc_to_fds.core.federation import load_sources
 from ifc_to_fds.domain.bim import BoundingBox, CanonicalModel
@@ -19,6 +20,16 @@ def prepare_model(
     for k in ("rebase_vector", "rebase_origin", "auto_rebase_origin"):
         if k in configuration:
             source_opts[k] = configuration[k]
+    early_scope = configuration.get("scope") or {}
+    if not (early_scope.get("storeys") or early_scope.get("bounding_box")):
+        for path in paths:  # cheap parse; checked before any geometry work
+            ifc = ifcopenshell.open(path)
+            sites, storeys = len(ifc.by_type("IfcSite")), len(ifc.by_type("IfcBuildingStorey"))
+            if sites > 1:
+                raise ValueError(
+                    f"Model has {sites} IfcSite entities and {storeys} storeys (often several merged level "
+                    "systems); select scope.storeys (CLI: --storey) or scope.bounding_box"
+                )
     model = load_sources(paths, source_opts, reference=reference)
     rebase_vec = getattr(model.source, "rebase_vector", None) or [0.0, 0.0, 0.0]
     has_rebase = any(abs(v) > 1e-6 for v in rebase_vec)
@@ -26,12 +37,6 @@ def prepare_model(
 
     scope_start = perf_counter()
     scope_raw = dict(configuration.get("scope", {}) or {})
-    sites = max((s.ifc_site_count for s in model.sources or [model.source]), default=0)
-    if sites > 1 and not (scope_raw.get("storeys") or scope_raw.get("bounding_box")):
-        raise ValueError(
-            f"Model has {sites} IfcSite entities and {len(model.storey_references)} storeys (often several "
-            "merged level systems); select scope.storeys (CLI: --storey) or scope.bounding_box"
-        )
     coord_frame = scope_raw.get("coordinate_frame") or configuration.get("coordinate_frame")
     if coord_frame not in (None, "WORLD", "REBASED"):
         raise ValueError(f"Invalid coordinate_frame: {coord_frame!r}, must be 'WORLD' or 'REBASED'")
