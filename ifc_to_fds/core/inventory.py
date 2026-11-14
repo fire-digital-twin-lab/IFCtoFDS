@@ -5,6 +5,7 @@ structures, property sets, and relationships in the source IFC model.
 """
 
 import hashlib
+import math
 import os
 from typing import Any, Dict, List, Optional, Tuple
 import ifcopenshell
@@ -94,6 +95,28 @@ def open_ifc(file_path):
     return ifcopenshell.open(file_path)
 
 
+def extract_georeference(ifc_file):
+    """Record IfcMapConversion/IfcProjectedCRS (IFC4+). The simulation frame is unchanged."""
+    if ifc_file.schema == "IFC2X3":
+        return None
+    for conversion in ifc_file.by_type("IfcMapConversion"):
+        target = conversion.TargetCRS
+        abscissa, ordinate = conversion.XAxisAbscissa, conversion.XAxisOrdinate
+        map_unit = getattr(target, "MapUnit", None)
+        return dict(
+            crs=getattr(target, "Name", None),
+            map_unit=getattr(map_unit, "Name", None) if map_unit else None,
+            eastings=conversion.Eastings,
+            northings=conversion.Northings,
+            orthogonal_height=conversion.OrthogonalHeight,
+            x_axis_abscissa=abscissa,
+            x_axis_ordinate=ordinate,
+            scale=conversion.Scale,
+            rotation_deg=math.degrees(math.atan2(ordinate or 0.0, 1.0 if abscissa is None else abscissa)),
+        )
+    return None
+
+
 @operation("IFC_READ")
 def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     if not os.path.isfile(file_path):
@@ -124,6 +147,7 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
         schema_version=schema,
         unit_length_name=unit_name,
         unit_scale_to_meters=unit_scale,
+        georeference=extract_georeference(ifc_file),
     )
 
     def ancestry(item):

@@ -22,6 +22,8 @@ class SourceMetadata(BaseModel):
         ]
     )
     rebase_vector: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
+    # IfcMapConversion as written in the source (map units, not metres). Provenance only.
+    georeference: dict[str, Any] | None = None
 
 
 class SourceIdentity(BaseModel):

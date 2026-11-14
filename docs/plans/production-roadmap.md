@@ -56,10 +56,10 @@ Mục tiêu: một kỹ sư PCCC đưa IFC tầng hầm thật vào CLI hoặc w
 **Cổng 3:** suite xanh; giảm ≈1.400 dòng; API khởi động và chạy job tiny qua `JobService` thật.
 
 ## Giai đoạn 4 — Tọa độ và đơn vị (1 tuần)
-- [ ] 4.1 Placement (`core/placement.py:33-42`, hiện gắn `CONFIRMED` chỉ cần hữu hạn): tách đoạn kiểm `RᵀR≈I`, `|det R−1|≤1e-6` ở `core/coordinate_preflight.py:64-73` (trong `_classify_local_placement`) thành helper nhận ma trận 3×3, dùng chung cho cả preflight và `extract_placement` (kể cả ma trận MappedItem `:54-57`); IfcAxis2Placement3D không trực giao → trực chuẩn Gram–Schmidt theo chuẩn IFC (giữ Z, chiếu RefDirection) và so bbox với `create_shape`; lệch → `UNVERIFIED` + finding. Test: `RefDirection=(1,0,1)` (case báo cáo).
-- [ ] 4.2 Đơn vị: `core/units.py` kiểm kiểu unit (`IfcSIUnit`, `IfcConversionBasedUnit` có chuỗi về SI; `IfcContextDependentUnit` → từ chối). Test fixture `CUSTOM_LENGTH` → exit 3.
-- [ ] 4.3 `rebase_model_to_origin` (`core/federation.py:176-286`) dịch thêm `storey_references[].elevation_m` (đang bỏ sót; ảnh hưởng chọn tầng ở `mapping/scope.py:43-73`) và mọi tọa độ phụ (vent_xb, scope bbox) theo cùng một vector; kích hoạt auto-rebase cả theo Z. Test probe `rebase_vector=[1001,0,3]`.
-- [ ] 4.4 Ghi `IfcMapConversion`/CRS vào provenance (chỉ ghi nhận, không đổi frame mô phỏng).
+- [x] 4.1 Placement (`core/placement.py:33-42`, hiện gắn `CONFIRMED` chỉ cần hữu hạn): tách đoạn kiểm `RᵀR≈I`, `|det R−1|≤1e-6` ở `core/coordinate_preflight.py:64-73` (trong `_classify_local_placement`) thành helper nhận ma trận 3×3, dùng chung cho cả preflight và `extract_placement` (kể cả ma trận MappedItem `:54-57`); IfcAxis2Placement3D không trực giao → trực chuẩn Gram–Schmidt theo chuẩn IFC (giữ Z, chiếu RefDirection) và so bbox với `create_shape`; lệch → `UNVERIFIED` + finding. Test: `RefDirection=(1,0,1)` (case báo cáo).
+- [x] 4.2 Đơn vị: `core/units.py` kiểm kiểu unit (`IfcSIUnit`, `IfcConversionBasedUnit` có chuỗi về SI; `IfcContextDependentUnit` → từ chối). Test fixture `CUSTOM_LENGTH` → exit 3.
+- [x] 4.3 `rebase_model_to_origin` (`core/federation.py:176-286`) dịch thêm `storey_references[].elevation_m` (đang bỏ sót; ảnh hưởng chọn tầng ở `mapping/scope.py:43-73`) và mọi tọa độ phụ (vent_xb, scope bbox) theo cùng một vector; kích hoạt auto-rebase cả theo Z. Test probe `rebase_vector=[1001,0,3]`.
+- [x] 4.4 Ghi `IfcMapConversion`/CRS vào provenance (chỉ ghi nhận, không đổi frame mô phỏng).
 **Cổng 4:** tầng hầm thật: placement không còn `CONFIRMED` sai; storey/mesh cùng frame; báo cáo provenance có CRS.
 
 ## Giai đoạn 5 — Tô-pô nguồn và lỗ mở cho IFC thật (1,5–2 tuần) — chìa khóa để hết "REJECTED oan"
