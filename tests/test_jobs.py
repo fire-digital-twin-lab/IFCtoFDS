@@ -33,7 +33,7 @@ def test_running_worker_is_killed(tmp_path, monkeypatch, action):
             stderr=subprocess.DEVNULL,
         )
 
-    monkeypatch.setattr("ifc_to_fds.jobs.subprocess.Popen", sleeping_worker)
+    monkeypatch.setattr("ifc_to_fds.adapters.jobs.service.subprocess.Popen", sleeping_worker)
     manager = JobManager(root=tmp_path, timeout_s=0.25 if action == "timeout" else 30)
     directory = tmp_path / "job"
     directory.mkdir()
@@ -79,7 +79,7 @@ def test_worker_environment_strips_api_key(tmp_path, monkeypatch):
         )
 
     monkeypatch.setenv("IFCFDS_API_KEY", "super_secret_test_key_123")
-    monkeypatch.setattr("ifc_to_fds.jobs.subprocess.Popen", mock_popen)
+    monkeypatch.setattr("ifc_to_fds.adapters.jobs.service.subprocess.Popen", mock_popen)
     manager = JobManager(root=tmp_path)
     directory = tmp_path / "job_key_test"
     directory.mkdir()

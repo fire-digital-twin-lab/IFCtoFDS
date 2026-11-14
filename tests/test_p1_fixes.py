@@ -34,7 +34,7 @@ from ifc_to_fds.geometry.normalization import (
     normalize_element_geometry,
     normalize_source_mesh,
 )
-from ifc_to_fds.server.job_repository import JobRepository
+from ifc_to_fds.adapters.jobs.repository import JobRepository
 
 
 def _make_source_metadata(source_id="src1", filename="test.ifc"):
@@ -286,7 +286,7 @@ def test_normalize_element_geometry_with_canonical_element():
 
 
 def test_sqlite_wal_pragmas_on_every_connection(tmp_path):
-    """WP-P1-03: SQLite WAL, busy_timeout=10000, and synchronous=NORMAL configured."""
+    """WP-P1-03: SQLite WAL, busy_timeout >= 10 s, and synchronous per IFCFDS_ENV configured."""
     repo = JobRepository(root=tmp_path)
     with repo._get_connection() as conn:
         journal_mode = conn.execute("PRAGMA journal_mode;").fetchone()[0].upper()
@@ -294,13 +294,16 @@ def test_sqlite_wal_pragmas_on_every_connection(tmp_path):
         sync_mode = conn.execute("PRAGMA synchronous;").fetchone()[0]
 
         assert journal_mode == "WAL"
-        assert busy_timeout == 10000
-        # SQLite returns synchronous as integer 1 or string 'NORMAL'
+        # Real repository connects with timeout=30 s (stronger than the removed copy's 10 s).
+        assert busy_timeout >= 10000
+        # NORMAL (1) in local/test; FULL (2) is covered by tests/test_sqlite_production_sync.py.
         assert sync_mode in (1, "NORMAL")
 
 
 def test_reconcile_orphaned_jobs_recovers_crashed_workers(tmp_path):
-    """WP-P1-03: Startup reconciliation transitions stuck RUNNING jobs to FAILED with diagnostics."""
+    """Startup reconciliation (real JobService path): crashed RUNNING job -> FAILED with diagnostics."""
+    from ifc_to_fds.adapters.jobs.service import JobService
+
     repo = JobRepository(root=tmp_path)
 
     # 1. Seed simulated stuck RUNNING job (worker crashed abruptly)
@@ -331,30 +334,32 @@ def test_reconcile_orphaned_jobs_recovers_crashed_workers(tmp_path):
         "mode": "convert",
     })
 
-    # 3. Perform startup reconciliation
-    reconciled = repo.reconcile_orphaned_jobs()
-    assert "job-orphaned-1" in reconciled
-    assert "job-completed" not in reconciled
-
-    # Check in-memory status
-    reconciled_job = repo.get("job-orphaned-1")
-    assert reconciled_job is not None
-    assert reconciled_job["state"] == "FAILED"
-    assert "Worker process restarted while job was in progress" in reconciled_job["error"]
+    # 3. Boot the real service on the same root: this runs _reconcile_startup_jobs
+    service = JobService(root=tmp_path)
+    try:
+        reconciled_job = service.repository.get("job-orphaned-1")
+        assert reconciled_job is not None
+        assert reconciled_job["state"] == "FAILED"
+        assert "terminated unexpectedly" in reconciled_job["error"]
+        assert service.repository.get("job-completed")["state"] == "COMPLETED"
+    finally:
+        service.close()
 
     # Check diagnostic file creation on disk
     diag_file = job1_dir / "diagnostics.json"
     assert diag_file.is_file()
     diag_data = json.loads(diag_file.read_text(encoding="utf-8"))
-    assert diag_data["error_type"] == "AbortError"
-    assert "Worker process restarted while job was in progress" in diag_data["message"]
+    assert diag_data["name"] == "AbortError"
+    assert diag_data["jobId"] == "job-orphaned-1"
+    assert diag_data["stage"] == "GEOMETRY_EXTRACTION"
+    assert "terminated unexpectedly" in diag_data["message"]
 
     # 4. Verify SQLite WAL persistence: simulate new server instance booting on the same DB
     repo_restarted = JobRepository(root=tmp_path)
     persisted_job = repo_restarted.get("job-orphaned-1")
     assert persisted_job is not None
     assert persisted_job["state"] == "FAILED"
-    assert "Worker process restarted while job was in progress" in persisted_job["error"]
+    assert "terminated unexpectedly" in persisted_job["error"]
 
     completed_job = repo_restarted.get("job-completed")
     assert completed_job is not None

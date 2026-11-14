@@ -16,6 +16,7 @@ from ifcopenshell.util.placement import get_local_placement
 import numpy as np
 
 from .inventory import compute_file_sha256
+from .placement import is_rigid_rotation
 from .source_dossier import write_source_dossier
 from .units import get_length_unit_scale
 
@@ -61,15 +62,7 @@ def _classify_local_placement(placement: Any, scale: float) -> tuple[str, float 
     if not np.allclose(matrix[3], [0.0, 0.0, 0.0, 1.0], rtol=0.0, atol=1e-10):
         return "NON_RIGID", None
 
-    rotation = matrix[:3, :3]
-    determinant = float(np.linalg.det(rotation))
-    if (
-        not math.isfinite(determinant)
-        or abs(determinant - 1.0) > 1e-6
-        or not np.allclose(
-            rotation.T @ rotation, np.eye(3), rtol=0.0, atol=1e-6
-        )
-    ):
+    if not is_rigid_rotation(matrix[:3, :3]):
         return "NON_RIGID", None
     # IfcOpenShell placement có translation ở đơn vị IFC; đổi sang mét đúng
     # một lần. Không đổi scale lên basis rotation và không áp rebase lần hai.

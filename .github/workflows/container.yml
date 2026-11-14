@@ -241,6 +241,13 @@ jobs:
             --base-url https://ifctofds.example.org \
             --api-key-file "$IFCFDS_SMOKE_API_KEY_FILE"
 
+      - name: Verify a 2 x 150 MiB upload is accepted (TMPDIR on the jobs volume, not the 256 MiB /tmp)
+        env:
+          SSL_CERT_FILE: /tmp/ifctofds-tls/fullchain.pem
+          NO_PROXY: ifctofds.example.org
+        run: |
+          python scripts/production-upload-smoke.py             --base-url https://ifctofds.example.org             --api-key-file "$IFCFDS_SMOKE_API_KEY_FILE"
+
       - name: Verify real IFC conversion and persisted artifacts through HTTPS
         shell: bash
         env:
@@ -385,3 +392,20 @@ jobs:
       - name: Stop test stack
         if: always()
         run: docker compose -f compose.production.yml down --volumes --remove-orphans || true
+
+  solver-image:
+    # Plan M5.4: the `solver` Dockerfile target adds a hash-pinned FDS 6.11.1; check it under the production profile.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the solver image (installer and binary hashes are checked during the build)
+        run: docker build --pull --target solver --tag ifctofds:solver .
+
+      - name: FDS sets up and its SMV is read, read-only root and all capabilities dropped
+        run: |
+          docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 512 \
+          --tmpfs /tmp:rw,nosuid,nodev,noexec,size=268435456 \
+          --tmpfs /work:rw,nosuid,nodev,uid=10001,gid=10001,size=67108864 \
+          -v "$PWD/scripts:/probe:ro" ifctofds:solver python /probe/container-solver-probe.py /work

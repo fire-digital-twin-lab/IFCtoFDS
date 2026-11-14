@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 import sys
 from typing import Any
@@ -48,6 +49,7 @@ def main(argv=None):
     p.add_argument("--profile", choices=["mapping", "research-basement", "simulation", "geometry-fidelity"])
     p.add_argument("--reference-case")
     p.add_argument("--decisions", help="Explicit entity decisions JSON")
+    p.add_argument("--accepted-source-defects", help="Reviewed source defects JSON (entity key -> mesh_sha256, defect, review)")
     p.add_argument("--intentional-deltas", help="Approved delta JSON")
     p.add_argument("--domain", nargs=6, type=float)
     p.add_argument("--coordinate-frame", choices=["WORLD", "REBASED"], default=None, help="Coordinate frame for domain/bbox")
@@ -145,6 +147,18 @@ def main(argv=None):
             if args.allowed_hosts:
                 os.environ["IFCFDS_ALLOWED_HOSTS"] = args.allowed_hosts
 
+            upload_tmp = os.getenv("TMPDIR")
+            if upload_tmp:
+                # Starlette spools large multipart parts to TMPDIR. The compose /tmp is a small tmpfs, so the
+                # operator points TMPDIR at the jobs volume; fail closed rather than silently fall back to /tmp.
+                spool = Path(upload_tmp)
+                try:
+                    if spool.name == ".upload-tmp" and spool.is_dir():
+                        shutil.rmtree(spool)  # leftovers of an interrupted upload; we own this directory
+                    spool.mkdir(parents=True, exist_ok=True)
+                except OSError as exc:
+                    sys.stderr.write(f"Cannot prepare TMPDIR {spool}: {exc}\n")
+                    return 1
             uvicorn.run("ifc_to_fds.server:app", host=args.host, port=args.port)
             return 0
         if args.command == "reference-check":
@@ -238,7 +252,7 @@ def main(argv=None):
         for name in ("profile", "reference_case"):
             if getattr(args, name, None):
                 config[name] = getattr(args, name)
-        for name in ("decisions", "intentional_deltas"):
+        for name in ("decisions", "intentional_deltas", "accepted_source_defects"):
             if getattr(args, name, None):
                 config[name] = json.loads(
                     Path(getattr(args, name)).read_text(encoding="utf-8")
@@ -293,9 +307,11 @@ def main(argv=None):
             bbox_dict: dict[str, Any] = dict(
                 zip(("xmin", "xmax", "ymin", "ymax", "zmin", "zmax"), args.bbox)
             )
+            scope = config.setdefault("scope", {})
+            scope["bounding_box"] = bbox_dict
+            # model_preparer reads scope.coordinate_frame, not a key inside the box.
             if getattr(args, "coordinate_frame", None):
-                bbox_dict["coordinate_frame"] = args.coordinate_frame
-            config.setdefault("scope", {})["bounding_box"] = bbox_dict
+                scope["coordinate_frame"] = args.coordinate_frame
         if args.common_coordinates:
             config.setdefault("sources", {})["common_coordinates"] = True
         if args.solver:

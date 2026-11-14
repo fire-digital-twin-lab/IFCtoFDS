@@ -36,7 +36,7 @@ class JobRepository:
         self._db_path: Optional[Path] = Path(root) / "jobs.sqlite3" if root else None
         if self._db_path:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._init_db()
+            self._init_db_when_unlocked()
             self._load_from_db()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -46,6 +46,21 @@ class JobRepository:
         conn.row_factory = sqlite3.Row
         conn.execute(f"PRAGMA synchronous={_synchronous_mode()};")
         return conn
+
+    def _init_db_when_unlocked(self, wait_s: float = 60.0) -> None:
+        """Several processes (server, workers) may create the same new database at once.
+
+        SQLite fails the journal-mode switch with 'database is locked' without honouring the
+        busy timeout, so wait and retry; any other error is raised at once.
+        """
+        deadline = time.monotonic() + wait_s  # a time budget: each try may itself wait the 30 s busy timeout
+        while True:
+            try:
+                return self._init_db()
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc).lower() or time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.5)
 
     def _init_db(self) -> None:
         if not self._db_path:

@@ -5,10 +5,10 @@ Designed by Challenger 2 to empirically test:
    - High-concurrency thread stress (20 threads, heavy interleaved set/get/snapshot/delete).
    - Multi-process concurrency: multiple distinct OS processes accessing the same SQLite WAL database concurrently.
    - SQLite PRAGMA integrity check and transaction consistency under high load.
-2. Crash Recovery & Orphaned Job Reconciliation:
+2. Crash Recovery & Orphaned Job Reconciliation (real JobService startup path):
    - Abrupt worker termination simulation with partial artifacts (partial progress.json, temp files).
-   - Missing job directories, pre-existing diagnostics, None started timestamps, timeout_seconds thresholding.
-   - Non-running jobs (QUEUED, COMPLETED) remain untouched.
+   - Missing job directories, pre-existing diagnostics, None started timestamps.
+   - Terminal jobs (COMPLETED) remain untouched; interrupted QUEUED/RUNNING jobs become FAILED.
    - Persistence verification across fresh JobRepository instances.
    - Snapshot URL verification for generated diagnostics artifacts.
 """
@@ -25,7 +25,7 @@ import time
 from typing import List, Optional, Tuple
 import pytest
 
-from ifc_to_fds.server.job_repository import JobRepository
+from ifc_to_fds.adapters.jobs.repository import JobRepository
 
 
 # ---------------------------------------------------------------------------
@@ -212,15 +212,16 @@ def test_sqlite_high_thread_contention(tmp_path):
 
 
 def test_crash_recovery_matrix_and_diagnostics(tmp_path):
-    """Exhaustive test for reconcile_orphaned_jobs covering all edge cases:
-    - Case 1: Standard RUNNING job with partial progress.json artifact -> Transitions to FAILED, diagnostics created.
-    - Case 2: RUNNING job with existing diagnostics.json -> Transitions to FAILED, diagnostics NOT overwritten.
-    - Case 3: RUNNING job with missing directory -> Handled gracefully without crash, state updated to FAILED.
-    - Case 4: RUNNING job with started=None -> Handled cleanly without crash, transitioned to FAILED.
-    - Case 5: RUNNING job within timeout_seconds -> Ignored (retains RUNNING).
-    - Case 6: RUNNING job past timeout_seconds -> Transitions to FAILED.
-    - Case 7: QUEUED and COMPLETED jobs -> Untouched.
+    """Exhaustive test of JobService startup reconciliation (the real recovery path):
+    - Case 1: RUNNING job with partial progress.json -> FAILED, diagnostics created with the stage.
+    - Case 2: RUNNING job with existing diagnostics.json -> FAILED, diagnostics NOT overwritten.
+    - Case 3: RUNNING job with missing directory -> boot must not crash, state becomes FAILED.
+    - Case 4: RUNNING job with started=None -> FAILED.
+    - Case 5: QUEUED job -> FAILED (interrupted before running).
+    - Case 6: COMPLETED job -> untouched.
     """
+    from ifc_to_fds.adapters.jobs.service import JobService
+
     repo = JobRepository(root=tmp_path)
     now = time.time()
 
@@ -269,37 +270,17 @@ def test_crash_recovery_matrix_and_diagnostics(tmp_path):
         "started": None,
     })
 
-    # Case 5: Job started 10s ago, within timeout_seconds=60
-    c5_dir = tmp_path / "active-recent"
+    # Case 5: QUEUED job interrupted by the restart
+    c5_dir = tmp_path / "queued-job"
     c5_dir.mkdir(parents=True, exist_ok=True)
-    repo.set("active-recent", {
-        "id": "active-recent",
-        "state": "RUNNING",
-        "directory": str(c5_dir),
-        "created": now - 15,
-        "started": now - 10,
-    })
-
-    # Case 6: Job started 120s ago, past timeout_seconds=60
-    c6_dir = tmp_path / "crashed-timeout"
-    c6_dir.mkdir(parents=True, exist_ok=True)
-    repo.set("crashed-timeout", {
-        "id": "crashed-timeout",
-        "state": "RUNNING",
-        "directory": str(c6_dir),
-        "created": now - 130,
-        "started": now - 120,
-    })
-
-    # Case 7a: QUEUED job (must not be modified)
     repo.set("queued-job", {
         "id": "queued-job",
         "state": "QUEUED",
-        "directory": str(tmp_path / "queued"),
+        "directory": str(c5_dir),
         "created": now - 10,
     })
 
-    # Case 7b: COMPLETED job (must not be modified)
+    # Case 6: COMPLETED job (must not be modified)
     repo.set("completed-job", {
         "id": "completed-job",
         "state": "COMPLETED",
@@ -308,43 +289,39 @@ def test_crash_recovery_matrix_and_diagnostics(tmp_path):
         "finished": now - 50,
     })
 
-    # Execute reconciliation with timeout_seconds=60
-    reconciled = repo.reconcile_orphaned_jobs(timeout_seconds=60.0)
+    service = JobService(root=tmp_path)
+    try:
+        reconciled = {"crashed-1", "crashed-2", "crashed-3-no-dir", "crashed-4-no-started", "queued-job"}
+        for jid in reconciled:
+            job = service.repository.get(jid)
+            assert job["state"] == "FAILED", jid
+            assert "terminated unexpectedly" in job["error"], jid
+            assert job["finished"] is not None, jid
+        assert service.repository.get("completed-job")["state"] == "COMPLETED"
 
-    # Expected reconciled: crashed-1, crashed-2, crashed-3-no-dir, crashed-4-no-started, crashed-timeout
-    expected_reconciled = {"crashed-1", "crashed-2", "crashed-3-no-dir", "crashed-4-no-started", "crashed-timeout"}
-    assert set(reconciled) == expected_reconciled
-
-    # Verify active-recent remains RUNNING
-    assert repo.get("active-recent")["state"] == "RUNNING"
-
-    # Verify queued-job and completed-job untouched
-    assert repo.get("queued-job")["state"] == "QUEUED"
-    assert repo.get("completed-job")["state"] == "COMPLETED"
+        # Verify snapshot exposes diagnostics_url for reconciled job with diagnostics
+        snap1 = service.repository.snapshot("crashed-1")
+        assert snap1.get("diagnostics_url") == "/api/jobs/crashed-1/diagnostics"
+    finally:
+        service.close()
 
     # Verify Case 1 diagnostics file created
     diag1 = json.loads((c1_dir / "diagnostics.json").read_text(encoding="utf-8"))
-    assert diag1["job_id"] == "crashed-1"
-    assert diag1["error_type"] == "AbortError"
-    assert "Worker process restarted while job was in progress" in diag1["message"]
+    assert diag1["jobId"] == "crashed-1"
+    assert diag1["name"] == "AbortError"
+    assert diag1["stage"] == "GEOM_TESSELLATION"
+    assert "terminated unexpectedly" in diag1["message"]
 
     # Verify Case 2 diagnostics was NOT overwritten
     diag2 = json.loads((c2_dir / "diagnostics.json").read_text(encoding="utf-8"))
     assert diag2["error_type"] == "CustomPreExistingError"
 
-    # Verify snapshot exposes diagnostics_url for reconciled job with diagnostics
-    snap1 = repo.snapshot("crashed-1")
-    assert snap1.get("diagnostics_url") == "/api/jobs/crashed-1/diagnostics"
-
     # Verify persistence across restart
     restarted_repo = JobRepository(root=tmp_path)
-    for jid in expected_reconciled:
+    for jid in reconciled:
         persisted = restarted_repo.get(jid)
-        assert persisted["state"] == "FAILED"
-        assert "Worker process restarted while job was in progress" in persisted["error"]
-
-    assert restarted_repo.get("active-recent")["state"] == "RUNNING"
-    assert restarted_repo.get("queued-job")["state"] == "QUEUED"
+        assert persisted["state"] == "FAILED", jid
+        assert "terminated unexpectedly" in persisted["error"], jid
     assert restarted_repo.get("completed-job")["state"] == "COMPLETED"
 
 
@@ -352,7 +329,7 @@ def test_real_subprocess_killed_worker_crash_recovery(tmp_path):
     """Live process kill test:
     Launch an external child process that writes partial artifacts and updates status to RUNNING.
     Forcefully kill the child process (SIGKILL / terminate).
-    Verify that reconcile_orphaned_jobs detects the orphaned job, marks it FAILED,
+    Verify that JobService startup reconciliation detects the orphaned job, marks it FAILED,
     creates diagnostics.json, and persists correctly across server restarts.
     """
     repo = JobRepository(root=tmp_path)
@@ -410,24 +387,28 @@ while True:
         if proc.poll() is None:
             proc.kill()
 
-    # Now simulate server reboot / recovery run
-    recovered_ids = repo.reconcile_orphaned_jobs()
-    assert jid in recovered_ids
+    # Now simulate server reboot / recovery run on the real service path
+    from ifc_to_fds.adapters.jobs.service import JobService
 
-    # Verify job status and diagnostic output
-    job = repo.get(jid)
-    assert job["state"] == "FAILED"
-    assert "Worker process restarted while job was in progress" in job["error"]
+    service = JobService(root=tmp_path)
+    try:
+        # Verify job status and diagnostic output
+        job = service.repository.get(jid)
+        assert job["state"] == "FAILED"
+        assert "terminated unexpectedly" in job["error"]
+    finally:
+        service.close()
 
     diag_file = jdir / "diagnostics.json"
     assert diag_file.is_file()
     diag = json.loads(diag_file.read_text(encoding="utf-8"))
-    assert diag["job_id"] == jid
-    assert diag["error_type"] == "AbortError"
+    assert diag["jobId"] == jid
+    assert diag["name"] == "AbortError"
+    assert diag["stage"] == "GEOM_SLICING"
 
     # Verify durability across fresh repository instance
     rebooted = JobRepository(root=tmp_path)
     rebooted_job = rebooted.get(jid)
     assert rebooted_job["state"] == "FAILED"
-    assert "Worker process restarted while job was in progress" in rebooted_job["error"]
+    assert "terminated unexpectedly" in rebooted_job["error"]
 

@@ -34,10 +34,14 @@ class DuctSpec(BaseModel):
     length_m: float | None = Field(None, gt=0)
     roughness_m: float = Field(0.0, ge=0)
     volume_flow_m3_s: float | None = None
+    # Reviewed dimensionless loss coefficients (forward, reverse) referred to this section's dynamic pressure.
+    loss: tuple[float, float] | None = None
     endpoints: dict[str, EndpointSpec] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_section(self):
+        if self.loss is not None and any(k < 0 for k in self.loss):
+            raise ValueError("HVAC loss coefficients must be nonnegative")
         if self.diameter_m is not None:
             if self.area_m2 is not None or self.perimeter_m is not None:
                 raise ValueError("Specify diameter OR area and perimeter")

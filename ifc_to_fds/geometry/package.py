@@ -1,7 +1,7 @@
 """Portable, checksummed geometry evidence. Audit never trusts exporter memory."""
 
 from ifc_to_fds.core.canonical import SCHEMA_VERSION, TriangleMesh, MappingStrategy
-from ifc_to_fds.geometry.mesh import valid_solid
+from ifc_to_fds.geometry.mesh import mesh_digest, valid_solid
 from ifc_to_fds.validation.metrics import compare_solids
 from ifc_to_fds.validation.acceptance import GateResult, GateStatus, Finding, Severity
 from .package_integrity import digest as digest, seal, verify_package_metadata
@@ -182,7 +182,13 @@ def audit_package(model, package, report, config):
                 preserved = False
                 continue
             try:
-                metrics = compare_solids(source, [TriangleMesh.model_validate(output)])
+                saved = TriangleMesh.model_validate(output)
+                if e.mapping_strategy == MappingStrategy.NONE and mesh_digest(source) == mesh_digest(saved):
+                    # Never exported to FDS, so a source defect cannot reach the solver: preservation is a
+                    # byte comparison, and the exact self-intersection scan (costly on MEP) is not needed.
+                    report.metrics.setdefault(e.entity_key, {})[f"preserved:{label}"] = {"reference_only": True}
+                    continue
+                metrics = compare_solids(source, [saved])
                 report.metrics.setdefault(e.entity_key, {})[f"preserved:{label}"] = (
                     metrics
                 )

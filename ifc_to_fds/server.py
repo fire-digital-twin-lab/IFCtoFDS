@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import shutil
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query, Body
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from .jobs import JobManager

@@ -27,6 +27,7 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
         "profile",
         "reference_case",
         "decisions",
+        "accepted_source_defects",
         "system_decisions",
         "intentional_deltas",
         "geometry_package_sha256",
@@ -55,6 +56,8 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
         config["reference_case"], str
     ):
         raise ValueError("reference_case must be a case directory or registered ID")
+    if "accepted_source_defects" in config:
+        _validate_accepted_source_defects(config["accepted_source_defects"])
     if config.get("simulation_domain") is not None:
         BoundingBox.model_validate(config["simulation_domain"])
     from ifc_to_fds.mapping.boundary import POLICY, EXACT_POLICY
@@ -106,3 +109,26 @@ def validate_configuration(value: Any) -> Dict[str, Any]:
         ):
             raise ValueError("rebase_vector must be [x,y,z] finite numbers")
     return config
+
+
+_DEFECT_KINDS = {"COPLANAR_FACE_OVERLAP", "TRIANGLE_CROSSING", "COMPONENT_VOLUME_OVERLAP"}
+_REVIEW_FIELDS = ("policy_version", "reviewer", "rationale", "evidence")
+
+
+def _validate_accepted_source_defects(value):
+    """entity_key -> reviewed acceptance of one defect on one exact mesh."""
+    def bad(why):
+        raise ValueError(f"accepted_source_defects: {why}")
+
+    if not isinstance(value, dict):
+        bad("must map entity keys to acceptances")
+    for key, item in value.items():
+        if not isinstance(item, dict) or set(item) != {"mesh_sha256", "defect", *_REVIEW_FIELDS}:
+            bad(f"{key}: requires exactly mesh_sha256, defect, " + ", ".join(_REVIEW_FIELDS))
+        digest = item["mesh_sha256"]
+        if not (isinstance(digest, str) and len(digest) == 64 and all(c in "0123456789abcdef" for c in digest)):
+            bad(f"{key}: mesh_sha256 must be 64 lowercase hex characters")
+        if item["defect"] not in _DEFECT_KINDS:
+            bad(f"{key}: defect must be one of {sorted(_DEFECT_KINDS)}")
+        if not all(isinstance(item[f], str) and item[f].strip() for f in _REVIEW_FIELDS):
+            bad(f"{key}: review fields must be non-empty text")

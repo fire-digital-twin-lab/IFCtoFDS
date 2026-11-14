@@ -5,10 +5,15 @@ import trimesh
 from ifc_to_fds.geometry.boolean import solid_boolean
 from ifc_to_fds.geometry.mesh import (
     as_trimesh,
+    mesh_digest,
+    mesh_volume,
     valid_solid,
     is_axis_aligned_box,
     self_intersection_evidence,
 )
+
+
+PLANE_TOLERANCE = 1e-9
 
 
 class SelfIntersectionError(ValueError):
@@ -65,14 +70,27 @@ def same_surface_partition(a, b):
     for key in left:
         pieces = left[key] + right[key]
         _, normal, distance, axis = pieces[0]
-        if any(not np.array_equal(n, normal) or d != distance for _, n, d, _ in pieces):
+        # The same plane written by two triangulations differs by float noise, never by more than
+        # PLANE_TOLERANCE (a nanometre); a real shift is far larger and is rejected here.
+        if any(not np.allclose(n, normal, rtol=0, atol=PLANE_TOLERANCE) or abs(d - distance) > PLANE_TOLERANCE
+               for _, n, d, _ in pieces):
             return False
         axes = [i for i in range(3) if i != axis]
         one = unary_union([Polygon(t[:, axes]) for t, _, _, _ in left[key]])
         two = unary_union([Polygon(t[:, axes]) for t, _, _, _ in right[key]])
-        if not one.equals(two):
+        if one.symmetric_difference(two).area > PLANE_TOLERANCE * max(1.0, one.length):
             return False
     return True
+
+
+def is_exact_match(m):
+    """True when a `compare_solids` result proves the two solids equal (no tolerance beyond float noise)."""
+    return bool(
+        m["surface_proven"]
+        and m["solid_iou"] > 1 - 1e-9
+        and m["relative_volume_error"] < 1e-9
+        and m["reference_components"] == m["output_components"]
+    )
 
 
 def compare_solids(reference, outputs):
@@ -114,7 +132,7 @@ def compare_solids(reference, outputs):
             comparison_method="EXACT_ORIENTED_TRIANGLES",
         )
     intersection = solid_boolean([a, b], "intersection")
-    vi = max(0.0, float(intersection.volume))
+    vi = max(0.0, mesh_volume(intersection))
     union = float(a.volume + b.volume - vi)
     # Corresponding triangles give a direct bound over entire surfaces. For
     # different triangulations sampled distance detects defects but cannot prove PASS.
@@ -167,7 +185,7 @@ def opening_residual(hosts, opening):
             raise ValueError("Invalid host solid")
         residual += max(
             0.0,
-            float(solid_boolean([as_trimesh(host), void], "intersection").volume),
+            mesh_volume(solid_boolean([as_trimesh(host), void], "intersection")),
         )
     return residual / max(float(void.volume), 1e-12)
 
@@ -219,14 +237,52 @@ class SolidCandidateIndex:
         ]
 
 
+def _same_meshes(left, right):
+    """True when both obstacle lists hold the same byte-identical meshes, in any order."""
+    if left is right:
+        return True
+    if len(left) != len(right):
+        return False
+    return sorted(map(mesh_digest, left)) == sorted(map(mesh_digest, right)) and None not in map(mesh_digest, left)
+
+
+def _proven_same_obstacles(left, right):
+    """Exact proof that two obstacle lists occupy the same space, in any order.
+
+    Each obstacle must pair with one on the other side having identical bounds and
+    either identical bytes, both being exact axis-aligned boxes, or an exactly equal
+    planar surface partition. Without such a proof, Booleans measure the difference.
+    """
+    if _same_meshes(left, right):
+        return True
+    if len(left) != len(right):
+        return False
+    remaining = [(m, as_trimesh(m)) for m in right]
+    for a in left:
+        ta = as_trimesh(a)
+        for k, (b, tb) in enumerate(remaining):
+            if np.array_equal(ta.bounds, tb.bounds) and (
+                (is_axis_aligned_box(a, tolerance=0.0) and is_axis_aligned_box(b, tolerance=0.0))
+                or same_surface_partition(ta, tb)
+            ):
+                remaining.pop(k)
+                break
+        else:
+            return False
+    return True
+
+
 def passage_metrics(reference_meshes, output_meshes, opening):
     """Compare entire free volumes, including source door/window fills and blockers."""
     void = as_trimesh(opening)
 
+    def obstacles(meshes):
+        if isinstance(meshes, SolidCandidateIndex):
+            return meshes.candidates(void.bounds)
+        return list(meshes)
+
     def free_volume(meshes):
         pieces = []
-        if isinstance(meshes, SolidCandidateIndex):
-            meshes = meshes.candidates(void.bounds)
         for mesh in meshes:
             tm = as_trimesh(mesh)
             if np.any(tm.bounds[1] <= void.bounds[0]) or np.any(
@@ -236,17 +292,30 @@ def passage_metrics(reference_meshes, output_meshes, opening):
             if not valid_solid(mesh):
                 raise ValueError("Invalid obstacle near source opening")
             intersection = solid_boolean([void, tm], "intersection")
-            if intersection.volume > 1e-12:
+            if mesh_volume(intersection) > 1e-12:
                 pieces.append(intersection)
         if not pieces:
             return void
         return solid_boolean([void, *pieces], "difference")
 
-    a, b = free_volume(reference_meshes), free_volume(output_meshes)
+    reference, output = obstacles(reference_meshes), obstacles(output_meshes)
+    a = free_volume(reference)
+    if _proven_same_obstacles(reference, output):
+        # Proven-equal obstacles leave the same passage. The Boolean A∩A is not exact
+        # for coincident faces (it lost 1.8-5.4% volume on FZK-Haus), so skip it.
+        components = len(a.split()) if len(a.faces) else 0
+        return dict(
+            source_free_volume_m3=float(a.volume),
+            output_free_volume_m3=float(a.volume),
+            normalized_symmetric_difference=0.0,
+            source_free_components=components,
+            output_free_components=components,
+        )
+    b = free_volume(output)
     intersection = (
         solid_boolean([a, b], "intersection") if len(a.faces) and len(b.faces) else None
     )
-    overlap = float(intersection.volume) if intersection is not None else 0.0
+    overlap = mesh_volume(intersection) if intersection is not None else 0.0
     return dict(
         source_free_volume_m3=float(a.volume),
         output_free_volume_m3=float(b.volume),

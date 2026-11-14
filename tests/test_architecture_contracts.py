@@ -1,8 +1,13 @@
 """Automated architecture tests verifying Hexagonal Architecture contracts."""
 
 import ast
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import List, Set
+
+import pytest
 
 ROOT_DIR = Path(__file__).parent.parent / "ifc_to_fds"
 
@@ -126,7 +131,6 @@ def test_container_and_skeleton_structure_exists():
     assert container.config is not None
     assert container.get_artifact_repository() is not None
     assert container.get_reference_repository() is not None
-    assert container.get_validation_runner() is not None
     assert container.get_save_artifacts_use_case() is not None
     assert container.get_audit_conversion_use_case() is not None
     assert container.get_convert_verified_use_case() is not None
@@ -154,53 +158,6 @@ def test_mapping_plan_decouples_mapping_from_serialization(box_model):
     # Plans describe intent; emitted IDs belong to the serialization result.
     assert decision.fds_primitive_ids == []
     assert len(elem.fds_primitive_ids) > 0
-
-
-def test_validation_evaluator_produces_immutable_report(box_model):
-    """AcceptanceEvaluator constructs an AcceptanceReport with unexecuted gates defaulting to NOT_RUN."""
-    from ifc_to_fds.domain.validation.evaluator import AcceptanceEvaluator
-    from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
-    from ifc_to_fds.domain.validation.model import (
-        ValidationContext,
-        GateResult,
-        GateStatus,
-        Finding,
-        Severity,
-        AuditConfig,
-    )
-
-    context = ValidationContext(
-        model=box_model,
-        fds_text="&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n&OBST XB=0,2,0,1,0,3 /",
-        manifest=None,
-        config=AuditConfig(),
-    )
-    outcome = CheckerOutcome(
-        gate_name="geometry",
-        result=GateResult(status=GateStatus.PASS, reason="All solids verified"),
-        findings=[
-            Finding(
-                id="FND-0001",
-                severity=Severity.P2,
-                category="geometry",
-                title="Minor tolerance check",
-                detail="Surface within tolerance",
-                element_id="fixture:1",
-            )
-        ],
-        element_statuses={"fixture:1": "MATCHED"},
-    )
-    evaluator = AcceptanceEvaluator()
-    report = evaluator.evaluate(context, [outcome])
-    assert report.total_elements_checked == 1
-    assert report.matched_count == 1
-    assert report.gates["geometry"].status == GateStatus.PASS
-    # Unexecuted gates must be NOT_RUN (fail-safe principle)
-    assert report.gates["syntax"].status == GateStatus.NOT_RUN
-    assert report.gates["mep"].status == GateStatus.NOT_RUN
-    assert report.gates["source_inventory"].status == GateStatus.NOT_RUN
-    assert len(report.findings) == 1
-    assert report.findings[0].id == "FND-0001"
 
 
 def test_artifact_repository_port_and_adapter(box_model, tmp_path):
@@ -233,30 +190,23 @@ def test_artifact_repository_port_and_adapter(box_model, tmp_path):
 def test_gate_checker_protocol_conformance(box_model):
     """All concrete gate checkers conform to GateChecker protocol and use context.parsed."""
     from ifc_to_fds.domain.validation.checkers.base import GateChecker
-    from ifc_to_fds.domain.validation.model import ValidationContext, AuditConfig
-    from ifc_to_fds.validation.checkers.syntax import FdsSyntaxChecker
-    from ifc_to_fds.validation.checkers.domain import DomainChecker
-    from ifc_to_fds.validation.checkers.traceability import TraceabilityChecker
-    from ifc_to_fds.validation.checkers.scope import ScopeChecker
-    from ifc_to_fds.validation.checkers.geometry import GeometryChecker
-    from ifc_to_fds.validation.checkers.structural import StructuralCompletenessChecker
-    from ifc_to_fds.validation.checkers.air_path import AirPathTopologyChecker
-    from ifc_to_fds.validation.checkers.openings import OpeningsChecker
-    from ifc_to_fds.validation.checkers.mep import MepChecker
-    from ifc_to_fds.validation.checkers.boundary import BoundaryChecker
-    from ifc_to_fds.validation.checkers.solver import SolverChecker
+    from ifc_to_fds.validation.checkers import (
+        AirPathTopologyChecker,
+        BoundaryChecker,
+        MeshResolutionChecker,
+        ScopeChecker,
+        SolverChecker,
+        StructuralCompletenessChecker,
+    )
+    from ifc_to_fds.validation.checkers.hvac import HvacNetworkChecker
 
     checkers = [
-        FdsSyntaxChecker(),
-        DomainChecker(),
-        TraceabilityChecker(),
         ScopeChecker(),
-        GeometryChecker(),
         StructuralCompletenessChecker(),
         AirPathTopologyChecker(),
-        OpeningsChecker(),
-        MepChecker(),
         BoundaryChecker(),
+        MeshResolutionChecker(),
+        HvacNetworkChecker(),
         SolverChecker(),
     ]
 
@@ -266,17 +216,16 @@ def test_gate_checker_protocol_conformance(box_model):
         assert callable(getattr(checker, "check"))
 
 
-def test_validation_runner_coordinates_checkers(box_model):
-    """ValidationRunner executes registered checkers and returns an evaluated AcceptanceReport."""
-    from ifc_to_fds.validation.runner import ValidationRunner
+def test_validation_engine_runs_and_reports_core_gates(box_model):
+    """The single production validation path returns an evaluated AcceptanceReport."""
+    from ifc_to_fds.validation.engine import run_independent_validation
     from ifc_to_fds.mapping.exporter import serialize_fds
     from ifc_to_fds.mapping.manifest import build_manifest
     from ifc_to_fds.domain.validation.model import AcceptanceReport, GateStatus
 
-    runner = ValidationRunner()
     fds_text, _ = serialize_fds(box_model)
     manifest = build_manifest(box_model, fds_text)
-    report = runner.validate(box_model, fds_text, manifest)
+    report = run_independent_validation(box_model, fds_text, manifest)
 
     assert isinstance(report, AcceptanceReport)
     assert "syntax" in report.gates
@@ -287,3 +236,43 @@ def test_validation_runner_coordinates_checkers(box_model):
     assert report.gates["scope"].status == GateStatus.PASS
     assert report.gates["traceability"].status == GateStatus.PASS
 
+
+def test_no_duplicate_job_repository_classes():
+    """Exactly one JobRepository class may exist under ifc_to_fds/ (no shadow copies)."""
+    found = []
+    for py_file in find_python_files(ROOT_DIR):
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        found += [
+            str(py_file.relative_to(ROOT_DIR))
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ClassDef) and node.name == "JobRepository"
+        ]
+    assert len(found) == 1, f"Expected one JobRepository class, found: {found}"
+
+
+_COLD_IMPORT_MODULES = sorted(
+    {f"ifc_to_fds.{d.name}" for d in ROOT_DIR.iterdir() if (d / "__init__.py").is_file()}
+    | {
+        "ifc_to_fds.fire",
+        "ifc_to_fds.validation.engine",
+        "ifc_to_fds.validation.checkers",
+        "ifc_to_fds.validation.checkers.mesh_resolution",
+        "ifc_to_fds.mapping",
+        "ifc_to_fds.mep",
+        "ifc_to_fds.server",
+        "ifc_to_fds.adapters.jobs.runner",
+    }
+)
+
+
+@pytest.mark.parametrize("module", _COLD_IMPORT_MODULES)
+def test_module_imports_first_in_a_fresh_process(module):
+    """Importing a module FIRST in a clean interpreter exposes circular imports."""
+    result = subprocess.run(
+        [sys.executable, "-c", f"import {module}"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env={**os.environ, "PYTHONIOENCODING": "utf-8", "IFCFDS_SOLVER_AUTODISCOVERY": "0"},
+    )
+    assert result.returncode == 0, f"cold import of {module} failed:\n{result.stderr[-2000:]}"

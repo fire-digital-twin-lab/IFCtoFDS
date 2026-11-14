@@ -47,7 +47,7 @@ def store_mesh(mesh, directory):
         or target.stat().st_size != vertices.nbytes + faces.nbytes
         or file_hash(target) != key
     ):
-        temporary = directory / (key + "." + uuid4().hex + ".tmp")
+        temporary = directory / (uuid4().hex + ".tmp")  # short: Windows MAX_PATH is 260
         with temporary.open("wb") as stream:
             stream.write(vertices.tobytes())
             stream.write(faces.tobytes())

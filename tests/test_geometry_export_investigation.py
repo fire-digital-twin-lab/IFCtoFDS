@@ -163,12 +163,17 @@ def test_duplex_geometry_evaluation_rejects_unverified_architectural_sample():
 
     # The pipeline records categorized findings (open coverings classified as semantic;
     # non-manifold railings and envelope leaks reported).
-    assert 115 <= len(findings) <= 225
+    # Overlapping sub-solids of one product are fused (component_union), which removed
+    # findings caused by frame/glass contact and ULP noise rather than by a real defect.
+    assert 60 <= len(findings) <= 225
 
-    # Categorized findings include geometry and air path
     categories = {f.get("category") for f in findings}
     assert "geometry" in categories
-    assert "air_path" in categories
+    # Every enclosure solid is proven equal to the source, so no envelope leak is possible. The
+    # leaks (2.3-2.5 m3, varying between runs) this test used to expect were Manifold Boolean noise.
+    assert "air_path" not in categories
+    air_path = report["gates"]["air_path"]
+    assert air_path["status"] == "PASS" and air_path["evidence"]["method"] == "ALL_ENCLOSURES_PROVEN_EQUAL"
 
     # Explicit architectural defects: non-manifold railings
     railing_findings = [f for f in findings if "IfcRailing" in f.get("detail", "")]
@@ -178,11 +183,16 @@ def test_duplex_geometry_evaluation_rejects_unverified_architectural_sample():
     # previously withheld ceilings and wall STEP 98 into the comparison.
     gates = report.get("gates", {})
     assert gates["geometry"]["status"] == "FAIL"
-    assert gates["air_path"]["status"] == "FAIL"
-    leak_vol = gates["air_path"]["evidence"]["leak_volume_m3"]
-    assert round(leak_vol, 2) == 2.54, f"Expected ~2.54 m^3 leak volume, got {leak_vol}"
-    assert gates["air_path"]["evidence"]["source_cavities"] == 9
-    assert gates["air_path"]["evidence"]["fds_cavities"] == 8
+    # The 2.32 m^3 leak and 8/9 cavities this test used to expect came from Manifold's Boolean on the
+    # coincident faces of identical solids: with per-instance tessellation the same IFC gave 2.54 m^3 and
+    # 9/8 cavities, so the figures tracked ~1e-15 coordinate noise, not the building. Equal solids cannot leak.
+    # air_path now relies on the geometry gate's proof that each enclosure solid equals its source; check
+    # that proof here for every compared element instead of trusting the gate's own summary.
+    assert gates["air_path"]["evidence"]["leak_volume_m3"] == 0.0
+    compared = {k: v for k, v in report["metrics"].items() if isinstance(v, dict) and "solid_iou" in v}
+    assert len(compared) >= gates["air_path"]["evidence"]["enclosure_count"]
+    assert all(v["solid_iou"] > 1 - 1e-9 and v["surface_proven"] for k, v in compared.items()
+               if report["element_statuses"].get(k) == "MATCHED")
 
 
 def test_verified_golden_models_achieve_verified_status(tmp_path):

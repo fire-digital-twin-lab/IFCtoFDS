@@ -835,7 +835,7 @@ docs/                  # Hướng dẫn, ADR, audit, bằng chứng, kiến trú
 
 HVAC tách contract HvacNetworkPlan trong domain, compiler `mep/network.py`, adapter `mep/fds_records.py` và checker `validation/checkers/hvac.py`. Scenario tách xác minh nền và ghép điều khiển với vật thể gốc.
 
-`validation/engine.py` và ValidationRunner vẫn cùng tồn tại, đã có checker HVAC/mesh gate nhưng chưa hợp nhất hoàn toàn. Ports/container cũng chưa thay thế hết import trực tiếp. [Kiến trúc mục tiêu](docs/architecture/02-target-architecture.md) là đích chuyển đổi, không phải tuyên bố mọi phần đã hoàn tất.
+`validation/engine.py` là đường validation duy nhất (đã bỏ ValidationRunner và 7 checker chỉ runner dùng). Ports/container cũng chưa thay thế hết import trực tiếp. [Kiến trúc mục tiêu](docs/architecture/02-target-architecture.md) là đích chuyển đổi, không phải tuyên bố mọi phần đã hoàn tất.
 
 <a id="kiem-thu"></a>
 
@@ -953,7 +953,6 @@ Tạo issue với ca tái hiện và kết quả mong đợi. Sửa thuật toá
 - [Kiến trúc và ADR](docs/architecture.md).
 - [Workflow Verified](docs/verified-conversion.md).
 - [Golden mapping/reference](docs/golden-mapping-parity.md).
-- [Kế hoạch biên soạn README tiếng Việt](docs/README_VI_PLAN_2026-11-02.md).
 
 Các báo cáo lịch sử phản ánh thời điểm ghi nhận; dùng trạng thái hiện tại và mã nguồn để biết tính năng đã được sửa sau đó.
 

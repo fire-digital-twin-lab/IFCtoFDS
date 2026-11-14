@@ -11,12 +11,15 @@ from ifc_to_fds.domain.validation.model import (
 from ifc_to_fds.fire import (
     EVSelection,
     ScenarioBundle,
-    calculate_d_star,
-    check_mesh_resolution,
     emit_fire_scenario,
 )
-from ifc_to_fds.validation.checkers.mesh_resolution import MeshResolutionChecker
-from ifc_to_fds.validation.runner import ValidationRunner
+from ifc_to_fds.fire.mesh_metrics import calculate_d_star
+from ifc_to_fds.validation.checkers.mesh_resolution import (
+    MeshResolutionChecker,
+    check_mesh_resolution,
+)
+from ifc_to_fds.validation.engine import run_independent_validation
+from ifc_to_fds.validation.parser import parse_fds
 
 
 def test_mesh_gate_reports_low_dstar_indicator_without_universal_fail():
@@ -84,8 +87,9 @@ def test_mesh_resolution_checker_not_applicable_when_no_fire(box_model):
         "&OBST XB=0.0,2.0,0.0,1.0,0.0,0.2, SURF_ID='WALL' /\n"
         "&TAIL /\n"
     )
-    runner = ValidationRunner()
-    context = runner.create_context(box_model, fds_text)
+    context = ValidationContext(
+        model=box_model, fds_text=fds_text, manifest=None, parsed_fds=parse_fds(fds_text)
+    )
     checker = MeshResolutionChecker()
     outcome = checker.check(context)
 
@@ -116,8 +120,7 @@ def test_mesh_resolution_checker_with_scenario_fds(box_model):
         "&TAIL /\n"
     )
 
-    runner = ValidationRunner()
-    report = runner.validate(box_model, fds_text)
+    report = run_independent_validation(box_model, fds_text)
 
     assert "mesh_resolution" in report.gates
     mesh_gate = report.gates["mesh_resolution"]
@@ -255,7 +258,7 @@ def test_solver_integration_runs_even_when_mesh_adequacy_is_inconclusive(
         return GateResult(status=GateStatus.PASS), GateResult(status=GateStatus.PASS)
 
     monkeypatch.setattr(
-        "ifc_to_fds.validation.checkers.solver.solver_gates", fake_solver_gates
+        "ifc_to_fds.validation.engine.solver_gates", fake_solver_gates
     )
 
     fds_text = (
@@ -269,8 +272,7 @@ def test_solver_integration_runs_even_when_mesh_adequacy_is_inconclusive(
         "&TAIL /\n"
     )
 
-    runner = ValidationRunner()
-    report = runner.validate(box_model, fds_text)
+    report = run_independent_validation(box_model, fds_text)
 
     assert report.gates["syntax"].status == GateStatus.PASS
     assert report.gates["mesh_resolution"].status == GateStatus.INCONCLUSIVE
@@ -325,8 +327,9 @@ def test_mesh_resolution_checker_multi_burner_evaluates_per_source(box_model):
         "&VENT ID='VENT_EBIKE', XB=5.0,6.8,0.0,0.6,0.0,0.0, SURF_ID='BURNER_EBIKE' /\n"
         "&TAIL /\n"
     )
-    runner = ValidationRunner()
-    context = runner.create_context(box_model, fds_text)
+    context = ValidationContext(
+        model=box_model, fds_text=fds_text, manifest=None, parsed_fds=parse_fds(fds_text)
+    )
     checker = MeshResolutionChecker()
     outcome = checker.check(context)
 
@@ -349,8 +352,9 @@ def test_mesh_resolution_checker_dimensional_fallback_inconclusive(box_model):
         "&SURF ID='FIRE_SURF', HRRPUA=500.0 /\n"
         "&TAIL /\n"
     )
-    runner = ValidationRunner()
-    context = runner.create_context(box_model, fds_text)
+    context = ValidationContext(
+        model=box_model, fds_text=fds_text, manifest=None, parsed_fds=parse_fds(fds_text)
+    )
     checker = MeshResolutionChecker()
     outcome = checker.check(context)
 

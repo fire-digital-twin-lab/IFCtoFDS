@@ -6,20 +6,22 @@ by comparing free-space connected components and leakage volume using binary64 M
 
 from typing import Any, List
 
+import numpy as np
+
 from ifc_to_fds.domain.bim import BoundingBox
 from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
 from ifc_to_fds.domain.validation.model import Finding, GateResult, GateStatus, Severity
 from ifc_to_fds.geometry.boolean import solid_boolean
 from ifc_to_fds.geometry.mesh import as_trimesh, box_mesh, valid_solid
+from ifc_to_fds.validation.passage_resolution import ENCLOSURE_TYPES
 
 
-ENCLOSURE_TYPES = {
-    "IFCWALL",
-    "IFCWALLSTANDARDCASE",
-    "IFCCURTAINWALL",
-    "IFCSLAB",
-    "IFCROOF",
-}
+def _volume(mesh):
+    """`.volume` of a possibly empty boolean result; trimesh divides 0/0 for its center of mass."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return float(mesh.volume) if mesh and hasattr(mesh, "volume") else 0.0
+
+
 
 
 class AirPathTopologyChecker:
@@ -110,6 +112,20 @@ class AirPathTopologyChecker:
                     )
                 ],
                 metrics={"air_path": {"enclosure_elements_count": len(enclosure_elements), "emitted_count": 0}},
+            )
+
+        if not unprovenanced_solids and enclosure_keys <= set(getattr(context, "exact_elements", ())):
+            # Equal solids have equal free space and equal leakage (zero). Manifold's Boolean is unreliable
+            # on the coincident faces this produces (negative leak volumes), so do not run it.
+            return CheckerOutcome(
+                gate_name=self.name,
+                result=GateResult(
+                    status=GateStatus.PASS,
+                    reason=f"Enclosure preserved exactly: all {len(enclosure_elements)} enclosure solids proven equal to the source; no leak is possible.",
+                    evidence={"enclosure_count": len(enclosure_elements), "method": "ALL_ENCLOSURES_PROVEN_EQUAL", "leak_volume_m3": 0.0},
+                ),
+                findings=[],
+                metrics={"air_path": {"enclosure_count": len(enclosure_elements), "method": "ALL_ENCLOSURES_PROVEN_EQUAL", "leak_volume_m3": 0.0}},
             )
 
         try:
@@ -332,7 +348,7 @@ class AirPathTopologyChecker:
                         opening_trimeshes.append(as_trimesh(op.mesh))
                     else:
                         has_missing_opening_mesh = True
-            if opening_trimeshes and leak_intersection and hasattr(leak_intersection, "volume") and leak_intersection.volume > 0:
+            if opening_trimeshes and _volume(leak_intersection) > 0:
                 try:
                     u_openings = solid_boolean(opening_trimeshes, "union") if len(opening_trimeshes) > 1 else opening_trimeshes[0]
                     leak_sub = solid_boolean([leak_intersection, u_openings], "difference")
@@ -349,7 +365,7 @@ class AirPathTopologyChecker:
                         metrics={"air_path": {"error": f"OPENING_DIFFERENCE_FAILED: {exc}"}},
                     )
 
-            v_leak = float(leak_intersection.volume) if leak_intersection and hasattr(leak_intersection, "volume") else 0.0
+            v_leak = _volume(leak_intersection)
 
             if v_leak < -1e-12:
                 return CheckerOutcome(

@@ -45,3 +45,5 @@ demo/demo.mp4
 .local-reference-cases/
 *.source-map.local.json
 .agents/
+# Serena MCP workspace state
+.serena/

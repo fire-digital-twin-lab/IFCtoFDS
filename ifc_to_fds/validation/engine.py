@@ -1,7 +1,7 @@
 """Read serialized FDS and verify against a separate source reference model."""
 
 import hashlib
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional
 from ifc_to_fds.diagnostics import operation
 from .acceptance import (
     AcceptanceReport,
@@ -12,6 +12,9 @@ from .acceptance import (
     Severity,
 )
 from .parser import parse_fds
+from ifc_to_fds.domain.validation.model import MAPPING_GATE_ORDER
+
+from .passage_resolution import PassageResolutionChecker
 from .effective import check_opening_grid_alignment
 from .preflight import (
     comparison_summary,
@@ -20,6 +23,7 @@ from .preflight import (
 )
 from .metrics import (
     compare_solids,
+    is_exact_match,
     opening_residual,
     passage_metrics,
     SolidCandidateIndex,
@@ -43,21 +47,7 @@ def run_independent_validation(
         total_elements_checked=len(model.elements), configuration=config.model_dump()
     )
     report.gates = {
-        name: GateResult(status=GateStatus.PASS)
-        for name in (
-            "syntax",
-            "source_inventory",
-            "traceability",
-            "scope",
-            "geometry",
-            "structural_completeness",
-            "air_path",
-            "openings",
-            "mep",
-            "representation",
-            "boundary",
-            "domain",
-        )
+        name: GateResult(status=GateStatus.PASS) for name in MAPPING_GATE_ORDER
     }
     report.gates["source_inventory"] = GateResult(
         status=GateStatus.INCONCLUSIVE,
@@ -267,6 +257,14 @@ def run_independent_validation(
         and e.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
     )
     source_topology = source_topology_preflight(model)
+    accepted = {
+        key: dict(item["self_intersection"].get("witness", {}), review=item["self_intersection"].get("review"),
+                  mesh_sha256=item["self_intersection"].get("mesh_sha256"))
+        for key, item in source_topology.items()
+        if item.get("reason") == "ACCEPTED_DEFECT"
+    }
+    if accepted:
+        report.metrics["accepted_source_defects"] = accepted
     topology_blockers = source_topology_blockers(source_topology)
     confirmed_invalid = sorted(
         key
@@ -659,6 +657,14 @@ def run_independent_validation(
                 )
             except Exception as exc:
                 unknown("openings", f"{opening.opening_global_id}: {exc}", key)
+    comparable = [
+        e for e in model.elements
+        if e.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
+        and e.scope_decision != ScopeDecision.OUT_OF_SCOPE
+    ]
+    if comparable and not completed_comparisons and not stop_solid_checks and report.gates["geometry"].status == GateStatus.PASS:
+        report.gates["geometry"].status = GateStatus.INCONCLUSIVE
+        report.gates["geometry"].reason = "No solid comparison completed; the FDS text held nothing to compare"
     if not opening_count and report.gates["openings"].status == GateStatus.PASS:
         report.gates["openings"] = GateResult(
             status=GateStatus.NOT_APPLICABLE,
@@ -712,10 +718,13 @@ def run_independent_validation(
         manifest=manifest,
         parsed_fds=parsed,
         config=config,
+        exact_elements=frozenset(
+            k for k in completed_comparisons if k not in comparison_deviations and is_exact_match(report.metrics[k])
+        ),
     )
     from .checkers.hvac import HvacNetworkChecker
     from .checkers.mesh_resolution import MeshResolutionChecker
-    for checker in (HvacNetworkChecker(), MeshResolutionChecker()):
+    for checker in (HvacNetworkChecker(), MeshResolutionChecker(), PassageResolutionChecker()):
         outcome = checker.check(validation_ctx)
         report.gates[outcome.gate_name] = outcome.result
         report.findings.extend(outcome.findings)

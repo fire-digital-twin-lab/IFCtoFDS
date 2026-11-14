@@ -7,6 +7,9 @@ from ifc_to_fds.domain.mapping.enums import MappingStrategy
 from ifc_to_fds.domain.scope import ScopeDecision
 
 PORT_POSITION_TOLERANCE_M = 0.001
+SEGMENT_TYPES = ("IFCDUCTSEGMENT", "IFCFLOWSEGMENT")
+FITTING_TYPES = ("IFCDUCTFITTING", "IFCFLOWFITTING")
+FAN_TYPES = ("IFCFAN",)
 
 
 def build_hvac_network(model):
@@ -17,13 +20,21 @@ def build_hvac_network(model):
     ports, owners, specs = {}, {}, {}
     for e in selected:
         declared_type = (e.type_class or e.ifc_type).upper().removesuffix("TYPE")
-        if declared_type not in ("IFCDUCTSEGMENT", "IFCFLOWSEGMENT") or e.mep_category not in ("VENTILATION", "SMOKE_EXTRACT"):
-            raise ValueError(f"HVAC requires a ventilation duct segment; fittings/fans need a dedicated operational adapter: {e.entity_key}")
+        if declared_type not in SEGMENT_TYPES + FITTING_TYPES + FAN_TYPES or e.mep_category not in ("VENTILATION", "SMOKE_EXTRACT"):
+            raise ValueError(f"HVAC requires a ventilation duct segment, two-port fitting or fixed-flow fan: {e.entity_key}")
         if e.decision.get("action") != "HVAC" or not e.decision.get("hvac"):
             raise ValueError(f"HVAC requires reviewed duct parameters and endpoint boundaries: {e.entity_key}")
         specs[e.entity_key] = DuctSpec.model_validate(e.decision["hvac"])
         if len(e.ports) != 2:
-            raise ValueError(f"HVAC duct requires exactly two source ports: {e.entity_key}")
+            raise ValueError(f"HVAC duct requires exactly two source ports; a junction needs node losses, which are not implemented: {e.entity_key}")
+        if declared_type in FITTING_TYPES and (specs[e.entity_key].loss is None or specs[e.entity_key].length_m is None):
+            raise ValueError(f"HVAC fitting needs reviewed loss coefficients and centreline length; the port chord is not its length: {e.entity_key}")
+        directions = {(getattr(p, "flow_direction", None) or "").upper() for p in e.ports}
+        if declared_type in FITTING_TYPES and specs[e.entity_key].loss[0] != specs[e.entity_key].loss[1] and directions != {"SINK", "SOURCE"}:
+            raise ValueError(f"HVAC fitting with different forward/reverse losses needs SINK/SOURCE port directions: {e.entity_key}")
+        if declared_type in FAN_TYPES:
+            if specs[e.entity_key].volume_flow_m3_s is None or directions != {"SINK", "SOURCE"}:
+                raise ValueError(f"HVAC fan needs a reviewed volume flow and SINK/SOURCE port directions; direction is never inferred: {e.entity_key}")
         for p in e.ports:
             if not p.port_key or p.port_key in ports or p.world_position is None or len(p.world_position) != 3 or not all(math.isfinite(x) for x in p.world_position):
                 raise ValueError(f"HVAC requires unique source port keys and finite world positions: {e.entity_key}")

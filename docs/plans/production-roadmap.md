@@ -1,0 +1,201 @@
+# IFCtoFDS — kế hoạch hoàn thiện production (bản 2)
+
+Cập nhật 2026-11-15. File này **thay thế** kế hoạch bản 1 và file bàn giao cũ (cả hai còn trong lịch sử git, commit `356eb42`).
+Đây là nguồn sự thật duy nhất: trạng thái ở Phần A, việc phải làm ở Phần B. Đánh dấu `[x]` khi một bước xong **và đã qua cổng kiểm tra của nó**.
+
+Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua CLI và Web/API (Docker Compose); nghiệm thu trên IFC thật của dự án.
+
+---
+
+# Phần A — Trạng thái
+
+## A1. Git
+- PR #109 (`feat/production-m0-geometry-ready`) được merge vào `main` bằng merge commit để giữ nguyên các mã commit nêu ở A2; nhánh đã xóa sau merge. Công việc tiếp theo làm trên nhánh mới từ `main`, mỗi mục một PR nhỏ.
+- Commit từ M2 trở đi viết tiếng Việt, không ghi công Claude (xem `AGENTS.md`). 21 commit tiếng Anh cũ hơn giữ nguyên theo quyết định của người dùng.
+- Bàn giao và kế hoạch kiểm thử: [production-handover.md](production-handover.md), [real-world-test-plan.md](real-world-test-plan.md).
+
+## A2. Đã xong (suite mặc định sạch tại từng commit)
+| Mốc | Commit | Kết quả chính |
+|---|---|---|
+| 0–1 | `e3d8592` | CLI `convert` chạy từ tiến trình mới; lối mở A△A = 0; khóa `scope.coordinate_frame`; `verdict-snapshot.py`; marker `slow`, `private` |
+| 2 Tốc độ | `392d8e0` | `has_self_intersection` vector hóa + số nguyên chính xác; FZK 34→8 s, Institute 148→42 s |
+| 3 Kiến trúc | `73e214d` | Một đường kiểm định, một `JobRepository`, bỏ `ifc_to_fds/server/` |
+| 4 Tọa độ | `b24650b` | Placement cứng chuẩn IFC, đơn vị về mét SI, rebase cao độ tầng và trục Z, georeference |
+| 5 Tô-pô | `ff4be54`, `f0e06cf` | `contact`/`numerical_contact`, `accepted_source_defects`, hợp nhất thành phần chồng lấn |
+| M0 | `883433a`, `4bb570e` | Hồi quy hợp nhất sửa xong; prefetch 4 worker; mốc verdict tạo lại |
+| M1 | `a498915`…`855f096` | Phần tử tham chiếu không bị chặn; ngưỡng thể tích chồng lấn số học; chặn nhiều IfcSite; sửa đường dẫn cache dài |
+| M2 | `426a96f`, `61a1738` | Hộp phủ OBST (mặc định bật); `air_path` chính xác; `effective_geometry` theo phần tử, đọc VENT và OBST điều khiển từ SMV; gate `passage_resolution` |
+| M3 (một phần) | `8800f92` | Phụ kiện hai cổng và quạt lưu lượng cố định từ thông số đã duyệt; tổn áp FDS khớp tính tay 0,5% |
+| Dọn dẹp + M4 (một phần) | `76bd48f`, `87a7430` | Bỏ mã chết, gom tên gate về một chỗ; phát lại đường HRR đo và kiểm chứng bằng FDS |
+| M5.1, M5.3, M5.4 | `92ac39b` | `TMPDIR` trên volume (upload 2×150 MiB: lỗi 400 → 202, đo bằng Docker); diễn tập backup/restore trên job thật; image `solver` có FDS 6.11.1 Linux ghim hash, probe đạt trong container với cờ production |
+
+## A3. Đang bị chặn (chờ đầu vào, không tự suy)
+| Mục | Chặn bởi | Cần gì | Đã chuẩn bị sẵn |
+|---|---|---|---|
+| M1.7 mục tiêu thời gian | đòn bẩy kỹ thuật còn mở | không cần đầu vào; làm khi ưu tiên | A 211–253 s (mục tiêu 120), C 477 s (mục tiêu 300) |
+| M2.4 `effective_geometry` PASS trên A | quyết định kỹ thuật | chọn: đọc cut-cell GEOM từ SMV, hoặc quay mô hình theo từng cánh, hoặc chấp nhận xấp xỉ bậc thang | A 0% OBST vì mọi tường/sàn không thẳng trục; gate đã liệt kê 546 GEOM theo tên |
+| M3.1 phân loại phụ kiện | người dùng duyệt bảng họ → loại | xác nhận 7 họ của C: cút 182, chuyển tiết diện vuông–tròn 100, côn 78, gót giày 60, đầu bịt 34, Y 16, tê 8 | phụ kiện hai cổng đã biên dịch được khi có K và chiều dài |
+| M3.2 phạm vi hệ thống | B-ext 2 | nghĩa PAD/CEAD/OAD-FAD/RAD/TEAD; hệ nào hút khói, cấp bù | cơ chế `decisions` đã có |
+| M3.3/M3.4 tê, Y, gót giày (84 cái của C) | chưa có tổn thất nút | hệ số `LOSS(I,J)` đã duyệt cho từng nhánh | lỗi rõ ràng thay vì đoán |
+| M3.5 đầu cuối → biên | B-ext 3 | lưu lượng thiết kế từng miệng, K, đường cong quạt (C không có đối tượng quạt) | VENT/AMBIENT đã hỗ trợ |
+| M3.6(b) bảo toàn khối lượng ở tê | phụ thuộc M3.3 | như trên | (a) và (c) đã đạt với FDS |
+| Ma sát ống chữ nhật trong FDS | quyết định kỹ thuật | có hiệu chỉnh tổn thất cho ống chữ nhật không (FDS thấp hơn khoảng 18% với 0,5×0,3 m) | gate `hvac` báo finding P2 |
+| M4.1 preset xe | B-ext 4 | số đo cháy nguyên xe được phép dùng (HRR theo thời gian, năng lượng pin) | có thể phát lại thẳng đường đo (M4.2) |
+| M4.3 HF/HCN | B-ext 4 | yield nguyên xe | — |
+| M4.4 biên truyền nhiệt | nguồn tính chất vật liệu | tính chất bê tông/thép có trích nguồn | — |
+| M5.2 job dài (C) | M1.7 và chạy C qua API | RSS đỉnh, timeout scheduler, khởi động lại giữa chừng | `scripts/production-conversion-e2e.py` đã có; cần `--storey` của C |
+| Bước CI mới (upload 2×150 MiB, job `solver-image`) | chưa chạy trên CI | chờ kết quả lần push `92ac39b` | cả hai đã chạy cục bộ bằng Docker |
+| M5.5–M5.7 | các mốc trên + kỹ sư review | QoI nghiệm thu (B-ext 5) | — |
+
+## A4. Vấn đề mở khác
+1. 2 test `xfail` nghiêm ngặt từ Giai đoạn 3: FDS rỗng → geometry `PASS`; traceability coi primitive kịch bản cháy là bất ngờ.
+2. Giai đoạn 3 đổi hành vi server (job QUEUED → FAILED khi khởi động lại); chưa kiểm client JS có đọc khóa chẩn đoán cũ.
+3. `air_path` vẫn dùng Boolean khi có phần tử vỏ bao lệch; khi đó có thể INCONCLUSIVE.
+4. `test_sqlite_wal_multi_process_concurrency` từng báo "database is locked" một lần khi máy tải nặng (đã thêm thử lại có thời hạn).
+5. Ổ đĩa dự án có 26 thư mục job cũ trong `.jobs/` (ngoài git) do server/test để lại; xóa tay nếu cần dung lượng.
+
+## A5. Dữ liệu thật (ngoài repo, không commit; trong repo chỉ dùng bí danh và số tổng hợp)
+Thư mục `D:\User\HUCE\NCKH\Resources\IFC_Tòa nhà\`. Cả ba IFC2X3, placement hợp lệ 100%, không có CRS; vị trí Site là mặc định phần mềm dựng.
+
+| | A `Ham2Tang.ifc` | B `Tang7.ifc` | C `ALL_FDS_2027.ifc` |
+|---|---|---|---|
+| Nội dung | hầm 2 tầng, 793 sản phẩm, mm | một tầng, 279 sản phẩm, mm | tổng hợp + MEP, 5.641 sản phẩm, **foot** |
+| Đặc điểm | 356 tường, 177 lỗ, 546/583 phần tử là GEOM; 21 cửa không-manifold | cửa, tường kính, lan can | 63 tầng (hai hệ cao độ trộn), 296 ống gió chữ nhật, 38 ống mềm, 588 ống nước, 478 phụ kiện, 130 đầu cuối, 68 hệ thống (SPR, PAD, CEAD, OAD/FAD, RAD, TEAD), 534 cổng `SOURCEANDSINK` |
+| Lần đo cuối | 253 s cache lạnh kèm solver (M2.4); 22 UNSUPPORTED (cửa lỗi nguồn) | 14 s; 8 DEVIATED | 670 s; 1.722 phần tử `NONE`, 89 finding bảo toàn, 4 UNSUPPORTED |
+| Verdict | REJECTED | REJECTED | REJECTED |
+
+A và B lệch nhau > 1.000 km trên trục Y sau khi đọc: không tự ghép được.
+
+## A6. Cách chạy
+- Môi trường: `uv sync --locked --extra test`; Python = `.venv/Scripts/python.exe`; đặt `PYTHONIOENCODING=utf-8`, `IFCFDS_SOLVER_AUTODISCOVERY=0`.
+- Toàn suite (~3 phút): `python -m pytest -q -p no:cacheprovider -o faulthandler_timeout=90`, sau đó `git checkout tests/baseline/snapshots/baseline_metrics.json` (test tự ghi file này).
+- Đo cold: đặt `IFCFDS_GEOMETRY_CACHE` tới thư mục mới ngoài repo. **Không chạy hai phép đo cùng lúc** (đã gây số đo sai trong phiên trước).
+- So verdict: `scripts/verdict-snapshot.py <ifc> --compare docs/evidence/production-roadmap/baseline-<n>.json`.
+- Profile: `scripts/stage-profile.py <ifc> -o <out.json>`.
+- Solver: `python scripts/install-fds.py` (FDS 6.11.1 vào `.deps/`), rồi `IFCFDS_SOLVER=<.deps/.../fds_openmp.exe> python -m pytest -q -m solver`.
+- Kết quả chạy file thật ghi ra ngoài repo.
+
+---
+
+# Phần B — Kế hoạch
+
+## B0. Quy tắc làm việc
+1. Mỗi bước = 1 commit/PR nhỏ: viết test hỏng → sửa → toàn suite → so verdict → commit.
+2. **Không sửa snapshot đóng băng để test xanh** trừ khi đã so từng trường và ghi lý do trong commit.
+3. Mọi thay đổi ở `geometry/mesh.py`, `component_union.py`, `normalization.py`, `engine.py` phải qua bộ fixture M0.3 và `verdict-snapshot --compare` trên 3 mẫu + B.
+4. Thay đổi **nới** quy tắc kiểm định (cho qua thứ trước đây bị chặn) phải nêu rõ trong commit và có fixture cả hai phía (ca được cho qua, ca vẫn bị chặn).
+5. Số đo ghi vào `docs/evidence/production-roadmap/` chỉ ở dạng tổng hợp; kèm ngày và commit.
+6. Hết mỗi mốc: cập nhật Phần A của file này.
+
+Lỗi suite "đã biết" tại thời điểm viết: 3 test cache ở A4.5 (sẽ xử lý ở M1.5).
+
+## M0 — Ổn định và khép 5.8 (1–2 ngày)
+
+- [x] **M0.1 Sửa hồi quy hợp nhất.** *(commit `883433a`; chọn biến thể: quét tự giao cắt cho mesh ≤ `SCAN_FACE_LIMIT`=5000 mặt khi thể tích chung = 0, mesh nặng giữ lối tắt)*
+  File: `ifc_to_fds/geometry/component_union.py` (`_fuse`). Bỏ lối thoát sớm "thể tích chung ≈ 0": luôn thử union khi hộp bao thành phần chồng nhau và mọi thành phần là volume; giữ các kiểm tra còn lại (solid hợp lệ, cận thể tích, oracle).
+  Test mới trong `tests/test_component_union.py`: hai hộp chạm nhau có cặp tam giác bị báo xuyên, thể tích chung 0 → sau `prepare_source_mesh` là `CLEAN`.
+  Kiểm: `tests/baseline` xanh **không sửa snapshot**; FZK và Duplex `DEVIATED` = 0.
+  Nếu chi phí oracle tăng rõ (đo trên A): chỉ chạy oracle khi thể tích chung > 0; khi = 0 thì đủ điều kiện `|V(union) − Σ V_i| ≤ tol`.
+- [x] **M0.2 Chốt prefetch song song.** *(GIỮ, tối đa 4 worker. A cold: 383 s → 221 s, validation 246 → 72 s, kết quả giống hệt. Lần "bất thường" trước đó do script đo thiếu `if __name__ == "__main__"` trên Windows, không phải lỗi mã sản phẩm.)*
+  `mesh.py` `prefetch_self_intersection`: mặc định `workers` tối đa 4. Chạy `convert` A cold một mình, ghi wall, CPU từng worker, RSS đỉnh.
+  Giữ nếu A nhanh hơn ≥ 20% và không worker nào vượt 2× thời gian tuần tự của mesh nặng nhất; ngược lại gỡ lời gọi trong `validation/preflight.py` (giữ hàm và test).
+- [ ] **M0.3 Bộ fixture phân loại tiếp xúc.** *(hoãn: test FZK trực tiếp trong `test_component_union.py` đã giữ hồi quy; làm khi có ca biên mới)*
+  Trích mesh thật đã từng gây lỗi thành JSON nhỏ ở `tests/fixtures/contacts/` (chỉ đỉnh/mặt, không tên/GUID): cửa sổ FZK chạm-không-thể-tích, cửa Duplex chạm mép (ULP), cửa B còn `DEVIATED`, hai hộp chạm mặt, chồng lấn thật, lồng nhau. Mỗi file kèm verdict mong đợi của `self_intersection_evidence` và của `prepare_source_mesh`.
+  Test tham số hóa `tests/test_contact_fixtures.py`, chạy ở cả hai chế độ tessellation nếu có liên quan.
+- [x] **M0.4 Đo lại và tạo lại mốc.** *(mốc verdict và real-A/B đã tạo lại; real-C chưa đo lại; thời gian KHÔNG ghi nhận được vì máy chậm ~5,6× lúc đo, xem lưu ý dưới)*
+  Cold, tuần tự từng mô hình: FZK, Duplex, Institute, B, A, C. Ghi `baseline-{fzk,duplex,institute}.json` và `real-{A,B,C}.json`. Chạy `verdict-snapshot --compare` hai lần liên tiếp cho Duplex để xác nhận hết chập chờn (A4 cũ: finding `representation`).
+- [x] **M0.5 Sửa tài liệu.** Viết lại `phase5-topology.md` theo số M0.4 (xóa kết luận "chồng lấn ≥ 1 mm"); cập nhật Phần A.
+- [x] **M0.6 Kiểm client đọc khóa chẩn đoán.** *(grep js/ và index.html: không có chỗ đọc khóa cũ)* `grep -rn "error_type\|job_id" js/ ifc_to_fds/` cho đường đọc `diagnostics.json`; sửa nếu có.
+- [x] **M0.7 Dọn và đưa lên.** *(PR #109 `feat/production-m0-geometry-ready`; đã xóa 5 nhánh + 4 worktree; CI phát hiện và đã sửa: race khởi tạo `JobRepository` nhiều tiến trình ('database is locked' khi `PRAGMA journal_mode=WAL'), nợ import/except mới)* Commit hoàn chỉnh thay WIP; xóa 5 nhánh và 4 worktree (A1); push; mở PR vào `main` gồm Giai đoạn 0–5.
+- **Cổng M0:** suite = đúng 3 lỗi đã biết; CI của PR xanh (ubuntu + windows); FZK/Duplex `DEVIATED` = 0.
+
+> **Lưu ý đo thời gian (2026-11-14, cuối phiên):** mã Giai đoạn 2 từng chạy FZK 8,1 s nay mất 46 s trên cùng máy, tức máy chậm ~5,6× lúc đo.
+> Mọi lần đo thời gian cần kèm một phép đối chứng (chạy `../IFCtoFDS-wt-phase2` hoặc cùng một mô hình cố định) và chỉ so cùng phiên.
+> Số hiện có đáng tin: A cold 221 s (có prefetch) so với 383 s (không prefetch), cùng phiên. Kết quả verdict không phụ thuộc tốc độ.
+
+## M1 — Hình học file thật sạch (1,5–2 tuần)
+
+- [x] **M1.1 Cửa không-manifold của A (21).** *(CHẨN ĐOÁN XONG, KHÔNG SỬA: giả thuyết hàn đỉnh bị bác bỏ. Tắt hàn đỉnh không cứu cửa nào (21 hỏng khi hàn, 23 khi không hàn); mesh có ~3.800 cạnh hở, 858 cạnh ngược chiều, 21 cạnh non-manifold, tức bề mặt nguồn hở. Đây là lỗi dữ liệu nguồn: giữ `UNSUPPORTED` kèm lý do; cần kỹ sư xử lý trong Revit hoặc loại các cửa này khỏi phạm vi. Còn có thể thử: tessellate từng representation item riêng.)*
+  Bước 1 chẩn đoán (không sửa): với 1 cửa, so `inspect_mesh_quality` của (a) mesh hiện tại, (b) tessellate với `WELD_VERTICES=False`, (c) từng representation item riêng. Ghi kết quả.
+  Nếu do hàn đỉnh giữa item: tessellate không hàn rồi hàn trong từng thành phần liên thông (`geometry/engine.py` / `normalization.py`). Nếu là lỗi nguồn: giữ `UNSUPPORTED`, ghi lý do đọc được trong report.
+  Kiểm: fixture từ 1 cửa A; `UNSUPPORTED` của A giảm hoặc có lý do rõ; 3 mẫu không đổi verdict.
+- [x] **M1.2 Ca còn bị chặn ở B (8) và A (≤ 2).** *(cả 8 ca của B có chung witness `COMPONENT_VOLUME_OVERLAP` do nhiễu Boolean cỡ 1e-17 m³ vì điều kiện `volume > 0`; nay ngưỡng `NUMERICAL_OVERLAP_VOLUME_M3`=1e-9 trong chế độ phân loại. B: DEVIATED 8 → 0, verdict REJECTED → INCONCLUSIVE; cổng bắt buộc còn lại là `air_path` (thể tích rò âm −1,3 lít trên mô hình chỉ một tầng, nghi phép Boolean/đường bao không kín; chưa điều tra). A: xem số đo.)*
+  Sau M0.1 đo lại trước. Với mỗi ca còn lại: ghi `component_union.reason`; thử union theo cụm liên thông chồng lấn thay vì toàn cấu kiện. Ca không sửa được bằng công cụ → viết file duyệt mẫu `accepted_source_defects` cho B (đặt ngoài repo) và mục hướng dẫn sử dụng trong README.
+- [x] **M1.3 Hình học tham chiếu không chặn cổng bảo toàn.** *(`geometry/package.py`: phần tử strategy `NONE` có mesh lưu byte-giống nguồn thì qua, ghi `reference_only`; phần tử phát ra FDS vẫn bị chặn. `tests/test_reference_geometry_preservation.py` có cả hai phía. Chưa đo lại trên C.)*
+  `geometry/package.py` (`audit_package`): phần tử `mapping_strategy` `NONE`/`REFERENCE_GEOMETRY` (không xuất ra FDS) → lỗi tự giao cắt ghi thành thông tin, không `fail`. Test với fixture MEP có sẵn (`tests/baseline/fixtures/mep.ifc`).
+  Kiểm: C không còn finding `geometry_preservation` từ phụ kiện tham chiếu.
+- [x] **M1.4 Georeference và chọn tầng.** *(`SourceMetadata.georeference.status=SOFTWARE_DEFAULT_SITE_LOCATION` khi Site là vị trí mặc định Revit (Boston) và không có CRS, kèm finding P2 `georeference`; `ifc_site_count`; mô hình > 1 `IfcSite` bắt buộc `scope.storeys` hoặc `scope.bounding_box`, nếu không lỗi mã 3. A và C là Boston mặc định; C có 5 IfcSite.)*
+  Finding P2 khi Site có tọa độ mặc định và không có CRS. Khi mô hình có > 1 `IfcSite` hoặc tầng trùng cao độ/âm lẫn lộn như C: yêu cầu `--storey`, thoát mã 3 kèm danh sách tầng. Test trên fixture tổng hợp.
+- [x] **M1.5 Ba test cache cũ.** *(NGUYÊN NHÂN: giới hạn đường dẫn Windows 260 ký tự. Tên file tạm của cache gồm SHA 64 + UUID 32 ký tự nên vượt giới hạn khi thư mục dài; `write_package` lỗi và bị nuốt âm thầm nên cache không bao giờ được ghi. CI bật đường dẫn dài nên không gặp. Đã rút ngắn tên file tạm ở `geometry/storage.py`, `geometry/cache.py`, `geometry/preview_cache.py`. Suite: 0 lỗi.)* Tìm nguyên nhân từng cái (nghi khóa cache/đường dẫn cache trong test). Sửa mã hoặc sửa test; xóa chỉ khi hành vi được test không còn tồn tại, ghi lý do.
+- [x] **M1.6 Hai test `xfail`.** *(FDS rỗng: cổng `geometry` giờ `INCONCLUSIVE` khi không so sánh được solid nào, thay assertion 'mọi cổng INCONCLUSIVE' của runner cũ bằng test hợp đồng thật; test primitive kịch bản cháy giữ `xfail` có chủ ý: engine chỉ audit deck gốc.)* FDS rỗng: cho các cổng phụ thuộc deck thành `INCONCLUSIVE` khi không có primitive nào. Traceability primitive kịch bản: để nguyên `xfail`, ghi quyết định "engine chỉ audit deck gốc" vào docstring.
+- [~] **M1.7 Hiệu năng.** *(ĐO XONG, MỤC TIÊU CHƯA ĐẠT; máy bình thường, cold, tuần tự: FZK 14 s, Duplex 13 s, Institute 76 s, B 13 s, **A 211 s** (hình học 58 + đọc lại 52 + validation 75 + audit gói 15; mục tiêu 120), **C chọn tầng hầm 477 s** (đọc lại nguồn 350 s vì dựng mesh cho cả 3.165 phần tử NGOÀI phạm vi; mục tiêu 300). Đã làm: quét "sạch" bỏ qua phần tử tham chiếu, prefetch song song 4 worker, so byte thay `compare_solids` cho phần tử tham chiếu (audit gói A 489 → 15 s). **Còn mở:** (1) áp phạm vi tầng trước khi dựng hình học (cần xác định phần tử cắt qua khoảng cao độ mà không cần mesh; `mapping/scope.py` hiện cần mesh); (2) tái dùng bằng chứng tự giao cắt cho instance cùng `geometry.id`; (3) lọc chiếu cho mesh cong nặng. Chữ ký mốc: `docs/evidence/production-roadmap/real-{A,B,C}.json`.)*
+  Mục tiêu gốc và thứ tự thử: Mục tiêu A ≤ 120 s, C (chọn tầng hầm) ≤ 300 s.
+  Thứ tự thử, đo sau mỗi bước bằng `stage-profile.py`:
+  1. Tái dùng bằng chứng tự giao cắt cho các instance cùng `geometry.id`: quét ở **tọa độ cục bộ** một lần (kết quả là thuộc tính của hình, không phụ thuộc vị trí). Cần truyền mesh cục bộ + ma trận tới preflight; chứng minh bằng test: verdict cục bộ = verdict thế giới trên bộ fixture M0.3.
+  2. Giảm cặp ứng viên cho mesh cong nặng: lọc theo khoảng chiếu lên pháp tuyến trước số học chính xác.
+  3. Audit gói (C: 117 s): bỏ lần so sánh lặp khi mesh đã chứng minh giống byte.
+- **Đã làm thêm ở review (commit sau `a498915`):** phần tử `NONE` bị bỏ qua trong preflight tự giao cắt (không chặn cổng sau, đỡ quét hàng nghìn mesh MEP); `JobRepository` thử lại theo ngân sách thời gian (không theo số lần).
+- **Cổng M1:** B `MAPPING_VERIFIED`, hoặc chỉ còn lỗi nguồn đã duyệt có ghi vết; A không còn `UNSUPPORTED` do công cụ; thời gian đạt mục tiêu (hoặc ghi số thật và lý do); suite không còn lỗi "đã biết".
+
+## M2 — Hình học hiệu dụng cấp solver (2–3 tuần)
+
+- [x] **M2.0 Có FDS.** *(`python scripts/install-fds.py` cài bản ghim hash vào `.deps/` (gitignore, không cài hệ thống); `IFCFDS_SOLVER=<.deps/.../fds_openmp.exe> pytest -m solver`: 11 test solver đạt trên máy dự án.)* Cài FDS 6.11.1 trên máy dự án (Windows) hoặc dùng WSL; `-m solver` chạy được tại chỗ. Xác nhận job `solver` của CI đang xanh.
+- [x] **M2.1 Hộp phủ cho tường trực giao có lỗ.** *(XONG, MẶC ĐỊNH BẬT từ M2.5; `IFCFDS_OBST_BOX_SETS=0` tắt. `geometry/rectilinear.py`: tổng quát hóa `OBST` thành một hoặc nhiều `&OBST`; chỉ nhận solid MỘT vỏ, lỗ phải được chứng minh đã trừ khỏi host (`_openings_are_cut`, không bao giờ lấp lỗ), hộp phủ phải qua chính `compare_solids` của cổng kiểm định (`is_exact_match`). Cửa và cửa sổ nhiều thành phần giữ `GEOM`. ĐO TRÊN A: 0% OBST. Cả 356 tường, 17 tường khác và 63 sàn của A đều không thẳng trục (tòa nhà có nhiều cánh theo các hướng khác nhau, hướng trội khoảng 40° chỉ chiếm khoảng 14% số mặt), nên không thể là hộp. Muốn có OBST trên A phải quay mô hình về lưới theo từng cánh hoặc chấp nhận xấp xỉ bậc thang; cả hai là quyết định kỹ thuật cần phê duyệt. Lợi ích thực của M2.1 nằm ở mô hình thẳng trục như FZK.)*
+- [x] **M2.5 Làm `air_path` đáng tin trên mặt trùng nhau.** *(XONG: khi MỌI phần tử vỏ bao đều có chứng minh `is_exact_match` từ so sánh hình học (cùng cổng kiểm định, không dùng exporter) thì `air_path` PASS với `method=ALL_ENCLOSURES_PROVEN_EQUAL` và không chạy Boolean; các trường hợp còn lại giữ đường Boolean cũ. Lý do: solid bằng nhau thì không thể rò, còn Boolean của Manifold trên mặt trùng cho thể tích âm hoặc rò giả (Duplex từng báo rò 2,32 hoặc 2,54 m³ tùy cách tessellate cùng một IFC; FZK nguyên tòa nhà ra −0,10 m³). Kết quả: FZK, Duplex và A đều `air_path` PASS (A: 435 vỏ bao). Hộp phủ bật mặc định. Test Duplex cũ đã sửa theo yêu cầu của người dùng: bỏ assert rò 2,32 m³ và 8/9 khoang (là nhiễu), thay bằng kiểm bằng chứng từng phần tử. Hai snapshot parity b và c chỉ đổi các trường GEOM→OBST (chiến lược, ID, số lượng, hash manifest), không đổi trạng thái hay finding. GIỚI HẠN: mô hình có phần tử vỏ bao lệch vẫn đi đường Boolean và có thể INCONCLUSIVE.)*
+  `mapping/policy.py` thêm chiến lược; `mapping/exporter.py` xuất nhiều `&OBST` cho một phần tử; `plan_validation.py`, manifest, parser nhận nhiều primitive cho một entity.
+  Thuật toán: mesh là đa diện trực giao (mọi pháp tuyến song song trục) → lưới từ tọa độ đỉnh duy nhất → giữ ô có tâm trong solid (winding number, hàm đã có ở `component_union.winding_numbers`) → gộp tham lam thành hộp.
+  Chứng minh: `compare_solids(mesh nguồn, [các hộp])` phải `surface_proven`. Không chứng minh được → giữ `GEOM`.
+  Test: tường 1 lỗ, 2 lỗ, lỗ chạm mép, tường chữ L; tường nghiêng vẫn `GEOM`.
+  Đo: % vật cản OBST/OBST_SET trên A.
+- [x] **M2.2 Cổng hiệu dụng theo phần tử.** *(XONG: `validation/effective.py` không còn từ chối cả deck vì có `GEOM`, `VENT` hay `CTRL_ID`. `GEOM` thành INCONCLUSIVE riêng phần tử (evidence `elements`), còn lỗi thật ở OBST hoặc VENT vẫn là FAIL nên không bị che. `VENT` phẳng: đọc từ SMV thật (VENTORIG và bảng VENT, chỉ số đã snap), kiểm tồn tại, không collapse, không lệch ô; vent cắt ngang ranh giới hai mesh đã kiểm bằng solver thật. OBST có `CTRL_ID` hoặc `DEVC_ID` vẫn nằm trong bảng OBST của SMV: kiểm biên ở trạng thái đóng, và các cặp tĩnh (trạng thái mở) kiểm khe; cặp có vật điều khiển được bỏ qua vì khi đóng nó được phép bịt khung. Sửa dung sai: SMV in 5 chữ số thập phân nên lưới không tròn (A: 0,19952 m) lệch tới 5e-6 so với FDS, và `atol` 1e-7 cũ luôn báo "lưới không đều" trên mô hình thật (`SMV_PRECISION_M`). `HOLE` vẫn INCONCLUSIVE cả deck. Fixture SMV do FDS 6.11.1 sinh ra nằm ở `tests/data/effective/`.)*
+- [x] **M2.3 Cổng độ phân giải lối thông.** *(XONG: `validation/passage_resolution.py`, gate `passage_resolution` thuộc nhóm mô phỏng nên không đổi hợp đồng mapping. Lỗ mở hộp có nhịp thông dưới 2 ô, hoặc vách vỏ bao có hai mặt cùng snap về một mặt phẳng lưới, thành FAIL kèm tên phần tử và cỡ ô đề xuất; finding có `verification_level=simulation`. Ca ô 1,0 m trên fixture opening: mapping vẫn MAPPING_VERIFIED, simulation REJECTED; dùng cỡ ô đề xuất thì PASS. GIỚI HẠN: lỗ không phải hộp trục (A: 177 lỗ) chưa ước lượng được nên gate INCONCLUSIVE thay vì PASS giả.)*
+- [~] **M2.4 Chạy thật.** *(FZK và A đã chạy với FDS 6.11.1 qua `convert`. A (253 s, cache lạnh): solver PASS (khởi tạo thành công), `air_path` PASS, `effective_geometry` INCONCLUSIVE vì cả 546 phần tử là GEOM (liệt kê tên từng phần tử), `passage_resolution` INCONCLUSIVE (177 lỗ không phải hộp), verdict vẫn REJECTED do 22 cửa UNSUPPORTED (lỗi nguồn). CHƯA ĐẠT mục tiêu `effective_geometry` PASS trên A vì A hoàn toàn là GEOM; cần đọc đầu ra cut-cell của GEOM hoặc thay bằng OBST, xem M2.1.)*  A: `convert --solver <fds>` với `T_END=0`; lưu bằng chứng tổng hợp.
+- **Cổng M2:** A: solver `PASS`; `effective_geometry` `PASS` cho mọi OBST/VENT; ≥ 90% vật cản là OBST/OBST_SET; phần GEOM còn lại có danh sách review.
+
+## M3 — HVAC vận hành trên C (3–4 tuần; cần đầu vào B-ext 1–3)
+
+- [ ] **M3.1 Phân loại phụ kiện theo tên họ** (IFC2X3 không có `PredefinedType`): bảng cấu hình tên họ → {cút, côn/chuyển tiết diện, tê, nắp bịt}; phần tử không khớp → `REVIEW_REQUIRED`. File: `mep/classifier.py`. *(CHƯA LÀM, cần người dùng duyệt bảng vì bộ phân loại hiện cố ý không đoán từ tên. Dữ liệu thật của C: 478 `IfcFlowFitting` thuộc 7 họ: cút ống gió vuông 182, chuyển tiết diện vuông–tròn 100, côn ống gió vuông 78, gót giày 60, đầu bịt 34, Y 16, tê 8. C không có quạt hay van gió riêng (IFC2X3 không có `IfcFan`), nên lưu lượng phải đến từ thiết kế từng miệng. 84 phụ kiện (gót giày, Y, tê) có từ 3 cổng nên cần tổn thất nút.)*
+- [ ] **M3.2 Phạm vi hệ thống.** `system_decisions` gán từng hệ (PAD/CEAD/…) là hút khói / cấp bù / ngoài phạm vi; ống nước SPR → vật cản thụ động hoặc loại có lý do. *(CHƯA LÀM: cần B-ext 2.)*
+- [~] **M3.3 Mở rộng spec** `domain/mep/hvac.py`: spec theo loại (duct, fitting 2 cổng với `loss=(K_thuận,K_ngược)` + chiều dài đường tâm, junction với `LOSS(I,J)`, fan với lưu lượng hoặc đường cong, damper với điều khiển); `EndpointSpec.vent_xb` có trường frame WORLD/REBASED. *(XONG phần: `DuctSpec.loss`, phụ kiện hai cổng, quạt lưu lượng cố định. CHƯA: tê/junction với `LOSS(I,J)`, đường cong quạt, damper, trường frame của `vent_xb`.)*
+- [~] **M3.4 Biên dịch.** `mep/network.py` bỏ guard chỉ-ống-thẳng theo từng loại đã hỗ trợ; `mep/fds_records.py` sinh `&HVAC` tương ứng; `validation/parser.py` + `checkers/hvac.py` nhận. Hướng dòng của cổng `SOURCEANDSINK` suy từ quạt/đầu cuối đã duyệt; không suy được → lỗi rõ ràng. *(XONG phần: guard theo loại, `LOSS` trên DUCT, parser và checker độc lập nhận bản ghi mới. Phụ kiện bắt buộc có K và chiều dài đường tâm đã duyệt (không dùng dây cung); K bất đối xứng và quạt bắt buộc cổng SINK/SOURCE, không bao giờ suy hướng. Phụ kiện ≥3 cổng báo lỗi rõ ràng. CHƯA: NODE với `LOSS(I,J)`.)*
+- [ ] **M3.5 Đầu cuối → biên.** 130 `IfcFlowTerminal` → `VENT` trên mặt OBST gần nhất hoặc `AMBIENT`, theo quyết định duyệt. *(CHƯA LÀM: cần B-ext 3.)*
+- [~] **M3.6 Kiểm chứng bằng FDS.** (a) quạt + ống + cút: Δp–Q so lời giải tay ±5%; (b) tê: bảo toàn khối lượng < 1%; (c) đảo chiều. *(XONG (a) và (c) với FDS 6.11.1 qua `tests/test_hvac_fds_pressure.py` (`-m solver`): deck sinh từ chính `render_network`; thuận 12,02 Pa vs tay 12,08 Pa; đảo chiều 23,97 vs 24,08 (dùng đúng K ngược, nhầm thứ tự sẽ ra 12,08). CHƯA (b) vì chưa có tê. PHÁT HIỆN CẦN KỸ SƯ QUYẾT: (1) `ROUGHNESS=0` nghĩa là KHÔNG ma sát trong FDS, không phải ống trơn; (2) FDS tính ma sát theo đường kính tương đương tròn √(4A/π) và bỏ qua `PERIMETER`, khớp 0,2% cả ba ca đo; với ống chữ nhật 0,5×0,3 m ma sát thấp hơn công thức sách giáo khoa (D_h = 4A/P) khoảng 18%. Cổng `hvac` nay báo cả hai thành finding P2 `verification_level=simulation` (không chặn verdict mapping); chưa tự hiệu chỉnh vì cần quyết định kỹ thuật.)*
+- **Cổng M3:** một nhánh hút khói thật của C biên dịch đủ, FDS chạy tới `T_END`, lưu lượng miệng hút ±10% thiết kế.
+
+## M4 — Cháy xe điện (3–4 tuần; cần đầu vào B-ext 4)
+
+- [ ] **M4.1 Preset.** Thêm `e-moped`/`e-motorbike`, sửa `auto-nmc` trong `reference-cases/ev-library/` theo số đo whole-vehicle; mỗi preset có citation, miền áp dụng. *(BỊ CHẶN: cần B-ext 4. Trong lúc chờ, số đo được phép dùng có thể phát lại thẳng bằng M4.2.)*
+- [x] **M4.2 Replay đường HRR đo** (CSV → `RAMP`) trong `fire/scenario_emitter.py`. *(XONG: `EVSelection.hrr_curve_kw` (thời gian sau đánh lửa s, HRR kW) cùng `hrr_curve_source` bắt buộc một dòng. Từ chối đường không bắt đầu ở t=0, thời gian không tăng, giá trị âm, hoặc `peak_hrr_mw` mâu thuẫn; đỉnh suy từ đường đo và vẫn phải nằm trong miền của preset. RAMP phát đúng từng điểm (có độ trễ đánh lửa); `assess_scenario_physics` đọc lại năng lượng từ deck. Việc đọc tệp CSV để dựng danh sách điểm là của phía gọi.)*
+- [ ] **M4.3 HF/HCN.** Xác minh cú pháp với FDS User's Guide 6.11.1 và chạy setup **trước khi viết mã**; yield từ dữ liệu nguyên xe. *(BỊ CHẶN: cần B-ext 4.)*
+- [ ] **M4.4 Biên truyền nhiệt.** `MATL` + `SURF` có `MATL_ID`/`THICKNESS` cho bê tông/thép, tính chất có nguồn. *(BỊ CHẶN: cần nguồn tính chất vật liệu được duyệt.)*
+- [~] **M4.5 Kiểm chứng.** Ca 1 xe khoang nhỏ: `_hrr.csv` khớp `RAMP` ±5%; năng lượng khớp `assess_scenario_physics`. *(XONG trên ca tổng hợp với FDS 6.11.1, `tests/test_hrr_curve_replay.py` (`-m solver`): năng lượng 8,402 MJ so với 8,4 MJ (0,02%); trung bình vùng đỉnh 45–80 s 119,98 kW so với 120 kW; đạt nửa đỉnh ở 21 s so với 20 s. ĐIỀU CHỈNH TIÊU CHÍ: HRR tức thời của FDS dao động khoảng ±10% do rối và trễ khoảng 1 s so với nhiên liệu cấp vào, nên so từng điểm ±5% không có ý nghĩa vật lý; test so năng lượng (±1%), trung bình vùng đỉnh (±5%) và thời điểm. CHƯA: ca trên A, cần preset và vị trí xe.)*
+- **Cổng M4:** kịch bản 1 xe máy điện + 1 ô tô trên A chạy tới `T_END`; báo cáo nêu miền áp dụng và bất định.
+
+## M5 — Vận hành API và nghiệm thu (2–3 tuần; phần API làm song song từ sau M1)
+
+- [x] **M5.1** `TMPDIR` về volume jobs (`compose.production.yml`); smoke test upload 2×150 MiB trong `container.yml`. *(XONG phần mã: lỗi gốc là Starlette ghi phần multipart lớn vào `TMPDIR`, mặc định `/tmp` của container chỉ là tmpfs 256 MiB trong khi một job được tới 500 MiB. Compose đặt `TMPDIR=/var/lib/ifctofds/jobs/.upload-tmp` (trên volume); `serve` tạo thư mục này, dọn phần sót của lần upload bị ngắt, và từ chối khởi động nếu không chuẩn bị được thay vì âm thầm quay về `/tmp`. ĐO BẰNG DOCKER 29.9.3 trên image mặc định với đúng cờ production (root read-only, bỏ mọi capability, `/tmp` tmpfs 256 MiB): upload 2×150 MiB KHÔNG có `TMPDIR` bị từ chối (HTTP 400 "error parsing the body", tức đây là lỗi thật của cấu hình hiện hành); CÓ `TMPDIR` trên volume thì HTTP 202 trong 2 giây. `scripts/production-upload-smoke.py` stream 2×150 MiB tới `POST /api/jobs`, mong HTTP 202 rồi hủy và xóa job; bước mới trong job `container` của CI chạy nó qua HTTPS. Bước CI mới chạy qua HTTPS trong stack đầy đủ; bước đó chưa chạy trên CI.)*
+- [~] **M5.2** Job dài (C ~10 phút): timeout scheduler, RSS đỉnh, tiến độ trên web; tải gần hạn mức; khởi động lại giữa chừng. *(CHƯA LÀM: cần chạy C qua API với `--storey` và ghi RSS đỉnh; làm sau khi M1.7 rút ngắn thời gian.)*
+- [x] **M5.3** Diễn tập backup/restore (`operations/offline_backup.py`). *(XONG: `tests/test_backup_restore_drill.py` chạy một chuyển đổi thật tới COMPLETED, dừng `JobService`, `create_offline_backup`, `restore_offline_backup` vào gốc mới, mở lại `JobService` trên bản khôi phục và so kết quả cùng hash từng tệp artifact. Test cũ chỉ dùng job tổng hợp. Lưu ý Windows: gốc thư mục phải ngắn vì đường dẫn artifact vượt MAX_PATH 260.)*
+- [x] **M5.4** Image có FDS 6.11.1 (hash cố định). *(XONG phần mã: `Dockerfile` có stage `runtime`, target tùy chọn `solver` và stage cuối `image` = `runtime` nên `docker build` mặc định không đổi. Target `solver` tải bản Linux chính thức `FDS-6.11.1_SMV-6.11.2_lnx.sh`, kiểm SHA-256 cả tệp (`ba8793b9…`, khớp digest GitHub công bố) và của `fds_openmp` (`5e7cab03…`), cắt tar nhúng đúng như bộ cài rồi chỉ giữ solver OpenMP và MPI đi kèm (~175 MB), đặt `IFCFDS_SOLVER` và đường thư viện. Đã kiểm trong WSL Ubuntu: giải nén, `ldd` đầy đủ khi có `LD_LIBRARY_PATH`, set-up deck fixture thành công, SMV Linux trùng từng dòng với SMV Windows trong `tests/data/effective/`. ĐÃ BUILD VÀ CHẠY CỤC BỘ bằng Docker: image `solver` 1,66 GB, hash cả hai khớp trong lúc build, probe `solver_gates` + `effective_geometry` đạt trong container với root read-only, bỏ mọi capability, `/tmp` noexec; image mặc định không có `/opt/fds`. Job CI mới `solver-image` build target và chạy `scripts/container-solver-probe.py` (`solver_gates` + `effective_geometry` của dự án) với root read-only, bỏ mọi capability, `/tmp` noexec.)*
+- [ ] **M5.5** CLI và web cho cùng deck (so hash) trên A.
+- [ ] **M5.6** Nghiên cứu lưới 3 mức cho QoI đã chốt (`fire/grid_sensitivity_*`).
+- [ ] **M5.7** Kỹ sư PCCC độc lập review deck + báo cáo; ghi giờ công so với dựng tay.
+- **Cổng cuối (Definition of Done):**
+  - CLI và web cho `MAPPING_VERIFIED` (hoặc `REJECTED` chỉ với lỗi nguồn thật đã xác nhận) trên A.
+  - Deck có HVAC hút khói + kịch bản cháy xe chạy FDS 6.11.1 tới `T_END`.
+  - Thời gian chuyển đổi + audit đo và ghi (mục tiêu < 10 phút cho A, C).
+  - Kỹ sư ký nhận; mọi giới hạn nằm trong báo cáo.
+
+## B-ext. Đầu vào từ người dùng/kỹ sư (hỏi ngay, chặn M3–M5)
+1. C và A có cùng không gian hầm không; nếu có, transform chung giữa hai file.
+2. Nghĩa của PAD / CEAD / OAD-FAD / RAD / TEAD; hệ nào hút khói, hệ nào cấp bù.
+3. Hệ số tổn thất K, đường cong quạt, lưu lượng thiết kế từng miệng hút.
+4. Dữ liệu đo cháy xe nguyên chiếc được phép dùng (HRR theo thời gian, yield).
+5. QoI nghiệm thu (nhiệt độ/tầm nhìn tại lối thoát, độ cao lớp khói) và kỹ sư review.
+
+## Thứ tự và phụ thuộc
+`M0 → M1 → M2 → M3 → M4 → M5.5–5.7`. M5.1–M5.4 song song từ sau M1. M3 và M4 độc lập nhau sau M2, làm song song được nếu có hai người.
+Ước lượng một kỹ sư: M0 2 ngày, M1 2 tuần, M2 3 tuần, M3 4 tuần, M4 4 tuần, M5 3 tuần ≈ 3,5–4 tháng. Ước lượng thô; xem lại sau M1.
+
+## Ánh xạ sang số bước của bản 1
+5.5→M1.2, 5.6→M1.1, 5.7→M1.3, 5.8→M0.1–M0.4+M1.7, 5.9→M1.4, Giai đoạn 6→M2, 7→M3, 8→M4, 9→M5.1–5.4, 10→M5.5–5.7.

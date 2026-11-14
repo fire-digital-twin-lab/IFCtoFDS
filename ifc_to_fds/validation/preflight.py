@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from ifc_to_fds.domain.mapping.enums import MappingStrategy
 from ifc_to_fds.domain.scope.model import ScopeDecision
 from ifc_to_fds.geometry.mesh import (
     inspect_mesh_quality,
+    mesh_digest,
+    prefetch_self_intersection,
     self_intersection_evidence,
     valid_solid,
 )
@@ -22,6 +25,17 @@ def source_topology_preflight(model) -> Dict[str, Dict[str, Any]]:
     """
 
     evidence: Dict[str, Dict[str, Any]] = {}
+    # Heavy meshes are independent of each other: scan them in parallel, then the loop below reads the cache.
+    prefetch_self_intersection(
+        e.mesh
+        for e in model.elements
+        if e.role == "PHYSICAL"
+        and e.scope_decision in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+        and e.mesh
+        and e.mapping_strategy != MappingStrategy.NONE
+        and len(e.mesh.faces) >= 2000
+        and valid_solid(e.mesh)
+    )
     for element in model.elements:
         if (
             element.role != "PHYSICAL"
@@ -40,12 +54,25 @@ def source_topology_preflight(model) -> Dict[str, Dict[str, Any]]:
             }
             continue
 
+        if element.mapping_strategy == MappingStrategy.NONE:
+            # Never exported to FDS: a self-intersection cannot reach the solver, and scanning
+            # thousands of reference meshes (MEP) is the most expensive part of the preflight.
+            evidence[element.entity_key] = {"status": "PASS", "reason": "REFERENCE_ONLY"}
+            continue
+
         intersection = self_intersection_evidence(element.mesh)
         if intersection["status"] == "CONFIRMED":
             evidence[element.entity_key] = {
                 "status": "FAIL",
                 "reason": "SELF_INTERSECTION",
                 "mesh_quality": quality,
+                "self_intersection": intersection,
+                "mesh_sha256": mesh_digest(element.mesh),  # to cite in accepted_source_defects
+            }
+        elif intersection["status"] == "ACCEPTED_DEFECT":
+            evidence[element.entity_key] = {
+                "status": "PASS",
+                "reason": "ACCEPTED_DEFECT",
                 "self_intersection": intersection,
             }
         elif intersection["status"] == "UNCERTAIN":

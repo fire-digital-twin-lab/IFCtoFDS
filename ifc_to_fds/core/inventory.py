@@ -5,6 +5,7 @@ structures, property sets, and relationships in the source IFC model.
 """
 
 import hashlib
+import math
 import os
 from typing import Any, Dict, List, Optional, Tuple
 import ifcopenshell
@@ -94,6 +95,49 @@ def open_ifc(file_path):
     return ifcopenshell.open(file_path)
 
 
+# Revit's built-in site (Boston); authoring tools write it when no real location was set.
+SOFTWARE_DEFAULT_SITE = ((42, 21, 31, 181945), (-71, -3, -24, -263305))
+
+
+@operation("IFC_READ")
+def require_scope_for_multi_site(path):
+    """Several IfcSite entities usually mean merged level systems; the caller must pick storeys."""
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"IFC file not found: {path}")
+    ifc = open_ifc(path)
+    sites, storeys = len(ifc.by_type("IfcSite")), len(ifc.by_type("IfcBuildingStorey"))
+    if sites > 1:
+        raise ValueError(
+            f"Model has {sites} IfcSite entities and {storeys} storeys (often several merged level "
+            "systems); select scope.storeys (CLI: --storey) or scope.bounding_box"
+        )
+
+
+def extract_georeference(ifc_file):
+    """Record IfcMapConversion/IfcProjectedCRS (IFC4+). The simulation frame is unchanged."""
+    if ifc_file.schema == "IFC2X3":
+        return None
+    for conversion in ifc_file.by_type("IfcMapConversion"):
+        target = conversion.TargetCRS
+        abscissa, ordinate = conversion.XAxisAbscissa, conversion.XAxisOrdinate
+        map_unit = getattr(target, "MapUnit", None)
+        return dict(
+            crs=getattr(target, "Name", None),
+            map_unit=getattr(map_unit, "Name", None) if map_unit else None,
+            eastings=conversion.Eastings,
+            northings=conversion.Northings,
+            orthogonal_height=conversion.OrthogonalHeight,
+            x_axis_abscissa=abscissa,
+            x_axis_ordinate=ordinate,
+            scale=conversion.Scale,
+            rotation_deg=math.degrees(math.atan2(ordinate or 0.0, 1.0 if abscissa is None else abscissa)),
+        )
+    for site in ifc_file.by_type("IfcSite"):
+        if (site.RefLatitude and tuple(site.RefLatitude), site.RefLongitude and tuple(site.RefLongitude)) == SOFTWARE_DEFAULT_SITE:
+            return dict(status="SOFTWARE_DEFAULT_SITE_LOCATION", crs=None)
+    return None
+
+
 @operation("IFC_READ")
 def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
     if not os.path.isfile(file_path):
@@ -124,6 +168,7 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
         schema_version=schema,
         unit_length_name=unit_name,
         unit_scale_to_meters=unit_scale,
+        georeference=extract_georeference(ifc_file),
     )
 
     def ancestry(item):

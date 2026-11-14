@@ -180,13 +180,17 @@ def rebase_model_to_origin(
 ) -> Tuple[CanonicalModel, Tuple[float, float, float]]:
     rebase_vec = rebase_vector
     if rebase_vec is None and model.model_bounds:
-        if auto_rebase and (
-            abs(model.model_bounds.xmin) > 1000.0 or abs(model.model_bounds.ymin) > 1000.0
+        if auto_rebase and any(
+            abs(v) > 1000.0
+            for v in (model.model_bounds.xmin, model.model_bounds.ymin, model.model_bounds.zmin)
         ):
+            # Each axis is shifted only when it is itself large, so a model that is
+            # far away in X/Y keeps its Z (floors stay at their IFC elevation).
             rebase_vec = [
-                float(np.floor(model.model_bounds.xmin)),
-                float(np.floor(model.model_bounds.ymin)),
-                0.0,
+                float(np.floor(v)) if abs(v) > 1000.0 or axis < 2 else 0.0
+                for axis, v in enumerate(
+                    (model.model_bounds.xmin, model.model_bounds.ymin, model.model_bounds.zmin)
+                )
             ]
         else:
             rebase_vec = [0.0, 0.0, 0.0]
@@ -267,6 +271,9 @@ def rebase_model_to_origin(
                         port.world_position[1] - dy,
                         port.world_position[2] - dz,
                     ]
+        for storey in model.storey_references:
+            if storey.elevation_m is not None:
+                storey.elevation_m -= dz
         if model.model_bounds:
             model.model_bounds.xmin -= dx
             model.model_bounds.xmax -= dx
