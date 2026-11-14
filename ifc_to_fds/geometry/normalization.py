@@ -9,7 +9,7 @@ Independent readers must call this on their own freshly extracted IFC mesh.
 from collections import defaultdict
 import hashlib
 import json
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 from scipy.spatial import cKDTree

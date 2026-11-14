@@ -953,7 +953,6 @@ Tạo issue với ca tái hiện và kết quả mong đợi. Sửa thuật toá
 - [Kiến trúc và ADR](docs/architecture.md).
 - [Workflow Verified](docs/verified-conversion.md).
 - [Golden mapping/reference](docs/golden-mapping-parity.md).
-- [Kế hoạch biên soạn README tiếng Việt](docs/README_VI_PLAN_2026-11-02.md).
 
 Các báo cáo lịch sử phản ánh thời điểm ghi nhận; dùng trạng thái hiện tại và mã nguồn để biết tính năng đã được sửa sau đó.
 

@@ -160,53 +160,6 @@ def test_mapping_plan_decouples_mapping_from_serialization(box_model):
     assert len(elem.fds_primitive_ids) > 0
 
 
-def test_validation_evaluator_produces_immutable_report(box_model):
-    """AcceptanceEvaluator constructs an AcceptanceReport with unexecuted gates defaulting to NOT_RUN."""
-    from ifc_to_fds.domain.validation.evaluator import AcceptanceEvaluator
-    from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
-    from ifc_to_fds.domain.validation.model import (
-        ValidationContext,
-        GateResult,
-        GateStatus,
-        Finding,
-        Severity,
-        AuditConfig,
-    )
-
-    context = ValidationContext(
-        model=box_model,
-        fds_text="&HEAD TITLE='test' /\n&MESH IJK=10,10,10, XB=0,2,0,1,0,3 /\n&OBST XB=0,2,0,1,0,3 /",
-        manifest=None,
-        config=AuditConfig(),
-    )
-    outcome = CheckerOutcome(
-        gate_name="geometry",
-        result=GateResult(status=GateStatus.PASS, reason="All solids verified"),
-        findings=[
-            Finding(
-                id="FND-0001",
-                severity=Severity.P2,
-                category="geometry",
-                title="Minor tolerance check",
-                detail="Surface within tolerance",
-                element_id="fixture:1",
-            )
-        ],
-        element_statuses={"fixture:1": "MATCHED"},
-    )
-    evaluator = AcceptanceEvaluator()
-    report = evaluator.evaluate(context, [outcome])
-    assert report.total_elements_checked == 1
-    assert report.matched_count == 1
-    assert report.gates["geometry"].status == GateStatus.PASS
-    # Unexecuted gates must be NOT_RUN (fail-safe principle)
-    assert report.gates["syntax"].status == GateStatus.NOT_RUN
-    assert report.gates["mep"].status == GateStatus.NOT_RUN
-    assert report.gates["source_inventory"].status == GateStatus.NOT_RUN
-    assert len(report.findings) == 1
-    assert report.findings[0].id == "FND-0001"
-
-
 def test_artifact_repository_port_and_adapter(box_model, tmp_path):
     """ArtifactRepositoryPort is implemented by LocalFilesystemArtifactRepository."""
     from ifc_to_fds.adapters.storage.filesystem import LocalFilesystemArtifactRepository

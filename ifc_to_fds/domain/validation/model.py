@@ -27,7 +27,8 @@ AcceptanceVerdict = AcceptanceStatus
 # A mapping verdict is a positive scientific claim about ALL core IFC-to-FDS
 # comparisons, not merely the gates the caller happened to supply. Keep this
 # list shared with the persisted/public result contract.
-REQUIRED_MAPPING_GATES = frozenset({
+# Order is the report order of the mapping gates.
+MAPPING_GATE_ORDER = (
     "syntax",
     "source_inventory",
     "traceability",
@@ -40,7 +41,8 @@ REQUIRED_MAPPING_GATES = frozenset({
     "representation",
     "boundary",
     "domain",
-})
+)
+REQUIRED_MAPPING_GATES = frozenset(MAPPING_GATE_ORDER)
 
 # These core checks always have something to verify. An operator-supplied
 # NOT_APPLICABLE explanation cannot waive source re-reading, syntax, provenance,
@@ -53,6 +55,18 @@ NON_WAIVABLE_MAPPING_GATES = frozenset({
     "geometry",
     "representation",
     "domain",
+})
+
+
+# Simulation verification gates: they shape simulation_status, never the mapping verdict.
+SIMULATION_GATES = frozenset({
+    "solver",
+    "effective_geometry",
+    "physics",
+    "scenario",
+    "mesh_resolution",
+    "passage_resolution",
+    "operational_model",
 })
 
 
@@ -190,15 +204,7 @@ class AcceptanceReport(BaseModel):
         # simulation epic defines solver/physics/scenario/mesh gates. The
         # MAPPING_VERIFIED-only checkpoint seal in convert_verified.py relies on
         # this. Pinned by test_finalize_never_issues_simulation_verified.
-        simulation = {
-            "solver",
-            "effective_geometry",
-            "physics",
-            "scenario",
-            "mesh_resolution",
-            "passage_resolution",
-            "operational_model",
-        }
+        simulation = SIMULATION_GATES
         required = [
             g for name, g in self.gates.items() if g.required and name not in simulation
         ]

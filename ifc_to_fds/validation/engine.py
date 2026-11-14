@@ -1,7 +1,7 @@
 """Read serialized FDS and verify against a separate source reference model."""
 
 import hashlib
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional
 from ifc_to_fds.diagnostics import operation
 from .acceptance import (
     AcceptanceReport,
@@ -12,6 +12,8 @@ from .acceptance import (
     Severity,
 )
 from .parser import parse_fds
+from ifc_to_fds.domain.validation.model import MAPPING_GATE_ORDER
+
 from .passage_resolution import PassageResolutionChecker
 from .effective import check_opening_grid_alignment
 from .preflight import (
@@ -45,21 +47,7 @@ def run_independent_validation(
         total_elements_checked=len(model.elements), configuration=config.model_dump()
     )
     report.gates = {
-        name: GateResult(status=GateStatus.PASS)
-        for name in (
-            "syntax",
-            "source_inventory",
-            "traceability",
-            "scope",
-            "geometry",
-            "structural_completeness",
-            "air_path",
-            "openings",
-            "mep",
-            "representation",
-            "boundary",
-            "domain",
-        )
+        name: GateResult(status=GateStatus.PASS) for name in MAPPING_GATE_ORDER
     }
     report.gates["source_inventory"] = GateResult(
         status=GateStatus.INCONCLUSIVE,
