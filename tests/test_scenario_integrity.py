@@ -18,7 +18,6 @@ from ifc_to_fds.pipeline import convert, save_artifacts
 from ifc_to_fds.results import public_result
 from ifc_to_fds.validation.engine import run_independent_validation
 from ifc_to_fds.validation.parser import parse_fds
-from ifc_to_fds.validation.runner import ValidationRunner
 
 
 def test_scenario_worker_rejects_a_hash_without_a_verified_base(tmp_path):
@@ -376,9 +375,7 @@ def test_door_event_replaces_fixed_base_fill(box_model):
     assert parse_fds(base).records, 'Base mapping remains intact'
 
 
-def test_both_validation_paths_keep_mesh_inconclusive_and_collect_solver_evidence(
-    box_model,
-):
+def test_validation_keeps_mesh_inconclusive_and_collects_solver_evidence(box_model):
     text = (
         "&HEAD CHID='coarse' /\n"
         "&TIME T_END=0 /\n"
@@ -397,32 +394,19 @@ def test_both_validation_paths_keep_mesh_inconclusive_and_collect_solver_evidenc
     ) as engine_solver:
         engine = run_independent_validation(box_model, text)
         engine_solver.assert_called_once()
-    with patch(
-        "ifc_to_fds.validation.checkers.solver.solver_gates", return_value=pair
-    ) as runner_solver:
-        runner = ValidationRunner().validate(box_model, text)
-        runner_solver.assert_called_once()
 
-    assert engine.gates["syntax"].status == runner.gates["syntax"].status == "PASS"
-    assert (
-        engine.gates["mesh_resolution"].status
-        == runner.gates["mesh_resolution"].status
-        == "INCONCLUSIVE"
-    )
-    assert engine.gates["solver"].status == runner.gates["solver"].status == "PASS"
-    assert (
-        engine.gates["solver"].evidence["mesh_adequacy_status"]
-        == runner.gates["solver"].evidence["mesh_adequacy_status"]
-        == "INCONCLUSIVE"
-    )
+    assert engine.gates["syntax"].status == "PASS"
+    assert engine.gates["mesh_resolution"].status == "INCONCLUSIVE"
+    assert engine.gates["solver"].status == "PASS"
+    assert engine.gates["solver"].evidence["mesh_adequacy_status"] == "INCONCLUSIVE"
 
 
-def test_runner_preserves_effective_geometry_result(box_model):
+def test_validation_preserves_effective_geometry_result(box_model):
     text, manifest = serialize_fds(box_model)
-    with patch('ifc_to_fds.validation.checkers.solver.solver_gates', return_value=(
+    with patch('ifc_to_fds.validation.engine.solver_gates', return_value=(
         GateResult(status=GateStatus.PASS), GateResult(status=GateStatus.FAIL, reason='Changed effective solid')
     )):
-        report = ValidationRunner().validate(box_model,text,manifest)
+        report = run_independent_validation(box_model, text, manifest)
     assert report.gates['effective_geometry'].status == 'FAIL'
     assert report.simulation_status == 'REJECTED'
 

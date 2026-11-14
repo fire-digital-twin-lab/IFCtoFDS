@@ -116,22 +116,11 @@ def test_partial_switch_requires_actual_boolean():
 
 
 @pytest.mark.parametrize("partial", [False, True])
-def test_runner_uses_the_same_preflight_and_comparison_coverage(box_model, monkeypatch, partial):
-    from ifc_to_fds.validation.runner import ValidationRunner
-
-    healthy, text, manifest = mixed_artifact(box_model)
+def test_preflight_blocks_dependent_checks_in_every_comparison_mode(box_model, monkeypatch, partial):
+    _, text, manifest = mixed_artifact(box_model)
     block_global_checks(monkeypatch)
-
-    def forbidden(*args, **kwargs):
-        pytest.fail("Preflight must block dependent checks in ValidationRunner")
-
-    monkeypatch.setattr("ifc_to_fds.validation.checkers.solver.SolverChecker.check", forbidden)
-    monkeypatch.setattr("ifc_to_fds.validation.checkers.openings.OpeningsChecker.check", forbidden)
     config = AuditConfig(fail_fast_on_source_errors=True, collect_partial_geometry_evidence=partial)
-    engine_report = engine.run_independent_validation(box_model, text, manifest, config)
-    runner_report = ValidationRunner().validate(box_model, text, manifest, config)
-    assert runner_report.coverage["fds_export"] == engine_report.coverage["fds_export"]
-    assert runner_report.element_statuses[healthy.entity_key] == engine_report.element_statuses[healthy.entity_key]
-    assert runner_report.status == engine_report.status == "REJECTED"
+    report = engine.run_independent_validation(box_model, text, manifest, config)
+    assert report.status == "REJECTED"
     for gate in ("openings", "air_path", "solver", "effective_geometry"):
-        assert runner_report.gates[gate].status == engine_report.gates[gate].status == "NOT_RUN"
+        assert report.gates[gate].status == "NOT_RUN"

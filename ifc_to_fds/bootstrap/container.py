@@ -22,10 +22,6 @@ class Container:
         from ifc_to_fds.adapters.reference import FilesystemReferenceRepository
         return FilesystemReferenceRepository()
 
-    def get_validation_runner(self):
-        from ifc_to_fds.validation.runner import ValidationRunner
-        return ValidationRunner()
-
     def get_save_artifacts_use_case(self):
         from ifc_to_fds.application.use_cases.save_artifacts import SaveArtifactsUseCase
         return SaveArtifactsUseCase(repository=self.get_artifact_repository())

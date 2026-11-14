@@ -1,7 +1,7 @@
 """Mutation testing suite for independent validation and traceability (T01-T07).
 
 Validates that all six intentional mutation modes (T02-T07) are reliably detected
-and rejected by both the production validation engine and the modular runner:
+and rejected by the production validation engine:
 - T01: Clean baseline (not mutated)
 - T02: Geometry shift mutation (translated XB)
 - T03: Primitive omission / missing solid mutation (deleted &OBST)
@@ -20,14 +20,11 @@ from ifc_to_fds.mapping.manifest import build_manifest
 from ifc_to_fds.mapping.policy import plan_mapping
 from ifc_to_fds.validation.acceptance import AcceptanceStatus, GateStatus, Severity
 from ifc_to_fds.validation.engine import run_independent_validation
-from ifc_to_fds.validation.runner import ValidationRunner
 
 
-def audit_both(model, fds_text, manifest, config=None):
-    """Runs both validation engines and returns their reports."""
-    rep_eng = run_independent_validation(model, fds_text, manifest, config=config)
-    rep_run = ValidationRunner().validate(model, fds_text, manifest, config=config)
-    return rep_eng, rep_run
+def audit(model, fds_text, manifest, config=None):
+    """Runs the production validation engine and returns its report."""
+    return run_independent_validation(model, fds_text, manifest, config=config)
 
 
 def test_t01_clean_baseline(box_model):
@@ -35,16 +32,12 @@ def test_t01_clean_baseline(box_model):
     fds_text, _ = serialize_fds(box_model)
     manifest = build_manifest(box_model, fds_text)
 
-    rep_eng, rep_run = audit_both(box_model, fds_text, manifest)
+    rep_eng = audit(box_model, fds_text, manifest)
 
     assert rep_eng.status != AcceptanceStatus.REJECTED
-    assert rep_run.status != AcceptanceStatus.REJECTED
     assert rep_eng.gates["geometry"].status == GateStatus.PASS
-    assert rep_run.gates["geometry"].status == GateStatus.PASS
     assert rep_eng.gates["traceability"].status == GateStatus.PASS
-    assert rep_run.gates["traceability"].status == GateStatus.PASS
     assert rep_eng.missing_count == 0
-    assert rep_run.missing_count == 0
 
 
 def test_t02_geometry_shift_mutation(box_model):
@@ -55,14 +48,11 @@ def test_t02_geometry_shift_mutation(box_model):
     shifted_fds = fds_text.replace("XB=0,2,0,1,0,3", "XB=0.5000,2.5000,0.0000,1.0000,0.0000,3.0000")
     manifest = build_manifest(box_model, shifted_fds)
 
-    rep_eng, rep_run = audit_both(box_model, shifted_fds, manifest)
+    rep_eng = audit(box_model, shifted_fds, manifest)
 
     assert rep_eng.status == AcceptanceStatus.REJECTED
-    assert rep_run.status == AcceptanceStatus.REJECTED
     assert rep_eng.gates["geometry"].status == GateStatus.FAIL
-    assert rep_run.gates["geometry"].status == GateStatus.FAIL
     assert rep_eng.element_statuses[wall_key] == "DEVIATED"
-    assert rep_run.element_statuses[wall_key] == "DEVIATED"
     assert any(f.category == "geometry" and f.severity == Severity.P1 for f in rep_eng.findings)
 
 
@@ -74,16 +64,12 @@ def test_t03_missing_solid_mutation(box_model):
     missing_fds = re.sub(r"&OBST[^/]+/", "", fds_text)
     manifest = build_manifest(box_model, missing_fds)
 
-    rep_eng, rep_run = audit_both(box_model, missing_fds, manifest)
+    rep_eng = audit(box_model, missing_fds, manifest)
 
     assert rep_eng.status == AcceptanceStatus.REJECTED
-    assert rep_run.status == AcceptanceStatus.REJECTED
     assert rep_eng.missing_count == 1
-    assert rep_run.missing_count == 1
     assert rep_eng.element_statuses[wall_key] == "MISSING"
-    assert rep_run.element_statuses[wall_key] == "MISSING"
     assert rep_eng.gates["traceability"].status == GateStatus.FAIL
-    assert rep_run.gates["traceability"].status == GateStatus.FAIL
     assert any(f.severity == Severity.P0 and f.element_id == wall_key for f in rep_eng.findings)
 
 
@@ -94,12 +80,10 @@ def test_t04_provenance_tampering_mutation(box_model):
     tampered_fds = fds_text.replace('"entity_key": "fixture:1"', '"entity_key": "forged:9999"')
     manifest = build_manifest(box_model, tampered_fds)
 
-    rep_eng, rep_run = audit_both(box_model, tampered_fds, manifest)
+    rep_eng = audit(box_model, tampered_fds, manifest)
 
     assert rep_eng.status == AcceptanceStatus.REJECTED
-    assert rep_run.status == AcceptanceStatus.REJECTED
     assert rep_eng.gates["traceability"].status == GateStatus.FAIL
-    assert rep_run.gates["traceability"].status == GateStatus.FAIL
     assert any(f.category == "traceability" and f.severity == Severity.P0 for f in rep_eng.findings)
 
 
@@ -128,12 +112,10 @@ def test_t05_void_omission_mutation(box_model):
     resealed_fds, _ = serialize_fds(mutant_model)
     manifest = build_manifest(box_model, resealed_fds)
 
-    rep_eng, rep_run = audit_both(box_model, resealed_fds, manifest)
+    rep_eng = audit(box_model, resealed_fds, manifest)
 
     assert rep_eng.status == AcceptanceStatus.REJECTED
-    assert rep_run.status == AcceptanceStatus.REJECTED
     assert rep_eng.gates["openings"].status == GateStatus.FAIL
-    assert rep_run.gates["openings"].status == GateStatus.FAIL
     assert any(f.category == "openings" and f.severity == Severity.P1 for f in rep_eng.findings)
 
 
@@ -153,12 +135,10 @@ def test_t06_air_leak_mutation(box_model):
     )
     manifest = build_manifest(box_model, leaked_fds)
 
-    rep_eng, rep_run = audit_both(box_model, leaked_fds, manifest)
+    rep_eng = audit(box_model, leaked_fds, manifest)
 
     assert rep_eng.status == AcceptanceStatus.REJECTED
-    assert rep_run.status == AcceptanceStatus.REJECTED
     assert rep_eng.gates["air_path"].status == GateStatus.FAIL
-    assert rep_run.gates["air_path"].status == GateStatus.FAIL
     assert any(f.category == "air_path" and f.severity == Severity.P1 for f in rep_eng.findings)
 
 
@@ -170,10 +150,8 @@ def test_t07_domain_mismatch_mutation(box_model):
     tampered_domain_fds = fds_text.replace("XB=0,2,0,1,0,3", "XB=1.0000,3.0000,0.0000,1.0000,0.0000,3.0000")
     manifest = build_manifest(box_model, tampered_domain_fds)
 
-    rep_eng, rep_run = audit_both(box_model, tampered_domain_fds, manifest)
+    rep_eng = audit(box_model, tampered_domain_fds, manifest)
 
     assert rep_eng.status == AcceptanceStatus.REJECTED
-    assert rep_run.status == AcceptanceStatus.REJECTED
     assert rep_eng.gates["domain"].status == GateStatus.FAIL
-    assert rep_run.gates["domain"].status == GateStatus.FAIL
     assert any(f.category == "domain" for f in rep_eng.findings)
