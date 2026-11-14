@@ -138,3 +138,53 @@ Mở rộng `decision["hvac"]` (đang validate bằng `DuctSpec` ở `domain/mep
 
 ## Ước lượng tổng
 Khoảng 4–5 tháng cho 1 kỹ sư; Giai đoạn 2/3 và 9 chạy song song được. Giai đoạn 7–8 phụ thuộc dữ liệu ngoài (hệ số K, đường cong quạt của dự án; số đo cháy whole-vehicle).
+
+---
+
+# Bổ sung theo dữ liệu thật (đo 2026-11-14, nhánh `feat/phase5-4-component-union`)
+
+Ba IFC thật của dự án, đặt ngoài repo; bí danh dùng ở đây (không ghi tên file/GUID vì tài liệu được commit):
+**A** = hầm 2 tầng, **B** = một tầng của tòa nhà (tầng 7), **C** = mô hình tổng hợp có MEP.
+Cả ba đều **IFC2X3**, mọi placement hợp lệ (`CONFIRMED`, không có placement xiên), không có `IfcMapConversion`.
+
+| | A hầm 2 tầng | B tầng 7 | C tổng hợp + MEP |
+|---|---|---|---|
+| Kích thước / sản phẩm | 32,7 MB / 793 | 0,9 MB / 279 | 31,6 MB / 5.641 |
+| Đơn vị | mm | mm | **foot** (đã nhận đúng, bước 4.2) |
+| Tầng | HẦM 1, HẦM 2 | 15 tầng, nhưng hình học chỉ ở một tầng (z 19,6–23,7 m) | 63 tầng gồm hai hệ cao độ trộn lẫn (tầng kiểu Revit mẫu + HẦM B1/B2), z −13,1…38,5 m |
+| Tọa độ gốc rebase | (578753; 2318413) | (592990; 1198459) | (0; 0) |
+| MEP | không | không | 922 đoạn (588 ống nước/chữa cháy, 296 ống gió chữ nhật, 38 ống gió mềm), 478 phụ kiện, 130 đầu cuối, 68 hệ thống, 2.392 cổng |
+| Verdict hiện tại | REJECTED | REJECTED | REJECTED |
+| Thời gian `convert` | **377 s** | 17 s | **1.008 s (17 phút)** |
+| Phần tử DEVIATED/UNSUPPORTED | 4 / 22 | 11 / 0 | 16 / 4 (+142 finding bảo toàn hình học) |
+
+Phát hiện và hệ quả:
+1. **Chậm theo cỡ thật.** Ví dụ mẫu 10–60 s, file thật 6–17 phút: A hình học 111 s + đọc lại 89 s + validation 113 s; C hình học 296 s, đọc lại 193 s, validation 209 s, audit gói 269 s.
+2. **Cửa và lan can vẫn gây lỗi nguồn** sau 5.4: "union vẫn tự giao cắt" (B 11, A ~10, C ~60), "union không phải solid kín" (C ~10); cửa của A có **21 solid không-manifold** (open + non-manifold + inconsistent edges), nghi do hàn đỉnh giữa các representation item chạm nhau theo cạnh.
+3. **MEP trong C chưa dùng được cho mô phỏng:** 1.722/2.986 phần tử vật lý có strategy `NONE` (chưa có quyết định); 76 phụ kiện tự giao cắt (một thành phần) chặn cổng bảo toàn dù chỉ là hình học tham chiếu.
+4. **Phần lớn tường của A là `GEOM`** (546/583) vì có lỗ cửa; C có 580 GEOM + 684 OBST.
+5. **Không có georeference tin cậy:** IFC2X3 không có CRS; vị trí Site là mặc định của phần mềm dựng (RefLatitude 42°21′ / RefLongitude −71°3′), không phải vị trí công trình. A và B cách nhau hơn 1 triệu mét ở trục Y nên **không thể ghép chung** nếu không có transform chung.
+6. **Hệ thống MEP của C** có tên viết tắt (SPR 22, PAD 20, CEAD 12, OAD/FAD 6, RAD 6, TEAD 2); cổng có hướng SINK 932 / SOURCE 926 / **SOURCEANDSINK 534** (mơ hồ); họ phụ kiện: cút 182, chuyển tiết diện 100, côn 78, "gót giày" 60, nắp bịt 34, tê chữ Y 16.
+
+## Bước bổ sung (đánh số tiếp theo roadmap, làm theo thứ tự)
+
+**Giai đoạn 5b — sửa lỗi nguồn trên dữ liệu thật (1–2 tuần), trước Giai đoạn 6**
+- [ ] 5.5 Chẩn đoán "union vẫn tự giao cắt / không kín" trên mẫu thật (B 11 phần tử là ca nhỏ nhất): xác định do mặt trùng/kề nhau, độ chính xác của đầu ra Manifold hay do thành phần mở. Thử hợp nhất theo cụm liên thông chồng lấn thay vì cả cấu kiện; đo lại. Cổng: ≥ 80% số ca này hết lỗi hoặc có lý do rõ để duyệt bằng 5.2.
+- [ ] 5.6 Không hàn đỉnh giữa các representation item khác nhau khi tessellate (cửa của A không-manifold). Kiểm tra giả thuyết trên 21 cửa A trước; nếu đúng, sửa trong `geometry/engine.py`/`normalization.py` và đo lại UNSUPPORTED.
+- [ ] 5.7 Phần tử `REFERENCE_GEOMETRY`/`NONE` (MEP chưa có quyết định) không được chặn cổng bảo toàn hình học chỉ vì tự giao cắt; ghi rõ là hình học tham chiếu không xuất ra FDS. Cổng: C không còn finding bảo toàn từ phụ kiện tham chiếu.
+- [ ] 5.8 Hiệu năng trên file thật: dùng `scripts/stage-profile.py` (bước 0.2 còn nợ) cho A và C; nghi ngờ: tessellation + chuẩn hóa (A 111 s, C 296 s), oracle winding-number của 5.4 (chi phí tỉ lệ mẫu × số mặt, cần giới hạn theo số mặt), audit gói 269 s ở C. Mục tiêu: A ≤ 120 s, C ≤ 300 s; verdict snapshot phải trùng.
+- [ ] 5.9 Cờ cảnh báo georeference mặc định (Site tọa độ của phần mềm dựng, không có CRS) và xử lý nhiều `IfcSite`/hai hệ tầng trong C: bắt buộc chọn tầng bằng `--storey` (HẦM B1, HẦM B2) và kiểm cao độ sau rebase.
+
+**Điều chỉnh Giai đoạn 6 (hình học hiệu dụng)**: ưu tiên 6.1 `OBST_SET` cho tường có lỗ của A (356 tường, 177 lỗ, chỉ 8 phần tử lấp); đo "% vật cản là OBST/OBST_SET" trên A và C.
+
+**Điều chỉnh Giai đoạn 7 (HVAC)**, theo dữ liệu C:
+- [ ] 7.0 Bảng phân loại phụ kiện theo tên họ (IFC2X3 không có `PredefinedType` cho `IfcFlowFitting`): cút → 7.1, chuyển tiết diện/côn → 7.1, tê chữ Y → 7.2, nắp bịt → đầu hở có điều kiện biên. Cấu hình được, không mã cứng.
+- [ ] 7.0b Kỹ sư gán nghĩa từng hệ thống viết tắt (PAD/CEAD/OAD-FAD/RAD/TEAD: hút khói, cấp gió, thải…); chỉ hệ hút khói và cấp bù vào quyết định HVAC. Ống nước SPR (588) ngoài phạm vi HVAC của FDS: giữ làm vật cản thụ động hoặc bỏ có lý do.
+- [ ] 7.0c Suy hướng dòng cho 534 cổng `SOURCEANDSINK` từ quạt/đầu cuối đã duyệt; không đoán.
+- [ ] 7.0d 130 `IfcFlowTerminal` → điểm biên `VENT`/`AMBIENT` (liên quan 7.5).
+
+**Điều chỉnh Giai đoạn 9/10**
+- [ ] 9.5 Job thời gian dài: C mất 17 phút; kiểm timeout của scheduler, RSS đỉnh và tiến độ báo về web với file cỡ này trước khi nói "production".
+- [ ] 10.0 Chọn ca nghiệm thu cuối: **A** (hầm 2 tầng) cho hình học, **C** cho HVAC. Xác nhận với kỹ sư C và A có cùng không gian hầm hay không (hệ tọa độ khác nhau, không tự ghép được). **B** làm ca kiểm thử nhanh (17 s) và ca có cửa/lan can/tường kính.
+
+Cổng bổ sung: mỗi giai đoạn trên A và B phải chạy trong thời gian đã nêu và bảng bằng chứng (`docs/evidence/production-roadmap/real-*.json`, chỉ số tổng hợp, không tên phần tử) được cập nhật.
