@@ -11,6 +11,8 @@ services:
       IFCFDS_ALLOWED_HOSTS: ${IFCFDS_PUBLIC_HOST:?set IFCFDS_PUBLIC_HOST},127.0.0.1,localhost
       IFCFDS_ALLOWED_ORIGINS: https://${IFCFDS_PUBLIC_HOST:?set IFCFDS_PUBLIC_HOST}
       IFCFDS_JOB_ROOT: /var/lib/ifctofds/jobs
+      # Uploads up to IFCFDS_MAX_JOB_BYTES are spooled here (on the volume), not in the 256 MiB /tmp tmpfs.
+      TMPDIR: /var/lib/ifctofds/jobs/.upload-tmp
       IFCFDS_MAX_WAITING: ${IFCFDS_MAX_WAITING:-2}
       IFCFDS_TIMEOUT_S: ${IFCFDS_TIMEOUT_S:-1800}
       IFCFDS_QUEUE_TIMEOUT_S: ${IFCFDS_QUEUE_TIMEOUT_S:-1800}

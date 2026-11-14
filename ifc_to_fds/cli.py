@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 import sys
 from typing import Any
@@ -146,6 +147,18 @@ def main(argv=None):
             if args.allowed_hosts:
                 os.environ["IFCFDS_ALLOWED_HOSTS"] = args.allowed_hosts
 
+            upload_tmp = os.getenv("TMPDIR")
+            if upload_tmp:
+                # Starlette spools large multipart parts to TMPDIR. The compose /tmp is a small tmpfs, so the
+                # operator points TMPDIR at the jobs volume; fail closed rather than silently fall back to /tmp.
+                spool = Path(upload_tmp)
+                try:
+                    if spool.name == ".upload-tmp" and spool.is_dir():
+                        shutil.rmtree(spool)  # leftovers of an interrupted upload; we own this directory
+                    spool.mkdir(parents=True, exist_ok=True)
+                except OSError as exc:
+                    sys.stderr.write(f"Cannot prepare TMPDIR {spool}: {exc}\n")
+                    return 1
             uvicorn.run("ifc_to_fds.server:app", host=args.host, port=args.port)
             return 0
         if args.command == "reference-check":
