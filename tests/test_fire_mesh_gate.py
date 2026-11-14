@@ -11,11 +11,13 @@ from ifc_to_fds.domain.validation.model import (
 from ifc_to_fds.fire import (
     EVSelection,
     ScenarioBundle,
-    calculate_d_star,
-    check_mesh_resolution,
     emit_fire_scenario,
 )
-from ifc_to_fds.validation.checkers.mesh_resolution import MeshResolutionChecker
+from ifc_to_fds.fire.mesh_metrics import calculate_d_star
+from ifc_to_fds.validation.checkers.mesh_resolution import (
+    MeshResolutionChecker,
+    check_mesh_resolution,
+)
 from ifc_to_fds.validation.runner import ValidationRunner
 
 

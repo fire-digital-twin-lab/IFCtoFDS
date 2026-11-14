@@ -4137,7 +4137,7 @@
     "placement": "PASS",
     "golden_reference_parity": "NOT_APPLICABLE"
   },
-  "findings_count": 47,
+  "findings_count": 45,
   "findings": [
     {
       "category": "geometry",

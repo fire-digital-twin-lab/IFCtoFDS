@@ -219,14 +219,31 @@ class SolidCandidateIndex:
         ]
 
 
+def _same_meshes(left, right):
+    """True when both obstacle lists hold byte-identical meshes in the same order."""
+    if left is right:
+        return True
+    return len(left) == len(right) and all(
+        a is b
+        or (
+            np.array_equal(np.asarray(a.vertices, dtype=float), np.asarray(b.vertices, dtype=float))
+            and np.array_equal(np.asarray(a.faces), np.asarray(b.faces))
+        )
+        for a, b in zip(left, right)
+    )
+
+
 def passage_metrics(reference_meshes, output_meshes, opening):
     """Compare entire free volumes, including source door/window fills and blockers."""
     void = as_trimesh(opening)
 
+    def obstacles(meshes):
+        if isinstance(meshes, SolidCandidateIndex):
+            return meshes.candidates(void.bounds)
+        return list(meshes)
+
     def free_volume(meshes):
         pieces = []
-        if isinstance(meshes, SolidCandidateIndex):
-            meshes = meshes.candidates(void.bounds)
         for mesh in meshes:
             tm = as_trimesh(mesh)
             if np.any(tm.bounds[1] <= void.bounds[0]) or np.any(
@@ -242,7 +259,20 @@ def passage_metrics(reference_meshes, output_meshes, opening):
             return void
         return solid_boolean([void, *pieces], "difference")
 
-    a, b = free_volume(reference_meshes), free_volume(output_meshes)
+    reference, output = obstacles(reference_meshes), obstacles(output_meshes)
+    a = free_volume(reference)
+    if _same_meshes(reference, output):
+        # A set compared with itself cannot differ. The Boolean A∩A is not exact
+        # for coincident faces (it lost 1.8-5.4% volume on FZK-Haus), so skip it.
+        components = len(a.split()) if len(a.faces) else 0
+        return dict(
+            source_free_volume_m3=float(a.volume),
+            output_free_volume_m3=float(a.volume),
+            normalized_symmetric_difference=0.0,
+            source_free_components=components,
+            output_free_components=components,
+        )
+    b = free_volume(output)
     intersection = (
         solid_boolean([a, b], "intersection") if len(a.faces) and len(b.faces) else None
     )
