@@ -25,6 +25,8 @@ def network_records(plan):
             values.update(AREA=[spec.area_m2], PERIMETER=[spec.perimeter_m])
         if spec.volume_flow_m3_s is not None:
             values["VOLUME_FLOW"] = [spec.volume_flow_m3_s]
+        if spec.loss is not None:
+            values["LOSS"] = list(spec.loss)
         records.append(("HVAC", values, [duct.entity_key]))
     return records
 
