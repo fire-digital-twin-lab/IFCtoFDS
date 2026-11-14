@@ -454,14 +454,45 @@ class _ExactPredicates:
         return 0 < tn < det and un >= 0 and vn >= 0 and un + vn <= det
 
 
-def has_self_intersection(mesh, details=None):
+# Two coplanar faces overlapping by less than (1e-5 m)^2, the default IFC
+# geometric precision, cannot be told apart from a rounding artefact.
+NUMERICAL_CONTACT_AREA_M2 = 1e-10
+# A transversal crossing where each triangle reaches past the other's plane by less
+# than the IFC precision is contact noise, not material overlap.
+NUMERICAL_PENETRATION_M = 1e-5
+
+
+def _penetration_depth(a, b):
+    """How far triangle b reaches past the plane of a on its shorter side (0 if it does not cross)."""
+    normal = np.cross(a[1] - a[0], a[2] - a[0])
+    length = float(np.linalg.norm(normal))
+    if length == 0.0:
+        return 0.0
+    d = (b - a[0]) @ (normal / length)
+    return float(min(d.max(), -d.min())) if d.max() > 0 > d.min() else 0.0
+
+
+_contact_sink = ContextVar("contact_sink", default=None)
+
+
+def has_self_intersection(mesh, details=None, classify_contacts=False, contacts=None):
     """Compatibility predicate. Numerical/backend uncertainty raises, never FAILs.
+
+    With classify_contacts, coplanar overlap that cannot hold material on both
+    sides is recorded in `contacts` instead of being a witness: faces with opposite
+    outward normals (solids touching face to face, `contact`) and same-facing
+    overlap below NUMERICAL_CONTACT_AREA_M2 (`numerical_contact`). Same-facing
+    overlap above that area, crossings and volume overlap stay witnesses.
 
     Candidate triangle pairs (R-tree, j > i) are processed in chunks, in the
     same order as the original per-pair loop, so the first witness is unchanged.
     """
     if details is None:
         details = _intersection_witness.get()
+    sink = _contact_sink.get()
+    if sink is not None and not classify_contacts:
+        # Set by self_intersection_evidence, which calls this with the original arity.
+        classify_contacts, contacts = True, sink
 
     def witness(kind, **values):
         if details is not None:
@@ -558,6 +589,20 @@ def has_self_intersection(mesh, details=None):
                 normal = safe_unit_normals(np.cross(tri[1] - tri[0], tri[2] - tri[0]))
                 axes = [x for x in range(3) if x != np.argmax(np.abs(normal))]
                 area = Polygon(tri[:, axes]).intersection(Polygon(other[:, axes])).area
+                if area > 0 and classify_contacts:
+                    facing = float(
+                        np.dot(
+                            np.cross(tri[1] - tri[0], tri[2] - tri[0]),
+                            np.cross(other[1] - other[0], other[2] - other[0]),
+                        )
+                    )
+                    kind = "contact" if facing < 0 else "numerical_contact" if area < NUMERICAL_CONTACT_AREA_M2 else None
+                    if kind:
+                        if contacts is not None:
+                            entry = contacts.setdefault(kind, {"face_pairs": 0, "area_m2": 0.0})
+                            entry["face_pairs"] += 1
+                            entry["area_m2"] += float(area)
+                        continue
                 if area > 0:
                     return witness(
                         "COPLANAR_FACE_OVERLAP",
@@ -569,13 +614,26 @@ def has_self_intersection(mesh, details=None):
                 continue
             row = next(verdicts)
             fi, fj = face_ids[i], face_ids[j]
+            crossed = False
             for e, (p, q) in enumerate(_EDGES):
                 for w, (own, plane) in enumerate(((fi, fj), (fj, fi))):
                     hit = row[2 * e + w]
                     if hit == _UNKNOWN:
                         hit = exact.crosses(own[p], own[q], plane)
                     if hit:
-                        return witness("TRIANGLE_CROSSING", triangles=[int(i), int(j)])
+                        crossed = True
+                        break
+                if crossed:
+                    break
+            if crossed:
+                if classify_contacts and max(
+                    _penetration_depth(tri, other), _penetration_depth(other, tri)
+                ) < NUMERICAL_PENETRATION_M:
+                    if contacts is not None:
+                        entry = contacts.setdefault("numerical_contact", {"face_pairs": 0, "area_m2": 0.0})
+                        entry["face_pairs"] += 1
+                    continue
+                return witness("TRIANGLE_CROSSING", triangles=[int(i), int(j)])
         return False
 
     first, second = [], []
@@ -627,25 +685,63 @@ def _cache_store(cache, key, value):
     cache[key] = value
 
 
+_accepted_defects = ContextVar("accepted_source_defects", default=None)
+
+
+def mesh_digest(mesh):
+    """SHA-256 (hex) of the complete mesh bytes; binds a review to one exact mesh."""
+    key = _mesh_key(mesh, "self-intersection")
+    return key[1].hex() if key else None
+
+
+@contextmanager
+def accepted_source_defects(accepted):
+    """Waive reviewed defects: {mesh_digest: {"defect": witness kind, "review": {...}}}."""
+    token = _accepted_defects.set(dict(accepted))
+    try:
+        yield
+    finally:
+        _accepted_defects.reset(token)
+
+
 def self_intersection_evidence(mesh):
-    """Three-way evidence consumed by the independent validator."""
+    """Three-way evidence consumed by the independent validator.
+
+    A CONFIRMED defect becomes ACCEPTED_DEFECT only when a reviewer accepted this
+    exact mesh (by digest) for this exact witness kind; anything else is unchanged.
+    """
+    result = _raw_self_intersection_evidence(mesh)
+    accepted = _accepted_defects.get()
+    if accepted and result["status"] == "CONFIRMED":
+        digest = mesh_digest(mesh)
+        rule = accepted.get(digest)
+        if rule and rule.get("defect") == result.get("witness", {}).get("kind"):
+            return {**result, "status": "ACCEPTED_DEFECT", "mesh_sha256": digest, "review": rule.get("review")}
+    return result
+
+
+def _raw_self_intersection_evidence(mesh):
     cache = _intersection_evidence.get()
     key = None if cache is None else _mesh_key(mesh, "self-intersection")
     if key is not None and key in cache:
         return deepcopy(cache[key])
-    details = {}
+    details, contacts = {}, {}
     token = _intersection_witness.set(details)
+    sink_token = _contact_sink.set(contacts)
     try:
         hit = has_self_intersection(mesh)
         result = {
             "status": "CONFIRMED" if hit else "CLEAN",
-            "method": "adaptive-exact-plane/triangle-crossing/manifold-components-v1",
+            "method": "adaptive-exact-plane/triangle-crossing/manifold-components-v2",
         }
         if details:
             result["witness"] = details
+        if not hit:
+            result.update(contacts)
     except Exception as exc:
         result = {"status": "UNCERTAIN", "reason": str(exc)}
     finally:
+        _contact_sink.reset(sink_token)
         _intersection_witness.reset(token)
     if key is not None and result["status"] != "UNCERTAIN":
         _cache_store(cache, key, deepcopy(result))

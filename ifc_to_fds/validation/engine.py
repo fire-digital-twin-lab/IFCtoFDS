@@ -267,6 +267,14 @@ def run_independent_validation(
         and e.mapping_strategy in (MappingStrategy.OBST, MappingStrategy.GEOM)
     )
     source_topology = source_topology_preflight(model)
+    accepted = {
+        key: dict(item["self_intersection"].get("witness", {}), review=item["self_intersection"].get("review"),
+                  mesh_sha256=item["self_intersection"].get("mesh_sha256"))
+        for key, item in source_topology.items()
+        if item.get("reason") == "ACCEPTED_DEFECT"
+    }
+    if accepted:
+        report.metrics["accepted_source_defects"] = accepted
     topology_blockers = source_topology_blockers(source_topology)
     confirmed_invalid = sorted(
         key

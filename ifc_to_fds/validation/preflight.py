@@ -7,6 +7,7 @@ from typing import Any, Dict
 from ifc_to_fds.domain.scope.model import ScopeDecision
 from ifc_to_fds.geometry.mesh import (
     inspect_mesh_quality,
+    mesh_digest,
     self_intersection_evidence,
     valid_solid,
 )
@@ -46,6 +47,13 @@ def source_topology_preflight(model) -> Dict[str, Dict[str, Any]]:
                 "status": "FAIL",
                 "reason": "SELF_INTERSECTION",
                 "mesh_quality": quality,
+                "self_intersection": intersection,
+                "mesh_sha256": mesh_digest(element.mesh),  # to cite in accepted_source_defects
+            }
+        elif intersection["status"] == "ACCEPTED_DEFECT":
+            evidence[element.entity_key] = {
+                "status": "PASS",
+                "reason": "ACCEPTED_DEFECT",
                 "self_intersection": intersection,
             }
         elif intersection["status"] == "UNCERTAIN":

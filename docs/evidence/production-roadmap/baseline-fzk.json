@@ -130,29 +130,29 @@
   },
   "findings_by_gate": {
     "geometry": 17,
-    "geometry_preservation": 35,
+    "geometry_preservation": 19,
     "openings": 1
   },
   "records": 127,
   "source": "AC20-FZK-Haus.ifc",
   "stage_timings_s": {
-    "audit_s": 32.79,
+    "audit_s": 9.03,
     "geometry_s": 0.15,
-    "independent_source_reread_s": 2.73,
-    "mapping_s": 0.26,
+    "independent_source_reread_s": 2.3,
+    "mapping_s": 0.28,
     "mep_s": 0.0,
-    "package_audit_s": 9.14,
+    "package_audit_s": 1.83,
     "package_write_s": 0.18,
     "parity_s": 0.01,
-    "parse_s": 0.24,
-    "prepare_s": 0.66,
+    "parse_s": 0.26,
+    "prepare_s": 0.69,
     "scope_s": 0.0,
-    "serialize_s": 0.33,
+    "serialize_s": 0.3,
     "solver_s": 0.0,
-    "validation_s": 20.63
+    "validation_s": 4.62
   },
   "status": "REJECTED",
-  "wall_s": 33.84,
+  "wall_s": 10.09,
   "witness_kinds": {
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:17468": "TRIANGLE_CROSSING",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:19199": "TRIANGLE_CROSSING",
@@ -160,15 +160,15 @@
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23024": "TRIANGLE_CROSSING",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:23944": "TRIANGLE_CROSSING",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27013": "TRIANGLE_CROSSING",
-    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27833": "COPLANAR_FACE_OVERLAP",
-    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:28113": "COPLANAR_FACE_OVERLAP",
+    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:27833": "TRIANGLE_CROSSING",
+    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:28113": "TRIANGLE_CROSSING",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31079": "TRIANGLE_CROSSING",
-    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31818": "COPLANAR_FACE_OVERLAP",
-    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32098": "COPLANAR_FACE_OVERLAP",
+    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:31818": "TRIANGLE_CROSSING",
+    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32098": "TRIANGLE_CROSSING",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:32829": "TRIANGLE_CROSSING",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33109": "TRIANGLE_CROSSING",
     "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:33389": "TRIANGLE_CROSSING",
-    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:66459": "COPLANAR_FACE_OVERLAP",
-    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:74280": "COPLANAR_FACE_OVERLAP"
+    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:66459": "TRIANGLE_CROSSING",
+    "ea6f04eaf92fac4d7ad0038bc3d2dfea4c094dd3f516ecc33c50bf1835ca108d:74280": "TRIANGLE_CROSSING"
   }
 }

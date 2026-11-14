@@ -8,10 +8,12 @@ from ifc_to_fds.domain.mapping import MappingManifest
 from ifc_to_fds.domain.validation import (
     AcceptanceReport,
     AuditConfig,
+    Finding,
     GateResult,
     GateStatus,
+    Severity,
 )
-from ifc_to_fds.geometry.mesh import mesh_evidence_scope
+from ifc_to_fds.geometry.mesh import accepted_source_defects, mesh_digest, mesh_evidence_scope
 from ifc_to_fds.mapping.manifest import build_manifest
 from ..services.audit_integrity import apply_independent_source_integrity
 from ..services.audit_mep_coverage import apply_mep_and_coverage
@@ -48,22 +50,24 @@ class AuditConversionUseCase:
         source_start = perf_counter()
         model = prepare_model(paths, configuration, reference=True)
         source_done = perf_counter()
-        config = AuditConfig.model_validate(configuration.get("audit", {}))
-        audit_start = perf_counter()
-        report = run_independent_validation(model, fds_text, manifest, config)
-        validation_done = perf_counter()
-        report.requested_level = (
-            "simulation" if configuration.get("profile") == "simulation" else "mapping"
-        )
-        apply_independent_source_integrity(
-            model, fds_text, manifest, geometry_package, report, config
-        )
-        apply_mep_and_coverage(model, report, configuration)
-        parity_start = perf_counter()
-        audited_manifest = build_manifest(model, fds_text, configuration, report)
-        golden_gate(
-            report, model, audited_manifest, geometry_package, configuration, fds_text
-        )
+        digests, stale = self._reviewed_defects(model, configuration)
+        with accepted_source_defects(digests):
+            config = AuditConfig.model_validate(configuration.get("audit", {}))
+            audit_start = perf_counter()
+            report = run_independent_validation(model, fds_text, manifest, config)
+            validation_done = perf_counter()
+            report.requested_level = (
+                "simulation" if configuration.get("profile") == "simulation" else "mapping"
+            )
+            apply_independent_source_integrity(
+                model, fds_text, manifest, geometry_package, report, config
+            )
+            apply_mep_and_coverage(model, report, configuration)
+            parity_start = perf_counter()
+            audited_manifest = build_manifest(model, fds_text, configuration, report)
+            golden_gate(
+                report, model, audited_manifest, geometry_package, configuration, fds_text
+            )
         report.metrics["stage_timings"] = dict(
             independent_source_reread_s=source_done - source_start,
             validation_s=validation_done - audit_start,
@@ -82,6 +86,21 @@ class AuditConversionUseCase:
         # Re-finalize after independent source integrity, MEP and golden
         # reference gates. A research label derived from an earlier verdict
         # must not outlive a later INCONCLUSIVE/REJECTED golden-reference gate.
+        for key in stale:
+            report.findings.append(
+                Finding(
+                    id=f"INC-{len(report.findings) + 1:04}",
+                    severity=Severity.P2,
+                    category="geometry",
+                    title="Accepted source defect no longer matches the model",
+                    detail=f"accepted_source_defects[{key}] does not match the current element mesh; it was not applied",
+                    element_id=key,
+                )
+            )
+        if stale and report.gates["geometry"].status == GateStatus.PASS:
+            report.gates["geometry"].status = GateStatus.INCONCLUSIVE
+            report.gates["geometry"].reason = "Stale accepted_source_defects: " + ", ".join(stale)
+            report.gates["geometry"].reason_code = "GEOMETRY_INCONCLUSIVE"
         report.finalize()
         report.configuration["research"] = research_context(
             [s.model_dump(mode="json") for s in model.sources],
@@ -90,3 +109,19 @@ class AuditConversionUseCase:
         )
         final = build_manifest(model, fds_text, configuration, report)
         return model, final, report
+
+    @staticmethod
+    def _reviewed_defects(model, configuration):
+        """Bind reviewed acceptances to the exact meshes of this audit's own re-read."""
+        by_key = {e.entity_key: e for e in model.elements}
+        digests, stale = {}, []
+        for key, item in (configuration.get("accepted_source_defects") or {}).items():
+            element = by_key.get(key)
+            if element is not None and element.mesh and mesh_digest(element.mesh) == item["mesh_sha256"]:
+                digests[item["mesh_sha256"]] = dict(
+                    defect=item["defect"],
+                    review={f: item[f] for f in ("policy_version", "reviewer", "rationale", "evidence")},
+                )
+            else:
+                stale.append(key)
+        return digests, stale

@@ -63,14 +63,15 @@ Mục tiêu: một kỹ sư PCCC đưa IFC tầng hầm thật vào CLI hoặc w
 **Cổng 4:** tầng hầm thật: placement không còn `CONFIRMED` sai; storey/mesh cùng frame; báo cáo provenance có CRS.
 
 ## Giai đoạn 5 — Tô-pô nguồn và lỗ mở cho IFC thật (1,5–2 tuần) — chìa khóa để hết "REJECTED oan"
-- [ ] 5.1 Phân loại lại trong `has_self_intersection`/`source_topology_preflight`:
+- [x] 5.1 Phân loại lại trong `has_self_intersection`/`source_topology_preflight`:
    - Đồng phẳng chồng lấn giữa **hai shell khác nhau với pháp tuyến ngược chiều** = tiếp xúc mặt (giao thể tích 0) → `CONTACT`, không chặn.
    - Diện tích chồng lấn < (IFC `Precision` của context)² → `NUMERICAL_CONTACT` có witness, không chặn.
    - Xuyên tam giác, chồng thể tích, đồng phẳng cùng chiều → vẫn `SELF_INTERSECTION`.
    Fixture: hai hộp chạm mặt (CLEAN), lệch 1 nm, xuyên, lồng nhau, cavity (bảng 2.2 báo cáo).
-- [ ] 5.2 Đường xử lý lỗi nguồn thật: dùng cơ chế `decisions` sẵn có (`mapping/policy.py:validate_decisions`) thêm action duyệt `ACCEPT_SOURCE_DEFECT` có lý do + witness hash, để kỹ sư chấp nhận có ghi vết thay vì sửa tay IFC. Report liệt kê rõ phần tử nào được duyệt.
-- [ ] 5.3 Đo lại 3 IFC mẫu + tầng hầm: số witness theo loại trước/sau; mỗi witness còn lại phải được 1 người kiểm bằng mắt (ghi kết quả vào `docs/evidence`).
-**Cổng 5:** tiny/opening fixture `MAPPING_VERIFIED`; với tầng hầm thật: mọi finding còn lại là lỗi nguồn thật đã được người xác nhận, hoặc được duyệt qua decision → đạt `MAPPING_VERIFIED`.
+- [x] 5.2 Đường xử lý lỗi nguồn thật: dùng cơ chế `decisions` sẵn có (`mapping/policy.py:validate_decisions`) thêm action duyệt `ACCEPT_SOURCE_DEFECT` có lý do + witness hash, để kỹ sư chấp nhận có ghi vết thay vì sửa tay IFC. Report liệt kê rõ phần tử nào được duyệt.
+- [x] 5.3 Đo lại 3 IFC mẫu + tầng hầm: số witness theo loại trước/sau; mỗi witness còn lại phải được 1 người kiểm bằng mắt (ghi kết quả vào `docs/evidence`).
+- [ ] 5.4 **Hợp nhất thành phần chồng lấn của cùng cấu kiện** (phát hiện ở 5.3, xem `docs/evidence/production-roadmap/phase5-topology.md`): FZK 16/18 và Duplex 22/58 phần tử bị chặn vì khung/kính/thanh chồng lấn thật ≥ 1 mm. Hợp nhất (union) các thành phần trước khi so sánh và xuất, giữ chứng minh tương đương với tham chiếu cũng là union; hoặc duyệt từng ca bằng `accepted_source_defects`.
+**Cổng 5 (CHƯA ĐẠT, cần 5.4):** tiny/opening fixture `MAPPING_VERIFIED`; với tầng hầm thật: mọi finding còn lại là lỗi nguồn thật đã được người xác nhận, hoặc được duyệt qua decision → đạt `MAPPING_VERIFIED`.
 
 ## Giai đoạn 6 — Hình học hiệu dụng cấp solver (2–3 tuần)
 - [ ] 6.1 **Tách tường trực giao có lỗ chữ nhật thành nhiều `OBST`**: trong `mapping/policy.py`, nếu mesh host là đa diện trực giao (mọi mặt vuông góc trục) → chiến lược mới `OBST_SET`: lưới tọa độ duy nhất, giữ ô có tâm nằm trong solid, gộp tham lam thành hộp. Chứng minh chính xác bằng `compare_solids` (hợp các hộp vs mesh nguồn) — tận dụng gate có sẵn. Tường nghiêng/cong vẫn `GEOM`.

@@ -48,6 +48,7 @@ def main(argv=None):
     p.add_argument("--profile", choices=["mapping", "research-basement", "simulation", "geometry-fidelity"])
     p.add_argument("--reference-case")
     p.add_argument("--decisions", help="Explicit entity decisions JSON")
+    p.add_argument("--accepted-source-defects", help="Reviewed source defects JSON (entity key -> mesh_sha256, defect, review)")
     p.add_argument("--intentional-deltas", help="Approved delta JSON")
     p.add_argument("--domain", nargs=6, type=float)
     p.add_argument("--coordinate-frame", choices=["WORLD", "REBASED"], default=None, help="Coordinate frame for domain/bbox")
@@ -238,7 +239,7 @@ def main(argv=None):
         for name in ("profile", "reference_case"):
             if getattr(args, name, None):
                 config[name] = getattr(args, name)
-        for name in ("decisions", "intentional_deltas"):
+        for name in ("decisions", "intentional_deltas", "accepted_source_defects"):
             if getattr(args, name, None):
                 config[name] = json.loads(
                     Path(getattr(args, name)).read_text(encoding="utf-8")
