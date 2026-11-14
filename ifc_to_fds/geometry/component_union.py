@@ -25,12 +25,13 @@ from .boolean import solid_boolean
 from .mesh import as_trimesh, mesh_digest, mesh_volume, self_intersection_evidence, valid_solid
 
 # Part of the converter geometry cache key: change it whenever fusing results can change.
-UNION_METHOD = "manifold-union+winding-number-oracle-v3"
+UNION_METHOD = "manifold-union+winding-number-oracle-v4"
 ORACLE_SAMPLES = 1024
 # Sample points this close to a surface can legitimately disagree between two
 # triangulations of the same boundary; they are reported, not counted.
 ORACLE_BOUNDARY_M = 1e-6
 VOLUME_TOLERANCE = 1e-9
+SCAN_FACE_LIMIT = 5000
 
 
 def _mesh(tm):
@@ -123,9 +124,12 @@ def _fuse(mesh):
     union_volume = mesh_volume(fused_tm)
     overlap = sum(volumes) - union_volume
     if overlap <= VOLUME_TOLERANCE * max(1.0, sum(volumes)):
-        # Components touch but share no volume. A kernel error here only skips fusing,
-        # and the preflight still blocks a real overlap, so this direction is safe.
-        return mesh, None
+        # No shared volume, yet the exact scan may still report crossing triangles between
+        # touching components (their union is the same body). Scan only meshes light enough to
+        # afford it. shortcut: meshes over SCAN_FACE_LIMIT faces keep their source mesh and are
+        # judged by the audit's preflight; raise the limit when the scan gets cheaper.
+        if len(mesh.faces) > SCAN_FACE_LIMIT or self_intersection_evidence(mesh)["status"] != "CONFIRMED":
+            return mesh, None
 
     def refuse(reason, **extra):
         return mesh, dict(status="NOT_APPLIED", reason=reason, components=len(components),

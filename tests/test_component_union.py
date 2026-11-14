@@ -72,10 +72,11 @@ def test_fusion_is_deterministic():
     assert mesh_digest(first) == mesh_digest(second) and a == b
 
 
-def test_nothing_to_fuse_never_runs_a_self_intersection_scan(monkeypatch):
-    """Deciding that no component overlaps another must not scan every triangle pair of the mesh."""
+def test_heavy_mesh_with_nothing_to_fuse_is_never_scanned(monkeypatch):
+    """Above SCAN_FACE_LIMIT, deciding that no component overlaps must not scan every triangle pair."""
     from ifc_to_fds.geometry import component_union
 
+    monkeypatch.setattr(component_union, "SCAN_FACE_LIMIT", 0)
     def forbidden(mesh):
         raise AssertionError("self-intersection scan on the unfused mesh")
 
@@ -113,3 +114,19 @@ def test_union_that_a_scan_would_reject_is_still_caught_by_the_audit():
 
     bad = TriangleMesh(vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], faces=[[0, 1, 2]])  # not a solid
     assert fuse(bad) == (bad, None)
+
+
+def test_fzk_windows_and_doors_that_only_touch_end_up_clean():
+    """Components sharing no volume can still report crossing triangles; those elements must not stay blocked."""
+    from pathlib import Path
+
+    from ifc_to_fds.application.services.model_preparer import prepare_model
+
+    path = Path(__file__).resolve().parents[1] / "examples" / "AC20-FZK-Haus.ifc"
+    model = prepare_model([str(path)], {"scope": {"storeys": ["Erdgeschoss"]}}, reference=True)
+    blocked = [
+        e.ifc_type for e in model.elements
+        if e.ifc_type in ("IfcWindow", "IfcDoor") and e.mesh and valid_solid(e.mesh)
+        and self_intersection_evidence(e.mesh)["status"] == "CONFIRMED"
+    ]
+    assert not blocked, blocked
