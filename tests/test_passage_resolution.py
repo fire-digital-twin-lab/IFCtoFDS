@@ -80,3 +80,51 @@ def test_a_non_enclosure_solid_thin_on_one_axis_is_not_a_finding(box_model):
     # a 0.08 m slab on a 0.2 m grid becomes one thin plane, which FDS keeps: only walls, slabs and roofs report it
     assert _deck_checker(box_model, "IfcBeam", [0.30, 0.70, 0.34, 0.42, 1.0, 1.8]).result.status == "PASS"
     assert _deck_checker(box_model, "IfcWall", [0.30, 0.70, 0.34, 0.42, 1.0, 1.8]).result.status == "FAIL"
+
+
+def _audit_with_meshes(tmp_path, meshes, *, obst_xb=None):
+    import hashlib
+    import re
+
+    from ifc_to_fds.domain.mapping import MappingManifest
+    from ifc_to_fds.pipeline import audit
+
+    base = convert([OPENING], output_directory=tmp_path)
+    text = re.sub(r"(?m)^&MESH .*? /$", meshes, base["fds_text"], count=1)
+    assert text != base["fds_text"]
+    if obst_xb is not None:
+        text, changed = re.subn(r"(?m)^(&OBST [^\n]*?\bXB=)[-0-9.eE+]+(?:,[-0-9.eE+]+){5}",
+                                lambda match: match[1] + obst_xb, text, count=1)
+        assert changed == 1
+    manifest = MappingManifest.model_validate(base["manifest"])
+    manifest.fds_sha256 = hashlib.sha256(text.encode()).hexdigest()
+    manifest.reseal()
+    return audit([OPENING], text, manifest, base["configuration"], base["geometry_package"])[2]
+
+
+SEAM = (
+    "&MESH ID='M1', IJK=1,2,15, XB=0,0.5,0,0.3,0,3 /\n"
+    "&MESH ID='M2', IJK=2,2,15, XB=0.5,4,0,0.3,0,3 /"
+)
+
+
+def test_an_opening_across_a_mesh_seam_is_not_reported_as_resolved(tmp_path):
+    """Audit F3: the wall boxes were counted as assessed and hid the opening that could not be estimated."""
+    report = _audit_with_meshes(tmp_path, SEAM)
+    gate = report.gates["passage_resolution"]
+    assert gate.status == "INCONCLUSIVE", gate
+    assert gate.evidence["openings_not_estimated"] >= 1 and gate.evidence["assessed"] >= 1
+    assert "not estimated" in gate.reason
+    assert report.mapping_status == "MAPPING_VERIFIED"  # only the simulation verdict is affected
+
+
+def test_a_single_mesh_still_passes_when_every_opening_is_estimated(tmp_path):
+    gate = _audit_with_meshes(tmp_path, "&MESH ID='M1', IJK=20,2,15, XB=0,4,0,0.3,0,3 /").gates["passage_resolution"]
+    assert gate.status == "PASS" and gate.evidence["openings_not_estimated"] == 0
+
+def test_a_vanishing_solid_takes_priority_over_an_unestimated_opening(tmp_path):
+    report = _audit_with_meshes(tmp_path, SEAM, obst_xb="0.34,0.42,0.034,0.042,1.0,1.8")
+    gate = report.gates["passage_resolution"]
+    assert gate.status == "FAIL", gate
+    assert gate.evidence["openings_not_estimated"] > 0
+    assert any("Solid vanishes on the grid" in f.title for f in report.findings)
