@@ -21,14 +21,14 @@ Mục đích: chứng minh trên IFC thật và trên stack triển khai thật 
 |---|---|---|---|---|
 | T5 | A, cold | `python -m ifc_to_fds convert A -o <ra>/a.fds --solver <fds>` | thời gian ≤ 120 s; chỉ có finding của 22 cửa lỗi nguồn; solver PASS; `air_path` PASS | LÀM ĐƯỢC (hiện 211–253 s: cần M1.7) |
 | T6 | A + lỗi nguồn đã duyệt | thêm `--accepted-source-defects <json>` (kỹ sư duyệt 22 cửa) | `MAPPING_VERIFIED` hoặc chỉ còn finding có giải thích | CHỜ ĐẦU VÀO (kỹ sư duyệt) |
-| T7 | B | `convert B` | tìm nguyên nhân rò âm −1,3 L của `air_path`; sau M2.5 phải PASS hoặc có lý do | LÀM ĐƯỢC |
+| T7 | B | `convert B` | tìm nguyên nhân rò âm −1,3 L của `air_path`; sau M2.5 phải PASS hoặc có lý do | ĐÃ ĐẠT: B `MAPPING_VERIFIED` (M2.5 gỡ lỗi rò giả) |
 | T8 | C, 8 tầng hầm | `convert C --storey <8 storey_id>` (id lấy từ `inventory`; tên trùng giữa các hệ cao độ) | ≤ 300 s; RSS < 4 GiB; số `EXCLUDED_SCOPE` khớp số phần tử ngoài tầng | ĐÃ ĐẠT: 293 s cold, RSS đỉnh 1,2 GiB (job qua API) |
 | T9 | A, kịch bản cháy | emitter với preset e-bike và auto-nmc đặt trong hầm; `T_END` ngắn | FDS chạy tới `T_END` không lỗi; HRR đúng đường đã chọn | LÀM ĐƯỢC |
 
 ## Tầng 3 — Web/API
 | # | Phép kiểm | Tiêu chí | Trạng thái |
 |---|---|---|---|
-| T10 | CLI và web (`POST /api/jobs`) trên A | cùng `model.fds` (SHA-256 trùng), cùng verdict | LÀM ĐƯỢC (M5.5) |
+| T10 | CLI và web (`POST /api/jobs`) trên A | cùng `model.fds` (SHA-256 trùng), cùng verdict | ĐÃ ĐẠT: A và B trùng từng byte, cùng verdict |
 | T11 | Job dài C qua web | tiến độ cập nhật; RSS đỉnh ghi lại; không vượt `IFCFDS_TIMEOUT_S` 1800 s | ĐÃ ĐẠT: 260–266 s, 16 mốc tiến độ, RSS 1,2 GiB |
 | T12 | Khởi động lại giữa chừng | job đang chạy chuyển FAILED có lý do; job mới chạy bình thường; không mất dữ liệu job xong | ĐÃ ĐẠT (local và production) |
 | T13 | Tải gần hạn mức | `IFCFDS_MAX_WAITING`+1 job cùng lúc: phần dư nhận 429, không treo | ĐÃ ĐẠT: 2 nhận, 2 bị 429 |
@@ -37,7 +37,7 @@ Mục đích: chứng minh trên IFC thật và trên stack triển khai thật 
 ## Tầng 4 — Vật lý và nghiệm thu
 | # | Phép kiểm | Tiêu chí | Trạng thái |
 |---|---|---|---|
-| T15 | Tổn áp tê/Y (M3.6b) | bảo toàn khối lượng tại nút < 1%; tổn áp khớp tính tay ±5% | LÀM ĐƯỢC sau khi có `LOSS(I,J)` |
+| T15 | Tổn áp tê/Y (M3.6b) | bảo toàn khối lượng tại nút < 1%; tổn áp khớp tính tay ±5% | ĐÃ ĐẠT: tách dòng khớp tay 5%, khối lượng 1% (mạng tê tổng hợp) |
 | T16 | Nhánh hút khói thật của C chạy tới `T_END` | lưu lượng miệng hút ±10% thiết kế | CHỜ ĐẦU VÀO (B-ext 2, 3) |
 | T17 | Nghiên cứu lưới 3 mức cho QoI | xu hướng đơn điệu trước khi tính GCI | CHỜ ĐẦU VÀO (B-ext 5) |
 | T18 | Kỹ sư PCCC độc lập review deck và báo cáo, ghi giờ công so với dựng tay | ký nhận; giới hạn nằm trong báo cáo | CHỜ ĐẦU VÀO |

@@ -9,10 +9,10 @@ Mục tiêu: IFC tầng hầm thật → deck FDS 6.11.1 kiểm định được
 |---|---|---|
 | CLI `convert` / `audit` chạy từ tiến trình mới | Đạt | test cold start, CI |
 | Mapping và kiểm định độc lập trên IFC mẫu | Đạt (FZK, Duplex, Institute, fixture) | suite 1280 đạt; verdict snapshot |
-| IFC thật A/B/C | **Chưa MAPPING_VERIFIED** | A: 22 cửa lỗi nguồn; B: chưa tìm nguyên nhân rò; C: cần `--storey` |
+| IFC thật A/B/C | **B đạt `MAPPING_VERIFIED`**; A, C chưa | A: 22 cửa lỗi nguồn; C: lỗi nguồn và cần `--storey`; deck CLI và web trùng từng byte trên A và B |
 | Hiệu năng | **C đạt, A chưa** | C tầng hầm cold 293 s (đích 300); A cold 170 s (đích 120) |
 | Hình học hiệu dụng cấp solver | Một phần | OBST/VENT/OBST điều khiển đọc từ SMV; A toàn GEOM nên INCONCLUSIVE |
-| HVAC vận hành | Một phần | ống thẳng, phụ kiện hai cổng, quạt lưu lượng cố định; tổn áp FDS khớp tính tay 0,5% |
+| HVAC vận hành | Một phần | ống thẳng, phụ kiện hai cổng, tê/Y/gót giày (nút có `LOSS(i,j)` đã duyệt), quạt lưu lượng cố định; FDS khớp tính tay (tổn áp 0,5%, tách dòng 5%, khối lượng 1%) |
 | Cháy xe điện | Một phần | phát lại đường HRR đo; năng lượng khớp 0,02% |
 | Web/API vận hành | Một phần | `TMPDIR` trên volume, backup/restore trên job thật, image có FDS |
 | Nghiệm thu kỹ sư | Chưa | cần người |
@@ -31,9 +31,7 @@ Phần chi tiết và commit nằm ở Phần A của kế hoạch. Tóm tắt:
 | Mục | Việc | Ghi chú |
 |---|---|---|
 | M1.7 (phần A) | Giảm thời gian A từ 170 s xuống 120 s | Oracle `winding_numbers` đã tối ưu (`c849461`). Còn lại: validation 73 s (quét tự giao cắt ~35 s, `compare_solids` 11, `passage_metrics` 9, `mesh_quality` 12); tái dùng bằng chứng theo `geometry.id` |
-| M5.5 | CLI và web cho cùng deck (so hash) trên A | cần chạy A hai đường |
 | M5.2 | ĐÃ XONG | Drill job dài trên C ở chế độ local và production: COMPLETED 260–266 s, RSS đỉnh 1,2 GiB, hàng đợi 2 nhận + 2×429, khởi động lại đúng. Bằng chứng `m5-2-drill-C*.json` |
-| M3.3/M3.4/M3.6(b) | Tổn thất nút `LOSS(I,J)` cho tê/Y/gót giày (84 phụ kiện của C) và kiểm bảo toàn khối lượng | dùng K làm đầu vào đã duyệt, kiểm bằng FDS với mạng tổng hợp |
 | M3.1 | Cơ chế bảng họ → loại phụ kiện cấu hình được, không khớp → `REVIEW_REQUIRED` | bảng cụ thể do kỹ sư duyệt |
 | M0.3 | Bộ fixture phân loại tiếp xúc | hoãn từ M0 |
 | A4 | 2 test `xfail`, khóa chẩn đoán cũ của client JS | nợ nhỏ |
@@ -43,6 +41,7 @@ Phần chi tiết và commit nằm ở Phần A của kế hoạch. Tóm tắt:
 |---|---|
 | M2.4 `effective_geometry` PASS trên A | chọn cách xử lý GEOM: đọc cut-cell từ SMV, quay mô hình theo từng cánh, hoặc xấp xỉ bậc thang (A có 0% OBST vì mọi tường/sàn không thẳng trục) |
 | M3.1 (nội dung bảng), M3.2, M3.5 | nghĩa PAD/CEAD/OAD-FAD/RAD/TEAD; hệ nào hút khói; hệ số K, lưu lượng thiết kế từng miệng hút, đường cong quạt (B-ext 2, 3) |
+| Hệ số K của tê/Y/gót giày | kỹ sư đưa đủ mọi cặp cổng có thứ tự cho 84 phụ kiện của C (cơ chế đã có; K quy chiếu theo vận tốc ống đích) |
 | Ma sát ống chữ nhật | có hiệu chỉnh hay không: FDS thấp hơn khoảng 18% với ống 0,5×0,3 m; `ROUGHNESS=0` là không ma sát |
 | M4.1, M4.3, M4.4 | số đo cháy nguyên xe được phép dùng, yield, tính chất vật liệu có nguồn (B-ext 4) |
 | M5.6 | QoI nghiệm thu (nhiệt độ/tầm nhìn tại lối thoát, độ cao lớp khói) (B-ext 5) |
@@ -63,4 +62,4 @@ Phần chi tiết và commit nằm ở Phần A của kế hoạch. Tóm tắt:
 2. `uv sync --locked --extra test`; `python scripts/install-fds.py` nếu cần solver.
 3. Suite: `python -m pytest -q -m "not solver and not browser and not slow" -o faulthandler_timeout=90` (~4–7 phút); solver: `IFCFDS_SOLVER=<fds_openmp> python -m pytest -q -m solver` (17 test, ~5 phút).
 4. Trước khi đẩy PR: cổng nợ `PYTHONUTF8=1 python scripts/quality/source_quality_budget.py --git-base <merge-base>`.
-5. Làm các mục nhóm A theo thứ tự M5.5 → M3.3/M3.4 → M1.7 (phần A) → M3.1 → M0.3; mỗi mục một PR nhỏ, commit tiếng Việt, không trailer Claude.
+5. Làm các mục nhóm A theo thứ tự M1.7 (phần A) → M3.1 → M0.3; mỗi mục một PR nhỏ, commit tiếng Việt, không trailer Claude.
