@@ -56,8 +56,11 @@ def assert_semantic_parity(actual: dict, expected: dict):
         # Additive gates: frozen fixtures contain no operational HVAC or fires.
         "hvac": "NOT_APPLICABLE",
         "mesh_resolution": "NOT_APPLICABLE",
-        # Every frozen opening and wall resolves on the 0.2 m grid; the MEP case has neither.
-        "passage_resolution": "NOT_APPLICABLE" if actual["case_id"] == "case_d_mep" else "PASS",
+        # Frozen openings and walls resolve on the 0.2 m grid; the MEP case has neither. FZK's 17 non-box
+        # openings cannot be estimated (7 other items resolve), which is INCONCLUSIVE, not PASS (audit F3).
+        "passage_resolution": {"case_d_mep": "NOT_APPLICABLE", "case_c_fzk_erdgeschoss": "INCONCLUSIVE"}.get(
+            actual["case_id"], "PASS"
+        ),
     }
     assert actual["findings_count"] == expected["findings_count"]
     assert actual["geometry_package_sha256"] == expected["geometry_package_sha256"]

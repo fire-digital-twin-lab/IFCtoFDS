@@ -24,7 +24,8 @@ def network_records(plan):
         if spec.diameter_m is not None:
             values["DIAMETER"] = [spec.diameter_m]
         else:
-            values.update(AREA=[spec.area_m2], PERIMETER=[spec.perimeter_m])
+            # Without ROUND=.FALSE. FDS 6.11.1 takes D = sqrt(4A/pi) and ignores PERIMETER for friction (audit F9)
+            values.update(AREA=[spec.area_m2], PERIMETER=[spec.perimeter_m], ROUND=[False])
         if spec.volume_flow_m3_s is not None:
             values["VOLUME_FLOW"] = [spec.volume_flow_m3_s]
         if spec.loss is not None:
