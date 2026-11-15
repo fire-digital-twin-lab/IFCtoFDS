@@ -1,0 +1,186 @@
+{
+ "date": "2026-11-15",
+ "commit": "e01e65d",
+ "note": "Aggregate only; no element names or keys. Old = audit.surface_tolerance_m=0.001, relative_volume_tolerance=0.001, min_solid_iou=0.999 declared; new = defaults (1e-9, 1e-9, 1-1e-9). Same code, same cache. Wall times not comparable (machine loaded by other work).",
+ "runs": {
+  "A_new": {
+   "status": "REJECTED",
+   "elements": {
+    "MATCHED": 546,
+    "REVIEW_REQUIRED": 15,
+    "SEMANTIC_ONLY": 210,
+    "UNSUPPORTED": 22
+   },
+   "findings": {
+    "geometry": 22,
+    "structural_completeness": 1,
+    "geometry_preservation": 22
+   },
+   "nonpass_gates": {
+    "geometry": "FAIL",
+    "structural_completeness": "INCONCLUSIVE",
+    "representation": "INCONCLUSIVE",
+    "hvac": "NOT_APPLICABLE",
+    "mesh_resolution": "NOT_APPLICABLE",
+    "passage_resolution": "INCONCLUSIVE",
+    "solver": "INCONCLUSIVE",
+    "effective_geometry": "INCONCLUSIVE",
+    "geometry_preservation": "FAIL",
+    "golden_reference_parity": "NOT_APPLICABLE"
+   }
+  },
+  "A_old": {
+   "status": "REJECTED",
+   "elements": {
+    "MATCHED": 546,
+    "REVIEW_REQUIRED": 15,
+    "SEMANTIC_ONLY": 210,
+    "UNSUPPORTED": 22
+   },
+   "findings": {
+    "geometry": 22,
+    "structural_completeness": 1,
+    "geometry_preservation": 22
+   },
+   "nonpass_gates": {
+    "geometry": "FAIL",
+    "structural_completeness": "INCONCLUSIVE",
+    "representation": "INCONCLUSIVE",
+    "hvac": "NOT_APPLICABLE",
+    "mesh_resolution": "NOT_APPLICABLE",
+    "passage_resolution": "INCONCLUSIVE",
+    "solver": "INCONCLUSIVE",
+    "effective_geometry": "INCONCLUSIVE",
+    "geometry_preservation": "FAIL",
+    "golden_reference_parity": "NOT_APPLICABLE"
+   }
+  },
+  "C_new": {
+   "status": "REJECTED",
+   "elements": {
+    "EXCLUDED_SCOPE": 3165,
+    "MATCHED": 688,
+    "INCONCLUSIVE": 1,
+    "REVIEW_REQUIRED": 183,
+    "DEVIATED": 9,
+    "UNSUPPORTED": 1,
+    "SEMANTIC_ONLY": 66,
+    "REFERENCE_PRESERVED": 1528
+   },
+   "findings": {
+    "geometry": 10,
+    "openings": 3,
+    "structural_completeness": 2,
+    "geometry_preservation": 2
+   },
+   "nonpass_gates": {
+    "syntax": "INCONCLUSIVE",
+    "scope": "INCONCLUSIVE",
+    "geometry": "FAIL",
+    "structural_completeness": "INCONCLUSIVE",
+    "openings": "FAIL",
+    "mep": "INCONCLUSIVE",
+    "representation": "INCONCLUSIVE",
+    "domain": "INCONCLUSIVE",
+    "hvac": "NOT_APPLICABLE",
+    "mesh_resolution": "NOT_APPLICABLE",
+    "solver": "NOT_RUN",
+    "effective_geometry": "NOT_RUN",
+    "geometry_preservation": "FAIL",
+    "golden_reference_parity": "NOT_APPLICABLE"
+   }
+  },
+  "C_old": {
+   "status": "REJECTED",
+   "elements": {
+    "EXCLUDED_SCOPE": 3165,
+    "MATCHED": 697,
+    "INCONCLUSIVE": 1,
+    "REVIEW_REQUIRED": 183,
+    "UNSUPPORTED": 1,
+    "SEMANTIC_ONLY": 66,
+    "REFERENCE_PRESERVED": 1528
+   },
+   "findings": {
+    "geometry": 1,
+    "openings": 3,
+    "structural_completeness": 2,
+    "geometry_preservation": 2
+   },
+   "nonpass_gates": {
+    "syntax": "INCONCLUSIVE",
+    "scope": "INCONCLUSIVE",
+    "geometry": "FAIL",
+    "structural_completeness": "INCONCLUSIVE",
+    "openings": "FAIL",
+    "mep": "INCONCLUSIVE",
+    "representation": "INCONCLUSIVE",
+    "domain": "INCONCLUSIVE",
+    "hvac": "NOT_APPLICABLE",
+    "mesh_resolution": "NOT_APPLICABLE",
+    "solver": "NOT_RUN",
+    "effective_geometry": "NOT_RUN",
+    "geometry_preservation": "FAIL",
+    "golden_reference_parity": "NOT_APPLICABLE"
+   }
+  }
+ },
+ "changed_elements_A": 0,
+ "changed_elements_C": 9,
+ "C_newly_deviated": [
+  {
+   "ifc_type": "IfcColumn",
+   "surface_distance_m": 1.1102230246251565e-16,
+   "relative_volume_error": 1.5674461167845805e-08,
+   "solid_iou": 0.9999999843256032
+  },
+  {
+   "ifc_type": "IfcCovering",
+   "surface_distance_m": 8.881784197001252e-16,
+   "relative_volume_error": 5.15201237400968e-07,
+   "solid_iou": 0.9999994847990276
+  },
+  {
+   "ifc_type": "IfcCovering",
+   "surface_distance_m": 7.105427357601002e-15,
+   "relative_volume_error": 2.007883180661784e-07,
+   "solid_iou": 0.9999997992117236
+  },
+  {
+   "ifc_type": "IfcCovering",
+   "surface_distance_m": 0.0,
+   "relative_volume_error": 4.55763971516511e-08,
+   "solid_iou": 0.9999999544236041
+  },
+  {
+   "ifc_type": "IfcCovering",
+   "surface_distance_m": 8.881784197001252e-16,
+   "relative_volume_error": 4.265230594639303e-07,
+   "solid_iou": 0.9999995734773027
+  },
+  {
+   "ifc_type": "IfcCovering",
+   "surface_distance_m": 8.881784197001252e-16,
+   "relative_volume_error": 5.15201237400968e-07,
+   "solid_iou": 0.9999994847990276
+  },
+  {
+   "ifc_type": "IfcCovering",
+   "surface_distance_m": 7.105427357601002e-15,
+   "relative_volume_error": 2.007883180661784e-07,
+   "solid_iou": 0.9999997992117236
+  },
+  {
+   "ifc_type": "IfcCovering",
+   "surface_distance_m": 0.0,
+   "relative_volume_error": 4.55763971516511e-08,
+   "solid_iou": 0.9999999544236041
+  },
+  {
+   "ifc_type": "IfcCovering",
+   "surface_distance_m": 8.881784197001252e-16,
+   "relative_volume_error": 4.265230594639303e-07,
+   "solid_iou": 0.9999995734773027
+  }
+ ]
+}
