@@ -33,7 +33,7 @@ Mục tiêu: IFC tầng hầm thật → deck FDS 6.11.1 kiểm định được
 **A. Làm được ngay, không cần đầu vào từ người dùng:**
 | Mục | Việc | Ghi chú |
 |---|---|---|
-| Sửa ngưỡng thể tích mới | 9 phần tử của C (8 `IfcCovering`, 1 `IfcColumn`) thành DEVIATED oan vì sai số thể tích tương đối 1,6e-8…5,2e-7 > 1e-9 dù bề mặt khớp tới 1e-15 m | đã đo (`tolerance-A-C.json`); đề xuất: thêm điều kiện tuyệt đối ≤ 1e-9 m³ cho sai số thể tích khi `surface_proven`; đổi hợp đồng nên cần duyệt |
+| M6 — khắc phục audit 2026-11-15 | F1, F3, F4, F2, F9, F7, F5, F8 theo thứ tự trong roadmap (mốc M6) | quyết định đã có: F9 `ROUND=.FALSE.`, F1 MESH chồng nhau FAIL, F4 mọi OBST |
 | M1.7 (phần A) | Giảm thời gian A từ 170 s xuống 120 s | validation 73 s (quét tự giao cắt ~35 s, `compare_solids` 11, `passage_metrics` 9, `mesh_quality` 12); tái dùng bằng chứng theo `geometry.id` |
 | Duplex chập chờn | tìm nguyên nhân finding `representation` "Manifest openings differs" (có ở một số lần chạy, không ở lần khác) | đọc lại IFC thì khớp từng trường; có thể liên quan thứ tự hoặc cache |
 | M3.1 | Cơ chế bảng họ → loại phụ kiện cấu hình được, không khớp → `REVIEW_REQUIRED` | bảng cụ thể do kỹ sư duyệt |
@@ -47,7 +47,7 @@ Mục tiêu: IFC tầng hầm thật → deck FDS 6.11.1 kiểm định được
 | M2.4 `effective_geometry` PASS trên A | chọn cách xử lý GEOM: đọc cut-cell từ SMV, quay mô hình theo từng cánh, hoặc xấp xỉ bậc thang (A có 0% OBST vì mọi tường/sàn không thẳng trục) |
 | M3.1 (nội dung bảng), M3.2, M3.5 | nghĩa PAD/CEAD/OAD-FAD/RAD/TEAD; hệ nào hút khói; hệ số K, lưu lượng thiết kế từng miệng hút, đường cong quạt (B-ext 2, 3) |
 | Hệ số K của tê/Y/gót giày | kỹ sư đưa đủ mọi cặp cổng có thứ tự cho 84 phụ kiện của C (cơ chế đã có; K quy chiếu theo vận tốc ống đích) |
-| Ma sát ống chữ nhật | có hiệu chỉnh hay không: FDS thấp hơn khoảng 18% với ống 0,5×0,3 m; `ROUGHNESS=0` là không ma sát |
+| Ma sát ống chữ nhật | ĐÃ QUYẾT: dùng `ROUND=.FALSE.` (M6.F9); chênh 18% là do serializer thiếu cờ. Còn mở: `ROUGHNESS=0` là không ma sát, cần độ nhám thật từ thiết kế |
 | Ngưỡng hình học khác 0 | nếu kỹ sư muốn dung sai (ví dụ 1 mm) thì khai trong `audit`; không còn là mặc định |
 | T6: 22 cửa lỗi nguồn của A | kỹ sư duyệt từng cửa để điền `accepted_source_defects` |
 | M4.1, M4.3, M4.4 | số đo cháy nguyên xe được phép dùng, yield, tính chất vật liệu có nguồn (B-ext 4) |
@@ -57,7 +57,7 @@ Mục tiêu: IFC tầng hầm thật → deck FDS 6.11.1 kiểm định được
 
 ## 4. Rủi ro và điều cần biết
 - **Đối chiếu PyroSim:** chưa có số liệu nào. Chạy `audit` trên deck PyroSim thường cho REJECTED với mọi phần tử MISSING vì deck không có `! IFC_SOURCE` (đã thử bằng cách xóa các dòng này khỏi deck FZK của dự án). Chưa biết PyroSim có giữ dòng chú thích `!` và mảng `LOSS(i,j)` khi mở rồi lưu hay không; nếu không giữ, deck sửa trong PyroSim sẽ mất truy vết.
-- **Ngưỡng mới đã đo trên A và C (2026-11-15):** A không đổi; C có 9 phần tử MATCHED → DEVIATED oan (nhiễu Boolean, xem mục 3A). Verdict hai tòa vẫn REJECTED như trước. Thời gian các lượt đo không so được.
+- **Ngưỡng hình học (PR #118):** dung sai bề mặt mặc định 1 µm, lệch thể tích/IoU tính theo bề dày lớp vỏ. Chạy lại `convert`: A 546 MATCHED, C 697 MATCHED, 0 DEVIATED, trùng hệt từng phần tử với ngưỡng 1 mm cũ; lệch 1 mm thật vẫn bị loại. Verdict hai tòa vẫn REJECTED do lỗi nguồn.
 - **Job `MAPPING_VERIFIED` hết hạn sau 30 ngày** (`IFCFDS_DURABLE_RETENTION_S`, `0` = giữ vô hạn). Ai cần giữ lâu hơn phải đặt biến này.
 - **Cache xác minh bằng bằng chứng** không thấy việc sửa file cùng kích thước mà còn khôi phục đúng mtime; kiểm đầy đủ vẫn chạy sau khi khởi động lại.
 - Thời gian đo chỉ so sánh được trong cùng phiên kèm lượt đối chứng (máy từng chậm 5,6 lần). Không chạy hai phép đo cùng lúc.
@@ -72,5 +72,5 @@ Mục tiêu: IFC tầng hầm thật → deck FDS 6.11.1 kiểm định được
 2. `uv sync --locked --extra test`; `python scripts/install-fds.py` nếu cần solver.
 3. Suite: `python -m pytest -q -m "not solver and not browser and not slow" -o faulthandler_timeout=90` (~3 phút); solver: `IFCFDS_SOLVER=<fds_openmp> python -m pytest -q -m solver` (17 test, ~5 phút; trên Windows thêm thư mục `bin/mpi` của FDS vào `PATH` nếu chạy `fds_openmp.exe` trực tiếp).
 4. Trước khi đẩy PR: cổng nợ `PYTHONUTF8=1 python scripts/quality/source_quality_budget.py --git-base <merge-base>`.
-5. Thứ tự đề xuất cho nhóm A: đo ngưỡng mới trên A và C → M1.7 (phần A) → nguyên nhân Duplex chập chờn → M3.1 → M0.3; mỗi mục một PR nhỏ, commit tiếng Việt, không trailer Claude.
+5. Thứ tự đề xuất cho nhóm A: M6 (khắc phục audit 2026-11-15, đọc `docs/audit/` trước) → M1.7 (phần A) → nguyên nhân Duplex chập chờn → M3.1 → M0.3; mỗi mục một PR nhỏ, commit tiếng Việt, không trailer Claude.
 6. Khi có deck PyroSim: `python scripts/compare-fds-decks.py <deck IFCtoFDS> <deck PyroSim> --json <ra.json>`, ghi kết quả vào T19–T21 và `docs/evidence/production-roadmap/` (chỉ số tổng hợp).
