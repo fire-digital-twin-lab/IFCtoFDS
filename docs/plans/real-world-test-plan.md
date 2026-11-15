@@ -42,5 +42,16 @@ Mục đích: chứng minh trên IFC thật và trên stack triển khai thật 
 | T17 | Nghiên cứu lưới 3 mức cho QoI | xu hướng đơn điệu trước khi tính GCI | CHỜ ĐẦU VÀO (B-ext 5) |
 | T18 | Kỹ sư PCCC độc lập review deck và báo cáo, ghi giờ công so với dựng tay | ký nhận; giới hạn nằm trong báo cáo | CHỜ ĐẦU VÀO |
 
+## Tầng 5 — Đối chiếu PyroSim
+Công cụ: `python scripts/compare-fds-decks.py <deck A> <deck B> --json <ra.json>`. Script so không gian do OBST/GEOM/HOLE lấp đầy (không cần dòng `! IFC_SOURCE`): thể tích, IoU, phần chỉ một deck có kèm vị trí, mesh/số ô, số dòng provenance còn lại, bản ghi HVAC và số cặp `LOSS(i,j)`. IoU tính từ hai phép hiệu Boolean (phép giao của Manifold mất khoảng 0,3% trên mặt trùng); phần "chỉ có ở một deck" cỡ 1e-4 m³ là nhiễu. Script chỉ đo, không kết luận đạt/không đạt. Audit thường không dùng được cho deck PyroSim: cùng hình học nhưng thiếu `! IFC_SOURCE` thì mọi phần tử bị coi là MISSING.
+
+| # | Phép kiểm | Cách làm | Tiêu chí | Trạng thái |
+|---|---|---|---|---|
+| T19 | PyroSim giữ provenance khi lưu | mở `model.fds` của B trong PyroSim, lưu thành `b_pyrosim.fds`; chạy script với deck gốc và deck đã lưu | `provenance_lines` của B bằng của A; `comparison.method` là `IDENTICAL_SPACE` hoặc phần chỉ một deck có ≤ nhiễu | CHỜ ĐẦU VÀO (cần PyroSim) |
+| T20 | PyroSim giữ mạng HVAC tê/Y | sinh deck tê: `python -c "import pathlib,sys; from tests.test_hvac_junction import build,K; from ifc_to_fds.pipeline import convert; d=pathlib.Path(sys.argv[1]); p,c,_=build(d,K); (d/'tee.fds').write_text(convert([str(p)],c,d/'out')['fds_text'],encoding='utf-8')" <thư mục>`; mở `tee.fds` trong PyroSim, xem cây HVAC, lưu; chạy script | `hvac` = `{'NODE': 4, 'DUCT': 3}` và `node_loss_pairs` = 6 ở cả hai deck; ghi PyroSim hiển thị LOSS của nút ra sao | CHỜ ĐẦU VÀO (cần PyroSim) |
+| T21 | So hình học với PyroSim nhập IFC | nhập A/B/C bằng PyroSim (ghi phiên bản, chế độ khối hay solid, khoảng nới lỗ mở), xuất `.fds`; chạy script với deck IFCtoFDS | ghi thể tích, IoU, 10 vùng lệch lớn nhất và nguyên nhân từng vùng; không tự đặt ngưỡng | CHỜ ĐẦU VÀO (cần PyroSim hoặc deck PyroSim) |
+
+Đã kiểm script trên deck B thật: so với bản bỏ hết `! IFC_SOURCE` cho `IDENTICAL_SPACE`, 218/0 dòng provenance; bỏ một GEOM 0,0983 m³ thì phần chỉ có ở deck gốc là 0,0980 m³ (phần còn lại chồng lên tường bên cạnh), nhiễu 2,3e-4 m³, IoU 0,999240 so với kỳ vọng 0,999242.
+
 ## Thứ tự chạy
 T5 → T8 (đo hiệu năng, sau M1.7) → T7 → T10 → T11–T13 → T14 → T9 → T15. Các phép CHỜ ĐẦU VÀO chạy khi người dùng cung cấp dữ liệu; kế hoạch này không thay thế quyết định kỹ thuật của kỹ sư.
