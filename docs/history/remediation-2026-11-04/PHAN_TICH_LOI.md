@@ -2,7 +2,7 @@
 
 ## Phạm vi và độ chắc chắn
 
-Nguồn review là [Review lần 2](../Review-Toan-Dien-IFCtoFDS-.docx), SHA256 `77baceec21f1bb15f510e515881ad660daed857b34e2d514fc4bbd3f73b92920`. Review đánh giá snapshot 02/11, chạy trên Linux ngày 03/11. Lần đối chiếu này đọc mã working tree ngày 04/11 trên Windows, đã bao gồm các sửa đổi chưa hoàn tất ngày 03/11. Do đó số lỗi, số test và mức tiến triển không thể lấy nguyên từ review.
+Nguồn review là Review lần 2 (`Review-Toan-Dien-IFCtoFDS-.docx`, đã gỡ khỏi repo, xem lịch sử git), SHA256 `77baceec21f1bb15f510e515881ad660daed857b34e2d514fc4bbd3f73b92920`. Review đánh giá snapshot 02/11, chạy trên Linux ngày 03/11. Lần đối chiếu này đọc mã working tree ngày 04/11 trên Windows, đã bao gồm các sửa đổi chưa hoàn tất ngày 03/11. Do đó số lỗi, số test và mức tiến triển không thể lấy nguyên từ review.
 
 Nhãn **tái hiện** chỉ dùng cho ca thực sự chạy trong lần này. **Xác nhận mã** là kết luận từ đường dữ liệu trong mã. **Bằng chứng cũ** là kết quả đã lưu trước đó. **Cần đo** là giả thuyết hoặc giới hạn chưa được tái kiểm nghiệm. Mỗi loại cần được giữ riêng trong sổ nghiệm thu.
 

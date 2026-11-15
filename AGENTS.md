@@ -3,6 +3,7 @@
 ## Phạm vi làm việc
 
 - Tệp gốc này quy định cách làm việc trong repo. [AGENTS.md của gói ngữ cảnh](docs/agent-context/AGENTS.md) áp dụng khi làm việc trong cây `docs/agent-context/` và là tài liệu tham chiếu cho các phần còn lại của repo. Gói đó có `checksums.json`, nên không sửa tệp trong `docs/agent-context/` nếu chưa cập nhật checksum theo cách gói quy định. Các bước khởi động toàn bộ chương trình trong gói chỉ áp dụng khi được giao rõ ràng. Tra cứu [README](README.md) cho hành vi hiện tại và [chỉ mục ngữ cảnh](docs/agent-context/docs/README.md) cho đặc tả liên quan.
+- Trước khi lập kế hoạch hoặc sửa mã, đọc mọi audit đang mở trong `docs/audit/` (quy ước ở [docs/audit/README.md](docs/audit/README.md)). Giữ ID phát hiện của audit khi báo cáo; audit đã xử lý xong thì xóa khỏi thư mục đó.
 - [Kế hoạch production](docs/plans/production-roadmap.md) là nguồn chính cho trạng thái, mốc và cổng nghiệm thu của chương trình production. Đọc Phần A và mốc liên quan ở Phần B khi tiếp tục công việc. Kiểm tra nhánh và HEAD thực tế trước khi dựa vào các ghi chép về Git. Chỉ đánh dấu xong mốc khi qua cổng và trong phạm vi được phép cập nhật kế hoạch.
 - Phân tích, review và lập kế hoạch mặc định chỉ đọc. Khi triển khai, giữ tương thích CLI, API, schema, báo cáo, artifact và job đã lưu nếu yêu cầu chưa cho phép đổi hợp đồng. Giữ giấy phép AGPL, thông báo bản quyền và thông tin trích dẫn nguồn.
 

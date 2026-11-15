@@ -256,7 +256,6 @@ examples/                  IFC models and source attribution
 | [Artifact and boundary guide](docs/artifact-boundary-v05.md) | Compact API, binary geometry and solver-backed boundary policy |
 | [Source fidelity and large IFC import](docs/adr/ADR-007-source-fidelity-and-backend-preview.md) | Passive MEP export, retained opening hosts, exact domain intersections and backend preview |
 | [Architecture decision](docs/adr/ADR-002-hexagonal-architecture.md) | Ports, adapters and the architecture transition |
-| [Correctness review](docs/post-refactor-correctness.md) | Documented correctness work and evidence |
 | [Example sources](examples/SOURCES.md) | KIT and IfcOpenShell Duplex attribution |
 | [CI workflow](.github/workflows/verified.yml) | Python, JavaScript, browser, solver and optional research checks |
 

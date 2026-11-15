@@ -14,7 +14,7 @@
 
 Bản tiếng Anh có thể chưa phản ánh đầy đủ các cập nhật HVAC/scenario trong hướng dẫn tiếng Việt này.
 
-Đợt sửa ngày 03/11/2026: [kế hoạch và chuẩn đầu vào/đầu ra](docs/CONVERSION_REPAIR_PLAN_2026-11-03.md), [kết quả đối chiếu từng tiêu chí](docs/CONVERSION_REPAIR_VERIFICATION_2026-11-03.md).
+Trạng thái và kế hoạch hiện hành: [kế hoạch production](docs/plans/production-roadmap.md), [bàn giao](docs/plans/production-handover.md).
 
 ![Workbench với mô hình KIT FZK Haus](demo/readme/workbench.png)
 
@@ -898,7 +898,7 @@ Một số bài trên Windows chọn channel Microsoft Edge; cần Edge tương 
 python scripts/audit-project-logic.py
 ```
 
-Script tạo thư mục mới `scripts/out/logic-review-...`, in đường dẫn evidence.json, xuất ba profile để so sánh và ghi các trường hợp bị chặn. Mã thoát 0 nghĩa là thu thập xong quan sát; đọc kết quả để biết case nào được chấp nhận. [Bằng chứng sau sửa](docs/evidence/hvac-network-v1/evidence.json) và [audit gốc](docs/audit/LOGIC_ARCHITECTURE_REVIEW_2026-11-02.md).
+Script tạo thư mục mới `scripts/out/logic-review-...`, in đường dẫn evidence.json, xuất ba profile để so sánh và ghi các trường hợp bị chặn. Mã thoát 0 nghĩa là thu thập xong quan sát; đọc kết quả để biết case nào được chấp nhận. [Bằng chứng sau sửa](docs/evidence/hvac-network-v1/evidence.json)
 
 <a id="su-co"></a>
 
@@ -950,7 +950,6 @@ Khi báo lỗi, gửi phiên bản/commit, hệ điều hành, lệnh/thao tác,
 Tạo issue với ca tái hiện và kết quả mong đợi. Sửa thuật toán cần kiểm thử hành vi/mutation phù hợp, mô tả thay đổi đầu ra/giới hạn và chạy CI liên quan. Phân biệt kiến trúc mục tiêu với implementation hiện có.
 
 - [Hướng dẫn HVAC](docs/HVAC_NETWORK_IMPLEMENTATION.md).
-- [Rà soát logic và kiến trúc ngày 02/11/2026](docs/audit/LOGIC_ARCHITECTURE_REVIEW_2026-11-02.md).
 - [Kiến trúc và ADR](docs/architecture.md).
 - [Workflow Verified](docs/verified-conversion.md).
 - [Golden mapping/reference](docs/golden-mapping-parity.md).
