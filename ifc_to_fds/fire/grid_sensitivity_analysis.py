@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from .grid_sensitivity_models import (
     GridSensitivityCaseResult,
     GridSensitivityStudyEvidence,
@@ -31,7 +33,10 @@ def _descriptor(observation):
 def _relative_to_finer(coarser: float, finer: float) -> float | None:
     if finer == 0.0:
         return None
-    return abs(finer - coarser) / abs(finer)
+    ratio = abs(finer - coarser) / abs(finer)
+    if not math.isfinite(ratio):
+        raise ValueError("Grid-sensitivity has non-finite relative change")
+    return ratio
 
 
 def _trend(coarse: float, medium: float, fine: float) -> str:
@@ -39,9 +44,11 @@ def _trend(coarse: float, medium: float, fine: float) -> str:
     second = fine - medium
     if first == 0.0 and second == 0.0:
         return "FLAT"
-    if first * second > 0.0:
+    # Không nhân hai sai phân: tích có thể underflow về 0 dù cả hai
+    # đều hữu hạn và khác 0, làm sai phân loại xu hướng vật lý.
+    if (first > 0.0 and second > 0.0) or (first < 0.0 and second < 0.0):
         return "MONOTONIC"
-    if first * second < 0.0:
+    if (first > 0.0 and second < 0.0) or (first < 0.0 and second > 0.0):
         return "OSCILLATORY"
     return "PLATEAU_OR_UNRESOLVED"
 
@@ -92,6 +99,11 @@ def analyze_grid_sensitivity(
         coarse, medium, fine = [observation.value for observation in observations]
         first_delta = medium - coarse
         second_delta = fine - medium
+        if not math.isfinite(first_delta) or not math.isfinite(second_delta):
+            # Chứng cứ không thể chứa thay đổi tràn miền biểu diễn binary64.
+            raise ValueError(
+                f"Metric '{metric_id}' has non-finite grid difference"
+            )
         metrics.append(
             MetricSensitivityEvidence(
                 metric_id=metric_id,
