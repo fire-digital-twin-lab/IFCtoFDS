@@ -29,8 +29,8 @@ def emitted_obst_boxes(element):
 def vent_rests_on_solid_face(vent_xb, boxes) -> bool:
     """True when the whole VENT rectangle lies on a face with solid on exactly one side.
 
-    A plane shared by two touching boxes is not a solid/gas interface: FDS has no exposed surface there to
-    attach a VENT to (ERROR 818), so only the area covered by boxes on exactly one side of the plane counts.
+    Consider the solid on each side of the plane, including any box that crosses it.
+    Require the same gas-facing side across the entire rectangle.
     """
     axis = next(a for a in range(3) if vent_xb[2 * a] == vent_xb[2 * a + 1])
     plane = vent_xb[2 * axis]
@@ -39,8 +39,13 @@ def vent_rests_on_solid_face(vent_xb, boxes) -> bool:
     def footprint(b):
         return _rectangle(b[2 * u], b[2 * v], b[2 * u + 1], b[2 * v + 1])
 
-    below = [footprint(b) for b in boxes if abs(b[2 * axis + 1] - plane) < FACE_TOLERANCE_M]
-    above = [footprint(b) for b in boxes if abs(b[2 * axis] - plane) < FACE_TOLERANCE_M]
-    exposed = unary_union(below).symmetric_difference(unary_union(above))
+    negative_side = plane - FACE_TOLERANCE_M
+    positive_side = plane + FACE_TOLERANCE_M
+    below = unary_union([footprint(b) for b in boxes if b[2 * axis] < negative_side < b[2 * axis + 1]])
+    above = unary_union([footprint(b) for b in boxes if b[2 * axis] < positive_side < b[2 * axis + 1]])
     rectangle = _rectangle(vent_xb[2 * u], vent_xb[2 * v], vent_xb[2 * u + 1], vent_xb[2 * v + 1])
-    return rectangle.difference(exposed).area <= COVERAGE_RELATIVE_TOLERANCE * rectangle.area
+    unexposed_area = min(
+        rectangle.difference(below.difference(above)).area,
+        rectangle.difference(above.difference(below)).area,
+    )
+    return unexposed_area <= COVERAGE_RELATIVE_TOLERANCE * rectangle.area

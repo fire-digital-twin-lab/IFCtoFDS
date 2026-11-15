@@ -32,6 +32,20 @@ def test_the_plane_between_two_touching_boxes_is_not_an_interface():
     assert vent_rests_on_solid_face([0.5, 1.5, 0.2, 0.8, 2, 2], stacked)  # the real top face
 
 
+def test_vent_is_rejected_when_another_obstruction_crosses_its_plane():
+    vent = [2, 2.6, 0, 0, 0.8, 1.2]
+    wall = [(1, 4, 0, 0.3, 0, 2.1)]
+    double_sided = [(1, 4, -0.1, 0.1, 0, 2.1)]
+    assert vent_rests_on_solid_face(vent, wall)
+    assert not vent_rests_on_solid_face(vent, wall + double_sided)
+
+
+def test_vent_is_rejected_when_the_exposed_faces_have_opposite_normals():
+    vent = [0.2, 1.8, 0, 0, 0.2, 0.8]
+    solids = [(0, 1, 0, 1, 0, 1), (1, 2, -1, 0, 0, 1)]
+    assert not vent_rests_on_solid_face(vent, solids)
+
+
 def test_a_vent_in_open_space_or_without_boxes_is_refused():
     assert not vent_rests_on_solid_face([5, 6, 0, 0, 0, 1], WALL)
     assert not vent_rests_on_solid_face([0, 1, 0, 0, 0, 1], [])
