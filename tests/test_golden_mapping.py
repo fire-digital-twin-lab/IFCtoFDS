@@ -31,8 +31,9 @@ def checked(model, text=None, package=None, configuration=None):
     config = configuration or {"mep_graph": model.mep_graph.model_dump(mode="json")}
     manifest = build_manifest(model, text, config)
     manifest.geometry_package_sha256 = package["sha256"]
-    report = run_independent_validation(model, text, manifest)
-    audit_package(model, package, report, AuditConfig())
+    audit = AuditConfig.model_validate(config.get("audit", {}))
+    report = run_independent_validation(model, text, manifest, audit)
+    audit_package(model, package, report, audit)
     report.configuration["test_serialized_fds"] = text
     return text, manifest, package, report, config
 
@@ -662,15 +663,20 @@ def test_golden_compares_actual_fds_to_accepted_fds(box_model, tmp_path):
     original = "XB=0,2,0,1,0,3"
     baseline = text.replace(original, "XB=0.00075,2.00075,0,1,0,3")
     actual = text.replace(original, "XB=-0.00075,1.99925,0,1,0,3")
-    _, manifest, package, report, config = checked(box_model, text=baseline)
+    # A 1 mm tolerance is an engineering decision, so it is declared, never a default.
+    declared = {
+        "mep_graph": box_model.mep_graph.model_dump(mode="json"),
+        "audit": {"surface_tolerance_m": 0.001, "relative_volume_tolerance": 0.001, "min_solid_iou": 0.999},
+    }
+    _, manifest, package, report, config = checked(box_model, text=baseline, configuration=declared)
     assert report.gates["geometry"].status == "PASS"
     directory = tmp_path / "fds-baseline"
     create_candidate(directory, box_model, manifest, package, report, config, baseline)
     approve_test_fixture(directory)
-    _, manifest, package, report, _ = checked(box_model, text=actual)
+    _, manifest, package, report, _ = checked(box_model, text=actual, configuration=declared)
     assert (
         report.gates["geometry"].status == "PASS"
-    )  # Both within IFC tolerance independently.
+    )  # Both within the declared tolerance independently.
     golden_gate(
         report,
         box_model,
@@ -719,3 +725,16 @@ def test_manual_fds_import_stays_a_draft(tiny_ifc, tmp_path):
     assert approval["status"] == "DRAFT"
     assert values["fds-geometry.json"]["complete"]
     assert values["fds-geometry.json"]["entries"]
+
+
+def test_default_tolerance_rejects_a_sub_millimetre_shift(box_model):
+    """Without a declared tolerance, a 0.75 mm shift is a deviation, not a match."""
+    box_model.simulation_domain = BoundingBox(xmin=-1, xmax=3, ymin=-1, ymax=2, zmin=-1, zmax=4)
+    text, _ = serialize_fds(box_model)
+    shifted = text.replace("XB=0,2,0,1,0,3", "XB=0.00075,2.00075,0,1,0,3")
+    assert shifted != text
+    _, _, _, report, _ = checked(box_model, text=shifted)
+    assert report.gates["geometry"].status == "FAIL"
+    assert report.element_statuses["fixture:1"] == "DEVIATED"
+    _, _, _, exact, _ = checked(box_model, text=text)
+    assert exact.gates["geometry"].status == "PASS"

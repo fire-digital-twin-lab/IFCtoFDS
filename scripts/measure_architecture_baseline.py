@@ -56,7 +56,7 @@ def compute_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def main():
+def main(output_path=OUTPUT_PATH):
     metrics = {
         "javascript_files": {},
         "python_files": {},
@@ -84,9 +84,9 @@ def main():
         metrics["fixtures"][rel] = {"sha256": digest, "size_bytes": p.stat().st_size if p.is_file() else 0}
         print(f"  {rel:35s}: {digest[:16]}... ({metrics['fixtures'][rel]['size_bytes']} bytes)")
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-    print(f"\nBaseline metrics written to {OUTPUT_PATH}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    print(f"\nBaseline metrics written to {output_path}")
 
 
 if __name__ == "__main__":

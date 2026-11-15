@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import hashlib
 import math
-import re
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ifc_to_fds.domain.mapping import MappingPlan
+from ifc_to_fds.mapping.exporter import clean_fds_id
 from ifc_to_fds.fire.base_geometry import VerifiedBaseGeometry
 from ifc_to_fds.fire.ev_library import EV_LIBRARY_VERSION, EVPreset, load_ev_preset
 from ifc_to_fds.fire.vehicle_collision import (
@@ -25,14 +25,6 @@ from ifc_to_fds.fire.vehicle_geometry import (
     VehicleGeometry,
     resolve_vehicle_geometry,
 )
-
-
-def clean_fds_id(name: str, fallback: str = "ID") -> str:
-    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", name or "")
-    cleaned = cleaned.strip("._-")
-    if not cleaned:
-        cleaned = fallback
-    return cleaned[:30]
 
 
 def opening_control_key(entity_key: str) -> str:

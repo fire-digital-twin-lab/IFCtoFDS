@@ -243,7 +243,8 @@ def _serialize_planned_model(model, cell_size, hvac_network):
         raise ValueError("Call plan_mapping before serialization")
     lines: List[str] = []
 
-    chid = clean_fds_id(Path(model.source.filename).stem, "IFC_MODEL")
+    # FDS stops with "No periods allowed in CHID" (ERROR 108); file names often carry a version suffix.
+    chid = clean_fds_id(Path(model.source.filename).stem.replace(".", "_"), "IFC_MODEL")
     lines.append(
         f"&HEAD CHID='{chid}', TITLE='IFCtoFDS conversion; see acceptance report' /"
     )

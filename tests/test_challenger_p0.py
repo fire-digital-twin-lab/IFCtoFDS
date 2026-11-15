@@ -340,17 +340,17 @@ class TestMeshNormalsStress:
 class TestMeasureArchitectureBaselineEmpirical:
     """Empirically tests scripts/measure_architecture_baseline.py execution and metrics."""
 
-    def test_script_execution_and_schema_validation(self):
+    def test_script_execution_and_schema_validation(self, tmp_path):
         """Verify baseline measurement script executes cleanly and produces expected schema."""
         script_path = Path(__file__).parents[1] / "scripts/measure_architecture_baseline.py"
         assert script_path.is_file()
 
         module_vars = runpy.run_path(str(script_path))
         main = module_vars["main"]
-        output_path = module_vars["OUTPUT_PATH"]
+        output_path = tmp_path / "baseline_metrics.json"  # never rewrite the tracked snapshot
 
         # Execute main function
-        main()
+        main(output_path)
         assert output_path.is_file()
 
         data = json.loads(output_path.read_text(encoding="utf-8"))

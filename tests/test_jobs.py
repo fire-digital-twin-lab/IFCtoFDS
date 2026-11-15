@@ -117,3 +117,33 @@ def test_cli_serve_with_api_key_file(tmp_path, monkeypatch):
     finally:
         os.environ.pop("IFCFDS_API_KEY", None)
 
+
+
+def test_wall_clock_step_does_not_expire_a_running_job(tmp_path, monkeypatch):
+    """A clock jump (NTP step) must not time out a worker: the deadline uses a monotonic clock."""
+    real_popen = subprocess.Popen
+
+    def sleeping_worker(*args, **kwargs):
+        return real_popen([sys.executable, "-c", "import time; time.sleep(60)"],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    monkeypatch.setattr("ifc_to_fds.adapters.jobs.service.subprocess.Popen", sleeping_worker)
+    manager = JobManager(root=tmp_path, timeout_s=30)
+    directory = tmp_path / "job"
+    directory.mkdir()
+    source = directory / "source-0.ifc"
+    source.write_text("fixture", encoding="utf-8")
+    try:
+        job = manager.submit([source], {}, directory)
+        deadline = time.monotonic() + 10
+        while manager.jobs[job["id"]].get("process") is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        with manager.lock:
+            manager.jobs[job["id"]]["started"] -= 3600  # the wall clock jumped forward one hour
+        manager.wake.set()
+        time.sleep(0.5)
+        assert manager.snapshot(job["id"])["state"] == "RUNNING"
+        assert "_started_monotonic" not in manager.snapshot(job["id"])
+        manager.cancel(job["id"])
+    finally:
+        manager.close()
