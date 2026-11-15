@@ -1434,7 +1434,8 @@
     }
 
     function escapeFdsString(value) {
-        return String(value).replace(/'/g, "''");
+        // A line break would end the namelist or provenance comment and let the rest of an IFC name become new input.
+        return String(value).replace(/[\x00-\x1f\x7f]/g, ' ').replace(/'/g, "''");
     }
 
     function surfaceForElement(element) {

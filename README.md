@@ -783,6 +783,7 @@ Job lưu tại `.jobs/` mặc định. Mapping được xác minh được đán
 | IFCFDS_TIMEOUT_S | 1.800 giây/job |
 | IFCFDS_WORKER_MAX_MEMORY_MB | 4.096 MB |
 | IFCFDS_JOB_RETENTION_S | 3.600 giây cho chính sách job không bền vững |
+| IFCFDS_DURABLE_RETENTION_S | 2.592.000 giây (30 ngày) giữ job đã đạt `MAPPING_VERIFIED`; `0` giữ vô hạn cho tới khi xóa bằng `DELETE ?purge=true` |
 | IFCFDS_SOLVER | Đường dẫn solver cho backend |
 | IFCFDS_API_KEY | Khóa truy cập khi cấu hình |
 | IFCFDS_ALLOWED_HOSTS, IFCFDS_ALLOWED_ORIGINS | Cấu hình host/origin được phép |
