@@ -15,6 +15,8 @@ def network_records(plan):
                 values.update(AMBIENT=[True], XYZ=list(node.xyz))
         else:
             values["XYZ"] = list(node.xyz)
+        for i, j, k in node.junction_loss:
+            values[f"LOSS({i},{j})"] = [k]
         records.append(("HVAC", values, node.entity_keys))
     for duct in plan.ducts:
         spec = duct.spec

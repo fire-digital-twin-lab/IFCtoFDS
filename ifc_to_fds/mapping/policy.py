@@ -89,8 +89,8 @@ def validate_decisions(decisions):
         if "hvac" in decision:
             if decision["action"] != "HVAC":
                 raise ValueError("hvac parameters require action=HVAC")
-            from ifc_to_fds.domain.mep.hvac import DuctSpec
-            DuctSpec.model_validate(decision["hvac"])
+            from ifc_to_fds.domain.mep.hvac import hvac_spec
+            hvac_spec(decision["hvac"])
         if decision["action"] == "PASSIVE_OBSTACLE" and (
             not isinstance(decision.get("factors"), dict)
             or set(decision["factors"]) != PROMOTION_FACTORS

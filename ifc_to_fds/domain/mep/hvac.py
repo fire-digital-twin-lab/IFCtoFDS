@@ -52,6 +52,35 @@ class DuctSpec(BaseModel):
         return self
 
 
+class JunctionLoss(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    from_port: str
+    to_port: str
+    # Dimensionless, referred to the dynamic pressure of the duct that leaves through `to_port` (FDS 6.11.1).
+    k: float = Field(ge=0)
+
+
+class JunctionSpec(BaseModel):
+    """Reviewed losses of a tee, wye or take-off: one coefficient per ordered pair of its ports."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    losses: list[JunctionLoss] = Field(min_length=6)  # three ports give six ordered pairs
+
+    @model_validator(mode="after")
+    def validate_pairs(self):
+        pairs = [(x.from_port, x.to_port) for x in self.losses]
+        if any(a == b for a, b in pairs):
+            raise ValueError("A junction loss needs two different ports")
+        if len(pairs) != len(set(pairs)):
+            raise ValueError("Duplicate junction loss for one ordered port pair")
+        return self
+
+
+def hvac_spec(data):
+    """The reviewed parameters of one HVAC element: a junction when it lists `losses`, else a duct."""
+    return JunctionSpec.model_validate(data) if isinstance(data, dict) and "losses" in data else DuctSpec.model_validate(data)
+
+
 class HvacNode(BaseModel):
     id: str
     port_keys: list[str]
@@ -59,6 +88,8 @@ class HvacNode(BaseModel):
     xyz: tuple[float, float, float]
     duct_ids: list[str]
     boundary: EndpointSpec | None = None
+    # (i, j, K) with 1-based positions in duct_ids, as FDS LOSS(i,j): flow from duct i into duct j.
+    junction_loss: list[tuple[int, int, float]] = Field(default_factory=list)
 
 
 class HvacDuct(BaseModel):

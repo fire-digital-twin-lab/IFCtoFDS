@@ -1,0 +1,36 @@
+{
+  "A": {
+    "ifc_bytes": 32655047,
+    "storeys": 0,
+    "cli": {
+      "seconds": 183.8,
+      "deck_bytes": 10096250,
+      "sha256": "5e859dadb9e75a4b703a4280de40344a1a6917c21ff0ef3df20722026ff7fa12"
+    },
+    "web": {
+      "seconds": 166.3,
+      "state": "COMPLETED",
+      "deck_bytes": 10096250,
+      "sha256": "5e859dadb9e75a4b703a4280de40344a1a6917c21ff0ef3df20722026ff7fa12",
+      "verdict": "REJECTED"
+    },
+    "identical": true
+  },
+  "B": {
+    "ifc_bytes": 902871,
+    "storeys": 0,
+    "cli": {
+      "seconds": 14.9,
+      "deck_bytes": 573646,
+      "sha256": "16e7c01d77ed487de0f7e7061944a1b5e685b905ccc9b664442b112dac12ae5a"
+    },
+    "web": {
+      "seconds": 12.2,
+      "state": "COMPLETED",
+      "deck_bytes": 573646,
+      "sha256": "16e7c01d77ed487de0f7e7061944a1b5e685b905ccc9b664442b112dac12ae5a",
+      "verdict": "MAPPING_VERIFIED"
+    },
+    "identical": true
+  }
+}
