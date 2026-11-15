@@ -123,19 +123,32 @@ class PassageResolutionChecker:
                 findings=findings,
                 metrics=metrics,
             )
-        if not assessed:
-            status = GateStatus.INCONCLUSIVE if not_estimated else GateStatus.NOT_APPLICABLE
-            reason = (
-                f"{not_estimated} opening(s) are not axis-aligned boxes; their resolution was not estimated"
-                if not_estimated
-                else "No openings or enclosure obstructions to assess"
+        if not_estimated:
+            # An opening that could not be measured keeps the gate open even when other items were resolved:
+            # counting the wall boxes as "assessed" used to hide it (audit F3).
+            return CheckerOutcome(
+                gate_name=self.name,
+                result=GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason=f"{not_estimated} opening(s) were not estimated (not an axis-aligned box inside one mesh); "
+                    f"{assessed} other item(s) were resolved on the grid",
+                    evidence=metrics["passage_resolution"],
+                ),
+                findings=[],
+                metrics=metrics,
             )
-            return CheckerOutcome(gate_name=self.name, result=GateResult(status=status, reason=reason), findings=[], metrics=metrics)
+        if not assessed:
+            return CheckerOutcome(
+                gate_name=self.name,
+                result=GateResult(status=GateStatus.NOT_APPLICABLE, reason="No openings or enclosure obstructions to assess"),
+                findings=[],
+                metrics=metrics,
+            )
         return CheckerOutcome(
             gate_name=self.name,
             result=GateResult(
                 status=GateStatus.PASS,
-                reason=f"{assessed} openings and enclosure solids resolved on the grid; {not_estimated} opening(s) not estimable",
+                reason=f"{assessed} openings and enclosure solids resolved on the grid",
                 evidence=metrics["passage_resolution"],
             ),
             findings=[],

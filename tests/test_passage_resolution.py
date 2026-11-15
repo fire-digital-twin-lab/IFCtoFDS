@@ -38,3 +38,40 @@ def test_proposed_cell_size_actually_resolves_the_passage():
     assert sizes, findings
     gate, _ = _resolution(convert([OPENING], configuration={"cell_size": min(sizes)}))
     assert gate["status"] == "PASS", gate
+
+
+def _audit_with_meshes(tmp_path, meshes):
+    import hashlib
+    import re
+
+    from ifc_to_fds.domain.mapping import MappingManifest
+    from ifc_to_fds.pipeline import audit
+
+    base = convert([OPENING], output_directory=tmp_path)
+    text = re.sub(r"(?m)^&MESH .*? /$", meshes, base["fds_text"], count=1)
+    assert text != base["fds_text"]
+    manifest = MappingManifest.model_validate(base["manifest"])
+    manifest.fds_sha256 = hashlib.sha256(text.encode()).hexdigest()
+    manifest.reseal()
+    return audit([OPENING], text, manifest, base["configuration"], base["geometry_package"])[2]
+
+
+SEAM = (
+    "&MESH ID='M1', IJK=1,2,15, XB=0,0.5,0,0.3,0,3 /\n"
+    "&MESH ID='M2', IJK=2,2,15, XB=0.5,4,0,0.3,0,3 /"
+)
+
+
+def test_an_opening_across_a_mesh_seam_is_not_reported_as_resolved(tmp_path):
+    """Audit F3: the wall boxes were counted as assessed and hid the opening that could not be estimated."""
+    report = _audit_with_meshes(tmp_path, SEAM)
+    gate = report.gates["passage_resolution"]
+    assert gate.status == "INCONCLUSIVE", gate
+    assert gate.evidence["openings_not_estimated"] >= 1 and gate.evidence["assessed"] >= 1
+    assert "not estimated" in gate.reason
+    assert report.mapping_status == "MAPPING_VERIFIED"  # only the simulation verdict is affected
+
+
+def test_a_single_mesh_still_passes_when_every_opening_is_estimated(tmp_path):
+    gate = _audit_with_meshes(tmp_path, "&MESH ID='M1', IJK=20,2,15, XB=0,4,0,0.3,0,3 /").gates["passage_resolution"]
+    assert gate.status == "PASS" and gate.evidence["openings_not_estimated"] == 0
