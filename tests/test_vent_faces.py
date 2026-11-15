@@ -98,4 +98,6 @@ def test_the_exporter_writes_exactly_the_boxes_the_compiler_checks():
     plan_mapping(model)
     expected = sorted(tuple(map(float, b)) for b in emitted_obst_boxes(wall))
     assert len(written) == len(expected) == 2
-    assert written == pytest.approx(expected)
+    assert [tuple(round(v, 9) for v in box) for box in written] == [
+        tuple(round(v, 9) for v in box) for box in expected
+    ]
