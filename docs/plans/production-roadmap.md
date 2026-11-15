@@ -10,7 +10,7 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 # Phần A — Trạng thái
 
 ## A1. Git
-- PR #109 (`feat/production-m0-geometry-ready`) được merge vào `main` bằng merge commit để giữ nguyên các mã commit nêu ở A2; nhánh đã xóa sau merge. Công việc tiếp theo làm trên nhánh mới từ `main`, mỗi mục một PR nhỏ.
+- Đã merge vào `main` bằng merge commit (nhánh đã xóa sau merge): #109 `439366a` (M0–M2 và một phần M3–M5), #110 `848904b` (M1.7, M5.2), #111 `64b0fa6` (M5.5, M3.3/M3.4/M3.6), #112 `4d077a0` (audit lần 1, 5 sửa), #113 `15a37e2` (audit lần 2, 10 sửa), #114 `d32dd7b` (script so deck PyroSim). Công việc tiếp theo làm trên nhánh mới từ `main`, mỗi mục một PR nhỏ.
 - Commit từ M2 trở đi viết tiếng Việt, không ghi công Claude (xem `AGENTS.md`). 21 commit tiếng Anh cũ hơn giữ nguyên theo quyết định của người dùng.
 - Bàn giao và kế hoạch kiểm thử: [production-handover.md](production-handover.md), [real-world-test-plan.md](real-world-test-plan.md).
 
@@ -30,6 +30,9 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 | M5.1, M5.3, M5.4 | `92ac39b` | `TMPDIR` trên volume (upload 2×150 MiB: lỗi 400 → 202, đo bằng Docker); diễn tập backup/restore trên job thật; image `solver` có FDS 6.11.1 Linux ghim hash, probe đạt trong container với cờ production |
 | M1.7 và M5.2 | `c849461`, `74d7e1d` | C cold 293 s (đạt); A cold 170 s (chưa đạt 120). Drill job dài trên C ở chế độ local và production: COMPLETED 260–266 s, RSS đỉnh 1,2 GiB, hàng đợi và khởi động lại đúng |
 | M3.3/M3.4/M3.6, M5.5 | tiếp theo `5298c71` | Tê, Y, gót giày thành một nút FDS với `LOSS(i,j)` đã duyệt; tách dòng khớp tay 5%, bảo toàn khối lượng 1%. Deck CLI và web trùng từng byte trên A và B; B `MAPPING_VERIFIED` |
+| Audit lần 1 (PR #112) | `4d077a0` | Tên IFC có xuống dòng không còn chèn lệnh vào deck Quick; thư mục upload không mồ côi khi `submit` lỗi (kể cả đĩa đầy); job `MAPPING_VERIFIED` hết hạn sau `IFCFDS_DURABLE_RETENTION_S` (30 ngày); upload song song bị giữ chỗ trước khi ghi byte (429); cache xác minh bằng chứng theo kích thước và mtime; `touch` bỏ commit SQLite khi vừa truy cập |
+| Audit lần 2 (PR #113) | `15a37e2` | `CHID` không còn dấu chấm (FDS dừng với ERROR 108, trước đây vẫn `MAPPING_VERIFIED`); `audit` không nhận `accepted_source_defects` từ manifest, mỗi lỗi được miễn là finding P2 trong báo cáo; ngưỡng hình học mặc định 1e-9 (trước 1 mm / 0,1% / 0,999), lỗ mở giữ nhiễu Boolean cũ qua `PASSAGE_NOISE_M`; `_dispatch` tách khỏi vòng lập lịch; hạn chót job dùng `time.monotonic`; `verified.yml` khai `permissions`; test baseline ghi ra `tmp_path`; xóa shim `fire/mesh_gate.py`. B vẫn `MAPPING_VERIFIED` (218 MATCHED) với ngưỡng mới; FZK, Duplex, Institute trùng `main` |
+| Đối chiếu PyroSim (PR #114) | `d32dd7b` | `scripts/compare-fds-decks.py` so không gian do OBST/GEOM/HOLE lấp đầy của hai deck không cần `! IFC_SOURCE` (thể tích, IoU, vùng lệch, số dòng provenance, HVAC và `LOSS(i,j)`); chạy thử trên deck B thật. Chưa có kết quả so với PyroSim vì máy không có PyroSim |
 
 ## A3. Đang bị chặn (chờ đầu vào, không tự suy)
 | Mục | Chặn bởi | Cần gì | Đã chuẩn bị sẵn |
@@ -43,7 +46,8 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 | M4.1 preset xe | B-ext 4 | số đo cháy nguyên xe được phép dùng (HRR theo thời gian, năng lượng pin) | có thể phát lại thẳng đường đo (M4.2) |
 | M4.3 HF/HCN | B-ext 4 | yield nguyên xe | — |
 | M4.4 biên truyền nhiệt | nguồn tính chất vật liệu | tính chất bê tông/thép có trích nguồn | — |
-| Bước CI mới (upload 2×150 MiB, job `solver-image`) | chưa chạy trên CI | chờ kết quả lần push `92ac39b` | cả hai đã chạy cục bộ bằng Docker |
+| Bước CI upload 2×150 MiB | chỉ chạy trong stack đầy đủ | không cần đầu vào | job `solver-image` đã đạt trên CI; bước upload đã đo cục bộ bằng Docker |
+| Đối chiếu PyroSim (T19–T21) | không có PyroSim, không có deck PyroSim | deck `.fds` PyroSim nhập A/B/C (kèm phiên bản và cài đặt nhập), và deck B/`tee.fds` mở rồi lưu lại bằng PyroSim | `scripts/compare-fds-decks.py` đã sẵn; audit thường không dùng được cho deck PyroSim vì thiếu `! IFC_SOURCE` (mọi phần tử bị MISSING) |
 | M5.5–M5.7 | các mốc trên + kỹ sư review | QoI nghiệm thu (B-ext 5) | — |
 
 ## A4. Vấn đề mở khác
@@ -52,6 +56,10 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 3. `air_path` vẫn dùng Boolean khi có phần tử vỏ bao lệch; khi đó có thể INCONCLUSIVE.
 4. `test_sqlite_wal_multi_process_concurrency` từng báo "database is locked" một lần khi máy tải nặng (đã thêm thử lại có thời hạn).
 5. Ổ đĩa dự án có 26 thư mục job cũ trong `.jobs/` (ngoài git) do server/test để lại; xóa tay nếu cần dung lượng.
+6. Ngưỡng hình học mặc định mới (1e-9) chưa chạy lại trên A và C; chỉ B, FZK, Duplex, Institute đã đo. Nếu A hoặc C có phần tử trước đây MATCHED nhờ ngưỡng 1 mm thì nay thành DEVIATED; cần đo trước khi làm T6.
+7. Duplex: finding `representation` "Manifest openings differs from independent policy" xuất hiện ở một số lần chạy và không ở lần khác (cả trên `main` và trên nhánh audit; `verdict-snapshot` trên `main` không có, `convert` trực tiếp trên `main` có). Đọc lại IFC thì manifest và kết quả đọc lại khớp từng trường; nguyên nhân chưa tìm ra. Đây là chập chờn đã ghi ở M0.4.
+8. `PASSAGE_NOISE_M` (1 mm quy theo diện tích/thể tích lỗ mở) là hằng dung sai nhiễu Boolean có `shortcut:`; bỏ khi lối đi được chứng minh bằng nhau chính xác cho mọi vật cản.
+9. Workflow CI chính ghim action theo tag (`@v4`); workflow release đã ghim theo SHA.
 
 ## A5. Dữ liệu thật (ngoài repo, không commit; trong repo chỉ dùng bí danh và số tổng hợp)
 Thư mục `D:\User\HUCE\NCKH\Resources\IFC_Tòa nhà\`. Cả ba IFC2X3, placement hợp lệ 100%, không có CRS; vị trí Site là mặc định phần mềm dựng.
@@ -60,14 +68,15 @@ Thư mục `D:\User\HUCE\NCKH\Resources\IFC_Tòa nhà\`. Cả ba IFC2X3, placeme
 |---|---|---|---|
 | Nội dung | hầm 2 tầng, 793 sản phẩm, mm | một tầng, 279 sản phẩm, mm | tổng hợp + MEP, 5.641 sản phẩm, **foot** |
 | Đặc điểm | 356 tường, 177 lỗ, 546/583 phần tử là GEOM; 21 cửa không-manifold | cửa, tường kính, lan can | 63 tầng (hai hệ cao độ trộn), 296 ống gió chữ nhật, 38 ống mềm, 588 ống nước, 478 phụ kiện, 130 đầu cuối, 68 hệ thống (SPR, PAD, CEAD, OAD/FAD, RAD, TEAD), 534 cổng `SOURCEANDSINK` |
-| Lần đo cuối | 253 s cache lạnh kèm solver (M2.4); 22 UNSUPPORTED (cửa lỗi nguồn) | 14 s; 8 DEVIATED | 670 s; 1.722 phần tử `NONE`, 89 finding bảo toàn, 4 UNSUPPORTED |
-| Verdict | REJECTED | REJECTED | REJECTED |
+| Lần đo cuối | 253 s cache lạnh kèm solver (M2.4); 22 UNSUPPORTED (cửa lỗi nguồn); deck CLI và web trùng từng byte (10.096.250 byte) | 218 MATCHED, 61 SEMANTIC_ONLY, ngưỡng hình học mới; deck CLI và web trùng từng byte | 670 s; 1.722 phần tử `NONE`, 89 finding bảo toàn, 4 UNSUPPORTED; tầng hầm 293 s cold |
+| Verdict | REJECTED | **MAPPING_VERIFIED** | REJECTED |
 
 A và B lệch nhau > 1.000 km trên trục Y sau khi đọc: không tự ghép được.
 
 ## A6. Cách chạy
 - Môi trường: `uv sync --locked --extra test`; Python = `.venv/Scripts/python.exe`; đặt `PYTHONIOENCODING=utf-8`, `IFCFDS_SOLVER_AUTODISCOVERY=0`.
-- Toàn suite (~3 phút): `python -m pytest -q -p no:cacheprovider -o faulthandler_timeout=90`, sau đó `git checkout tests/baseline/snapshots/baseline_metrics.json` (test tự ghi file này).
+- Toàn suite (~3 phút): `python -m pytest -q -m "not solver and not browser and not slow" -p no:cacheprovider -o faulthandler_timeout=90` (test không còn ghi đè `tests/baseline/snapshots/baseline_metrics.json`).
+- Cổng nợ nguồn trước khi đẩy PR: `PYTHONUTF8=1 python scripts/quality/source_quality_budget.py --git-base <merge-base với origin/main>`.
 - Đo cold: đặt `IFCFDS_GEOMETRY_CACHE` tới thư mục mới ngoài repo. **Không chạy hai phép đo cùng lúc** (đã gây số đo sai trong phiên trước).
 - So verdict: `scripts/verdict-snapshot.py <ifc> --compare docs/evidence/production-roadmap/baseline-<n>.json`.
 - Profile: `scripts/stage-profile.py <ifc> -o <out.json>`.
@@ -191,6 +200,7 @@ Lỗi suite "đã biết" tại thời điểm viết: 3 test cache ở A4.5 (s�
 3. Hệ số tổn thất K, đường cong quạt, lưu lượng thiết kế từng miệng hút.
 4. Dữ liệu đo cháy xe nguyên chiếc được phép dùng (HRR theo thời gian, yield).
 5. QoI nghiệm thu (nhiệt độ/tầm nhìn tại lối thoát, độ cao lớp khói) và kỹ sư review.
+6. Đối chiếu PyroSim (T19–T21 trong kế hoạch kiểm thử thực tế): deck `.fds` do PyroSim sinh khi nhập A/B/C (ghi phiên bản, chế độ khối hay solid, khoảng nới lỗ mở) và deck B / `tee.fds` đã mở rồi lưu lại bằng PyroSim, hoặc một máy có PyroSim.
 
 ## Thứ tự và phụ thuộc
 `M0 → M1 → M2 → M3 → M4 → M5.5–5.7`. M5.1–M5.4 song song từ sau M1. M3 và M4 độc lập nhau sau M2, làm song song được nếu có hai người.

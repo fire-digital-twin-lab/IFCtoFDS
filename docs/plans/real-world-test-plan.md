@@ -11,7 +11,7 @@ Mục đích: chứng minh trên IFC thật và trên stack triển khai thật 
 ## Tầng 1 — Tự động, đã có
 | # | Phép kiểm | Tiêu chí | Trạng thái |
 |---|---|---|---|
-| T1 | Suite mặc định | 0 lỗi | ĐÃ ĐẠT (1280) |
+| T1 | Suite mặc định | 0 lỗi | ĐÃ ĐẠT (1323 trên `main` `d32dd7b`) |
 | T2 | Suite solver với FDS 6.11.1 | 0 lỗi | ĐÃ ĐẠT (17) |
 | T3 | Container: upload 2×150 MiB, image `solver` dưới profile production | HTTP 202; `solver_gates` và `effective_geometry` PASS | ĐÃ ĐẠT cục bộ; `solver-image` đạt trên CI |
 | T4 | Backup/restore job thật | artifact và kết quả giống hệt | ĐÃ ĐẠT |
@@ -19,9 +19,9 @@ Mục đích: chứng minh trên IFC thật và trên stack triển khai thật 
 ## Tầng 2 — IFC thật qua CLI
 | # | IFC | Lệnh (rút gọn) | Tiêu chí đạt | Trạng thái |
 |---|---|---|---|---|
-| T5 | A, cold | `python -m ifc_to_fds convert A -o <ra>/a.fds --solver <fds>` | thời gian ≤ 120 s; chỉ có finding của 22 cửa lỗi nguồn; solver PASS; `air_path` PASS | LÀM ĐƯỢC (hiện 211–253 s: cần M1.7) |
+| T5 | A, cold (chạy lại cả với ngưỡng 1e-9 trước T6) | `python -m ifc_to_fds convert A -o <ra>/a.fds --solver <fds>` | thời gian ≤ 120 s; chỉ có finding của 22 cửa lỗi nguồn; solver PASS; `air_path` PASS | LÀM ĐƯỢC (hiện 211–253 s: cần M1.7) |
 | T6 | A + lỗi nguồn đã duyệt | thêm `--accepted-source-defects <json>` (kỹ sư duyệt 22 cửa) | `MAPPING_VERIFIED` hoặc chỉ còn finding có giải thích | CHỜ ĐẦU VÀO (kỹ sư duyệt) |
-| T7 | B | `convert B` | tìm nguyên nhân rò âm −1,3 L của `air_path`; sau M2.5 phải PASS hoặc có lý do | ĐÃ ĐẠT: B `MAPPING_VERIFIED` (M2.5 gỡ lỗi rò giả) |
+| T7 | B | `convert B` | tìm nguyên nhân rò âm −1,3 L của `air_path`; sau M2.5 phải PASS hoặc có lý do | ĐÃ ĐẠT: B `MAPPING_VERIFIED` (M2.5 gỡ lỗi rò giả); chạy lại với ngưỡng hình học mới 1e-9: vẫn `MAPPING_VERIFIED`, 218 MATCHED |
 | T8 | C, 8 tầng hầm | `convert C --storey <8 storey_id>` (id lấy từ `inventory`; tên trùng giữa các hệ cao độ) | ≤ 300 s; RSS < 4 GiB; số `EXCLUDED_SCOPE` khớp số phần tử ngoài tầng | ĐÃ ĐẠT: 293 s cold, RSS đỉnh 1,2 GiB (job qua API) |
 | T9 | A, kịch bản cháy | emitter với preset e-bike và auto-nmc đặt trong hầm; `T_END` ngắn | FDS chạy tới `T_END` không lỗi; HRR đúng đường đã chọn | LÀM ĐƯỢC |
 
@@ -54,4 +54,4 @@ Công cụ: `python scripts/compare-fds-decks.py <deck A> <deck B> --json <ra.js
 Đã kiểm script trên deck B thật: so với bản bỏ hết `! IFC_SOURCE` cho `IDENTICAL_SPACE`, 218/0 dòng provenance; bỏ một GEOM 0,0983 m³ thì phần chỉ có ở deck gốc là 0,0980 m³ (phần còn lại chồng lên tường bên cạnh), nhiễu 2,3e-4 m³, IoU 0,999240 so với kỳ vọng 0,999242.
 
 ## Thứ tự chạy
-T5 → T8 (đo hiệu năng, sau M1.7) → T7 → T10 → T11–T13 → T14 → T9 → T15. Các phép CHỜ ĐẦU VÀO chạy khi người dùng cung cấp dữ liệu; kế hoạch này không thay thế quyết định kỹ thuật của kỹ sư.
+T5 → T8 (đo hiệu năng, sau M1.7) → T7 → T10 → T11–T13 → T14 → T9 → T15 → T19–T21 (khi có PyroSim). Các phép CHỜ ĐẦU VÀO chạy khi người dùng cung cấp dữ liệu; kế hoạch này không thay thế quyết định kỹ thuật của kỹ sư.
