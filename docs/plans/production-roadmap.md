@@ -10,7 +10,7 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 # Phần A — Trạng thái
 
 ## A1. Git
-- Đã merge vào `main` bằng merge commit (nhánh đã xóa sau merge): #109 `439366a` (M0–M2 và một phần M3–M5), #110 `848904b` (M1.7, M5.2), #111 `64b0fa6` (M5.5, M3.3/M3.4/M3.6), #112 `4d077a0` (audit lần 1, 5 sửa), #113 `15a37e2` (audit lần 2, 10 sửa), #114 `d32dd7b` (script so deck PyroSim). Công việc tiếp theo làm trên nhánh mới từ `main`, mỗi mục một PR nhỏ.
+- Đã merge vào `main` bằng merge commit (nhánh đã xóa sau merge): #109 `439366a` (M0–M2 và một phần M3–M5), #110 `848904b` (M1.7, M5.2), #111 `64b0fa6` (M5.5, M3.3/M3.4/M3.6), #112 `4d077a0` (audit lần 1, 5 sửa), #113 `15a37e2` (audit lần 2, 10 sửa), #114 `d32dd7b` (script so deck PyroSim), #92 `beb435f` (underflow xu hướng lưới), #116 `b286408` (số đo ngưỡng), #117 `39998f7` (dọn tài liệu, hộp audit), #118 `e448e11` (ngưỡng thể tích theo bề dày lớp vỏ). Công việc tiếp theo làm trên nhánh mới từ `main`, mỗi mục một PR nhỏ.
 - Commit từ M2 trở đi viết tiếng Việt, không ghi công Claude (xem `AGENTS.md`). 21 commit tiếng Anh cũ hơn giữ nguyên theo quyết định của người dùng.
 - Bàn giao và kế hoạch kiểm thử: [production-handover.md](production-handover.md), [real-world-test-plan.md](real-world-test-plan.md).
 
@@ -42,7 +42,7 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 | M3.1 phân loại phụ kiện | người dùng duyệt bảng họ → loại | xác nhận 7 họ của C: cút 182, chuyển tiết diện vuông–tròn 100, côn 78, gót giày 60, đầu bịt 34, Y 16, tê 8 | phụ kiện hai cổng đã biên dịch được khi có K và chiều dài |
 | M3.2 phạm vi hệ thống | B-ext 2 | nghĩa PAD/CEAD/OAD-FAD/RAD/TEAD; hệ nào hút khói, cấp bù | cơ chế `decisions` đã có |
 | M3.5 đầu cuối → biên | B-ext 3 | lưu lượng thiết kế từng miệng, K, đường cong quạt (C không có đối tượng quạt) | VENT/AMBIENT đã hỗ trợ |
-| Ma sát ống chữ nhật trong FDS | quyết định kỹ thuật | có hiệu chỉnh tổn thất cho ống chữ nhật không (FDS thấp hơn khoảng 18% với 0,5×0,3 m) | gate `hvac` báo finding P2 |
+| Ma sát ống chữ nhật trong FDS | ĐÃ QUYẾT (2026-11-15): dùng `ROUND=.FALSE.` | xem M6.F9: chênh 18% do serializer thiếu cờ `ROUND=.FALSE.`, FDS mặc định dùng đường kính tròn tương đương; không phải giới hạn của FDS | M6.F9 |
 | M4.1 preset xe | B-ext 4 | số đo cháy nguyên xe được phép dùng (HRR theo thời gian, năng lượng pin) | có thể phát lại thẳng đường đo (M4.2) |
 | M4.3 HF/HCN | B-ext 4 | yield nguyên xe | — |
 | M4.4 biên truyền nhiệt | nguồn tính chất vật liệu | tính chất bê tông/thép có trích nguồn | — |
@@ -56,7 +56,7 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 3. `air_path` vẫn dùng Boolean khi có phần tử vỏ bao lệch; khi đó có thể INCONCLUSIVE.
 4. `test_sqlite_wal_multi_process_concurrency` từng báo "database is locked" một lần khi máy tải nặng (đã thêm thử lại có thời hạn).
 5. Ổ đĩa dự án có 26 thư mục job cũ trong `.jobs/` (ngoài git) do server/test để lại; xóa tay nếu cần dung lượng.
-6. **Ngưỡng hình học mặc định mới (1e-9) làm 9 phần tử của C thành DEVIATED oan** (đo 2026-11-15, `main` `e01e65d`, ngưỡng cũ khai tường minh so với mặc định mới, cùng mã và cache; bằng chứng `docs/evidence/production-roadmap/tolerance-A-C.json`). A: 0 phần tử đổi (546 MATCHED, 22 UNSUPPORTED như trước). C tám tầng hầm: 697 → 688 MATCHED, 9 → DEVIATED (8 `IfcCovering`, 1 `IfcColumn`), finding `geometry` 1 → 10; verdict vẫn REJECTED. Cả 9 có khoảng cách bề mặt ≤ 7e-15 m, IoU ≥ 0,9999995, sai số thể tích tương đối 1,6e-8 … 5,2e-7, tức nhiễu Boolean trên phần tử mỏng chứ không lệch thật. Đề xuất sửa (cần quyết định vì đổi hợp đồng): khi `surface_proven` và khoảng cách bề mặt trong dung sai thì sai số thể tích chỉ cần ≤ 1e-9 m³ tuyệt đối HOẶC ≤ 1e-9 tương đối; chưa làm. Thời gian các lượt đo không so được (máy đang bận việc khác).
+6. **ĐÃ SỬA (PR #118 `e448e11`):** ngưỡng mặc định 1e-9 từng làm 9 phần tử của C thành DEVIATED oan (đo 2026-11-15, `main` `e01e65d`, ngưỡng cũ khai tường minh so với mặc định mới, cùng mã và cache; bằng chứng `docs/evidence/production-roadmap/tolerance-A-C.json`). A: 0 phần tử đổi (546 MATCHED, 22 UNSUPPORTED như trước). C tám tầng hầm: 697 → 688 MATCHED, 9 → DEVIATED (8 `IfcCovering`, 1 `IfcColumn`), finding `geometry` 1 → 10; verdict vẫn REJECTED. Cả 9 có khoảng cách bề mặt ≤ 7e-15 m, IoU ≥ 0,9999995, sai số thể tích tương đối 1,6e-8 … 5,2e-7, tức nhiễu Boolean trên phần tử mỏng chứ không lệch thật. Đo trực tiếp: phần tử lớn nhất 7,55 m³ trên 44,5 m² lệch 3,9e-6 m³, tức lớp vỏ 0,09 µm (đỉnh nguồn lệch trục ~1e-7 m). Sửa: `within_tolerance` chấp nhận lệch thể tích/IoU không lớn hơn diện tích × `surface_tolerance_m`, và `surface_tolerance_m` mặc định 1 µm. Chạy lại `convert` sau sửa: A 546 MATCHED, C 697 MATCHED, 0 DEVIATED; trạng thái từng phần tử của cả hai trùng hệt lượt dùng ngưỡng 1 mm cũ. Lệch 1 mm thật vẫn bị loại.
 7. Duplex: finding `representation` "Manifest openings differs from independent policy" xuất hiện ở một số lần chạy và không ở lần khác (cả trên `main` và trên nhánh audit; `verdict-snapshot` trên `main` không có, `convert` trực tiếp trên `main` có). Đọc lại IFC thì manifest và kết quả đọc lại khớp từng trường; nguyên nhân chưa tìm ra. Đây là chập chờn đã ghi ở M0.4.
 8. `PASSAGE_NOISE_M` (1 mm quy theo diện tích/thể tích lỗ mở) là hằng dung sai nhiễu Boolean có `shortcut:`; bỏ khi lối đi được chứng minh bằng nhau chính xác cho mọi vật cản.
 9. Workflow CI chính ghim action theo tag (`@v4`); workflow release đã ghim theo SHA.
@@ -193,6 +193,20 @@ Lỗi suite "đã biết" tại thời điểm viết: 3 test cache ở A4.5 (s�
   - Deck có HVAC hút khói + kịch bản cháy xe chạy FDS 6.11.1 tới `T_END`.
   - Thời gian chuyển đổi + audit đo và ghi (mục tiêu < 10 phút cho A, C).
   - Kỹ sư ký nhận; mọi giới hạn nằm trong báo cáo.
+
+## M6 — Khắc phục audit 2026-11-15 (Codex, đo ở `8ed1f38`)
+Nguồn: [docs/audit/AUDIT_2026-11-15_ifctofds-chuyen-doi-hvac-fds.md](../audit/AUDIT_2026-11-15_ifctofds-chuyen-doi-hvac-fds.md). Giữ ID của audit. Quyết định của người dùng (2026-11-15): F9 dùng `ROUND=.FALSE.`; F1 MESH chồng nhau là FAIL; F4 áp cho mọi OBST. F6 (underflow xu hướng lưới) đã đóng ở #92.
+- [ ] **M6.0 Chuẩn bị.** Commit bản audit; thêm test đi qua `compare_solids` thật cho quy tắc lớp vỏ của #118; `verdict-snapshot --compare` FZK/Duplex/Institute.
+- [ ] **M6.F1 (P1) Cổng `domain` kiểm độ phủ thật.** `validation/engine.py`: mỗi MESH nằm trong miền, không hai MESH chồng nhau (FAIL), tổng thể tích MESH bằng thể tích miền. Test: ghép sát PASS, hở dải FAIL, chồng nhau FAIL, miền do `partition_simulation_domain` chia PASS. Cổng: ca F1 của audit ra REJECTED; FZK, B không đổi verdict.
+- [ ] **M6.F3 (P1) `passage_resolution` không PASS khi còn lỗ chưa đo.** Còn lỗ mở chưa ước lượng được thì INCONCLUSIVE kể cả khi OBST khác đạt; FAIL vẫn ưu tiên. Test: lỗ qua biên hai MESH INCONCLUSIVE; mọi lỗ đo được PASS; lỗ hẹp FAIL. Chỉ đổi verdict mô phỏng.
+- [ ] **M6.F4 (P2) Vật cản bị lưới xóa.** Mọi OBST co về một điểm trên ≥ 2 trục là FAIL "bị lưới xóa"; co trên 1 trục vẫn chỉ xét tường/sàn/mái. Test: dầm 0,08 m trên lưới 0,20 m FAIL; dầm đủ dày PASS; ca tường không đổi.
+- [ ] **M6.F2 (P1) VENT HVAC trên đúng hộp OBST được ghi ra.** Hàm dùng chung "các hộp OBST của phần tử" cho exporter và `mep/network.py`; hình chữ nhật VENT phải nằm trọn trên hợp mặt hộp ở mặt phẳng đó và phía kia là khí. Test: VENT trong ô cửa bị từ chối; trên tường đặc đạt; vắt qua hai hộp đạt; trên mặt tiếp giáp hai hộp bị từ chối; một ca `-m solver` khởi tạo được FDS.
+- [ ] **M6.F9 (P2) `ROUND=.FALSE.` cho ống tiết diện `AREA/PERIMETER`.** Deck cũ thiếu cờ nhận finding P2 thay vì FAIL; sửa nội dung finding `HVAC-FRICTION-0002`. Test solver ống chữ nhật đổi sang mong đợi 4A/P (thay đổi hành vi có chủ ý).
+- [ ] **M6.F7 (P2) Sai số float khi tính số ô.** Thương sát số nguyên (1e-9 tương đối) làm tròn về số nguyên đó; còn lại `ceil`. Kiểm snapshot FZK/Duplex/Institute/B.
+- [ ] **M6.F5 (P2) Đường dẫn dài Windows.** Rút tên staging nội bộ; tính trước đường dẫn dài nhất, vượt giới hạn thì báo lỗi rõ trước khi ghi, không hỏng bundle cũ.
+- [ ] **M6.F8 (P2) README.** Mục 9.4 (D*/Δx chỉ là chỉ báo, cổng INCONCLUSIVE); mục 8.3/8.5 và các dòng năng lực HVAC (phụ kiện, tê/Y `LOSS(i,j)`, quạt lưu lượng, chiều SINK→SOURCE).
+- [ ] **M6.9 Đóng audit.** Ghi kết quả từng ID ở đây, xóa tệp audit khỏi `docs/audit/`.
+- **Cổng M6:** mọi ID có test hỏng-trước-sửa; suite mặc định và cổng nợ sạch; snapshot FZK/Duplex/Institute và B không đổi verdict ngoài thay đổi có chủ ý đã giải thích.
 
 ## B-ext. Đầu vào từ người dùng/kỹ sư (hỏi ngay, chặn M3–M5)
 1. C và A có cùng không gian hầm không; nếu có, transform chung giữa hai file.
