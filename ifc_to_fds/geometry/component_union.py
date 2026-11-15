@@ -16,6 +16,8 @@ Any failed check returns the source mesh unchanged, so the element stays blocked
 """
 
 import hashlib
+import os
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from trimesh.proximity import closest_point
@@ -32,6 +34,7 @@ ORACLE_SAMPLES = 1024
 # triangulations of the same boundary; they are reported, not counted.
 ORACLE_BOUNDARY_M = 1e-6
 VOLUME_TOLERANCE = 1e-9
+BOX_MARGIN_M = 1e-9
 SCAN_FACE_LIMIT = 5000
 
 
@@ -51,26 +54,73 @@ def _overlapping_boxes(components):
     return boxes
 
 
-def winding_numbers(tm, points, chunk=128):
-    """Generalized winding number of each point (Jacobson et al. 2013): ~1 inside, ~0 outside.
+PAIRS_PER_CHUNK = 1 << 13  # point x triangle pairs per block; measured optimum (L1/L2-sized arrays), 2-3x faster than 2^20
+THREADED_PAIRS = 1 << 22  # below this (about 4,000 triangles for 1,024 points) the thread hand-off costs more than it saves
+_WORKERS = min(4, os.cpu_count() or 1)
+_pool = None
 
+
+def _threads():
+    global _pool
+    if _pool is None:
+        _pool = ThreadPoolExecutor(max_workers=_WORKERS, thread_name_prefix="winding")
+    return _pool
+
+
+def winding_numbers(tm, points):
+    """Generalized winding number of each point (Jacobson et al. 2013): ~1 inside, ~0 outside.
     Deterministic and robust to coincident or overlapping faces, unlike ray parity.
+    Plain elementwise arithmetic on (points x triangles) blocks: several times faster than
+    np.cross / einsum on (P, F, 3) arrays, with the same result up to rounding.
     """
-    triangles = tm.triangles
-    result = np.empty(len(points))
-    for start in range(0, len(points), chunk):
-        p = points[start : start + chunk, None, None, :]
-        a, b, c = (triangles[None, :, k, :] - p[:, :, 0, :] for k in range(3))
-        la, lb, lc = (np.linalg.norm(v, axis=-1) for v in (a, b, c))
-        numerator = np.einsum("pfk,pfk->pf", a, np.cross(b, c))
+    points = np.asarray(points, dtype=float).reshape(-1, 3)
+    triangles = np.asarray(tm.triangles, dtype=float)
+    result = np.zeros(len(points))
+    if not len(points) or not len(triangles):
+        return result
+    corner = [[triangles[:, k, axis][None, :] for axis in range(3)] for k in range(3)]
+    block = max(1, PAIRS_PER_CHUNK // len(triangles))
+
+    def solve(start):
+        p = points[start : start + block]
+        (ax, ay, az), (bx, by, bz), (cx, cy, cz) = (
+            [corner[k][axis] - p[:, axis, None] for axis in range(3)] for k in range(3)
+        )
+        la = np.sqrt(ax * ax + ay * ay + az * az)
+        lb = np.sqrt(bx * bx + by * by + bz * bz)
+        lc = np.sqrt(cx * cx + cy * cy + cz * cz)
+        numerator = ax * (by * cz - bz * cy) + ay * (bz * cx - bx * cz) + az * (bx * cy - by * cx)
         denominator = (
             la * lb * lc
-            + np.einsum("pfk,pfk->pf", a, b) * lc
-            + np.einsum("pfk,pfk->pf", a, c) * lb
-            + np.einsum("pfk,pfk->pf", b, c) * la
+            + (ax * bx + ay * by + az * bz) * lc
+            + (ax * cx + ay * cy + az * cz) * lb
+            + (bx * cx + by * cy + bz * cz) * la
         )
-        result[start : start + chunk] = (2.0 * np.arctan2(numerator, denominator)).sum(axis=1) / (4 * np.pi)
+        return (2.0 * np.arctan2(numerator, denominator)).sum(axis=1) / (4 * np.pi)
+
+    starts = range(0, len(points), block)
+    if len(starts) > 1 and len(points) * len(triangles) >= THREADED_PAIRS and _WORKERS > 1:
+        # numpy releases the GIL inside these elementwise operations, so blocks run in parallel.
+        for start, values in zip(starts, _threads().map(solve, starts)):
+            result[start : start + block] = values
+    else:
+        for start in starts:
+            result[start : start + block] = solve(start)
     return result
+
+
+def _inside(tm, points):
+    """winding > 0.5 for every point, evaluated only where the mesh can contain it.
+
+    A closed mesh has winding number 0 outside its bounding box, so those points are never
+    sent through the triangle sum; components are usually small next to the sampled region.
+    """
+    lo, hi = tm.bounds
+    near = np.all((points >= lo - BOX_MARGIN_M) & (points <= hi + BOX_MARGIN_M), axis=1)
+    inside = np.zeros(len(points), dtype=bool)
+    if near.any():
+        inside[near] = winding_numbers(tm, points[near]) > 0.5
+    return inside
 
 
 def _oracle(fused, components, boxes, seed):
@@ -85,10 +135,10 @@ def _oracle(fused, components, boxes, seed):
         (box_lo + rng.random((local, 3)) * (box_hi - box_lo),
          lo + rng.random((ORACLE_SAMPLES - local, 3)) * (hi - lo))
     )
-    in_union = winding_numbers(fused, points) > 0.5
+    in_union = _inside(fused, points)
     in_any = np.zeros(len(points), dtype=bool)
     for component in components:
-        in_any |= winding_numbers(component, points) > 0.5
+        in_any |= _inside(component, points)
     disagree = np.nonzero(in_union != in_any)[0]
     near = 0
     if len(disagree):

@@ -10,7 +10,7 @@ Mục tiêu: IFC tầng hầm thật → deck FDS 6.11.1 kiểm định được
 | CLI `convert` / `audit` chạy từ tiến trình mới | Đạt | test cold start, CI |
 | Mapping và kiểm định độc lập trên IFC mẫu | Đạt (FZK, Duplex, Institute, fixture) | suite 1280 đạt; verdict snapshot |
 | IFC thật A/B/C | **Chưa MAPPING_VERIFIED** | A: 22 cửa lỗi nguồn; B: chưa tìm nguyên nhân rò; C: cần `--storey` |
-| Hiệu năng | **Chưa đạt mục tiêu** | A 211–253 s (mục tiêu 120); C 477 s (mục tiêu 300) |
+| Hiệu năng | **C đạt, A chưa** | C tầng hầm cold 293 s (đích 300); A cold 170 s (đích 120) |
 | Hình học hiệu dụng cấp solver | Một phần | OBST/VENT/OBST điều khiển đọc từ SMV; A toàn GEOM nên INCONCLUSIVE |
 | HVAC vận hành | Một phần | ống thẳng, phụ kiện hai cổng, quạt lưu lượng cố định; tổn áp FDS khớp tính tay 0,5% |
 | Cháy xe điện | Một phần | phát lại đường HRR đo; năng lượng khớp 0,02% |
@@ -30,9 +30,9 @@ Phần chi tiết và commit nằm ở Phần A của kế hoạch. Tóm tắt:
 **A. Làm được ngay, không cần đầu vào từ người dùng** (agent tự làm theo kế hoạch):
 | Mục | Việc | Ghi chú |
 |---|---|---|
-| M1.7 | Giảm thời gian A và C | **Đòn bẩy số 1 đã đo:** oracle `winding_numbers` trong `geometry/component_union.py` chiếm 196/252 s của đường đọc lại (1.500 phần tử C; 96 lần gọi, mỗi lần ~2 s). Bước dựng mesh chỉ ~44 s. Tiền quét phạm vi không tính khoang cửa nhanh 3,8 lần nhưng chỉ là đòn bẩy thứ hai |
+| M1.7 (phần A) | Giảm thời gian A từ 170 s xuống 120 s | Oracle `winding_numbers` đã tối ưu (`c849461`). Còn lại: validation 73 s (quét tự giao cắt ~35 s, `compare_solids` 11, `passage_metrics` 9, `mesh_quality` 12); tái dùng bằng chứng theo `geometry.id` |
 | M5.5 | CLI và web cho cùng deck (so hash) trên A | cần chạy A hai đường |
-| M5.2 | Job dài trên C: RSS đỉnh, timeout, khởi động lại giữa chừng | cần `--storey` của 8 tầng hầm C |
+| M5.2 | ĐÃ XONG | Drill job dài trên C ở chế độ local và production: COMPLETED 260–266 s, RSS đỉnh 1,2 GiB, hàng đợi 2 nhận + 2×429, khởi động lại đúng. Bằng chứng `m5-2-drill-C*.json` |
 | M3.3/M3.4/M3.6(b) | Tổn thất nút `LOSS(I,J)` cho tê/Y/gót giày (84 phụ kiện của C) và kiểm bảo toàn khối lượng | dùng K làm đầu vào đã duyệt, kiểm bằng FDS với mạng tổng hợp |
 | M3.1 | Cơ chế bảng họ → loại phụ kiện cấu hình được, không khớp → `REVIEW_REQUIRED` | bảng cụ thể do kỹ sư duyệt |
 | M0.3 | Bộ fixture phân loại tiếp xúc | hoãn từ M0 |
@@ -63,4 +63,4 @@ Phần chi tiết và commit nằm ở Phần A của kế hoạch. Tóm tắt:
 2. `uv sync --locked --extra test`; `python scripts/install-fds.py` nếu cần solver.
 3. Suite: `python -m pytest -q -m "not solver and not browser and not slow" -o faulthandler_timeout=90` (~4–7 phút); solver: `IFCFDS_SOLVER=<fds_openmp> python -m pytest -q -m solver` (17 test, ~5 phút).
 4. Trước khi đẩy PR: cổng nợ `PYTHONUTF8=1 python scripts/quality/source_quality_budget.py --git-base <merge-base>`.
-5. Làm các mục nhóm A theo thứ tự M1.7 → M5.5 → M5.2 → M3.3/M3.4 → M3.1 → M0.3; mỗi mục một PR nhỏ, commit tiếng Việt, không trailer Claude.
+5. Làm các mục nhóm A theo thứ tự M5.5 → M3.3/M3.4 → M1.7 (phần A) → M3.1 → M0.3; mỗi mục một PR nhỏ, commit tiếng Việt, không trailer Claude.
