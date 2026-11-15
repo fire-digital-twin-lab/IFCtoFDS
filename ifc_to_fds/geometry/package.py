@@ -2,7 +2,7 @@
 
 from ifc_to_fds.core.canonical import SCHEMA_VERSION, TriangleMesh, MappingStrategy
 from ifc_to_fds.geometry.mesh import mesh_digest, valid_solid
-from ifc_to_fds.validation.metrics import compare_solids
+from ifc_to_fds.validation.metrics import compare_solids, within_tolerance
 from ifc_to_fds.validation.acceptance import GateResult, GateStatus, Finding, Severity
 from .package_integrity import digest as digest, seal, verify_package_metadata
 from .storage import DiskPackage
@@ -47,12 +47,7 @@ def verify_package(package):
 
 
 def metrics_pass(metrics, config):
-    return (
-        metrics["surface_distance_m"] <= config.surface_tolerance_m
-        and metrics["relative_volume_error"] <= config.relative_volume_tolerance
-        and metrics["solid_iou"] >= config.min_solid_iou
-        and metrics["reference_components"] == metrics["output_components"]
-    )
+    return within_tolerance(metrics, config)
 
 
 def audit_package(model, package, report, config):

@@ -78,3 +78,43 @@ def test_auditor_supplied_waivers_are_still_applied(tiny_conversion):
     _, _, report = audit([TINY], tiny_conversion["fds_text"], manifest, configuration, tiny_conversion["geometry_package"])
     # The digest is deliberately wrong, so an applied waiver shows up as stale.
     assert any("does not match" in f.detail for f in report.findings)
+
+
+# --- volume noise is judged by shell thickness (measured on real model C) --------------------------------------
+
+def _metrics(volume, area, rel_error, iou=None, surface=1e-15, comps=(1, 1)):
+    m = dict(surface_distance_m=surface, relative_volume_error=rel_error, solid_iou=iou if iou is not None else 1 - rel_error,
+             reference_components=comps[0], output_components=comps[1])
+    if volume is not None:
+        m.update(reference_volume_m3=volume, reference_area_m2=area)
+    return m
+
+
+def test_a_sub_micrometre_shell_is_noise_not_a_deviation():
+    from ifc_to_fds.validation.metrics import within_tolerance
+
+    # C: 7.55 m3 insulation box over 44.5 m2, volume off by 3.9e-6 m3 = a 0.09 um shell
+    assert within_tolerance(_metrics(7.5515, 44.489, 5.15e-7), AuditConfig())
+
+
+def test_a_millimetre_shell_is_still_a_deviation():
+    from ifc_to_fds.validation.metrics import within_tolerance
+
+    # the same box with 1 mm of surface gone: relative error 44.489 * 1e-3 / 7.5515 = 5.9e-3
+    assert not within_tolerance(_metrics(7.5515, 44.489, 5.9e-3), AuditConfig())
+    assert not within_tolerance(_metrics(7.5515, 44.489, 5.15e-7, surface=1e-3), AuditConfig())
+    assert not within_tolerance(_metrics(7.5515, 44.489, 5.15e-7, comps=(1, 2)), AuditConfig())
+
+
+def test_without_volume_and_area_the_strict_relative_rule_applies():
+    from ifc_to_fds.validation.metrics import within_tolerance
+
+    assert not within_tolerance(_metrics(None, None, 5.15e-7), AuditConfig())
+    assert within_tolerance(_metrics(None, None, 0.0, iou=1.0), AuditConfig())
+
+
+def test_a_declared_tolerance_still_widens_the_shell():
+    from ifc_to_fds.validation.metrics import within_tolerance
+
+    wide = AuditConfig(surface_tolerance_m=0.01, relative_volume_tolerance=0.01, min_solid_iou=0.99)
+    assert within_tolerance(_metrics(7.5515, 44.489, 5.9e-3, surface=1e-3), wide)

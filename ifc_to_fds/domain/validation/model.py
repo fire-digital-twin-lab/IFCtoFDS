@@ -90,9 +90,10 @@ class AuditConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     fail_fast_on_source_errors: StrictBool = False
     collect_partial_geometry_evidence: StrictBool = False
-    # Defaults accept only float noise: a proven-equal solid passes, any real deviation is DEVIATED. A wider
-    # tolerance is an engineering decision and must be declared in the audit configuration.
-    surface_tolerance_m: float = Field(default=1e-9, gt=0, allow_inf_nan=False)
+    # Defaults accept only float noise: a proven-equal solid passes, any real deviation is DEVIATED. 1 um is the
+    # precision floor of IFC coordinates after unit conversion (measured on C: ~1e-7 m); a wider tolerance is an
+    # engineering decision and must be declared in the audit configuration.
+    surface_tolerance_m: float = Field(default=1e-6, gt=0, allow_inf_nan=False)
     relative_volume_tolerance: float = Field(
         default=1e-9, ge=0, lt=1, allow_inf_nan=False
     )
