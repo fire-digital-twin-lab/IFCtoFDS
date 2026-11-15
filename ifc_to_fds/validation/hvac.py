@@ -1,6 +1,7 @@
 """Semantic checks shared by the FDS reader and independent network checker."""
 
 import math
+import re
 
 
 def hvac_errors(parsed):
@@ -47,6 +48,14 @@ def hvac_errors(parsed):
             bad(node, "internal node cannot be an endpoint")
         if sum((ambient, bool(vent), geom)) > 1:
             bad(node, "endpoint boundary types are mutually exclusive")
+        for field, values in node.values.items():
+            pair = re.fullmatch(r"LOSS\((\d+),\s*(\d+)\)", field)
+            if pair and not (
+                1 <= int(pair[1]) <= len(ds) and 1 <= int(pair[2]) <= len(ds) and pair[1] != pair[2]
+                and len(values) == 1 and not isinstance(values[0], bool)
+                and isinstance(values[0], (int, float)) and math.isfinite(values[0]) and values[0] >= 0
+            ):
+                bad(node, f"{field} needs two different DUCT_ID positions and one finite nonnegative loss")
         if not vent and "XYZ" not in node.values and "XYZ(3)" not in node.values:
             bad(node, "ambient/internal node requires its elevation")
         if vent:
