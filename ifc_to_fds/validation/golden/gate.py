@@ -12,7 +12,7 @@ from ifc_to_fds.geometry.mesh import as_trimesh
 from ifc_to_fds.geometry.package import metrics_pass, verify_package
 from ifc_to_fds.validation.golden.bundle_io import inspect_case
 from ifc_to_fds.validation.golden.normalizer import serialized_geometry, source_signature
-from ifc_to_fds.validation.metrics import compare_solids, passage_metrics
+from ifc_to_fds.validation.metrics import PASSAGE_NOISE_M, compare_solids, passage_metrics
 from ifc_to_fds.validation.reference_integrity import FIELDS, snapshot
 
 
@@ -180,11 +180,8 @@ def golden_gate(
     baseline_settings = (
         values["acceptance-profile.json"].get("configuration", {}).get("audit", {})
     )
-    for name, default in (
-        ("surface_tolerance_m", 0.001),
-        ("relative_volume_tolerance", 0.001),
-        ("min_solid_iou", 0.999),
-    ):
+    for name in ("surface_tolerance_m", "relative_volume_tolerance", "min_solid_iou"):
+        default = AuditConfig.model_fields[name].default  # the value the audit really used
         if audit_settings.get(name, default) != baseline_settings.get(name, default):
             fail(
                 "",
@@ -305,7 +302,7 @@ def golden_gate(
                     solid = as_trimesh(probe)
                     tolerance = max(
                         1e-6,
-                        config.surface_tolerance_m
+                        PASSAGE_NOISE_M
                         * solid.area
                         / max(solid.volume, 1e-12),
                     )

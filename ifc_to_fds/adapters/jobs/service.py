@@ -341,10 +341,6 @@ class JobService:
             if not self.can_accept():
                 raise OverflowError("Job queue is full")
             jid = uuid.uuid4().hex
-            durable = bool(
-                (configuration or {}).get("preserve_artifacts")
-                or (configuration or {}).get("durable")
-            )
             job = dict(
                 id=jid,
                 state="QUEUED",
@@ -356,7 +352,7 @@ class JobService:
                 last_accessed=time.time(),
                 error=None,
                 process=None,
-                durable=durable,
+                durable=False,  # promoted to durable only when the job is MAPPING_VERIFIED
                 retention_s=self.retention_s,
                 peak_rss_bytes=None,
             )
@@ -644,6 +640,92 @@ class JobService:
                     self._cleanup(terminal)
             return True
 
+    def _dispatch(self, queued) -> bool:
+        """Commit RUNNING, then spawn the worker. Returns False when the job stays QUEUED.
+
+        Called with self.lock held by the scheduler loop.
+        """
+        # The worker cannot start until its RUNNING transition is
+        # durable. A failed SQLite write leaves the queue entry
+        # unchanged and does not create an untracked subprocess.
+        starting = dict(queued)
+        starting.update(
+            state="RUNNING", started=time.time(), process=None
+        )
+        try:
+            self.repository.set_durable(starting["id"], starting)
+        except JobPersistenceError:
+            logger.exception(
+                "Keeping job %s QUEUED: could not reserve worker startup",
+                queued["id"],
+            )
+            return False
+        else:
+            try:
+                # Capture stderr to error.txt if worker fails during startup.
+                err_path = Path(starting["directory"]) / "error.txt"
+                worker_env = os.environ.copy()
+                worker_env.pop("IFCFDS_API_KEY", None)
+                repo_root = str(Path(__file__).resolve().parents[3])
+                existing_pythonpath = worker_env.get("PYTHONPATH", "")
+                worker_env["PYTHONPATH"] = (
+                    f"{repo_root}{os.pathsep}{existing_pythonpath}"
+                    if existing_pythonpath
+                    else repo_root
+                )
+                with open(err_path, "a", encoding="utf-8") as err_file:
+                    proc = subprocess.Popen(
+                        [
+                            sys.executable,
+                            "-m",
+                            "ifc_to_fds.jobs",
+                            starting["directory"],
+                        ],
+                        stdout=subprocess.DEVNULL,
+                        stderr=err_file,
+                        cwd=repo_root,
+                        env=worker_env,
+                        creationflags=getattr(
+                            subprocess, "CREATE_NO_WINDOW", 0
+                        ),
+                    )
+            except Exception as exc:
+                failed = dict(starting)
+                failed.update(
+                    state="FAILED",
+                    error=f"Failed to spawn worker: {exc}",
+                    finished=time.time(),
+                )
+                try:
+                    self._terminal_diagnostic(
+                        failed, "WorkerSpawnError", failed["error"]
+                    )
+                except OSError:
+                    logger.exception(
+                        "Could not write startup diagnostic for job %s",
+                        failed["id"],
+                    )
+                try:
+                    self.repository.set_durable(failed["id"], failed)
+                except JobPersistenceError:
+                    # Keep the original spawn error in a private
+                    # retry intent. A missing Popen handle must not
+                    # overwrite it with a generic error next turn.
+                    self._pending_terminal[failed["id"]] = failed
+                    logger.exception(
+                        "Preserving job %s after worker spawn failure "
+                        "could not be persisted", failed["id"]
+                    )
+                else:
+                    self._cleanup(failed)
+            else:
+                # Only the nonserializable process handle changes
+                # after the RUNNING record has committed. The deadline uses a
+                # monotonic clock, so a wall-clock step cannot expire or extend it.
+                starting["process"] = proc
+                starting["_started_monotonic"] = time.monotonic()
+        return True
+
     def _loop(self):
         """Retry recoverable scheduler filesystem errors without losing job state.
 
@@ -788,7 +870,11 @@ class JobService:
                         else:
                             self._cleanup(missing)
                     # Process deadline timeout
-                    elif time.time() - running["started"] > self.timeout_s:
+                    elif (
+                        time.monotonic() - running["_started_monotonic"]
+                        if "_started_monotonic" in running
+                        else time.time() - running["started"]
+                    ) > self.timeout_s:
                         self._stop(proc)
                         expired = dict(running)
                         expired.update(
@@ -873,83 +959,7 @@ class JobService:
                         None,
                     )
                     if queued:
-                        # The worker cannot start until its RUNNING transition is
-                        # durable. A failed SQLite write leaves the queue entry
-                        # unchanged and does not create an untracked subprocess.
-                        starting = dict(queued)
-                        starting.update(
-                            state="RUNNING", started=time.time(), process=None
-                        )
-                        try:
-                            self.repository.set_durable(starting["id"], starting)
-                        except JobPersistenceError:
-                            logger.exception(
-                                "Keeping job %s QUEUED: could not reserve worker startup",
-                                queued["id"],
-                            )
-                        else:
-                            has_running = True
-                            try:
-                                # Capture stderr to error.txt if worker fails during startup.
-                                err_path = Path(starting["directory"]) / "error.txt"
-                                worker_env = os.environ.copy()
-                                worker_env.pop("IFCFDS_API_KEY", None)
-                                repo_root = str(Path(__file__).resolve().parents[3])
-                                existing_pythonpath = worker_env.get("PYTHONPATH", "")
-                                worker_env["PYTHONPATH"] = (
-                                    f"{repo_root}{os.pathsep}{existing_pythonpath}"
-                                    if existing_pythonpath
-                                    else repo_root
-                                )
-                                with open(err_path, "a", encoding="utf-8") as err_file:
-                                    proc = subprocess.Popen(
-                                        [
-                                            sys.executable,
-                                            "-m",
-                                            "ifc_to_fds.jobs",
-                                            starting["directory"],
-                                        ],
-                                        stdout=subprocess.DEVNULL,
-                                        stderr=err_file,
-                                        cwd=repo_root,
-                                        env=worker_env,
-                                        creationflags=getattr(
-                                            subprocess, "CREATE_NO_WINDOW", 0
-                                        ),
-                                    )
-                            except Exception as exc:
-                                failed = dict(starting)
-                                failed.update(
-                                    state="FAILED",
-                                    error=f"Failed to spawn worker: {exc}",
-                                    finished=time.time(),
-                                )
-                                try:
-                                    self._terminal_diagnostic(
-                                        failed, "WorkerSpawnError", failed["error"]
-                                    )
-                                except OSError:
-                                    logger.exception(
-                                        "Could not write startup diagnostic for job %s",
-                                        failed["id"],
-                                    )
-                                try:
-                                    self.repository.set_durable(failed["id"], failed)
-                                except JobPersistenceError:
-                                    # Keep the original spawn error in a private
-                                    # retry intent. A missing Popen handle must not
-                                    # overwrite it with a generic error next turn.
-                                    self._pending_terminal[failed["id"]] = failed
-                                    logger.exception(
-                                        "Preserving job %s after worker spawn failure "
-                                        "could not be persisted", failed["id"]
-                                    )
-                                else:
-                                    self._cleanup(failed)
-                            else:
-                                # Only the nonserializable process handle changes
-                                # after the RUNNING record has committed.
-                                starting["process"] = proc
+                        has_running = self._dispatch(queued)
 
                 # Check if there are further queued jobs
                 has_queued = any(j.get("state") == "QUEUED" for j in self.repository.all_jobs())

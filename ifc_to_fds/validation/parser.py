@@ -542,7 +542,7 @@ def parse_fds(
                 if kind == "HEAD":
                     chid = values.get("CHID", [""])[0]
                     if not isinstance(chid, str) or not re.fullmatch(
-                        r"[A-Za-z0-9][A-Za-z0-9_.-]{0,59}", chid
+                        r"[A-Za-z0-9][A-Za-z0-9_-]{0,59}", chid
                     ):
                         raise ValueError("HEAD CHID must be a safe local basename")
                 if kind == "MESH":

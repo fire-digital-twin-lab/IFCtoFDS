@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 from typing import Any
 from .pipeline import convert, audit, save_artifacts
+from .application.use_cases.audit_conversion import ARTIFACT_CONFIG_EXCLUDED
 from .core.inventory import extract_inventory
 from .core.source_dossier import inspect_source_dossier, write_source_dossier
 from .core.coordinate_preflight import inspect_coordinate_file, save_coordinate_preflight
@@ -278,7 +279,7 @@ def main(argv=None):
             elif default_zip.is_file():
                 package = restore_package(default_zip, default_json)
             if not args.config:
-                config = {**{k: v for k, v in manifest.configuration.items() if k != "audit"}, **config}
+                config = {**{k: v for k, v in manifest.configuration.items() if k not in ARTIFACT_CONFIG_EXCLUDED}, **config}
             _, _, report = audit(
                 args.input_ifc,
                 Path(args.fds).read_bytes().decode("utf-8"),

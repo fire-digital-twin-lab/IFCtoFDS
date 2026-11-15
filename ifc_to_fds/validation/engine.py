@@ -25,6 +25,7 @@ from .metrics import (
     compare_solids,
     is_exact_match,
     opening_residual,
+    PASSAGE_NOISE_M,
     passage_metrics,
     SolidCandidateIndex,
 )
@@ -265,6 +266,21 @@ def run_independent_validation(
     }
     if accepted:
         report.metrics["accepted_source_defects"] = accepted
+        for key, item in sorted(accepted.items()):
+            # A waiver never changes the verdict, but every reader of the report must see it.
+            review = item.get("review") or {}
+            report.findings.append(
+                Finding(
+                    id=f"ACC-{len(report.findings) + 1:04}",
+                    severity=Severity.P2,
+                    category="geometry",
+                    title="Source defect accepted by review",
+                    detail=f"{item.get('kind') or 'defect'} accepted by {review.get('reviewer', '?')} "
+                    f"(policy {review.get('policy_version', '?')}): {review.get('rationale', '')}; "
+                    f"mesh {str(item.get('mesh_sha256') or '')[:16]}",
+                    element_id=key,
+                )
+            )
     topology_blockers = source_topology_blockers(source_topology)
     confirmed_invalid = sorted(
         key
@@ -617,7 +633,7 @@ def run_independent_validation(
                 opening_solid = as_trimesh(opening.mesh)
                 opening_tolerance = max(
                     1e-6,
-                    config.surface_tolerance_m
+                    PASSAGE_NOISE_M
                     * opening_solid.area
                     / max(opening_solid.volume, 1e-12),
                 )

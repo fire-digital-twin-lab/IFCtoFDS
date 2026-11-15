@@ -90,11 +90,13 @@ class AuditConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     fail_fast_on_source_errors: StrictBool = False
     collect_partial_geometry_evidence: StrictBool = False
-    surface_tolerance_m: float = Field(default=0.001, gt=0, allow_inf_nan=False)
+    # Defaults accept only float noise: a proven-equal solid passes, any real deviation is DEVIATED. A wider
+    # tolerance is an engineering decision and must be declared in the audit configuration.
+    surface_tolerance_m: float = Field(default=1e-9, gt=0, allow_inf_nan=False)
     relative_volume_tolerance: float = Field(
-        default=0.001, ge=0, lt=1, allow_inf_nan=False
+        default=1e-9, ge=0, lt=1, allow_inf_nan=False
     )
-    min_solid_iou: float = Field(default=0.999, gt=0, le=1, allow_inf_nan=False)
+    min_solid_iou: float = Field(default=1 - 1e-9, gt=0, le=1, allow_inf_nan=False)
     solver_executable: str | None = None
     solver_version: str = "6.11.1"
     solver_evidence_directory: str | None = None

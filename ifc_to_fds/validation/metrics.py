@@ -14,6 +14,12 @@ from ifc_to_fds.geometry.mesh import (
 
 
 PLANE_TOLERANCE = 1e-9
+# Opening residual and passage checks measure free space with Manifold Booleans, which lose small slivers on
+# coincident faces. This allowance (scaled by the opening's area/volume) absorbs that noise; it is not a geometry
+# tolerance for elements, which accept only float noise unless the audit configuration declares more.
+# shortcut: a fixed 1 mm-equivalent Boolean allowance, kept from the former default; replace once passage equality
+# is proven exactly (byte/box/partition) for every obstacle, as compare_solids already does.
+PASSAGE_NOISE_M = 0.001
 
 
 class SelfIntersectionError(ValueError):

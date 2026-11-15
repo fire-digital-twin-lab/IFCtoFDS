@@ -23,7 +23,11 @@ from ifc_to_fds.validation.golden import golden_gate
 from ..dto.configuration import validate_configuration
 from ..services.model_preparer import prepare_model
 
-__all__ = ["prepare_model", "AuditConversionUseCase"]
+__all__ = ["prepare_model", "AuditConversionUseCase", "ARTIFACT_CONFIG_EXCLUDED"]
+
+# An artifact may reproduce placement and mapping, but it cannot set its own audit tolerances or waive its
+# own source defects: those must come from the person running the audit.
+ARTIFACT_CONFIG_EXCLUDED = frozenset({"audit", "accepted_source_defects"})
 
 
 class AuditConversionUseCase:
@@ -42,7 +46,7 @@ class AuditConversionUseCase:
             # An artifact can reproduce placement and mapping, but cannot set
             # the tolerance or choose an executable for its own audit.
             manifest_config = manifest.configuration or {}
-            configuration = {k: v for k, v in manifest_config.items() if k != "audit"}
+            configuration = {k: v for k, v in manifest_config.items() if k not in ARTIFACT_CONFIG_EXCLUDED}
         configuration = validate_configuration(configuration)
         manifest_config = manifest.configuration or {}
         if "mep_graph" not in configuration and "mep_graph" in manifest_config:
