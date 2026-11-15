@@ -187,7 +187,9 @@ def test_frictionless_and_non_circular_ducts_are_reported_not_hidden(connected_i
     path, config = connected_ifc
     result = convert([str(path)], config, tmp_path / "conversion")
     notes = {f["id"]: f for f in result["report"]["findings"] if f["category"] == "hvac"}
-    assert set(notes) == {"HVAC-FRICTION-0001", "HVAC-FRICTION-0002"}  # fixture: roughness 0, area 0.12 / perimeter 1.4
+    # fixture: roughness 0 is reported; area 0.12 / perimeter 1.4 is now written with ROUND=.FALSE., so no 0002
+    assert set(notes) == {"HVAC-FRICTION-0001"}
+    assert result["fds_text"].count("ROUND=.FALSE.") == 2
     assert all(f["severity"] == "P2" and f["verification_level"] == "simulation" for f in notes.values())
     assert result["status"] == "MAPPING_VERIFIED"  # a simulation caveat never blocks the mapping verdict
     for decision in config["decisions"].values():
@@ -196,3 +198,32 @@ def test_frictionless_and_non_circular_ducts_are_reported_not_hidden(connected_i
         decision["hvac"]["diameter_m"] = 0.2
     clean = convert([str(path)], config, tmp_path / "clean")
     assert not [f for f in clean["report"]["findings"] if f["category"] == "hvac"]
+
+
+def test_a_deck_saved_without_round_false_is_reported_not_rejected(connected_ifc):
+    """Audit F9: old decks lack ROUND=.FALSE.; they keep their hvac PASS and gain a P2 finding about friction."""
+    path, config = connected_ifc
+    model = prepare([str(path)], config)
+    text, manifest = serialize_fds(model)
+    legacy = text.replace(", ROUND=.FALSE.", "")
+    assert legacy.count("ROUND") == 0 and legacy != text
+    manifest.fds_sha256 = hashlib.sha256(legacy.encode()).hexdigest()
+    manifest.reseal()
+    report = run_independent_validation(model, legacy, manifest)
+    assert report.gates["hvac"].status == "PASS"
+    old = [f for f in report.findings if f.id == "HVAC-FRICTION-0002"]
+    assert len(old) == 1 and old[0].severity == "P2" and old[0].verification_level == "simulation"
+    # any other change in the same record is still a FAIL
+    changed = legacy.replace("AREA=0.12", "AREA=0.24", 1)
+    manifest.fds_sha256 = hashlib.sha256(changed.encode()).hexdigest()
+    manifest.reseal()
+    assert run_independent_validation(model, changed, manifest).gates["hvac"].status == "FAIL"
+
+
+def test_round_ducts_never_get_the_round_flag(connected_ifc):
+    path, config = connected_ifc
+    for decision in config["decisions"].values():
+        decision["hvac"].pop("area_m2"), decision["hvac"].pop("perimeter_m")
+        decision["hvac"]["diameter_m"] = 0.2
+    text, _ = serialize_fds(prepare([str(path)], config))
+    assert "DIAMETER=0.2" in text and "ROUND" not in text
