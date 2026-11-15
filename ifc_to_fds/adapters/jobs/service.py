@@ -76,6 +76,7 @@ class JobService:
         retention_s: int = 3600,
         max_memory_mb: Optional[int] = None,
         queue_timeout_s: int = 1800,
+        durable_retention_s: int = 30 * 24 * 3600,
     ):
         self.root = Path(
             root or os.environ.get("IFCFDS_JOB_ROOT", str(Path.cwd() / ".jobs"))
@@ -87,6 +88,10 @@ class JobService:
         max_mem = int(os.environ.get("IFCFDS_WORKER_MAX_MEMORY_MB", str(max_memory_mb or 4096)))
         self.max_memory_bytes = max_mem * 1024 * 1024
         self.queue_timeout_s = int(os.environ.get("IFCFDS_QUEUE_TIMEOUT_S", str(queue_timeout_s)))
+        # Verified (durable) jobs outlive ordinary retention but not forever: 0 keeps them until purged.
+        self.durable_retention_s = int(
+            os.environ.get("IFCFDS_DURABLE_RETENTION_S", str(durable_retention_s))
+        )
 
         self.boot_time = time.time()  # informational; sweep guards no longer use it
         # One OS-level scheduler owner per local SQLite root in network modes.
@@ -116,6 +121,8 @@ class JobService:
         self._pending_diagnostic: Dict[str, tuple[str, str]] = {}
         # Protect file responses between route validation and final ASGI send.
         self._artifact_leases: Dict[str, int] = {}
+        # Uploads admitted but not yet submitted; they count against the queue limit.
+        self._uploads = 0
 
         # Clean up stale directories and reconcile interrupted jobs on startup.
         # NOTE: unregistered-dir sweep is NEVER run implicitly at boot -- the
@@ -146,6 +153,20 @@ class JobService:
         with self.lock:
             return self.repository.count_pending() < (self.max_waiting + 1)
 
+    def reserve_upload(self) -> None:
+        """Admit an upload before its bytes are written, so parallel uploads cannot exceed the queue limit."""
+        with self.lock:
+            if (
+                not self.can_accept()
+                or self.repository.count_pending() + self._uploads >= self.max_waiting + 1
+            ):
+                raise OverflowError("Job queue is full")
+            self._uploads += 1
+
+    def release_upload(self) -> None:
+        with self.lock:
+            self._uploads = max(0, self._uploads - 1)
+
     def touch(self, jid: str) -> None:
         """Commit access time before publishing an extension to job retention.
 
@@ -155,8 +176,13 @@ class JobService:
         with self.lock:
             job = self.repository.get(jid)
             if job:
+                now = time.time()
+                # Every download calls this; one SQLite commit per request under the scheduler lock is
+                # wasted when the retention window is hours long.
+                if now - (job.get("last_accessed") or 0) < min(60.0, self.retention_s / 10):
+                    return
                 touched = dict(job)
-                touched["last_accessed"] = time.time()
+                touched["last_accessed"] = now
                 self.repository.set_durable(jid, touched)
 
     def acquire_artifact_lease(self, jid: str) -> None:
@@ -239,11 +265,12 @@ class JobService:
                         # before init can carry a newer mtime than boot_time on
                         # coarse-grained filesystems.)
                         _rmtree_logged(resolved)
-                    elif max_age > 0:
+                    else:
                         job_entry = known_by_dir.get(resolved)
+                        limit = self.durable_retention_s if job_entry and job_entry.get("durable") else max_age
                         if (
                             job_entry is None
-                            or job_entry.get("durable")
+                            or limit <= 0
                             or job_entry.get("state") in ("QUEUED", "RUNNING")
                         ):
                             continue
@@ -260,7 +287,7 @@ class JobService:
                             )
                             if type(value) in (int, float) and math.isfinite(value)
                         ]
-                        if not timestamps or now - max(timestamps) <= max_age:
+                        if not timestamps or now - max(timestamps) <= limit:
                             continue
                         with self.lock:
                             if self._artifact_leases.get(job_entry["id"], 0):
@@ -654,13 +681,14 @@ class JobService:
             with self.lock:
                 self.wake.clear()
                 now = time.time()
-                # 1. Retention sweep for non-durable jobs
+                # 1. Retention sweep (durable jobs use the longer durable window)
                 for jid, job in self.repository.items():
-                    if job.get("durable") or self._artifact_leases.get(jid, 0):
+                    if self._artifact_leases.get(jid, 0):
                         continue
-                    if self.retention_s > 0:
+                    limit = self.durable_retention_s if job.get("durable") else self.retention_s
+                    if limit > 0:
                         last_active = max(job.get("finished") or now, job.get("last_accessed") or 0)
-                        if last_active + self.retention_s < now:
+                        if last_active + limit < now:
                             directory = Path(job["directory"]).resolve()
                             try:
                                 self.repository.delete(jid)
