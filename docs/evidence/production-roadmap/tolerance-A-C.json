@@ -182,5 +182,47 @@
    "relative_volume_error": 4.265230594639303e-07,
    "solid_iou": 0.9999995734773027
   }
- ]
+ ],
+ "after_fix": {
+  "commit": "8ed1f38 (merged as e448e11)",
+  "rule": "surface_tolerance_m=1e-6; volume/IoU gap accepted up to reference_area*surface_tolerance_m",
+  "runs": {
+   "A_fixed": {
+    "status": "REJECTED",
+    "elements": {
+     "MATCHED": 546,
+     "REVIEW_REQUIRED": 15,
+     "SEMANTIC_ONLY": 210,
+     "UNSUPPORTED": 22
+    },
+    "findings": {
+     "geometry": 22,
+     "structural_completeness": 1,
+     "geometry_preservation": 22
+    }
+   },
+   "C_fixed": {
+    "status": "REJECTED",
+    "elements": {
+     "EXCLUDED_SCOPE": 3165,
+     "MATCHED": 697,
+     "INCONCLUSIVE": 1,
+     "REVIEW_REQUIRED": 183,
+     "UNSUPPORTED": 1,
+     "SEMANTIC_ONLY": 66,
+     "REFERENCE_PRESERVED": 1528
+    },
+    "findings": {
+     "geometry": 1,
+     "openings": 3,
+     "structural_completeness": 2,
+     "geometry_preservation": 2
+    }
+   }
+  },
+  "element_status_changes_vs_old_1mm": {
+   "A": 0,
+   "C": 0
+  }
+ }
 }
