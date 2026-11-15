@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Audit geometry defaults now accept only float noise: `surface_tolerance_m=1e-9`, `relative_volume_tolerance=1e-9`, `min_solid_iou=1-1e-9` (were 0.001 / 0.001 / 0.999). A wider tolerance must be declared in `audit`. Opening passage checks keep their former Boolean-noise allowance as the named constant `PASSAGE_NOISE_M`.
+- Audit geometry defaults now accept only float noise: `surface_tolerance_m=1e-6` (1 um, the precision floor of IFC coordinates after unit conversion), `relative_volume_tolerance=1e-9`, `min_solid_iou=1-1e-9` (were 0.001 / 0.001 / 0.999). A volume or IoU gap passes when it is no larger than `reference_area * surface_tolerance_m` (a shell thinner than the surface tolerance), so thin or large elements are not flagged for float noise while a 1 mm deviation still is. `compare_solids` reports `reference_volume_m3` and `reference_area_m2`; `within_tolerance` is the single rule used by the audit, the package gate and the golden gate. A wider tolerance must be declared in `audit`. Opening passage checks keep their former Boolean-noise allowance as the named constant `PASSAGE_NOISE_M`.
 - `audit` without `--config` no longer takes `accepted_source_defects` from the manifest; waivers must come from the auditor. Every applied waiver is listed as a P2 finding in the report.
 - `CHID` derived from a file name replaces `.` with `_` (FDS stops with "No periods allowed in CHID"), and the syntax gate rejects a `CHID` containing `.`.
 

@@ -25,6 +25,7 @@ from .metrics import (
     compare_solids,
     is_exact_match,
     opening_residual,
+    within_tolerance,
     PASSAGE_NOISE_M,
     passage_metrics,
     SolidCandidateIndex,
@@ -585,12 +586,7 @@ def run_independent_validation(
             metrics = compare_solids(target_mesh(e), meshes)
             completed_comparisons.add(key)
             report.metrics[key] = metrics
-            fail = (
-                metrics["surface_distance_m"] > config.surface_tolerance_m
-                or metrics["relative_volume_error"] > config.relative_volume_tolerance
-                or metrics["solid_iou"] < config.min_solid_iou
-                or metrics["reference_components"] != metrics["output_components"]
-            )
+            fail = not within_tolerance(metrics, config)
             if fail:
                 comparison_deviations.add(key)
                 finding("geometry", f"Geometric deviation: {metrics}", key)

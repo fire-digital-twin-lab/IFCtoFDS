@@ -135,6 +135,8 @@ def compare_solids(reference, outputs):
             surface_proven=True,
             reference_components=components,
             output_components=components,
+            reference_volume_m3=float(a.volume),
+            reference_area_m2=float(a.area),
             comparison_method="EXACT_ORIENTED_TRIANGLES",
         )
     intersection = solid_boolean([a, b], "intersection")
@@ -178,7 +180,31 @@ def compare_solids(reference, outputs):
         surface_proven=bool(correspondence or box_equivalent or partition_equivalent),
         reference_components=len(a.split(only_watertight=False, repair=False)),
         output_components=len(b.split(only_watertight=False, repair=False)),
+        reference_volume_m3=float(a.volume),
+        reference_area_m2=float(a.area),
     )
+
+
+def within_tolerance(m, config):
+    """True when a `compare_solids` result meets the audit tolerances.
+
+    Volume noise is judged by the thickness of the shell it would form: a volume or IoU gap is accepted when
+    it is no larger than `reference_area * surface_tolerance_m`. A gap of that size is not a smaller solid, it
+    is the same surface within tolerance. Measured on a real model (C): a 7.55 m3 insulation box whose source
+    vertices lie ~1e-7 m off the axes differs by 3.9e-6 m3 over 44.5 m2, a 0.09 um shell, yet a relative test
+    of 1e-9 called it DEVIATED. A 1 mm shift gives 1000x more volume and still fails.
+    """
+    if m["reference_components"] != m["output_components"] or m["surface_distance_m"] > config.surface_tolerance_m:
+        return False
+    volume, area = m.get("reference_volume_m3"), m.get("reference_area_m2")
+    shell = area * config.surface_tolerance_m if volume is not None and area is not None else 0.0
+    volume_ok = m["relative_volume_error"] <= config.relative_volume_tolerance or (
+        volume is not None and m["relative_volume_error"] * volume <= shell
+    )
+    iou_ok = m["solid_iou"] >= config.min_solid_iou or (
+        volume is not None and (1.0 - m["solid_iou"]) * volume <= shell
+    )
+    return volume_ok and iou_ok
 
 
 def opening_residual(hosts, opening):
