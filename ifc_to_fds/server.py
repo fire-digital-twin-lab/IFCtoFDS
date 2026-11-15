@@ -299,15 +299,18 @@ async def submit_uploads(uploads, config, mode="convert"):
     try:
         configuration = config() if callable(config) else config
         directory, paths = await store_uploads(uploads)
+        queued = False
         try:
-            return manager.submit(paths, configuration, directory, mode=mode)
-        except BaseException as exc:
-            shutil.rmtree(directory, ignore_errors=True)
-            if isinstance(exc, OverflowError):
-                raise HTTPException(429, str(exc)) from exc
-            if isinstance(exc, JobPersistenceError):
-                raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
-            raise
+            job = manager.submit(paths, configuration, directory, mode=mode)
+            queued = True
+            return job
+        except OverflowError as exc:
+            raise HTTPException(429, str(exc)) from exc
+        except JobPersistenceError as exc:
+            raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
+        finally:
+            if not queued:  # any failure, including OSError on a full disk, must not leave the upload behind
+                shutil.rmtree(directory, ignore_errors=True)
     finally:
         manager.release_upload()
 
