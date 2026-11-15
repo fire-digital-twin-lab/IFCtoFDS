@@ -6,6 +6,11 @@ import os
 from pathlib import Path
 from typing import Optional
 
+try:
+    import winreg
+except ImportError:
+    winreg = None
+
 WINDOWS_MAX_PATH = 260  # characters including the terminating NUL
 WORK_PREFIX = ".ifcfds-work-"  # tempfile adds 8 random characters
 STAGING_PREFIX = ".staging-"  # followed by 12 hex characters
@@ -16,11 +21,9 @@ _PAYLOAD = "0" * 64 + ".bin"  # content-addressed geometry payload name
 
 def long_paths_enabled() -> bool:
     """True when this process can use paths of 260 characters or more (always on non-Windows)."""
-    if os.name != "nt":
+    if os.name != "nt" or winreg is None:
         return True
     try:
-        import winreg
-
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem") as key:
             return winreg.QueryValueEx(key, "LongPathsEnabled")[0] == 1
     except OSError:
