@@ -33,7 +33,7 @@ Mục tiêu: IFC tầng hầm thật → deck FDS 6.11.1 kiểm định được
 **A. Làm được ngay, không cần đầu vào từ người dùng:**
 | Mục | Việc | Ghi chú |
 |---|---|---|
-| Đo ngưỡng mới trên A, C | chạy `convert` A và C (một mình, cold) với ngưỡng 1e-9, so verdict và số phần tử DEVIATED với trước | chưa đo; làm trước T6 |
+| Sửa ngưỡng thể tích mới | 9 phần tử của C (8 `IfcCovering`, 1 `IfcColumn`) thành DEVIATED oan vì sai số thể tích tương đối 1,6e-8…5,2e-7 > 1e-9 dù bề mặt khớp tới 1e-15 m | đã đo (`tolerance-A-C.json`); đề xuất: thêm điều kiện tuyệt đối ≤ 1e-9 m³ cho sai số thể tích khi `surface_proven`; đổi hợp đồng nên cần duyệt |
 | M1.7 (phần A) | Giảm thời gian A từ 170 s xuống 120 s | validation 73 s (quét tự giao cắt ~35 s, `compare_solids` 11, `passage_metrics` 9, `mesh_quality` 12); tái dùng bằng chứng theo `geometry.id` |
 | Duplex chập chờn | tìm nguyên nhân finding `representation` "Manifest openings differs" (có ở một số lần chạy, không ở lần khác) | đọc lại IFC thì khớp từng trường; có thể liên quan thứ tự hoặc cache |
 | M3.1 | Cơ chế bảng họ → loại phụ kiện cấu hình được, không khớp → `REVIEW_REQUIRED` | bảng cụ thể do kỹ sư duyệt |
@@ -57,7 +57,7 @@ Mục tiêu: IFC tầng hầm thật → deck FDS 6.11.1 kiểm định được
 
 ## 4. Rủi ro và điều cần biết
 - **Đối chiếu PyroSim:** chưa có số liệu nào. Chạy `audit` trên deck PyroSim thường cho REJECTED với mọi phần tử MISSING vì deck không có `! IFC_SOURCE` (đã thử bằng cách xóa các dòng này khỏi deck FZK của dự án). Chưa biết PyroSim có giữ dòng chú thích `!` và mảng `LOSS(i,j)` khi mở rồi lưu hay không; nếu không giữ, deck sửa trong PyroSim sẽ mất truy vết.
-- **Ngưỡng mới chưa đo trên A, C** (xem mục 3A). Tòa B, FZK, Duplex, Institute đã đo.
+- **Ngưỡng mới đã đo trên A và C (2026-11-15):** A không đổi; C có 9 phần tử MATCHED → DEVIATED oan (nhiễu Boolean, xem mục 3A). Verdict hai tòa vẫn REJECTED như trước. Thời gian các lượt đo không so được.
 - **Job `MAPPING_VERIFIED` hết hạn sau 30 ngày** (`IFCFDS_DURABLE_RETENTION_S`, `0` = giữ vô hạn). Ai cần giữ lâu hơn phải đặt biến này.
 - **Cache xác minh bằng bằng chứng** không thấy việc sửa file cùng kích thước mà còn khôi phục đúng mtime; kiểm đầy đủ vẫn chạy sau khi khởi động lại.
 - Thời gian đo chỉ so sánh được trong cùng phiên kèm lượt đối chứng (máy từng chậm 5,6 lần). Không chạy hai phép đo cùng lúc.
