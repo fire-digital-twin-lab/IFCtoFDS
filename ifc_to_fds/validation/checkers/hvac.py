@@ -8,19 +8,24 @@ from ifc_to_fds.mep.network import build_hvac_network
 from ifc_to_fds.mep.fds_records import network_records
 
 
-def friction_findings(plan):
-    """FDS 6.11.1 friction pitfalls, measured against the pinned solver (tests/test_hvac_fds_pressure.py)."""
+def friction_findings(plan, legacy_ducts=()):
+    """FDS 6.11.1 friction pitfalls, measured against the pinned solver (tests/test_hvac_fds_pressure.py).
+
+    `legacy_ducts` are ducts whose saved deck has AREA/PERIMETER but no ROUND=.FALSE.: only those still get the
+    equivalent-round-diameter friction, because the serializer now writes the flag for every such duct.
+    """
     smooth = [d.id for d in plan.ducts if d.spec.roughness_m == 0]
     noncircular = [
         d.id for d in plan.ducts
-        if d.spec.diameter_m is None and d.spec.perimeter_m ** 2 > 4 * math.pi * d.spec.area_m2 * (1 + 1e-3)
+        if d.id in legacy_ducts and d.spec.diameter_m is None
+        and d.spec.perimeter_m ** 2 > 4 * math.pi * d.spec.area_m2 * (1 + 1e-3)
     ]
     notes = [
         ("HVAC-FRICTION-0001", smooth, "HVAC duct has ROUGHNESS=0",
          "FDS applies no wall friction when ROUGHNESS is 0, so these ducts are frictionless rather than smooth-pipe."),
-        ("HVAC-FRICTION-0002", noncircular, "Non-circular HVAC duct friction uses the equivalent round diameter",
-         "FDS takes D = sqrt(4A/pi) from AREA and ignores PERIMETER for friction; a 0.5 x 0.3 m duct then has about 18% "
-         "less friction pressure drop than with the hydraulic diameter 4A/P. Review the loss budget."),
+        ("HVAC-FRICTION-0002", noncircular, "Saved HVAC deck lacks ROUND=.FALSE. on a non-circular duct",
+         "Without ROUND=.FALSE. FDS takes D = sqrt(4A/pi) from AREA and ignores PERIMETER for friction; a 0.5 x 0.3 m duct "
+         "then has about 18% less friction pressure drop than with the hydraulic diameter 4A/P. Convert again to write the flag."),
     ]
     return [
         Finding(id=ident, severity=Severity.P2, category="hvac", title=f"{title}: {len(ids)} duct(s)",
@@ -44,16 +49,21 @@ class HvacNetworkChecker:
                       for r in context.parsed.operational_records}
             if set(expected) != set(actual):
                 raise ValueError("Serialized HVAC record set differs from reviewed source network")
+            legacy_ducts = set()
             for identity, (values, keys) in expected.items():
                 r = actual[identity]
-                if r.values != values or sorted(r.source.get("entity_keys", [])) != sorted(keys):
+                if r.values != values and "ROUND" in values and r.values == {k: v for k, v in values.items() if k != "ROUND"}:
+                    legacy_ducts.add(identity[2])  # a deck saved before ROUND=.FALSE.: reported, never a FAIL
+                elif r.values != values:
+                    raise ValueError(f"HVAC parameters, topology or provenance changed: {identity}")
+                if sorted(r.source.get("entity_keys", [])) != sorted(keys):
                     raise ValueError(f"HVAC parameters, topology or provenance changed: {identity}")
             if context.manifest:
                 expected_assignments = plan.assignments()
                 for record in context.manifest.records:
                     if record.entity_key in expected_assignments and sorted(record.fds_primitive_ids) != sorted(expected_assignments[record.entity_key]):
                         raise ValueError(f"Manifest HVAC assignments changed: {record.entity_key}")
-            findings = friction_findings(plan)
+            findings = friction_findings(plan, legacy_ducts)
             return CheckerOutcome(self.name, GateResult(
                 status=GateStatus.PASS if expected else GateStatus.NOT_APPLICABLE,
                 reason="Operational HVAC network independently reconstructed" if expected else "No operational HVAC network requested",
