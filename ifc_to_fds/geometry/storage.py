@@ -47,7 +47,7 @@ def store_mesh(mesh, directory):
         or target.stat().st_size != vertices.nbytes + faces.nbytes
         or file_hash(target) != key
     ):
-        temporary = directory / (key + "." + uuid4().hex + ".tmp")
+        temporary = directory / (uuid4().hex + ".tmp")  # short: Windows MAX_PATH is 260
         with temporary.open("wb") as stream:
             stream.write(vertices.tobytes())
             stream.write(faces.tobytes())
@@ -113,15 +113,18 @@ class DiskPackage(dict):
             or ref["byte_length"] != nv * 24 + nf * 12
         ):
             raise ValueError("Invalid mesh offsets/length")
+        try:
+            data = path.read_bytes()  # one read serves both the integrity check and the arrays
+        except OSError:
+            data = None
         if (
-            not path.is_file()
-            or path.stat().st_size != ref["byte_length"]
-            or file_hash(path) != key
+            data is None
+            or len(data) != ref["byte_length"]
+            or hashlib.sha256(data).hexdigest() != key
         ):
             raise ValueError("Missing or corrupted geometry payload: " + key)
-        with path.open("rb") as stream:
-            vertices = np.fromfile(stream, dtype="<f8", count=nv * 3).reshape(-1, 3)
-            faces = np.fromfile(stream, dtype="<u4", count=nf * 3).reshape(-1, 3)
+        vertices = np.frombuffer(data, dtype="<f8", count=nv * 3).reshape(-1, 3)
+        faces = np.frombuffer(data, dtype="<u4", count=nf * 3, offset=nv * 24).reshape(-1, 3)
         if not np.isfinite(vertices).all() or (faces.size and faces.max() >= nv):
             raise ValueError("Invalid payload coordinates/indices")
         return dict(

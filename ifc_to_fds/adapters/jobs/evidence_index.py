@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -26,6 +27,26 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+# A verified job is re-checked on every download and every geometry batch. Re-hashing a large bundle each time is
+# wasted work, so a success is remembered while no evidence file changes size or modification time.
+# shortcut: a same-size edit that also restores the old mtime goes unseen; the full check still runs after any
+# restart or cache eviction. Files modified within the last two seconds are never trusted, because coarse
+# filesystem clocks could hide a second edit.
+_VERIFIED: dict[tuple, bool] = {}
+_VERIFIED_LIMIT = 256
+_MTIME_SETTLE_NS = 2_000_000_000
+
+
+def _evidence_signature(directory: Path, mode: str, names) -> tuple | None:
+    try:
+        stats = [(name, (directory / name).stat()) for name in sorted(names)]
+    except OSError:
+        return None
+    if time.time_ns() - max((st.st_mtime_ns for _, st in stats), default=0) < _MTIME_SETTLE_NS:
+        return None
+    return (str(directory), mode, tuple((name, st.st_size, st.st_mtime_ns) for name, st in stats))
 
 
 def _read_object(path: Path) -> dict[str, Any]:
@@ -171,6 +192,9 @@ def verify_evidence_index(
     files = index.get("files")
     if not isinstance(files, dict) or set(files) != _selected_files(mode, result):
         raise ValueError("Evidence file-set differs from result artifact declarations")
+    signature = _evidence_signature(directory, mode, [*files, EVIDENCE_FILENAME])
+    if signature is not None and signature in _VERIFIED:
+        return
     for filename, digest in files.items():
         if (
             not isinstance(digest, str)
@@ -191,3 +215,7 @@ def verify_evidence_index(
         _validate_linked_content(directory, mode, result, files)
     except OSError as exc:
         raise ValueError("Evidence files disappeared during verification") from exc
+    if signature is not None:
+        if len(_VERIFIED) >= _VERIFIED_LIMIT:
+            _VERIFIED.clear()
+        _VERIFIED[signature] = True

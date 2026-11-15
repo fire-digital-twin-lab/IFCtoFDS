@@ -4,9 +4,8 @@ import json
 import pytest
 
 from ifc_to_fds.domain.mapping import build_mapping_plan, MappingStrategy
-from ifc_to_fds.domain.validation import ValidationContext, GateResult, GateStatus
-from ifc_to_fds.domain.validation.evaluator import AcceptanceEvaluator
-from ifc_to_fds.domain.validation.checkers.base import CheckerOutcome
+from ifc_to_fds.domain.validation import GateResult, GateStatus
+from ifc_to_fds.domain.validation.model import MAPPING_GATE_ORDER, AcceptanceReport
 from ifc_to_fds.mapping.exporter import serialize_fds
 from ifc_to_fds.domain.bim import BoundingBox
 from ifc_to_fds.domain.scope import ScopeDecision
@@ -171,41 +170,25 @@ def test_plan_rejects_invalid_authorization(box_model, mutation):
         serialize_fds(box_model, mapping_plan=plan, **kwargs)
 
 
-def test_evaluator_finalizes_and_detaches_outcomes(box_model):
-    context = ValidationContext(model=box_model, fds_text="", manifest=None)
-    evaluator = AcceptanceEvaluator()
-    empty = evaluator.evaluate(context, [])
-    assert empty.status == "INCONCLUSIVE"
-    failed = CheckerOutcome(
-        "geometry",
-        GateResult(status=GateStatus.FAIL, evidence={"nested": [1]}),
-        metrics={"nested": [1]},
-    )
-    report = evaluator.evaluate(context, [failed])
-    assert report.status == report.mapping_status == "REJECTED"
-    failed.result.status = GateStatus.PASS
-    failed.result.evidence["nested"].append(2)
-    failed.metrics["nested"].append(2)
-    assert report.gates["geometry"].status == "FAIL"
-    assert report.gates["geometry"].evidence == {"nested": [1]}
-    assert report.metrics["nested"] == [1]
-    outcomes = [
-        CheckerOutcome(name, GateResult(status=GateStatus.PASS)) for name in empty.gates
-    ]
-    assert evaluator.evaluate(context, outcomes).status == "MAPPING_VERIFIED"
-    outcomes[0].result.status = GateStatus.NOT_APPLICABLE
-    assert evaluator.evaluate(context, outcomes).status == "INCONCLUSIVE"
-    outcomes[0].result.reason = "Not applicable to fixture"
+def test_mapping_verdict_needs_every_gate_and_an_explained_not_applicable():
+    def verdict(**changes):
+        gates = {name: GateResult(status=GateStatus.PASS) for name in MAPPING_GATE_ORDER}
+        gates.update(changes)
+        return AcceptanceReport(gates=gates).finalize()
+
+    unrun = AcceptanceReport(gates={n: GateResult(status=GateStatus.NOT_RUN) for n in MAPPING_GATE_ORDER})
+    assert unrun.finalize().status == "INCONCLUSIVE"
+    failed = verdict(geometry=GateResult(status=GateStatus.FAIL))
+    assert failed.status == failed.mapping_status == "REJECTED"
+    assert verdict().status == "MAPPING_VERIFIED"
+    assert verdict(syntax=GateResult(status=GateStatus.NOT_APPLICABLE)).status == "INCONCLUSIVE"
     # Core syntax evidence cannot be waived, even with an explanation.
-    assert evaluator.evaluate(context, outcomes).status == "INCONCLUSIVE"
-    outcomes[0].result.status = GateStatus.PASS
-    outcomes[0].result.reason = ""
-    # No in-scope openings is a genuinely non-applicable mapping check.
-    opening = next(outcome for outcome in outcomes if outcome.gate_name == "openings")
-    opening.result.status = GateStatus.NOT_APPLICABLE
-    assert evaluator.evaluate(context, outcomes).status == "INCONCLUSIVE"
-    opening.result.reason = "No in-scope source openings"
-    assert evaluator.evaluate(context, outcomes).status == "MAPPING_VERIFIED"
+    waived = GateResult(status=GateStatus.NOT_APPLICABLE, reason="Not applicable to fixture")
+    assert verdict(syntax=waived).status == "INCONCLUSIVE"
+    # No in-scope openings is a genuinely non-applicable mapping check, but only with a reason.
+    assert verdict(openings=GateResult(status=GateStatus.NOT_APPLICABLE)).status == "INCONCLUSIVE"
+    explained = GateResult(status=GateStatus.NOT_APPLICABLE, reason="No in-scope source openings")
+    assert verdict(openings=explained).status == "MAPPING_VERIFIED"
 
 
 @pytest.mark.parametrize(

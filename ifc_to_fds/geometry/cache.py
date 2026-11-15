@@ -9,9 +9,31 @@ import ifcopenshell
 from ifc_to_fds.core.canonical import CanonicalModel, SCHEMA_VERSION, TriangleMesh
 from ifc_to_fds.core.canonical import GeometryStatus
 from .mesh import bounds_for_vertices
-from .engine import process_model_geometry, opening_diagnostic
+from .component_union import UNION_METHOD
+from .engine import instancing_enabled, process_model_geometry, opening_diagnostic
 from .storage import DiskPackage, write_package
 from ifc_to_fds.diagnostics import operation
+
+
+# Modules whose code decides which mesh a source element gets; editing any of them must not
+# reuse meshes cached by an older version (the key would otherwise only see the IFC bytes).
+FINGERPRINT_FILES = ("normalization.py", "component_union.py", "mesh.py", "boolean.py", "engine.py")
+_fingerprint = None
+
+
+def code_fingerprint(files=None, directory=None):
+    global _fingerprint
+    default = files is None and directory is None
+    if default and _fingerprint:
+        return _fingerprint
+    digest = hashlib.sha256()
+    for name in sorted(files or FINGERPRINT_FILES):
+        digest.update(name.encode())
+        digest.update((Path(directory) if directory else Path(__file__).parent).joinpath(name).read_bytes())
+    value = digest.hexdigest()[:16]
+    if default:
+        _fingerprint = value
+    return value
 
 
 @operation("IFC_GEOMETRY")
@@ -22,6 +44,9 @@ def cached_geometry(model, file):
         engine=ifcopenshell.version,
         schema=SCHEMA_VERSION,
         extraction_revision="source-numerical-seams-8ulp-cap-1e-12-v5",
+        component_union=UNION_METHOD,
+        code=code_fingerprint(),
+        iteration="local-instanced-v1" if instancing_enabled() else "world",
         world=True,
         metres=True,
         weld=True,
@@ -83,7 +108,7 @@ def cached_geometry(model, file):
     try:
         directory.mkdir(parents=True, exist_ok=True)
         write_package(model, path)
-        temporary = directory / (key + "." + uuid.uuid4().hex + ".tmp")
+        temporary = directory / (uuid.uuid4().hex + ".tmp")  # short: Windows MAX_PATH is 260
         temporary.write_text(
             model.model_dump_json(
                 exclude={

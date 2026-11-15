@@ -56,7 +56,7 @@ def read_preview(model, directory):
 
 def save_preview(model, directory, result):
     target = cache_path(model)
-    staging = target.with_name(target.name + "." + uuid4().hex + ".tmp")
+    staging = target.with_name(target.name[:16] + "." + uuid4().hex[:12] + ".tmp")  # short: Windows MAX_PATH is 260
     try:
         staging.mkdir(parents=True)
         copy_preview(directory, staging)

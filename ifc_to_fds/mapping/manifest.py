@@ -1,6 +1,5 @@
 """Versioned bidirectional provenance, finalized from audit results."""
 
-from typing import Any
 from ifc_to_fds.core.canonical import SCHEMA_VERSION
 from ifc_to_fds.domain.mapping import (
     ManifestRecord,
@@ -85,7 +84,6 @@ def build_manifest(model, fds_text="", configuration=None, report=None):
         for pid in e.fds_primitive_ids:
             reverse.setdefault(pid, []).append(e.entity_key)
 
-    import json
 
     fds_sha256 = (
         hashlib.sha256(fds_text.encode("utf-8")).hexdigest() if fds_text else ""

@@ -6,7 +6,6 @@ Re-exports from ifc_to_fds.adapters.jobs:
   - JobRepository
 """
 
-import subprocess
 import sys
 from ifc_to_fds.adapters.jobs import JobManager, JobRepository, JobService, WorkerRunner
 

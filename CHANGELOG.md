@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Audit geometry defaults now accept only float noise: `surface_tolerance_m=1e-9`, `relative_volume_tolerance=1e-9`, `min_solid_iou=1-1e-9` (were 0.001 / 0.001 / 0.999). A wider tolerance must be declared in `audit`. Opening passage checks keep their former Boolean-noise allowance as the named constant `PASSAGE_NOISE_M`.
+- `audit` without `--config` no longer takes `accepted_source_defects` from the manifest; waivers must come from the auditor. Every applied waiver is listed as a P2 finding in the report.
+- `CHID` derived from a file name replaces `.` with `_` (FDS stops with "No periods allowed in CHID"), and the syntax gate rejects a `CHID` containing `.`.
+
 ## [0.5.0] — 2026-10-26
 
 Major release delivering the research-grade Python Verified Pipeline, 14-gate independent audit engine, and EV battery fire simulation suite.

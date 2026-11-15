@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import shutil
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query, Body
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Query
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from .jobs import JobManager
@@ -286,22 +286,41 @@ async def store_uploads(uploads):
             await upload.close()
 
 
+async def submit_uploads(uploads, config, mode="convert"):
+    """Admit, store and queue uploaded IFC files; every failure leaves no orphan job directory.
+
+    The slot is reserved before any byte is written, so parallel uploads cannot exceed the queue limit
+    and a rejected upload never occupies disk. `config` may be a callable, evaluated after admission.
+    """
+    try:
+        manager.reserve_upload()
+    except OverflowError as exc:
+        raise HTTPException(429, "Job queue is full; retry after existing jobs finish") from exc
+    try:
+        configuration = config() if callable(config) else config
+        directory, paths = await store_uploads(uploads)
+        queued = False
+        try:
+            job = manager.submit(paths, configuration, directory, mode=mode)
+            queued = True
+            return job
+        except OverflowError as exc:
+            raise HTTPException(429, str(exc)) from exc
+        except JobPersistenceError as exc:
+            raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
+        finally:
+            if not queued:  # any failure, including OSError on a full disk, must not leave the upload behind
+                shutil.rmtree(directory, ignore_errors=True)
+    finally:
+        manager.release_upload()
+
+
 @app.post("/api/inventory")
 async def inventory(
     file: Optional[UploadFile] = File(None),
     files: Optional[list[UploadFile]] = File(None),
 ):
-    if not manager.can_accept():
-        raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
-    directory, paths = await store_uploads(files or ([file] if file else []))
-    try:
-        job = manager.submit(paths, {}, directory, mode="inventory")
-    except OverflowError as exc:
-        shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(429, str(exc)) from exc
-    except JobPersistenceError as exc:
-        shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
+    job = await submit_uploads(files or ([file] if file else []), {}, mode="inventory")
     return await wait_for_job(job["id"])
 
 
@@ -322,32 +341,12 @@ async def wait_for_job(jid):
 @app.post("/api/jobs", status_code=202)
 async def submit(files: list[UploadFile] = File(...), configuration: str = Form("{}")):
     config = configuration_value(configuration)
-    if not manager.can_accept():
-        raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
-    directory, paths = await store_uploads(files)
-    try:
-        return manager.submit(paths, config, directory)
-    except OverflowError as exc:
-        shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(429, str(exc)) from exc
-    except JobPersistenceError as exc:
-        shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
+    return await submit_uploads(files, config)
 
 
 @app.post("/api/preview-jobs", status_code=202)
 async def submit_preview(file: UploadFile = File(...)):
-    if not manager.can_accept():
-        raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
-    directory, paths = await store_uploads([file])
-    try:
-        return manager.submit(paths, {}, directory, mode="preview")
-    except OverflowError as exc:
-        shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(429, str(exc)) from exc
-    except JobPersistenceError as exc:
-        shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
+    return await submit_uploads([file], {}, mode="preview")
 
 
 @app.post("/api/scenario-jobs", status_code=202)
@@ -662,25 +661,17 @@ async def legacy_convert(
     profile: Optional[str] = Form(None),
     configuration: str = Form("{}"),
 ):
-    if not manager.can_accept():
-        raise HTTPException(429, "Job queue is full; retry after existing jobs finish")
-    config = configuration_value(
-        configuration,
-        cell_size=cell_size,
-        storey=storey,
-        all_geom=all_geom,
-        include_review=include_review,
-        profile=profile,
+    job = await submit_uploads(
+        [file],
+        lambda: configuration_value(
+            configuration,
+            cell_size=cell_size,
+            storey=storey,
+            all_geom=all_geom,
+            include_review=include_review,
+            profile=profile,
+        ),
     )
-    directory, paths = await store_uploads([file])
-    try:
-        job = manager.submit(paths, config, directory)
-    except OverflowError as exc:
-        shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(429, str(exc)) from exc
-    except JobPersistenceError as exc:
-        shutil.rmtree(directory, ignore_errors=True)
-        raise HTTPException(503, "Job metadata storage unavailable; retry later") from exc
     return await wait_for_job(job["id"])
 
 

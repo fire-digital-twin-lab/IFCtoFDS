@@ -32,10 +32,10 @@
       "name": "WallWithOpening",
       "storey": "Level 1",
       "scope_decision": "IN_SCOPE",
-      "mapping_strategy": "GEOM",
+      "mapping_strategy": "OBST",
       "simulation_role": "PASSIVE_OBSTACLE",
       "operational_status": "NOT_APPLICABLE",
-      "fds_representation": "GEOM",
+      "fds_representation": "OBST",
       "review_status": "NOT_REQUIRED",
       "boundary_treatment": "NOT_APPLICABLE",
       "boundary_policy": null,
@@ -44,7 +44,8 @@
       "ports_count": 0,
       "system_names": [],
       "fds_primitive_ids": [
-        "GEOM_1_WallWithOpening"
+        "OBST_1_WallWithOpening",
+        "OBST_2_WallWithOpening"
       ]
     },
     {
@@ -82,11 +83,12 @@
     {
       "entity_key": "ba9ea5d4ae15496bcdcf825f4e6c2ed7b18d0ccc761eaf6973f0cc4d936f105a:12",
       "mapping_status": "MATCHED",
-      "mapping_strategy": "GEOM",
+      "mapping_strategy": "OBST",
       "simulation_role": "PASSIVE_OBSTACLE",
       "boundary_treatment": "NOT_APPLICABLE",
       "fds_primitive_ids": [
-        "GEOM_1_WallWithOpening"
+        "OBST_1_WallWithOpening",
+        "OBST_2_WallWithOpening"
       ],
       "openings_count": 1,
       "ports_count": 0
@@ -105,22 +107,34 @@
   "mep_systems_count": 0,
   "mep_connections_count": 0,
   "fds_summary": {
-    "obst_count": 0,
-    "geom_count": 1,
+    "obst_count": 2,
+    "geom_count": 0,
     "mesh_count": 1,
-    "total_primitives": 1
+    "total_primitives": 2
   },
   "fds_primitives": [
     {
-      "kind": "GEOM",
-      "id": "GEOM_1_WallWithOpening",
+      "kind": "OBST",
+      "id": "OBST_1_WallWithOpening",
       "xb": [
         0.0,
         4.0,
         0.0,
         0.3,
-        0.0,
+        2.1,
         3.0
+      ]
+    },
+    {
+      "kind": "OBST",
+      "id": "OBST_2_WallWithOpening",
+      "xb": [
+        1.0,
+        4.0,
+        0.0,
+        0.3,
+        0.0,
+        2.1
       ]
     }
   ],
@@ -144,5 +158,5 @@
   "findings_count": 0,
   "findings": [],
   "geometry_package_sha256": "9fead33912adbd0f4a4d32c69f6d9e92798fbd2bbce8e303ab3067b70c5da1c6",
-  "manifest_csv_sha256": "dae8fc77212976f51ea8a7f29fb1805922a9824322b542dcc5d47518bc32525a"
+  "manifest_csv_sha256": "bf76679cd2dce1f652ba9a956c1401d29b0f3142b22def4373c687b0bcfad78f"
 }

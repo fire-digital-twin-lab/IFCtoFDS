@@ -15,6 +15,7 @@ from ifc_to_fds.core.canonical import SCHEMA_VERSION
 from ifc_to_fds.domain.validation.model import (
     NON_WAIVABLE_MAPPING_GATES,
     REQUIRED_MAPPING_GATES,
+    SIMULATION_GATES,
 )
 from ifc_to_fds.results import ARTIFACTS
 
@@ -134,10 +135,7 @@ class ConversionResult(ResultShape):
                 for name in REQUIRED_MAPPING_GATES
             ):
                 raise ValueError("Verified mapping has incomplete mandatory gate evidence")
-            simulation_gates = {
-                "solver", "effective_geometry", "physics",
-                "scenario", "mesh_resolution", "operational_model",
-            }
+            simulation_gates = SIMULATION_GATES
             required_mapping = [
                 gate for name, gate in self.gates.items()
                 if gate.required and name not in simulation_gates

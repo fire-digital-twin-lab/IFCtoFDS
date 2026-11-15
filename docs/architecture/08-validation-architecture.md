@@ -1,44 +1,38 @@
-# 08 — Validation Architecture: Independent Gate Checkers
+# 08 — Validation Architecture
 
-## 1. Modular Validation Pipeline
-Rather than executing all validation in a monolithic multi-hundred-line procedure, the validation suite decomposes into single-responsibility checkers:
+## One audit path
+
+The only production audit is `run_independent_validation` in `ifc_to_fds/validation/engine.py`. It re-reads the
+source IFC, parses the serialized FDS text and fills one `AcceptanceReport`. The verdict comes from
+`AcceptanceReport.finalize()` in `ifc_to_fds/domain/validation/model.py`; there is no second evaluator.
 
 ```text
-ValidationContext
-       │
-       ├──> SourceCoverageChecker        (verifies IFC sources and entity accounting)
-       ├──> ScopeChecker                 (verifies spatial inclusion / exclusion boundaries)
-       ├──> GeometryChecker              (audits topology, degenerate faces, bounds)
-       ├──> OpeningChecker               (measures void subtraction and residual passages)
-       ├──> MEPChecker                   (audits system connectivity and port alignment)
-       ├──> ProvenanceChecker            (verifies bidirectional IFC-FDS entity keys)
-       ├──> BoundaryChecker              (audits cross-boundary elements and solver proofs)
-       ├──> FdsSyntaxChecker             (validates FDS namelist grammar and face indices)
-       ├──> SolverChecker                (verifies FDS execution when solver is present)
-       └──> GoldenParityChecker          (evaluates parity against approved reference cases)
-       │
-       ▼
-GateResult[]
-       │
-       ▼
-AcceptanceEvaluator ──> Finalized AcceptanceReport
+re-read IFC + parsed FDS + manifest
+        │
+        ├── engine: syntax, source_inventory, traceability, scope, geometry, openings,
+        │           mep, representation, boundary, domain, geometry_preservation
+        ├── checkers (ifc_to_fds/validation/checkers, validation/passage_resolution.py):
+        │           structural_completeness, air_path, hvac, mesh_resolution, passage_resolution
+        └── solver gates (validation/solver.py, validation/effective.py): solver, effective_geometry
+        │
+        ▼
+AcceptanceReport.finalize()  →  status, mapping_status, simulation_status
 ```
 
-## 2. Checker Contract — `[IMPLEMENTED]`
-Every checker implements the same protocol defined in `ifc_to_fds/domain/validation/checkers/base.py`:
-```python
-@runtime_checkable
-class GateChecker(Protocol):
-    name: str
+## Gate names
 
-    def check(self, context: ValidationContext) -> CheckerOutcome:
-        ...
-```
-`ValidationContext` carries the model, fds_text, manifest, config, and a lazy `parsed` FDS parser property so shared parse artifacts are not repeatedly recalculated.
+`MAPPING_GATE_ORDER` / `REQUIRED_MAPPING_GATES` and `SIMULATION_GATES` in `domain/validation/model.py` are the single
+source of the gate names. The engine creates the mapping gates in that order, `finalize()` and the persisted job
+result contract (`adapters/jobs/result_contract.py`) both import them.
 
-## 3. Evaluator Fail-Safe & Result Isolation — `[IMPLEMENTED]`
-- **Fail-Safe Principle**: `AcceptanceEvaluator` initializes all unexecuted gates to `GateStatus.NOT_RUN`. A gate only transitions to `PASS` when its corresponding checker successfully validates all assertions.
-- **Result isolation**: Checkers **never mutate** the `AcceptanceReport` directly. Outcomes return isolated `findings`, `metrics`, and `evidence`. `AcceptanceEvaluator` copies outcomes and constructs a finalized report. The Pydantic report remains mutable; it does not share nested evidence with checker inputs.
+- A mapping verdict (`MAPPING_VERIFIED`) needs every required mapping gate to pass. A `NOT_APPLICABLE` gate needs
+  a reason, and the non-waivable gates can never be `NOT_APPLICABLE`.
+- Simulation gates only shape `simulation_status`. Their findings carry `verification_level="simulation"` so they
+  never reject a correct mapping.
 
-## Runtime integration
-The production audit still uses `run_independent_validation` and its complete existing checks. The new syntax/domain checkers and AcceptanceEvaluator are transitional contracts; they do not replace missing geometry, openings, MEP or solver checkers.
+## Checker contract
+
+Checkers implement `GateChecker` from `domain/validation/checkers/base.py` and return a `CheckerOutcome`
+(gate result, findings, metrics). They receive a `ValidationContext` with the model, FDS text, manifest, config,
+the parsed FDS and, for `air_path`, the set of elements whose emitted solids the geometry gate proved equal to
+the source (`exact_elements`).

@@ -79,7 +79,7 @@ Một số tọa độ tại vùng tiếp xúc khác nhau khoảng `3,55e-15 m`,
 | CLI — `cli.py` | Workspace tạm mặc định phụ thuộc thư mục hệ thống; nguy cơ ghi checkpoint model.fds vào nơi không mong muốn | Dựng checkpoint trong thư mục công việc riêng cạnh đích và xuất bộ kết quả bằng repository. |
 | Benchmark — `benchmark_real_ham2tang_improved.py` | Mô tả còn khẳng định chữa cửa bằng hộp; RSS delta bị gọi là peak; xóa output cũ | Cập nhật đúng trạng thái; tên chỉ số RSS đúng; tạo thư mục theo từng lượt; khởi tạo solver một thread, ghi riêng mapping acceptance. |
 
-Các sửa UI khôi phục Focus/Back, Hide/Show, Isolate/Unisolate, Undo/Show all; hủy tác vụ; worker đọc FDS; cú pháp GEOM Legacy, precision và ID tương thích Windows đã được kiểm tra lại. Chi tiết ở [báo cáo UI trước đó](UI_LOGIC_REVIEW_2026-10-20.md).
+Các sửa UI khôi phục Focus/Back, Hide/Show, Isolate/Unisolate, Undo/Show all; hủy tác vụ; worker đọc FDS; cú pháp GEOM Legacy, precision và ID tương thích Windows đã được kiểm tra lại. Chi tiết ở báo cáo UI ngày 20/10/2026 (đã gỡ khỏi repo, xem lịch sử Git).
 
 ## Kết quả chạy toàn luồng
 

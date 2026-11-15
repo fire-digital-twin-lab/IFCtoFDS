@@ -18,7 +18,7 @@ JS_TARGETS = [
 
 PY_TARGETS = [
     "ifc_to_fds/validation/engine.py",
-    "ifc_to_fds/validation/golden.py",
+    "ifc_to_fds/validation/golden/__init__.py",
     "ifc_to_fds/domain/bim/model.py",
     "ifc_to_fds/domain/validation/model.py",
     "ifc_to_fds/application/use_cases/audit_conversion.py",
@@ -35,7 +35,11 @@ FIXTURE_TARGETS = [
 
 def count_lines(path: Path) -> dict:
     if not path.is_file():
-        return {"total_lines": 0, "code_lines": 0}
+        # Dynamic fallback for relocated modules
+        if path.name == "golden.py" and (path.parent / "golden/__init__.py").is_file():
+            path = path.parent / "golden/__init__.py"
+        else:
+            return {"total_lines": 0, "code_lines": 0}
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     code_lines = [l for l in lines if l.strip() and not l.strip().startswith(("#", "//", "/*", "*"))]
     return {
@@ -52,7 +56,7 @@ def compute_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def main():
+def main(output_path=OUTPUT_PATH):
     metrics = {
         "javascript_files": {},
         "python_files": {},
@@ -80,9 +84,9 @@ def main():
         metrics["fixtures"][rel] = {"sha256": digest, "size_bytes": p.stat().st_size if p.is_file() else 0}
         print(f"  {rel:35s}: {digest[:16]}... ({metrics['fixtures'][rel]['size_bytes']} bytes)")
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-    print(f"\nBaseline metrics written to {OUTPUT_PATH}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    print(f"\nBaseline metrics written to {output_path}")
 
 
 if __name__ == "__main__":

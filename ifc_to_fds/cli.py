@@ -3,11 +3,16 @@
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 import sys
 from typing import Any
 from .pipeline import convert, audit, save_artifacts
+from .application.use_cases.audit_conversion import ARTIFACT_CONFIG_EXCLUDED
 from .core.inventory import extract_inventory
+from .core.source_dossier import inspect_source_dossier, write_source_dossier
+from .core.coordinate_preflight import inspect_coordinate_file, save_coordinate_preflight
+from .core.opening_review import inspect_opening_review, save_opening_review
 from .mapping.manifest import MappingManifest
 
 
@@ -45,6 +50,7 @@ def main(argv=None):
     p.add_argument("--profile", choices=["mapping", "research-basement", "simulation", "geometry-fidelity"])
     p.add_argument("--reference-case")
     p.add_argument("--decisions", help="Explicit entity decisions JSON")
+    p.add_argument("--accepted-source-defects", help="Reviewed source defects JSON (entity key -> mesh_sha256, defect, review)")
     p.add_argument("--intentional-deltas", help="Approved delta JSON")
     p.add_argument("--domain", nargs=6, type=float)
     p.add_argument("--coordinate-frame", choices=["WORLD", "REBASED"], default=None, help="Coordinate frame for domain/bbox")
@@ -80,6 +86,16 @@ def main(argv=None):
     p = commands.add_parser("inventory")
     p.add_argument("input_ifc")
     p.add_argument("--json", action="store_true")
+    p = commands.add_parser("source-dossier")
+    p.add_argument("input_ifc", help="Private IFC input; never uploaded by this command")
+    p.add_argument("-o", "--output", required=True, help="Private JSON destination, no overwrite")
+    p = commands.add_parser("coordinate-preflight")
+    p.add_argument("input_ifc", help="Private IFC input")
+    p.add_argument("-o", "--output", required=True, help="Private JSON destination, no overwrite")
+    p.add_argument("--max-products", type=int, default=25000)
+    p = commands.add_parser("opening-review")
+    p.add_argument("input_ifc", help="Private IFC input")
+    p.add_argument("-o", "--output", required=True, help="Private JSON, contains IFC identifiers")
     p = commands.add_parser("serve")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
@@ -132,6 +148,18 @@ def main(argv=None):
             if args.allowed_hosts:
                 os.environ["IFCFDS_ALLOWED_HOSTS"] = args.allowed_hosts
 
+            upload_tmp = os.getenv("TMPDIR")
+            if upload_tmp:
+                # Starlette spools large multipart parts to TMPDIR. The compose /tmp is a small tmpfs, so the
+                # operator points TMPDIR at the jobs volume; fail closed rather than silently fall back to /tmp.
+                spool = Path(upload_tmp)
+                try:
+                    if spool.name == ".upload-tmp" and spool.is_dir():
+                        shutil.rmtree(spool)  # leftovers of an interrupted upload; we own this directory
+                    spool.mkdir(parents=True, exist_ok=True)
+                except OSError as exc:
+                    sys.stderr.write(f"Cannot prepare TMPDIR {spool}: {exc}\n")
+                    return 1
             uvicorn.run("ifc_to_fds.server:app", host=args.host, port=args.port)
             return 0
         if args.command == "reference-check":
@@ -160,6 +188,24 @@ def main(argv=None):
                 if args.json
                 else f"{model.source.filename}: {len(model.elements)} IfcProduct entities"
             )
+            return 0
+        if args.command == "source-dossier":
+            dossier = inspect_source_dossier(args.input_ifc)
+            write_source_dossier(args.output, dossier)
+            # Không ghi đường dẫn/tên/GUID/tọa độ IFC riêng tư vào log.
+            print("Source dossier: DRAFT; geometry/mapping NOT_EVALUATED")
+            return 0
+        if args.command == "coordinate-preflight":
+            report = inspect_coordinate_file(
+                args.input_ifc, max_products=args.max_products
+            )
+            save_coordinate_preflight(args.output, report)
+            print("Coordinate preflight: REVIEW_REQUIRED; geometry NOT_EVALUATED")
+            return 0
+        if args.command == "opening-review":
+            report = inspect_opening_review(args.input_ifc)
+            save_opening_review(args.output, report)
+            print("Opening review: UNREVIEWED; air path NOT_EVALUATED")
             return 0
         config = (
             json.loads(Path(args.config).read_text(encoding="utf-8"))
@@ -207,7 +253,7 @@ def main(argv=None):
         for name in ("profile", "reference_case"):
             if getattr(args, name, None):
                 config[name] = getattr(args, name)
-        for name in ("decisions", "intentional_deltas"):
+        for name in ("decisions", "intentional_deltas", "accepted_source_defects"):
             if getattr(args, name, None):
                 config[name] = json.loads(
                     Path(getattr(args, name)).read_text(encoding="utf-8")
@@ -233,7 +279,7 @@ def main(argv=None):
             elif default_zip.is_file():
                 package = restore_package(default_zip, default_json)
             if not args.config:
-                config = {**{k: v for k, v in manifest.configuration.items() if k != "audit"}, **config}
+                config = {**{k: v for k, v in manifest.configuration.items() if k not in ARTIFACT_CONFIG_EXCLUDED}, **config}
             _, _, report = audit(
                 args.input_ifc,
                 Path(args.fds).read_bytes().decode("utf-8"),
@@ -262,9 +308,11 @@ def main(argv=None):
             bbox_dict: dict[str, Any] = dict(
                 zip(("xmin", "xmax", "ymin", "ymax", "zmin", "zmax"), args.bbox)
             )
+            scope = config.setdefault("scope", {})
+            scope["bounding_box"] = bbox_dict
+            # model_preparer reads scope.coordinate_frame, not a key inside the box.
             if getattr(args, "coordinate_frame", None):
-                bbox_dict["coordinate_frame"] = args.coordinate_frame
-            config.setdefault("scope", {})["bounding_box"] = bbox_dict
+                scope["coordinate_frame"] = args.coordinate_frame
         if args.common_coordinates:
             config.setdefault("sources", {})["common_coordinates"] = True
         if args.solver:

@@ -4,7 +4,6 @@ import csv
 import hashlib
 import io
 import json
-from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 

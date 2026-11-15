@@ -27,7 +27,8 @@ AcceptanceVerdict = AcceptanceStatus
 # A mapping verdict is a positive scientific claim about ALL core IFC-to-FDS
 # comparisons, not merely the gates the caller happened to supply. Keep this
 # list shared with the persisted/public result contract.
-REQUIRED_MAPPING_GATES = frozenset({
+# Order is the report order of the mapping gates.
+MAPPING_GATE_ORDER = (
     "syntax",
     "source_inventory",
     "traceability",
@@ -40,7 +41,8 @@ REQUIRED_MAPPING_GATES = frozenset({
     "representation",
     "boundary",
     "domain",
-})
+)
+REQUIRED_MAPPING_GATES = frozenset(MAPPING_GATE_ORDER)
 
 # These core checks always have something to verify. An operator-supplied
 # NOT_APPLICABLE explanation cannot waive source re-reading, syntax, provenance,
@@ -53,6 +55,18 @@ NON_WAIVABLE_MAPPING_GATES = frozenset({
     "geometry",
     "representation",
     "domain",
+})
+
+
+# Simulation verification gates: they shape simulation_status, never the mapping verdict.
+SIMULATION_GATES = frozenset({
+    "solver",
+    "effective_geometry",
+    "physics",
+    "scenario",
+    "mesh_resolution",
+    "passage_resolution",
+    "operational_model",
 })
 
 
@@ -76,11 +90,13 @@ class AuditConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     fail_fast_on_source_errors: StrictBool = False
     collect_partial_geometry_evidence: StrictBool = False
-    surface_tolerance_m: float = Field(default=0.001, gt=0, allow_inf_nan=False)
+    # Defaults accept only float noise: a proven-equal solid passes, any real deviation is DEVIATED. A wider
+    # tolerance is an engineering decision and must be declared in the audit configuration.
+    surface_tolerance_m: float = Field(default=1e-9, gt=0, allow_inf_nan=False)
     relative_volume_tolerance: float = Field(
-        default=0.001, ge=0, lt=1, allow_inf_nan=False
+        default=1e-9, ge=0, lt=1, allow_inf_nan=False
     )
-    min_solid_iou: float = Field(default=0.999, gt=0, le=1, allow_inf_nan=False)
+    min_solid_iou: float = Field(default=1 - 1e-9, gt=0, le=1, allow_inf_nan=False)
     solver_executable: str | None = None
     solver_version: str = "6.11.1"
     solver_evidence_directory: str | None = None
@@ -110,6 +126,8 @@ class ValidationContext(BaseModel):
     config: AuditConfig | None = None
     geometry_package: Any | None = None
     parsed_fds: Any | None = None
+    # entity keys whose emitted solids the geometry comparison proved equal to the source
+    exact_elements: frozenset = frozenset()
 
     _parser: ClassVar[Optional[Callable[[str], Any]]] = None
 
@@ -188,14 +206,7 @@ class AcceptanceReport(BaseModel):
         # simulation epic defines solver/physics/scenario/mesh gates. The
         # MAPPING_VERIFIED-only checkpoint seal in convert_verified.py relies on
         # this. Pinned by test_finalize_never_issues_simulation_verified.
-        simulation = {
-            "solver",
-            "effective_geometry",
-            "physics",
-            "scenario",
-            "mesh_resolution",
-            "operational_model",
-        }
+        simulation = SIMULATION_GATES
         required = [
             g for name, g in self.gates.items() if g.required and name not in simulation
         ]

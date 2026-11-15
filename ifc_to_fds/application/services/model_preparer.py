@@ -1,6 +1,7 @@
 """Application service for preparing canonical models with spatial scope and mapping plan."""
 
 from time import perf_counter
+from ifc_to_fds.core.inventory import require_scope_for_multi_site
 from typing import Any, Dict, List
 from ifc_to_fds.core.federation import load_sources
 from ifc_to_fds.domain.bim import BoundingBox, CanonicalModel
@@ -19,6 +20,10 @@ def prepare_model(
     for k in ("rebase_vector", "rebase_origin", "auto_rebase_origin"):
         if k in configuration:
             source_opts[k] = configuration[k]
+    early_scope = configuration.get("scope") or {}
+    if not (early_scope.get("storeys") or early_scope.get("bounding_box")):
+        for path in paths:  # cheap parse; checked before any geometry work
+            require_scope_for_multi_site(path)
     model = load_sources(paths, source_opts, reference=reference)
     rebase_vec = getattr(model.source, "rebase_vector", None) or [0.0, 0.0, 0.0]
     has_rebase = any(abs(v) > 1e-6 for v in rebase_vec)

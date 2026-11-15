@@ -181,3 +181,18 @@ def test_real_fds_accepts_connected_network(connected_ifc, tmp_path, vent_endpoi
     gate, _ = solver_gates(text, AuditConfig(solver_executable=executable,
                           solver_evidence_directory=str(tmp_path / "solver")))
     assert gate.status == "PASS", gate.model_dump()
+
+
+def test_frictionless_and_non_circular_ducts_are_reported_not_hidden(connected_ifc, tmp_path):
+    path, config = connected_ifc
+    result = convert([str(path)], config, tmp_path / "conversion")
+    notes = {f["id"]: f for f in result["report"]["findings"] if f["category"] == "hvac"}
+    assert set(notes) == {"HVAC-FRICTION-0001", "HVAC-FRICTION-0002"}  # fixture: roughness 0, area 0.12 / perimeter 1.4
+    assert all(f["severity"] == "P2" and f["verification_level"] == "simulation" for f in notes.values())
+    assert result["status"] == "MAPPING_VERIFIED"  # a simulation caveat never blocks the mapping verdict
+    for decision in config["decisions"].values():
+        decision["hvac"].update(roughness_m=5e-4)
+        decision["hvac"].pop("area_m2"), decision["hvac"].pop("perimeter_m")
+        decision["hvac"]["diameter_m"] = 0.2
+    clean = convert([str(path)], config, tmp_path / "clean")
+    assert not [f for f in clean["report"]["findings"] if f["category"] == "hvac"]

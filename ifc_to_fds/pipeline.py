@@ -12,7 +12,6 @@ from typing import Any, Dict, Optional, Tuple, Union
 from ifc_to_fds.application.dto import validate_configuration
 from ifc_to_fds.application.use_cases import (
     AuditConversionUseCase,
-    ConvertVerifiedUseCase,
     prepare_model,
 )
 from ifc_to_fds.core.canonical import CanonicalModel
