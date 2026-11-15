@@ -21,5 +21,5 @@ Phạm vi lần này là phân tích, tái hiện và lưu kế hoạch. Không 
 
 ## Liên hệ kế hoạch trước
 
-Kế hoạch này bổ sung và sắp thứ tự thực hiện tiếp cho [kế hoạch ngày 03/11](../../CONVERSION_REPAIR_PLAN_2026-11-03.md). Các OUT-01 đến OUT-12 cũ vẫn phải được đối chiếu. [Sổ theo dõi cũ](../../CONVERSION_REPAIR_VERIFICATION_2026-11-03.md) còn nhiều dòng NOT_RUN và chưa phản ánh đầy đủ bằng chứng đã có. Không sửa lịch sử thành PASS khi chưa kiểm tra lại.
+Kế hoạch này bổ sung và sắp thứ tự thực hiện tiếp cho kế hoạch ngày 03/11 (đã gỡ khỏi repo, xem lịch sử git). Các OUT-01 đến OUT-12 cũ vẫn phải được đối chiếu. Sổ theo dõi cũ (đã gỡ khỏi repo, xem lịch sử git) còn nhiều dòng NOT_RUN và chưa phản ánh đầy đủ bằng chứng đã có. Không sửa lịch sử thành PASS khi chưa kiểm tra lại.
 

@@ -9,7 +9,7 @@ related-tests.txt lưu kết quả 26 test liên quan, không phải full suite.
 Chạy lại probe từ gốc repository bằng lệnh sau. Đối số cuối phải là thư mục mới để không trộn bằng chứng cũ. Lệnh sẽ chạy bốn ca FDS rất nhỏ nếu binary ghim tồn tại.
 
 ```powershell
-.venv/Scripts/python.exe -B -X utf8 docs/audit/remediation-2026-11-04/evidence/review_reanalysis_probe.py . scripts/out/review-reanalysis-rerun
+.venv/Scripts/python.exe -B -X utf8 docs/history/remediation-2026-11-04/evidence/review_reanalysis_probe.py . scripts/out/review-reanalysis-rerun
 ```
 
 Script tái hiện hành vi hiện tại, không phải regression assertions cho bản đã sửa. Sau khi triển khai phải viết test expected behavior theo A04–A08 trong kế hoạch.

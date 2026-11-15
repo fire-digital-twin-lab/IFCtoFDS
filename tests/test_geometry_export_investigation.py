@@ -142,7 +142,7 @@ def test_duplex_geometry_evaluation_rejects_unverified_architectural_sample():
     - Non-manifold railings, stairs, and furnishings (open edges, degenerate faces, zero volume).
     - Envelope compartmentation breach after audited winding normalization: 2.54 m³
       and 9 source versus 8 FDS cavities. The raw control case omits 14 solids
-      and has a different envelope. See docs/audit/remediation-2026-11-04.
+      and has a different envelope. See docs/history/remediation-2026-11-04.
 
     The verified IFC-to-FDS pipeline honestly rejects this model (mapping_status == "REJECTED")
     without crashing or fabricating geometry via silent bounding box substitution.
