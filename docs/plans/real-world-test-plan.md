@@ -19,7 +19,7 @@ Mục đích: chứng minh trên IFC thật và trên stack triển khai thật 
 ## Tầng 2 — IFC thật qua CLI
 | # | IFC | Lệnh (rút gọn) | Tiêu chí đạt | Trạng thái |
 |---|---|---|---|---|
-| T5 | A, cold (chạy lại cả với ngưỡng 1e-9 trước T6) | `python -m ifc_to_fds convert A -o <ra>/a.fds --solver <fds>` | thời gian ≤ 120 s; chỉ có finding của 22 cửa lỗi nguồn; solver PASS; `air_path` PASS | LÀM ĐƯỢC (hiện 211–253 s: cần M1.7) |
+| T5 | A, cold (ngưỡng 1e-9 đã đo 2026-11-15: không đổi so với 1 mm; thời gian chưa đo lại) | `python -m ifc_to_fds convert A -o <ra>/a.fds --solver <fds>` | thời gian ≤ 120 s; chỉ có finding của 22 cửa lỗi nguồn; solver PASS; `air_path` PASS | LÀM ĐƯỢC (hiện 211–253 s: cần M1.7) |
 | T6 | A + lỗi nguồn đã duyệt | thêm `--accepted-source-defects <json>` (kỹ sư duyệt 22 cửa) | `MAPPING_VERIFIED` hoặc chỉ còn finding có giải thích | CHỜ ĐẦU VÀO (kỹ sư duyệt) |
 | T7 | B | `convert B` | tìm nguyên nhân rò âm −1,3 L của `air_path`; sau M2.5 phải PASS hoặc có lý do | ĐÃ ĐẠT: B `MAPPING_VERIFIED` (M2.5 gỡ lỗi rò giả); chạy lại với ngưỡng hình học mới 1e-9: vẫn `MAPPING_VERIFIED`, 218 MATCHED |
 | T8 | C, 8 tầng hầm | `convert C --storey <8 storey_id>` (id lấy từ `inventory`; tên trùng giữa các hệ cao độ) | ≤ 300 s; RSS < 4 GiB; số `EXCLUDED_SCOPE` khớp số phần tử ngoài tầng | ĐÃ ĐẠT: 293 s cold, RSS đỉnh 1,2 GiB (job qua API) |
