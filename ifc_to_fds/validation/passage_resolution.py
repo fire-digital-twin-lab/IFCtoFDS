@@ -93,14 +93,30 @@ class PassageResolutionChecker:
         for primitive in parsed.primitives:
             key = (getattr(primitive, "source", None) or {}).get("entity_key")
             element = elements.get(key)
-            if primitive.kind != "OBST" or element is None or element.ifc_type.upper() not in ENCLOSURE_TYPES:
+            if primitive.kind != "OBST" or element is None:
                 continue
             xb = primitive.values.get("XB", [])
             if len(xb) != 6:
                 continue
             assessed += 1
+            enclosure = (element.ifc_type or "").upper() in ENCLOSURE_TYPES
             for mesh in meshes:
-                for axis, thickness, step in _collapsed_axes(xb, mesh):
+                collapsed = _collapsed_axes(xb, mesh)
+                if len(collapsed) >= 2:
+                    # FDS keeps an obstruction that collapses to a plane (thin obstruction) but not one that
+                    # collapses to a line or a point; this holds for any solid, not only enclosures (audit F4).
+                    axes = "/".join("XYZ"[axis] for axis, _, _ in collapsed)
+                    thinnest = min(thickness for _, thickness, _ in collapsed)
+                    report(
+                        key,
+                        f"Solid vanishes on the grid: {element.global_id}",
+                        f"{primitive.id} ({element.ifc_type} {element.global_id}) is thinner than half a cell on {axes}, so "
+                        f"both faces snap to one plane on each and FDS drops the obstruction. "
+                        f"Use cells of at most {_round_down_mm(thinnest):.3f} m.",
+                    )
+                    break
+                if collapsed and enclosure:
+                    axis, thickness, step = collapsed[0]
                     report(
                         key,
                         f"Thin solid collapses on the grid: {element.global_id}",
@@ -140,7 +156,7 @@ class PassageResolutionChecker:
         if not assessed:
             return CheckerOutcome(
                 gate_name=self.name,
-                result=GateResult(status=GateStatus.NOT_APPLICABLE, reason="No openings or enclosure obstructions to assess"),
+                result=GateResult(status=GateStatus.NOT_APPLICABLE, reason="No openings or obstructions to assess"),
                 findings=[],
                 metrics=metrics,
             )
@@ -148,7 +164,7 @@ class PassageResolutionChecker:
             gate_name=self.name,
             result=GateResult(
                 status=GateStatus.PASS,
-                reason=f"{assessed} openings and enclosure solids resolved on the grid",
+                reason=f"{assessed} openings and obstructions resolved on the grid",
                 evidence=metrics["passage_resolution"],
             ),
             findings=[],
