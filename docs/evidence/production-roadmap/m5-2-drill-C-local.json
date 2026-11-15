@@ -1,0 +1,51 @@
+{
+  "limits": {
+    "max_memory_mb": 4096,
+    "timeout_s": 1800,
+    "max_waiting": 2
+  },
+  "queue_limit": {
+    "statuses_while_running": [
+      202,
+      202,
+      429,
+      429
+    ],
+    "accepted": 2,
+    "rejected_429": 2
+  },
+  "long_job": {
+    "state": "COMPLETED",
+    "wall_s": 266.4,
+    "peak_rss_mib": 1242,
+    "error": null,
+    "progress_stages_seen": [
+      "IFC_READ",
+      "IFC_GEOMETRY",
+      "ARTIFACT",
+      "IFC_GEOMETRY",
+      "SCOPE",
+      "MAPPING",
+      "SERIALIZATION",
+      "ARTIFACT",
+      "IFC_PARSE",
+      "IFC_READ",
+      "MEP_EXTRACTION",
+      "IFC_GEOMETRY",
+      "SCOPE",
+      "FDS_PARSE",
+      "VALIDATION",
+      "GOLDEN"
+    ],
+    "result_http": 200,
+    "verdict": "REJECTED",
+    "mapping_status": "REJECTED"
+  },
+  "restart": {
+    "interrupted_state_after_restart": "FAILED",
+    "interrupted_error": "Process terminated unexpectedly during server restart",
+    "finished_job_result_identical": true,
+    "new_job_http": 202,
+    "new_job_state": "COMPLETED"
+  }
+}
