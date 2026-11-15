@@ -90,17 +90,26 @@ def surface_for_element(elem: CanonicalElement) -> str:
 
 
 
+def _cell_count(length: float, cell_size: float) -> int:
+    """Cells needed to span `length`: ceil, except a quotient within float noise of an integer is that integer.
+
+    0.07 / 0.01 is 7.000000000000001 in binary64, and a bare ceil would add a cell (audit F7); a real
+    remainder still rounds up, so the step never exceeds the requested cell size.
+    """
+    quotient = length / cell_size
+    nearest = round(quotient)
+    if nearest >= 1 and abs(quotient - nearest) <= 1e-9 * nearest:
+        return nearest
+    return max(1, math.ceil(quotient))
+
+
 def compute_mesh_grid(
     bounds: BoundingBox, cell_size: float = 0.2, max_total_cells: int = 50_000_000
 ) -> Tuple[List[int], List[float]]:
     if not math.isfinite(cell_size) or cell_size <= 0:
         raise ValueError("cell_size must be finite and positive")
     xb = bounds.to_xb()
-    ijk = [
-        max(1, math.ceil((xb[1] - xb[0]) / cell_size)),
-        max(1, math.ceil((xb[3] - xb[2]) / cell_size)),
-        max(1, math.ceil((xb[5] - xb[4]) / cell_size)),
-    ]
+    ijk = [_cell_count(xb[2 * axis + 1] - xb[2 * axis], cell_size) for axis in range(3)]
     total_cells = ijk[0] * ijk[1] * ijk[2]
     if total_cells > max_total_cells:
         raise ValueError(
