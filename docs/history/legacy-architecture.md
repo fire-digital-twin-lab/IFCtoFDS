@@ -1,7 +1,7 @@
 # IFC to FDS Workbench Architecture (Historical / Prototype Legacy)
 
 > ⚠️ **ARCHITECTURAL NOTICE (v0.5.0+)**:  
-> This document describes the initial browser-only client-side prototype. The authoritative architectural documentation for the current Python Verified Pipeline and independent validation engine is located in **[docs/architecture/01-current-architecture.md](architecture/01-current-architecture.md)** and the Architecture Decision Records (**[docs/adr/](adr/)**).
+> This document describes the initial browser-only client-side prototype. The authoritative architectural documentation for the current Python Verified Pipeline and independent validation engine is located in **[docs/architecture/08-validation-architecture.md](../architecture/08-validation-architecture.md)** and the Architecture Decision Records (**[docs/adr/](../adr/)**).
 
 This project started as a static browser app that can be opened from `file://`.
 It uses classic script tags and a shared `window.IfcFds` namespace so each module
