@@ -44,3 +44,36 @@ def test_fzk_box_covers_keep_air_path_pass(monkeypatch):
     monkeypatch.setenv("IFCFDS_OBST_BOX_SETS", "1")
     gate = convert([FZK])["report"]["gates"]["air_path"]
     assert gate["status"] == "PASS", gate
+
+
+class _Unreadable:
+    """An emitted primitive whose mesh cannot be built."""
+
+    kind, id = "OBST", "BAD"
+
+    def __init__(self, source):
+        self.source = source
+
+    def mesh(self):
+        raise RuntimeError("mesh could not be built")
+
+
+def _with_unreadable(context, monkeypatch, source):
+    parsed = context.parsed
+    emitted = list(parsed.primitives) + [_Unreadable(source)]
+    monkeypatch.setattr(type(parsed), "primitives", property(lambda self: emitted))  # `primitives` is computed
+    return context
+
+
+def test_an_unreadable_emitted_solid_makes_the_air_path_inconclusive_not_a_pass(box_model, monkeypatch):
+    keys = frozenset(e.entity_key for e in box_model.elements)
+    context = _with_unreadable(_context(box_model, keys), monkeypatch, source={})  # no source: it may block the envelope
+    outcome = AirPathTopologyChecker().check(context)
+    assert outcome.result.status == GateStatus.INCONCLUSIVE
+    assert "BAD" in outcome.result.reason and outcome.metrics["air_path"]["unreadable_count"] == 1
+
+
+def test_an_unreadable_solid_of_an_unrelated_source_is_not_held_against_the_enclosure(box_model, monkeypatch):
+    keys = frozenset(e.entity_key for e in box_model.elements)
+    context = _with_unreadable(_context(box_model, keys), monkeypatch, source={"entity_key": "elsewhere:999"})
+    assert AirPathTopologyChecker().check(context).result.status == GateStatus.PASS

@@ -118,7 +118,7 @@ async def security_guard(request: Request, call_next):
             auth_header = request.headers.get("authorization", "")
             if auth_header.lower().startswith("bearer "):
                 provided_key = auth_header[7:].strip()
-        if not provided_key or not hmac.compare_digest(provided_key, api_key):
+        if not provided_key or not hmac.compare_digest(provided_key.encode("utf-8"), api_key.encode("utf-8")):  # bytes: str with non-ASCII raises TypeError
             from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=401,

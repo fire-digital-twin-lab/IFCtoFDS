@@ -67,6 +67,7 @@ class AirPathTopologyChecker:
         known_elements = {e.entity_key: e for e in elements} if elements else {}
         emitted_meshes = []
         unprovenanced_solids = []
+        unreadable = []  # emitted solids whose mesh could not be built
         if context.parsed and getattr(context.parsed, "primitives", None):
             for p in context.parsed.primitives:
                 if getattr(p, "kind", None) in ("OBST", "GEOM") and hasattr(p, "mesh"):
@@ -77,6 +78,8 @@ class AirPathTopologyChecker:
                         if raw_m and valid_solid(raw_m):
                             m = as_trimesh(raw_m)
                     except Exception:
+                        if not source_key or source_key in enclosure_keys:  # may be the enclosure or a blocker
+                            unreadable.append(str(getattr(p, "id", None) or "primitive"))
                         continue
                     if not m:
                         continue
@@ -112,6 +115,18 @@ class AirPathTopologyChecker:
                     )
                 ],
                 metrics={"air_path": {"enclosure_elements_count": len(enclosure_elements), "emitted_count": 0}},
+            )
+
+        if unreadable:
+            return CheckerOutcome(
+                gate_name=self.name,
+                result=GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason=f"{len(unreadable)} emitted solid(s) of the enclosure or without a source element could not be read, so the air path cannot be judged: {', '.join(unreadable[:5])}",
+                    evidence={"unreadable_primitives": unreadable},
+                ),
+                findings=[],
+                metrics={"air_path": {"unreadable_count": len(unreadable)}},
             )
 
         if not unprovenanced_solids and enclosure_keys <= set(getattr(context, "exact_elements", ())):

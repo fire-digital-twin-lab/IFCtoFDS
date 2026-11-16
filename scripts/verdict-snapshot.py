@@ -16,7 +16,6 @@ import tempfile
 import time
 from pathlib import Path
 
-os.environ.setdefault("IFCFDS_SOLVER_AUTODISCOVERY", "0")
 
 from ifc_to_fds.pipeline import convert  # noqa: E402
 
@@ -81,6 +80,7 @@ def compare_aggregate(old: dict, new: dict) -> int:
 
 
 def main() -> int:
+    os.environ.setdefault("IFCFDS_SOLVER_AUTODISCOVERY", "0")  # set here, not at import: importing must not change the environment
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("ifc")
     parser.add_argument("-o", "--output")
