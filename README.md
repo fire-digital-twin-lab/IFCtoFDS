@@ -69,7 +69,7 @@ Các đầu ra chính:
 | Lỗ mở và biên miền | Kiểm tra opening, boundary và thay đổi hình học | Một số trường hợp cần bằng chứng solver/effective geometry bổ sung |
 | Nhiều IFC | Ghép nguồn, giữ định danh theo nguồn, áp transform và rebase | Cần xác nhận hệ tọa độ hoặc cung cấp transform cho từng nguồn |
 | MEP | Đọc hệ thống, port và quan hệ nối tường minh | Có thể còn phần tử chưa phân loại hoặc chưa có kết nối |
-| HVAC vận hành | NODE/DUCT và đầu VENT/AMBIENT từ port, thông số được khai báo | Chưa tự chuyển fan, damper, fitting, filter, aircoil; chưa ghép VENT với GEOM |
+| HVAC vận hành | NODE/DUCT và đầu VENT/AMBIENT từ port; phụ kiện hai cổng có chiều dài đường tâm và `LOSS` đã duyệt; tê/Y/gót giày thành một NODE với `LOSS(i,j)` theo từng cặp cổng; quạt `IfcFan` áp đặt `VOLUME_FLOW` | Mọi thông số do người khai báo, không suy từ IFC (K, lưu lượng, hướng). Chưa chuyển damper, filter, aircoil, đường đặc tính quạt; chưa ghép VENT với GEOM |
 | Kịch bản EV | Preset, REAC/RAMP, nguồn cháy, thiết bị đo, sự kiện và batch | Sinh file và kiểm tra lưới; chưa phải bộ chạy batch CFD hoàn chỉnh |
 | Miền nhiều mesh | Chia miền khi vượt ngưỡng cell mỗi mesh | Chia mesh không tự chứng minh hiệu quả MPI hoặc độ hội tụ nghiệm |
 | Job và artifact | Hàng đợi, hủy, timeout, giám sát bộ nhớ, checkpoint, checksum | Tác vụ xử lý xong không đồng nghĩa mô hình đạt kiểm định |
@@ -422,13 +422,17 @@ Thay khóa `SOURCE_HASH:…` bằng khóa thật; khung không chạy nguyên tr
 | Tham số | Đơn vị/quy tắc |
 |---|---|
 | `diameter_m` | Đường kính tiết diện tròn, m, lớn hơn 0 |
-| `area_m2`, `perimeter_m` | Diện tích và chu vi tiết diện khác; cần cả hai, không khai báo cùng diameter |
-| `length_m` | Tùy chọn; mặc định khoảng cách hai port, không được ngắn hơn khoảng cách đó. Đường đi cong cần chiều dài xác nhận |
-| `roughness_m` | Độ nhám tuyệt đối, m, không âm |
-| `volume_flow_m3_s` | Lưu lượng áp đặt tùy chọn; dấu theo thứ tự hai port trong inventory, cần xác nhận hướng |
+| `area_m2`, `perimeter_m` | Diện tích và chu vi tiết diện khác; cần cả hai, không khai báo cùng diameter. Backend ghi `ROUND=.FALSE.` nên FDS tính ma sát theo đường kính thủy lực 4A/P (không có cờ này FDS dùng √(4A/π) và bỏ qua chu vi, ma sát thấp hơn khoảng 18% với ống 0,5×0,3 m) |
+| `length_m` | Tùy chọn cho đoạn thẳng; mặc định khoảng cách hai port, không được ngắn hơn khoảng cách đó. Phụ kiện hai cổng bắt buộc có chiều dài đường tâm đã duyệt, vì dây cung hai cổng không phải chiều dài phụ kiện |
+| `roughness_m` | Độ nhám tuyệt đối, m, không âm. `0` nghĩa là FDS không tính ma sát thành ống (không phải ống trơn); cổng `hvac` báo finding P2 |
+| `loss` | Cặp hệ số tổn thất (thuận, ngược), không âm, quy chiếu theo áp suất động của chính tiết diện đó. Bắt buộc cho phụ kiện hai cổng |
+| `volume_flow_m3_s` | Lưu lượng áp đặt tùy chọn. Quạt (`IfcFan`) bắt buộc có lưu lượng và hai cổng `SINK`/`SOURCE`; hướng không bao giờ được suy ra |
 | `endpoints` | Bản đồ port key → loại đầu nối và thông số biên |
+| `losses` (tê, Y, gót giày) | Danh sách `{from_port, to_port, k}` cho phần tử 3 đến 10 cổng; phải đủ mọi cặp cổng có thứ tự (3 cổng cần 6 cặp, 4 cổng cần 12 cặp). Mọi cổng của phần tử gộp thành một NODE; `LOSS(i,j)` quy chiếu theo vận tốc của ống đích j |
 
-Tiết diện không còn suy ra từ AABB. Thông số dùng SI và được thẩm định; chưa tự trích/xác nhận đầy đủ thông số thủy lực từ IFC profile/property set.
+Thứ tự `NODE_ID` của một DUCT theo `SINK → SOURCE` nếu hai cổng có hướng, nên `VOLUME_FLOW` dương là dòng đi từ cổng SINK (vào) sang cổng SOURCE (ra); đảo hướng cổng thì đảo thứ tự và dấu. Cổng không có hướng thì theo thứ tự cổng trong inventory và người khai báo phải xác nhận hướng.
+
+Tiết diện không còn suy ra từ AABB. Thông số dùng SI và được thẩm định; chưa tự trích/xác nhận thông số thủy lực (K, lưu lượng, độ nhám) từ IFC profile/property set. Khả năng nhận cấu hình đã duyệt khác với việc tự suy diễn từ IFC: dự án chỉ làm việc đầu.
 
 ### 8.4. Đầu nối CFD bằng VENT
 
@@ -442,13 +446,13 @@ Ví dụ đối tượng boundary cho một port:
 }
 ```
 
-`vent_xb` theo thứ tự XMIN, XMAX, YMIN, YMAX, ZMIN, ZMAX trong tọa độ mô hình sau biến đổi. VENT phải có diện tích dương, trên mặt OBST được hỗ trợ hoặc mặt biên MESH, chứa port và trong miền. Backend tạo `SURF_ID='HVAC'` và NODE có `VENT_ID`. Nút nội bộ không khai báo AMBIENT/VENT; đầu mạng thiếu cấu hình bị chặn.
+`vent_xb` theo thứ tự XMIN, XMAX, YMIN, YMAX, ZMIN, ZMAX trong tọa độ mô hình sau biến đổi. VENT phải có diện tích dương, nằm trọn trên một mặt rắn–khí của các hộp OBST thực sự được ghi ra FDS (không phải hộp bao của cả phần tử: ô cửa cắt trong tường không có mặt để đặt, và mặt phẳng giữa hai hộp kề nhau không tính) hoặc trên mặt biên MESH, chứa port và trong miền. Backend tạo `SURF_ID='HVAC'` và NODE có `VENT_ID`. Nút nội bộ không khai báo AMBIENT/VENT; đầu mạng thiếu cấu hình bị chặn.
 
 ### 8.5. Đối chiếu trong PyroSim và giới hạn
 
 Nhập `scripts/out/readme-hvac/model.fds` bằng chức năng nhập FDS của phiên bản PyroSim đang dùng. Kiểm tra danh sách/cây HVAC, số NODE/DUCT, nối mạng, đầu biên, chiều dòng và thông số; không chỉ nhìn hình ống. Ghi phiên bản PyroSim/FDS khi đối chiếu. Dự án đã kiểm tra FDS 6.11.1; chưa xác nhận thao tác nhập/lưu lại trực tiếp trong PyroSim ở đợt kiểm thử này.
 
-Adapter hỗ trợ `IfcDuctSegment`/`IfcFlowSegment` được phân loại thông gió/hút khói, có hai port hợp lệ. Fan, damper, co/fitting, filter, aircoil và VENT ghép GEOM chưa được tự động chuyển. Ống nước chữa cháy không thành mạng khí chỉ vì có hình dạng ống. [Chi tiết và bằng chứng](docs/HVAC_NETWORK_IMPLEMENTATION.md).
+Adapter hỗ trợ `IfcDuctSegment`/`IfcFlowSegment` được phân loại thông gió/hút khói có hai port hợp lệ, phụ kiện hai cổng (`IfcDuctFitting`/`IfcFlowFitting`) có `loss` và chiều dài đường tâm đã duyệt, phụ kiện 3 đến 10 cổng có `losses` đủ mọi cặp cổng, và `IfcFan` có lưu lượng và cổng SINK/SOURCE đã duyệt. Damper, filter, aircoil, đường đặc tính quạt và VENT ghép GEOM chưa được chuyển. Hệ số K, lưu lượng và độ nhám không được suy từ IFC. Ống nước chữa cháy không thành mạng khí chỉ vì có hình dạng ống. [Chi tiết và bằng chứng](docs/HVAC_NETWORK_IMPLEMENTATION.md).
 
 <a id="kich-ban-ev"></a>
 
@@ -486,15 +490,14 @@ Nhãn `Full Simulation` có thể còn xuất hiện trong bảng EV. Job này h
 
 ### 9.4. Hiểu mesh gate và file kịch bản
 
-Backend tạo phản ứng đơn/composite, RAMP, SURF, vật thể xe và VENT nguồn cháy. Mesh gate đọc lưới thực từ FDS đã ghép, đánh giá D*/Δx theo chính sách hiện tại:
+Backend tạo phản ứng đơn/composite, RAMP, SURF, vật thể xe và VENT nguồn cháy. Mesh gate đọc lưới thực từ FDS đã ghép và tính D*/Δx cho từng nguồn cháy, nhưng **chỉ coi đó là chỉ báo độ phân giải của luồng khói**, không phải tiêu chí đạt/không đạt:
 
-| Tỷ số | Kết quả thông thường |
+| Tỷ số | Kết quả |
 |---|---|
-| D*/Δx < 4 | FAIL: lưới quá thô theo gate |
-| 4 ≤ D*/Δx ≤ 16 | PASS |
-| D*/Δx > 16 | INCONCLUSIVE: ngoài miền kiểm chứng của gate |
+| D*/Δx bất kỳ (kể cả dải 4 đến 16 trong dữ liệu lịch sử của FDS) | INCONCLUSIVE, kèm `indicator_band` và `historical_4_16_is_acceptance_rule=false` |
+| Cỡ ô không hữu hạn hoặc không dương, HRR không hữu hạn | FAIL: đầu vào không hợp lệ |
 
-Tỷ số này không tự chứng minh hội tụ lưới hoặc tính đúng vật lý. `mesh_status=PASS` và `simulation_status=NOT_RUN` có thể cùng xuất hiện.
+Cổng không bao giờ cấp PASS chỉ từ D*/Δx. Muốn PASS cần nghiên cứu độ nhạy lưới theo từng kịch bản và bằng chứng độ phân giải hình học liên quan (lối thông, dầm cản khói). Tỷ số này không tự chứng minh hội tụ lưới hoặc tính đúng vật lý.
 
 `scenario.fds` chứa nền và kịch bản. T_END giữ thời gian nền dài hơn và bao phủ RAMP, sự kiện cửa và thời gian yêu cầu. Kết quả kịch bản ghi SHA-256 của file cuối và tách `mesh_status`, `physics_status`, `simulation_status`. Ngân sách năng lượng cháy toàn bộ xe có thể khai báo qua `energy_budget` với `scope: WHOLE_VEHICLE_FLEET`, `battery_chemical_energy_mj`, `other_vehicle_energy_mj` và `source`. Thiếu ngân sách có nguồn thì đánh giá năng lượng là `INCONCLUSIVE`. HF hiện có trạng thái `NOT_MODELED`.
 
@@ -938,7 +941,7 @@ Khi báo lỗi, gửi phiên bản/commit, hệ điều hành, lệnh/thao tác,
 
 ### 16.1. Hướng phát triển
 
-- Adapter vận hành cho fitting, fan, damper và thành phần HVAC còn thiếu.
+- Adapter vận hành cho damper, filter, aircoil và đường đặc tính quạt (phụ kiện hai cổng, tê/Y và quạt lưu lượng cố định đã có).
 - Trích xuất/xác nhận profile, chiều dài đường đi và đơn vị MEP đầy đủ hơn.
 - Đồng bộ giao diện EV với bố trí xe/sự kiện cửa thực tế của backend.
 - Mở rộng effective geometry và ghép biên GEOM/multi-mesh.

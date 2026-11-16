@@ -9,6 +9,7 @@ import sys
 from typing import Any
 from .pipeline import convert, audit, save_artifacts
 from .application.use_cases.audit_conversion import ARTIFACT_CONFIG_EXCLUDED
+from .adapters.storage.path_budget import WORK_PREFIX, check_output_path_budget
 from .core.inventory import extract_inventory
 from .core.source_dossier import inspect_source_dossier, write_source_dossier
 from .core.coordinate_preflight import inspect_coordinate_file, save_coordinate_preflight
@@ -325,9 +326,10 @@ def main(argv=None):
         # directory. A conversion must not overwrite an unrelated model.fds.
         import tempfile
 
+        check_output_path_budget(output)  # before minutes of conversion, not after (audit F5)
         target = Path(output).resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix=".ifcfds-work-", dir=target.parent) as work:
+        with tempfile.TemporaryDirectory(prefix=WORK_PREFIX, dir=target.parent) as work:
             result = convert(args.input_ifc, config, output_directory=work)
             save_artifacts(result, target)
         print(f"{result['status']}: {output}")
