@@ -87,12 +87,13 @@ def cached_geometry(model, file):
                 opening.bounding_box = (
                     bounds_for_vertices(opening.mesh.vertices) if opening.mesh else None
                 )
-                opening.extraction_diagnostic = opening_diagnostic(
-                    opening.mesh,
-                    [old_opening.extraction_diagnostic]
-                    if old_opening.extraction_diagnostic
-                    else [],
-                )
+                if e.has_3d_geometry:  # the cold path never visits a host without a body, so its openings keep no diagnostic
+                    opening.extraction_diagnostic = opening_diagnostic(
+                        opening.mesh,
+                        [old_opening.extraction_diagnostic]
+                        if old_opening.extraction_diagnostic
+                        else [],
+                    )
         model.model_bounds = cached.model_bounds
         return model
     except (OSError, ValueError, KeyError, TypeError):
