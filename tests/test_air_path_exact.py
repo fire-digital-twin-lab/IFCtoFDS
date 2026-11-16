@@ -77,3 +77,20 @@ def test_an_unreadable_solid_of_an_unrelated_source_is_not_held_against_the_encl
     keys = frozenset(e.entity_key for e in box_model.elements)
     context = _with_unreadable(_context(box_model, keys), monkeypatch, source={"entity_key": "elsewhere:999"})
     assert AirPathTopologyChecker().check(context).result.status == GateStatus.PASS
+
+
+def test_equal_source_wall_does_not_claim_source_airtightness(box_model):
+    """A source with only one wall can pass equality without enclosing a building."""
+    keys = frozenset(e.entity_key for e in box_model.elements)
+    outcome = AirPathTopologyChecker().check(_context(box_model, keys))
+
+    assert outcome.result.status == GateStatus.PASS
+    assert outcome.result.reason == (
+        "Enclosure solids in the deck equal the source: all 1 proven equal to the IFC geometry. "
+        "Source airtightness is not assessed by this gate."
+    )
+    assert "no leak" not in outcome.result.reason.lower()
+    evidence = {"enclosure_count": 1, "method": "ALL_ENCLOSURES_PROVEN_EQUAL", "leak_volume_m3": 0.0}
+    assert outcome.result.evidence == evidence
+    assert outcome.metrics == {"air_path": evidence}
+    assert outcome.findings == []

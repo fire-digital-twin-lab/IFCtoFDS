@@ -1552,7 +1552,7 @@
         line('h3', 'Acceptance: ' + statusLabel);
         line('p', 'Mapping: ' + report.mapping_status + '; simulation: ' + simulationLabel);
         var roles = (report.coverage || {}).representation || {};
-        line('p', 'Reference objects: ' + (roles.REFERENCE_GEOMETRY || 0) + '; passive obstacles: ' + (roles.PASSIVE_OBSTACLE || 0) + '; operational objects: ' + (roles.OPERATIONAL_MEP || 0));
+        line('p', 'Role classification in scope (see FDS written for export counts): reference objects: ' + (roles.REFERENCE_GEOMETRY || 0) + '; passive obstacles: ' + (roles.PASSIVE_OBSTACLE || 0) + '; operational objects: ' + (roles.OPERATIONAL_MEP || 0));
         var pending = (report.coverage || {}).boundary_pending || 0;
         line('p', 'Pending boundary treatment: ' + (Array.isArray(pending) ? pending.length : pending));
         if (report.research) line('p', 'Research acceptance: ' + report.research.research_acceptance + '; reference parity: ' + report.research.parity_status);

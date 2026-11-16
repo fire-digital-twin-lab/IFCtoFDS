@@ -136,7 +136,7 @@ class AirPathTopologyChecker:
                 gate_name=self.name,
                 result=GateResult(
                     status=GateStatus.PASS,
-                    reason=f"Enclosure preserved exactly: all {len(enclosure_elements)} enclosure solids proven equal to the source; no leak is possible.",
+                    reason=f"Enclosure solids in the deck equal the source: all {len(enclosure_elements)} proven equal to the IFC geometry. Source airtightness is not assessed by this gate.",
                     evidence={"enclosure_count": len(enclosure_elements), "method": "ALL_ENCLOSURES_PROVEN_EQUAL", "leak_volume_m3": 0.0},
                 ),
                 findings=[],
