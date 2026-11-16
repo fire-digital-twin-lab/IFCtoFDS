@@ -58,6 +58,17 @@ jobs:
             test "$(dpkg-query -W -f="\${Version}" zlib1g)" = "1:1.3.dfsg+really1.3.1-1+deb13u1"
           '
 
+      - name: Verify EV preset library is packaged in production image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --read-only --entrypoint python ifctofds:ci -c '
+          from ifc_to_fds.fire.ev_library import list_ev_presets, load_ev_preset
+          assert load_ev_preset("auto", "nmc").preset_id == "auto-nmc"
+          assert load_ev_preset("e-bike", "lfp").preset_id == "e-bike-lfp"
+          assert list_ev_presets() == ["auto-nmc", "e-bike-lfp"], list_ev_presets()
+          '
+
       - name: Validate file-backed secret ownership and container isolation
         shell: bash
         run: |

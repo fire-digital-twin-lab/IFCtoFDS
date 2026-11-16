@@ -13,7 +13,10 @@ tests
 docs
 examples
 demo
-reference-cases
+reference-cases/*
+!reference-cases/ev-library/
+reference-cases/ev-library/*
+!reference-cases/ev-library/*.json
 *.zip
 *.tar
 *.tar.gz
