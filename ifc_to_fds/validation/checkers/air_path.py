@@ -72,16 +72,14 @@ class AirPathTopologyChecker:
             for p in context.parsed.primitives:
                 if getattr(p, "kind", None) in ("OBST", "GEOM") and hasattr(p, "mesh"):
                     source_key = p.source.get("entity_key") if getattr(p, "source", None) else None
-                    m = None
                     try:
                         raw_m = p.mesh()
-                        if raw_m and valid_solid(raw_m):
-                            m = as_trimesh(raw_m)
+                        m = as_trimesh(raw_m) if raw_m and valid_solid(raw_m) else None
                     except Exception:
+                        m = None
+                    if not m:  # raised, no mesh, or not a valid solid: never skipped silently
                         if not source_key or source_key in enclosure_keys:  # may be the enclosure or a blocker
                             unreadable.append(str(getattr(p, "id", None) or "primitive"))
-                        continue
-                    if not m:
                         continue
 
                     if not source_key:
@@ -136,7 +134,7 @@ class AirPathTopologyChecker:
                 gate_name=self.name,
                 result=GateResult(
                     status=GateStatus.PASS,
-                    reason=f"Enclosure preserved exactly: all {len(enclosure_elements)} enclosure solids proven equal to the source; no leak is possible.",
+                    reason=f"Enclosure solids in the deck equal the source: all {len(enclosure_elements)} proven equal to the IFC geometry. Source airtightness is not assessed by this gate.",
                     evidence={"enclosure_count": len(enclosure_elements), "method": "ALL_ENCLOSURES_PROVEN_EQUAL", "leak_volume_m3": 0.0},
                 ),
                 findings=[],
