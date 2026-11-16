@@ -480,6 +480,18 @@ def run_independent_validation(
             report.element_statuses[key] = "EXCLUDED_APPROVED"
             if key in primitives:
                 finding("scope", "Excluded element has emitted geometry", key)
+            decision = e.decision or {}
+            detail = (
+                f"Excluded from the deck by reviewed decision (reviewer: {decision.get('reviewer', 'unknown')}): "
+                f"{decision.get('rationale', 'no rationale recorded')}"
+            )
+            # Information, not a failure: appended directly so the scope gate keeps its status.
+            report.findings.append(
+                Finding(
+                    id=f"FND-{len(report.findings) + 1:04}", severity=Severity.P2, category="scope",
+                    title=detail[:100], detail=detail, element_id=key,
+                )
+            )
             continue
         if strategy == MappingStrategy.SEMANTIC_ONLY.value:
             report.semantic_only_count += 1
