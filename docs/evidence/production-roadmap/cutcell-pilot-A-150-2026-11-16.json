@@ -1,0 +1,108 @@
+{
+ "note": "Aggregate numbers only (model alias A); per-element rows stay outside the repo",
+ "model": "A",
+ "date": "2026-11-16",
+ "repo_sha_of_script": "89ef421cf0113df51a15478b09f4e7f93068018e",
+ "fds_version": "6.11.1",
+ "cell_size_m": 0.2,
+ "sample_size": 150,
+ "seed": 0,
+ "status_counts": {
+  "PASS": 140,
+  "INCONCLUSIVE": 9,
+  "FAIL": 1
+ },
+ "status_note": "PASS/FAIL come from a deliberately huge tolerance (measurement only); the error below is what matters",
+ "evaluable": 141,
+ "relative_error_global_gas_over_element_volume": {
+  "n": 141,
+  "median": 0.00015182888539417853,
+  "p90": 2.3520032784606673,
+  "max": 3.066478814137103,
+  "over_1pct": 46
+ },
+ "by_type": {
+  "IfcBeam": {
+   "n": 1,
+   "median": 0.0012145694968447678,
+   "p90": 0.0012145694968447678,
+   "max": 0.0012145694968447678,
+   "over_1pct": 0
+  },
+  "IfcColumn": {
+   "n": 25,
+   "median": 6.250546072215426e-07,
+   "p90": 0.00038866503904669687,
+   "max": 0.00444982006921732,
+   "over_1pct": 0
+  },
+  "IfcMember": {
+   "n": 25,
+   "median": 1.9705718538413444e-09,
+   "p90": 4.457036465389726e-06,
+   "max": 0.33100000309870403,
+   "over_1pct": 1
+  },
+  "IfcPlate": {
+   "n": 14,
+   "median": 2.2371283858953,
+   "p90": 2.7057218236572433,
+   "max": 2.96416368592369,
+   "over_1pct": 14
+  },
+  "IfcSlab": {
+   "n": 38,
+   "median": 2.0469573940871984e-05,
+   "p90": 0.8077825068261939,
+   "max": 3.01739217575096,
+   "over_1pct": 7
+  },
+  "IfcWall": {
+   "n": 14,
+   "median": 0.5647151149359746,
+   "p90": 2.3520032784606673,
+   "max": 3.066478814137103,
+   "over_1pct": 7
+  },
+  "IfcWallStandardCase": {
+   "n": 24,
+   "median": 2.0631128686570688,
+   "p90": 2.5571059504758678,
+   "max": 3.005548474917603,
+   "over_1pct": 17
+  }
+ },
+ "by_volume_class": {
+  "volume_lt_1_m3": {
+   "n": 96,
+   "median": 0.004356953398552441,
+   "p90": 2.521550225688882,
+   "max": 3.066478814137103,
+   "over_1pct": 45
+  },
+  "volume_ge_1_m3": {
+   "n": 45,
+   "median": 3.817917996543119e-05,
+   "p90": 0.005180884297324313,
+   "max": 0.013481482030757089,
+   "over_1pct": 1
+  }
+ },
+ "over_1pct_elements": {
+  "n": 46,
+  "all_have_more_solid_in_fds": true,
+  "fds_solid_over_true_solid": {
+   "min": 1.0127412574423862,
+   "median": 3.2247308364604303,
+   "max": 4.066478814137103
+  },
+  "true_volume_m3": 7.74,
+  "fds_volume_m3": 18.71,
+  "share_of_sample_true_volume": 0.0318
+ },
+ "sample_total": {
+  "true_volume_m3": 243.6,
+  "fds_volume_m3": 254.7,
+  "ratio": 1.046
+ }
+}
