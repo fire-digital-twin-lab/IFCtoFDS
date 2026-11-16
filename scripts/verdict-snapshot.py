@@ -8,6 +8,7 @@ or witness kind changed. Timings are printed but never compared.
 """
 
 import argparse
+from collections import Counter
 import json
 import os
 import sys
@@ -48,6 +49,8 @@ def snapshot(ifc: str) -> dict:
 
 
 def compare(old: dict, new: dict) -> int:
+    if "element_statuses" not in old and "elements" in old:
+        return compare_aggregate(old, new)
     diffs = 0
     for field in ("status",):
         if old[field] != new[field]:
@@ -59,6 +62,21 @@ def compare(old: dict, new: dict) -> int:
                 print(f"{field}[{key}]: {old[field].get(key)} -> {new[field].get(key)}")
                 diffs += 1
     print(f"wall: {old['wall_s']}s -> {new['wall_s']}s; differences: {diffs}")
+    return 1 if diffs else 0
+
+
+def compare_aggregate(old: dict, new: dict) -> int:
+    """`real-{A,B,C}.json` keep counts only (status, elements by status, findings by gate, timings)."""
+    diffs = 0
+    if old["status"] != new["status"]:
+        print(f"status: {old['status']} -> {new['status']}")
+        diffs += 1
+    for field, now in (("elements", dict(Counter(new["element_statuses"].values()))), ("findings", new["findings_by_gate"])):
+        for key in sorted(set(old[field]) | set(now)):
+            if old[field].get(key, 0) != now.get(key, 0):
+                print(f"{field}[{key}]: {old[field].get(key, 0)} -> {now.get(key, 0)}")
+                diffs += 1
+    print(f"wall: {old.get('timings', {}).get('wall_s', '?')}s -> {new['wall_s']}s; differences: {diffs}")
     return 1 if diffs else 0
 
 

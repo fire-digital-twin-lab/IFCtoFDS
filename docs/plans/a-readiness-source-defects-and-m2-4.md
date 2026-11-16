@@ -41,14 +41,31 @@ Chỉ 6 trong 21 cửa lấp một lỗ mở (`IfcRelFillsElement`) của một 
 | # | Phương án | Ưu | Nhược | Ai làm |
 | --- | --- | --- | --- | --- |
 | 1 | **Sửa ở nguồn:** xuất lại hai họ cửa với chi tiết thô hoặc ẩn phụ kiện (hoặc thân dạng khối đặc) | Một thay đổi sửa cả 21 chiếc; không cần miễn trừ; pipeline xác minh bình thường | Cần truy cập Revit | Người giữ mô hình |
-| 2 | **Miễn trừ có duyệt** (`accepted_source_defects`: digest lưới, loại lỗi, người duyệt) cùng quyết định rõ trạng thái cửa | Làm được ngay, không đổi mô hình | 21 cửa vắng mặt khỏi deck (lối đi mở); mỗi mục thành finding P2; cần kỹ sư tuyên bố cửa đóng hay mở | Kỹ sư review |
+| 2 | **Quyết định `EXCLUDE` có duyệt** (loại khỏi FDS, trạng thái `EXCLUDED_APPROVED`; cần phiên bản chính sách, lý do, người duyệt, bằng chứng) cùng tuyên bố trạng thái cửa | Làm được ngay, không đổi mô hình | 21 cửa vắng mặt khỏi deck (lối đi mở); báo cáo **không sinh finding** cho phần tử bị loại, chỉ có số đếm; cần kỹ sư tuyên bố đóng hay mở | Kỹ sư review |
 | 3 | **Thế bằng tấm mỏng đã duyệt** dựng từ thuộc tính IFC (`OverallWidth`, `OverallHeight`, vị trí đặt, bề dày của các vỏ đóng kín đo được 12 đến 49 mm, chưa xác nhận đó là cánh cửa) | Giữ được vai trò chắn dòng | Hình học dựng từ thuộc tính, không phải từ lưới lỗi: phải đo sai số và phê duyệt dung sai (`AGENTS.md`); cần cơ chế quyết định mới trong mapping | Kỹ sư duyệt, tôi cài đặt |
 | 4 | Tự động sửa lưới | | **Loại:** dữ liệu cho thấy không có solid khôi phục được | |
 
-**Khuyến nghị:** phương án 1 cho 21 cửa. Dùng phương án 2 chỉ như bước tạm kèm quyết định thận trọng (coi cửa là đóng) nếu chưa sửa được nguồn. Phương án 3 chỉ khi kỹ sư muốn mô phỏng cửa đóng mà không sửa được nguồn.
+**Đính chính:** bản đầu của tài liệu này nêu `accepted_source_defects` như phương án miễn trừ. Cơ chế đó chỉ nhận ba loại lỗi tự giao cắt (`COPLANAR_FACE_OVERLAP`, `TRIANGLE_CROSSING`, `COMPONENT_VOLUME_OVERLAP`) trên lưới đóng kín, **không áp dụng cho cạnh hở hay cạnh non-manifold**.
+
+**Khuyến nghị:** phương án 1 cho 21 cửa. Dùng phương án 2 chỉ như bước tạm nếu chưa sửa được nguồn, và chỉ khi kỹ sư tuyên bố rõ trạng thái cửa. Phương án 3 chỉ khi kỹ sư muốn mô phỏng cửa đóng mà không sửa được nguồn.
 
 ### Tường (1 phần tử)
-Khác với cửa, lưới tường gần hợp lệ (26 cạnh hở). Nhưng khối bao 18,4 × 15,4 × 3,3 m cho thấy đây có thể là phần tử lớn: miễn trừ sẽ bỏ nó khỏi deck, ảnh hưởng lớn hơn nhiều so với một cửa. Cần **xem vị trí 26 cạnh hở** (khe hở nhỏ hay lỗ lớn) rồi chọn: sửa ở nguồn, hoặc miễn trừ có duyệt kèm ghi nhận thể tích bị bỏ. Chưa làm bước kiểm này.
+Đã đo trên IFC nguồn: lưới chỉ 51 đỉnh, 88 mặt. 26 cạnh hở gom thành **hai cụm giống hệt nhau**, mỗi cụm khoảng 0,39 × 0,30 × 0,06 m (11 đỉnh, tổng chiều dài cạnh 1,14 m), ở hai cao độ gần nhau (z ≈ −5,64 và −5,44 m). Tức là hai lỗ xuyên nhỏ thiếu mặt bên, không phải tường hỏng cả khối. Nhưng khối bao của tường là 18,4 × 15,4 × 3,3 m, nên **loại cả tường vì hai lỗ nhỏ sẽ mở cả một vùng lớn** trong mô phỏng. **Khuyến nghị: sửa ở nguồn** (đóng hai lỗ trong Revit), không loại tường.
+
+### Thử quyết định trên A (dry-run, 2026-11-16)
+Chạy A với 22 quyết định `EXCLUDE` (21 cửa và tường) và 15 quyết định `REFERENCE_GEOMETRY` (giữ hình học tham chiếu, không xuất vào FDS), người duyệt ghi là bạn kèm chú thích "chờ kỹ sư xác nhận":
+
+| | Trước | Sau (dry-run) |
+| --- | --- | --- |
+| Kết luận mapping | `REJECTED` | **`MAPPING_VERIFIED`** |
+| Phần tử | 546 MATCHED, 22 UNSUPPORTED, 15 REVIEW_REQUIRED, 210 SEMANTIC_ONLY | 546 MATCHED, 22 `EXCLUDED_APPROVED`, 15 `REFERENCE_PRESERVED`, 210 SEMANTIC_ONLY |
+| Finding | 44 (P1) và 1 (P2) | **0** |
+
+Hai điều cần lưu ý:
+1. **Báo cáo hết finding dù 22 phần tử vắng khỏi deck** (21 cửa, 1 tường lớn): người đọc chỉ thấy số đếm `EXCLUDED_APPROVED`. Nên hiển thị mỗi phần tử bị loại thành một finding P2 để không thể bỏ sót. Chưa làm.
+2. `MAPPING_VERIFIED` ở đây chỉ nói các quyết định loại trừ đã được ghi và duyệt, không nói loại trừ đó đúng về vật lý (cửa vắng nghĩa là lối đi mở; loại tường mở cả một vùng).
+
+Tệp quyết định (có mã cấu kiện thật) và danh sách bàn giao 21 cửa để sửa trong Revit (mã, tầng, họ cửa, kích thước, chỉ số lưới) nằm **ngoài repo** trong thư mục sao lưu cục bộ.
 
 ## 3. M2.4: `effective_geometry` trên A (và B)
 
@@ -74,19 +91,33 @@ Với C, miền (x từ −12 đến 89, y từ −1 đến 18, z từ −9 đ�
 | c | Xấp xỉ bậc thang bằng `OBST` theo lưới | Cần dung sai được duyệt. Bằng chứng từ deck PyroSim của A (cùng cách làm): IoU trung vị của tường chỉ 0,12 và 97% `OBST` là tấm mỏng. Không khuyến nghị cho tường |
 
 ### Khuyến nghị: phương án (a), làm theo bốn bước
-1. Đưa lại mô-đun probe cut-cell lên `main` (không đổi hành vi hiện tại).
-2. **Thí điểm trên 20 đến 30 phần tử GEOM** phân tầng theo loại và hướng, ở cỡ ô thực tế (0,2 m): đo sai số của khối khí và diện tích mặt mở của FDS so với giá trị giải tích chính xác.
-3. **Người duyệt chốt dung sai** từ phân bố sai số đo được (tôi không tự đặt ngưỡng).
+1. **Đã làm:** đưa lại mô-đun probe cut-cell lên nhánh `feat/cutcell-probes` (commit `b836cf2`, cherry-pick sạch lên `main`). Test với FDS 6.11.1 đạt (tứ diện chuẩn khớp, phát hiện được dịch chuyển), test lưới và cổng nợ nguồn đạt.
+2. **Đã làm một phần:** thí điểm trên 24 GEOM của A (`scripts/cutcell-pilot.py`), 19 phần tử đánh giá được, xem kết quả bên dưới.
+3. **Chờ người duyệt:** chốt dung sai từ phân bố sai số đo được (tôi không tự đặt ngưỡng).
 4. Chạy cho cả deck (ước khoảng 1.100 DEVC trong một lượt chẩn đoán `T_END` nhỏ) và cho `effective_geometry` `PASS` hoặc `FAIL` theo từng phần tử.
+
+### Kết quả thí điểm (A, FDS 6.11.1, ô 0,2 m)
+Mỗi phần tử chạy trong deck cô lập trên cùng lưới nút 0,2 m; giá trị kỳ vọng tính bằng boolean chính xác và đã được kiểm độc lập bằng lấy mẫu điểm. Mẫu: 514 trong 546 GEOM đủ điều kiện về kích thước (≤ 60.000 ô, nên **chưa có tường và sàn lớn**); chọn 24, đánh giá được 19 (4 không phải một vỏ đơn, 1 thiếu chỗ đặt probe).
+
+- **Chỉ 17/514 phần tử (3,3%, đều là sàn) có từ 95% diện tích mặt song song với trục lưới.** Mọi cột, tường, cửa, thanh đều bị xoay so với lưới.
+- **Khối khí cục bộ (114 probe):** trung vị sai số 4e-9 m³, nhưng đuôi dài: p90 = 1,2e-2 m³, tối đa 2,7e-2 m³ (3,3 ô lưới).
+- **Phần tử dày (độ dày ước lượng ≥ 0,2 m, 7 cái):** sai số tương đối của khối khí toàn miền so với thể tích phần tử có trung vị 6e-5, tối đa 1,2e-3. FDS khớp rất tốt.
+- **Phần tử mỏng (độ dày ước lượng < 0,2 m, 12 cái):** 6 cái chính xác, **6 cái FDS cho tổng thể tích rắn gấp 1,9 đến 4 lần thể tích thật** (phần thừa bằng 0,85 đến 3,0 lần thể tích phần tử; khí ít hơn kỳ vọng). FDS có vẻ làm dày các lớp mỏng. Độ dày ước lượng là V/(d1·d2) của khối bao nên chỉ là chỉ báo thô.
+- **Diện tích mặt mở:** 5/17 (trục x), 5/13 (y) và 7/16 (z) probe lệch trên 1e-6 m², tối đa 0,12 m². Nhiều ca FDS báo mặt hở hoàn toàn (0,36 m²) khi giải tích còn một lớp mỏng. Ca đối xứng chuẩn (tứ diện) và hộp xoay 40° cho kết quả đúng ở cả ba trục, nên đây không phải lỗi phép đo theo trục.
+
+**Ý nghĩa:** với phần tử dày, FDS giữ hình học cut-cell chính xác. Với lớp mỏng, FDS có thể thay đổi thể tích đáng kể, nên `effective_geometry` ở cấp phần tử có khả năng phân biệt thật, không chỉ là thủ tục. **Giới hạn:** mẫu nhỏ, chưa có tường và sàn lớn (loại phần tử chiếm đa số của A), nên chưa đủ để chốt dung sai hay khái quát cho cả deck. Cần mở rộng mẫu (cắt cửa sổ đo trong phần tử lớn thay vì dựng cả phần tử) trước bước 3.
 
 Cho đến khi xong, kết luận đúng là: mapping có thể `MAPPING_VERIFIED`, còn hình học hiệu dụng ở cấp solver của các phần tử `GEOM` là `INCONCLUSIVE`, và báo cáo phải nêu điều đó.
 
-## 4. Cần người duyệt
+## 4. Trạng thái duyệt
 
-| Việc | Chọn |
+**2026-11-16: đã duyệt toàn bộ các khuyến nghị ở mục 4 bản đầu.** Phần đã thực hiện và phần còn lại:
+
+| Việc | Trạng thái |
 | --- | --- |
-| 21 cửa: phương án 1, 2 hay 3 | Sửa nguồn (khuyến nghị), miễn trừ, hoặc tấm mỏng |
-| Nếu miễn trừ cửa: trạng thái cửa trong mô phỏng | Đóng hay mở, kèm người chịu trách nhiệm |
-| 1 tường: kiểm 26 cạnh hở rồi quyết định | Cho phép tôi mở phần tử để xem vị trí lỗ |
-| 15 phần tử `REVIEW_REQUIRED` (10 proxy, 5 lan can) | Quyết định từng loại (giữ thụ động, loại có lý do) |
-| M2.4: duyệt hướng (a) và cho phép chạy thí điểm | Có/không; dung sai chốt sau thí điểm |
+| 21 cửa: sửa ở nguồn (phương án 1) | **Còn lại, phía người giữ mô hình.** Danh sách bàn giao (mã, tầng, họ cửa, kích thước, chỉ số lưới) đã lập, ngoài repo |
+| Tường: kiểm 26 cạnh hở | **Đã làm.** Hai lỗ nhỏ khoảng 0,39 × 0,30 × 0,06 m; khuyến nghị sửa ở nguồn, không loại tường |
+| 15 phần tử `REVIEW_REQUIRED` | **Đã thử** với `REFERENCE_GEOMETRY` cho cả 15 (A thành `MAPPING_VERIFIED` khi kèm 22 quyết định loại). Kỹ sư cần xác nhận, đặc biệt 6 phần tử thang máy |
+| Người duyệt ký các quyết định trên | **Còn lại.** Người duyệt hiện ghi là bạn kèm chú thích chờ kỹ sư xác nhận |
+| M2.4: hướng (a) | **Đã làm bước 1 và một phần bước 2** (mục 3). Cần mở rộng mẫu rồi mới chốt dung sai |
+| Hiển thị phần tử bị loại thành finding P2 | **Chưa làm** (nên làm trước khi dùng `EXCLUDE` cho kết luận thật) |
