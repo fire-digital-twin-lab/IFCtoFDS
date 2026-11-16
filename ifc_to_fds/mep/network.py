@@ -5,7 +5,7 @@ import math
 from ifc_to_fds.domain.mep.hvac import HvacDuct, HvacNetworkPlan, HvacNode, JunctionSpec, hvac_spec
 from ifc_to_fds.domain.mapping.enums import MappingStrategy
 from ifc_to_fds.domain.scope import ScopeDecision
-from ifc_to_fds.mapping.obst_boxes import emitted_obst_boxes, vent_rests_on_solid_face
+from ifc_to_fds.mapping.obst_boxes import emitted_obst_boxes, vent_rests_on_solid_face, vent_unsupported_area
 
 PORT_POSITION_TOLERANCE_M = 0.001
 SEGMENT_TYPES = ("IFCDUCTSEGMENT", "IFCFLOWSEGMENT")
@@ -117,9 +117,11 @@ def build_hvac_network(model):
                 boxes = [b for e in model.elements if e.scope_decision in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
                          for b in emitted_obst_boxes(e)]
                 if not vent_rests_on_solid_face(xb, boxes):
+                    unsupported, vent_area = vent_unsupported_area(xb, boxes)
                     raise ValueError(
                         f"HVAC vent of ports {', '.join(keys)} must lie entirely on a solid/gas face of the OBST boxes written to FDS "
-                        "or on a mesh boundary face; this rectangle covers open space or the inside of a solid. "
+                        f"or on a mesh boundary face; this rectangle covers open space or the inside of a solid "
+                        f"(XB={xb}: {unsupported:.6g} of {vent_area:.6g} m2 unsupported). "
                         "GEOM vent coupling is not yet supported")
         nodes.append(node)
         for key in keys:
