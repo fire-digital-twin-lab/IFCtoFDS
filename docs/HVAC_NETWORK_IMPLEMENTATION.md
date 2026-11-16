@@ -82,7 +82,8 @@ Scenario còn kiểm tra xe nằm trong miền đã xác minh, dùng công suấ
 ## Ranh giới hỗ trợ hiện tại
 
 - Hỗ trợ operational adapter cho `IfcDuctSegment` và `IfcFlowSegment` có phân loại thông gió/hút khói, hai port nguồn và quan hệ nối tường minh. Không tự biến ống nước PCCC thành ống gió.
-- Chưa tự chuyển co/fitting, fan, damper, aircoil hoặc filter thành mô hình vận hành. Nếu chọn HVAC cho các loại chưa hỗ trợ, hệ thống trả lỗi rõ ràng.
+- Phụ kiện hai cổng (có `loss` và chiều dài đường tâm đã duyệt), tê/Y/gót giày (`losses` đủ mọi cặp cổng, một NODE với `LOSS(i,j)`) và quạt lưu lượng cố định (`volume_flow_m3_s` và cổng SINK/SOURCE đã duyệt) đã được chuyển; mọi thông số do người khai báo, không suy từ IFC. Ống tiết diện `AREA/PERIMETER` được ghi với `ROUND=.FALSE.`.
+- Chưa chuyển damper, aircoil, filter và đường đặc tính quạt thành mô hình vận hành. Nếu chọn HVAC cho các loại chưa hỗ trợ, hệ thống trả lỗi rõ ràng.
 - Chưa tự trích và xác nhận đầy đủ thông số thủy lực từ IFC profile/property sets; người dùng cung cấp thông số có thẩm định. Không dùng kích thước hiển thị thay cho dữ liệu còn thiếu.
 - VENT ghép vào GEOM chưa được hỗ trợ. Điều khiển cửa dạng GEOM hoặc lịch nhiều sự kiện trên cùng cửa hiện bị từ chối thay vì tạo file có hành vi không chắc chắn.
 - FDS initialization đã được kiểm tra. Chưa thao tác nhập file trực tiếp vào ứng dụng PyroSim hay xác nhận lưu lượng/áp suất hút khói công trình thực tế.
