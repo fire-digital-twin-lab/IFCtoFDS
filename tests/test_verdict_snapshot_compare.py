@@ -1,11 +1,21 @@
 """verdict-snapshot --compare accepts the count-only baselines kept for the real buildings (roadmap A4.12)."""
 
 import importlib.util
+import os
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("verdict_snapshot", Path(__file__).parents[1] / "scripts" / "verdict-snapshot.py")
 verdict_snapshot = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(verdict_snapshot)
+# The script switches solver auto-discovery off at import. Collecting this module must not leak that into the
+# solver tests of the same session (a leak made `pytest -m solver` fail test_p4c2_executes_three_pinned_fds_cases).
+_autodiscovery = os.environ.get("IFCFDS_SOLVER_AUTODISCOVERY")
+try:
+    spec.loader.exec_module(verdict_snapshot)
+finally:
+    if _autodiscovery is None:
+        os.environ.pop("IFCFDS_SOLVER_AUTODISCOVERY", None)
+    else:
+        os.environ["IFCFDS_SOLVER_AUTODISCOVERY"] = _autodiscovery
 
 OLD = {"status": "MAPPING_VERIFIED", "elements": {"MATCHED": 2, "SEMANTIC_ONLY": 1}, "findings": {}, "timings": {"wall_s": 9}}
 NEW = {"status": "MAPPING_VERIFIED", "element_statuses": {"a": "MATCHED", "b": "MATCHED", "c": "SEMANTIC_ONLY"},
