@@ -118,3 +118,29 @@ def test_a_declared_tolerance_still_widens_the_shell():
 
     wide = AuditConfig(surface_tolerance_m=0.01, relative_volume_tolerance=0.01, min_solid_iou=0.99)
     assert within_tolerance(_metrics(7.5515, 44.489, 5.9e-3, surface=1e-3), wide)
+
+
+def _box_mesh(xb, nudge=None):
+    import trimesh
+    from ifc_to_fds.core.canonical import TriangleMesh
+
+    box = trimesh.creation.box(bounds=[[xb[0], xb[2], xb[4]], [xb[1], xb[3], xb[5]]])
+    vertices = box.vertices.copy()
+    if nudge is not None:
+        top = vertices[:, 2] > (xb[4] + xb[5]) / 2
+        vertices[top, 2] += nudge  # lift the top face, as IFC unit-conversion noise does
+    return TriangleMesh(vertices=vertices.tolist(), faces=box.faces.tolist())
+
+
+def test_real_compare_solids_feeds_the_shell_rule():
+    """End to end through compare_solids: a 0.1 um source offset (C's insulation case) is noise, 1 mm is not."""
+    from ifc_to_fds.validation.metrics import compare_solids, within_tolerance
+
+    xb = [18.76, 31.89, 7.38, 7.98, 2.0, 2.95]  # ~7.5 m3 box far from the origin
+    emitted = [_box_mesh(xb)]
+    noisy = compare_solids(_box_mesh(xb, nudge=1e-7), emitted)
+    assert "reference_volume_m3" in noisy and "reference_area_m2" in noisy
+    assert noisy["relative_volume_error"] > AuditConfig().relative_volume_tolerance  # strict relative rule alone fails
+    assert within_tolerance(noisy, AuditConfig())
+    shifted = compare_solids(_box_mesh(xb, nudge=1e-3), emitted)
+    assert not within_tolerance(shifted, AuditConfig())
