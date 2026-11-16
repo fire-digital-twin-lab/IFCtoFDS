@@ -1,0 +1,187 @@
+{
+ "date": "2026-11-16",
+ "commit": "60fd3b0",
+ "note": "Aggregate only; no element names, ids or paths. Our decks produced with default settings (A, B full model; C eight basement storeys, scope as in m6-close). Decks written by PyroSim 2026.2.0715 from the same IFC, 2026-10-13. PyroSim decks were cleaned in a temp copy (unique OBST ids, banner removed) because the strict parser refuses repeated ids; the originals are untouched.",
+ "frames": {
+  "A": "PyroSim = ours + rebase vector (578753, 2318413, 0): pure translation, verified from bounds",
+  "B": "PyroSim re-based to its own origin (not our rebase vector); translation not determined, so no volume or IoU for B",
+  "C": "same frame, no translation"
+ },
+ "pyrosim_decks": {
+  "A": {
+   "obst_records": 24720,
+   "zero_thickness_obst": 23967,
+   "zero_thickness_share_pct": 97.0
+  },
+  "B": {
+   "obst_records": 1538,
+   "zero_thickness_obst": 1270,
+   "zero_thickness_share_pct": 82.6
+  },
+  "C": {
+   "obst_records": 7868,
+   "zero_thickness_obst": 6085,
+   "zero_thickness_share_pct": 77.3
+  }
+ },
+ "domain_clipped_space": {
+  "A": {
+   "ours_in_domain_m3": 1688.07,
+   "pyro_in_domain_m3": 916.03,
+   "intersection_m3": 589.63,
+   "only_ours_m3": 1098.44,
+   "only_pyro_m3": 325.32,
+   "iou": 0.2929,
+   "pyro_thin_area_m2": 14615.8
+  },
+  "C": {
+   "ours_in_domain_m3": 2639.53,
+   "pyro_in_domain_m3": 2142.6,
+   "intersection_m3": 1552.91,
+   "only_ours_m3": 1086.63,
+   "only_pyro_m3": 583.94,
+   "iou": 0.4818,
+   "pyro_thin_area_m2": 13133.0
+  }
+ },
+ "per_element_by_revit_id": {
+  "A": {
+   "ours_entities_with_volume": 546,
+   "pyro_revit_ids": 196,
+   "matched": 194,
+   "only_ours": 352,
+   "only_pyro": 2
+  },
+  "B": {
+   "ours_entities_with_volume": 218,
+   "pyro_revit_ids": 105,
+   "matched": 105,
+   "only_ours": 113,
+   "only_pyro": 0
+  },
+  "C": {
+   "ours_entities_with_volume": 697,
+   "pyro_revit_ids": 796,
+   "matched": 370,
+   "only_ours": 178,
+   "only_pyro": 823
+  }
+ },
+ "matched_elements_A_C": {
+  "A": {
+   "iou_quartiles_p10_p25_p50_p75_p90": [
+    0.017,
+    0.055,
+    0.167,
+    0.354,
+    0.615
+   ],
+   "volume_ratio_pyro_over_ours_quartiles": [
+    0.717,
+    0.924,
+    1.07,
+    1.875,
+    7.046
+   ],
+   "by_ifc_type_top": {
+    "IfcWallStandardCase": {
+     "n": 117,
+     "ours_m3": 406.2,
+     "pyro_m3": 436.6,
+     "median_iou": 0.121
+    },
+    "IfcSlab": {
+     "n": 33,
+     "ours_m3": 357.9,
+     "pyro_m3": 360.3,
+     "median_iou": 0.697
+    },
+    "IfcBeam": {
+     "n": 11,
+     "ours_m3": 80.3,
+     "pyro_m3": 78.3,
+     "median_iou": 0.365
+    },
+    "IfcColumn": {
+     "n": 21,
+     "ours_m3": 29.1,
+     "pyro_m3": 39.2,
+     "median_iou": 0.381
+    },
+    "IfcStairFlight": {
+     "n": 2,
+     "ours_m3": 0.9,
+     "pyro_m3": 0.8,
+     "median_iou": 0.167
+    }
+   }
+  },
+  "C": {
+   "iou_quartiles_p10_p25_p50_p75_p90": [
+    0.363,
+    0.504,
+    0.616,
+    0.72,
+    0.783
+   ],
+   "volume_ratio_pyro_over_ours_quartiles": [
+    0.756,
+    0.885,
+    1.044,
+    1.368,
+    1.829
+   ],
+   "by_ifc_type_top": {
+    "IfcWallStandardCase": {
+     "n": 111,
+     "ours_m3": 787.9,
+     "pyro_m3": 861.0,
+     "median_iou": 0.569
+    },
+    "IfcSlab": {
+     "n": 5,
+     "ours_m3": 468.4,
+     "pyro_m3": 691.4,
+     "median_iou": 0.483
+    },
+    "IfcCovering": {
+     "n": 148,
+     "ours_m3": 164.4,
+     "pyro_m3": 179.4,
+     "median_iou": 0.614
+    },
+    "IfcWall": {
+     "n": 7,
+     "ours_m3": 105.3,
+     "pyro_m3": 111.5,
+     "median_iou": 0.651
+    },
+    "IfcRamp": {
+     "n": 2,
+     "ours_m3": 84.6,
+     "pyro_m3": 81.5,
+     "median_iou": 0.83
+    }
+   }
+  }
+ },
+ "our_elements_not_matched_as_solid": {
+  "A": {
+   "entities": 352,
+   "present_as_zero_thickness_obst": 345
+  },
+  "B": {
+   "entities": 113,
+   "present_as_zero_thickness_obst": 111
+  },
+  "C": {
+   "ids": 152,
+   "present_as_zero_thickness_obst": 144
+  }
+ },
+ "pyrosim_only": {
+  "A": "2 lift-door elements (0.5 m3)",
+  "B": "none",
+  "C": "MEP and out-of-scope items: rectangular ducts 224 records (173 m3), duct insulation 58 (43 m3), concrete beams not in our storeys 99 (63 m3), pipes 56 (6 m3)"
+ }
+}
