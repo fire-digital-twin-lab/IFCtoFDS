@@ -19,7 +19,8 @@ from ifc_to_fds.core.canonical import (
 )
 from ifc_to_fds.domain.mapping import MappingPlan
 from .manifest import MappingManifest, build_manifest
-from ifc_to_fds.geometry.rectilinear import box_set_for, is_obstruction_box_set
+from ifc_to_fds.geometry.rectilinear import is_obstruction_box_set
+from .obst_boxes import emitted_obst_boxes
 from ifc_to_fds.geometry.mesh import (
     bounds_for_vertices,
     valid_solid,
@@ -342,12 +343,7 @@ def _serialize_planned_model(model, cell_size, hvac_network):
 
         if strategy == MappingStrategy.OBST and elem.bounding_box:
             # One box, or the exact box cover of a rectilinear host (wall with openings).
-            boxes = (
-                [(elem.representation_bounds or elem.bounding_box).to_xb()]
-                if is_axis_aligned_box(elem.mesh)
-                else box_set_for(elem.mesh)
-            )
-            for xb in boxes:
+            for xb in emitted_obst_boxes(elem):
                 prim_counter += 1
                 prim_id = f"OBST_{prim_counter}_{clean_fds_id(elem.name, 'obs')}"
                 elem.fds_primitive_ids.append(prim_id)
