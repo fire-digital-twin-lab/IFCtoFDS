@@ -74,6 +74,8 @@ Nếu không sửa được Revit, hai lựa chọn còn lại: loại cửa và
 ### Tường (1 phần tử)
 Đã đo trên IFC nguồn: lưới chỉ 51 đỉnh, 88 mặt. 26 cạnh hở gom thành **hai cụm giống hệt nhau**, mỗi cụm khoảng 0,39 × 0,30 × 0,06 m (11 đỉnh, tổng chiều dài cạnh 1,14 m), ở hai cao độ gần nhau (z ≈ −5,64 và −5,44 m). Tức là hai lỗ xuyên nhỏ thiếu mặt bên, không phải tường hỏng cả khối. Nhưng khối bao của tường là 18,4 × 15,4 × 3,3 m, nên **loại cả tường vì hai lỗ nhỏ sẽ mở cả một vùng lớn** trong mô phỏng. **Khuyến nghị: sửa ở nguồn** (đóng hai lỗ trong Revit), không loại tường.
 
+**Đính chính (2026-11-16):** phần tử này là **lớp trát trong dày 15 mm** (vữa xi măng), không phải tường lõi (roadmap A4.20). Loại nó không mở vùng nào nếu tường lõi phía sau còn: 89% bề mặt của nó có vật rắn khác của deck trong 5 cm (lấy mẫu cách 6 cm nên là cận dưới). Khuyến nghị mới: `EXCLUDE` có xác nhận của kỹ sư, hoặc ẩn loại tường trát khi xuất IFC từ Revit; đóng hai lỗ vẫn tốt nhưng không còn cần thiết cho mô phỏng.
+
 ### Thử quyết định trên A (dry-run, 2026-11-16)
 Chạy A với 22 quyết định `EXCLUDE` (21 cửa và tường) và 15 quyết định `REFERENCE_GEOMETRY` (giữ hình học tham chiếu, không xuất vào FDS), người duyệt ghi là bạn kèm chú thích "chờ kỹ sư xác nhận":
 
@@ -85,7 +87,7 @@ Chạy A với 22 quyết định `EXCLUDE` (21 cửa và tường) và 15 quy�
 
 Hai điều cần lưu ý:
 1. **Báo cáo hết finding dù 22 phần tử vắng khỏi deck** (21 cửa, 1 tường lớn): người đọc chỉ thấy số đếm `EXCLUDED_APPROVED`. Nên hiển thị mỗi phần tử bị loại thành một finding P2 để không thể bỏ sót. Chưa làm.
-2. `MAPPING_VERIFIED` ở đây chỉ nói các quyết định loại trừ đã được ghi và duyệt, không nói loại trừ đó đúng về vật lý (cửa vắng nghĩa là lối đi mở; loại tường mở cả một vùng).
+2. `MAPPING_VERIFIED` ở đây chỉ nói các quyết định loại trừ đã được ghi và duyệt, không nói loại trừ đó đúng về vật lý (cửa vắng nghĩa là lối đi mở; loại tường mở cả một vùng; **đính chính:** tường đó là lớp trát 15 mm, xem A4.20).
 
 **Cập nhật dry-run (cửa thang máy mặc định đóng, roadmap A7):** 6 phần tử thang máy chuyển từ `REFERENCE_GEOMETRY` sang `PASSIVE_OBSTACLE`. Chạy lại A với mã đã có finding loại trừ cho kết quả: `MAPPING_VERIFIED`, **552 MATCHED** (546 cũ và 6 phần tử thang máy nay được xuất thành vật rắn mỏng và đối chiếu khớp nguồn), 9 `REFERENCE_PRESERVED`, 210 `SEMANTIC_ONLY`, 22 `EXCLUDED_APPROVED`, và **đúng 22 finding P2** loại `scope` (mỗi phần tử bị loại một finding, nêu người duyệt và lý do). Chỉ còn ba cổng mô phỏng `INCONCLUSIVE` (`passage_resolution`, `solver` chưa chạy trong lượt này, `effective_geometry`).
 
@@ -144,7 +146,7 @@ Cho đến khi xong, kết luận đúng là: mapping có thể `MAPPING_VERIFIE
 | --- | --- |
 | Có phải sửa Revit không | **Đã phân tích** (mục 2): không bắt buộc cho cả 21 cửa; chỉ cần cho 8 cửa đứng trong lối đi trống nếu muốn cửa đóng; 5 cửa nửa trong tường cần xem từng cái |
 | 21 cửa: sửa ở nguồn | **Còn lại, phía người giữ mô hình**, ưu tiên 8 cửa trong lối đi trống. Danh sách bàn giao đã lập, ngoài repo |
-| Tường: 26 cạnh hở | **Đã làm.** Hai lỗ nhỏ khoảng 0,39 × 0,30 × 0,06 m; khuyến nghị sửa ở nguồn, không loại tường |
+| Tường: 26 cạnh hở | **Đã làm.** Hai lỗ nhỏ khoảng 0,39 × 0,30 × 0,06 m; khuyến nghị sửa ở nguồn, không loại tường (**đính chính 2026-11-16:** đây là lớp trát 15 mm, loại được nếu tường lõi còn, xem A4.20) |
 | Cửa thang máy mặc định đóng | **Đã ghi (A7) và áp dụng.** 6 phần tử thành `PASSIVE_OBSTACLE`, đã chạy A: 552 MATCHED, `MAPPING_VERIFIED`. Kỹ sư cần xác nhận |
 | 9 phần tử `REVIEW_REQUIRED` còn lại (giá đỡ mái, lan can) | **Đã thử** với `REFERENCE_GEOMETRY` (không xuất vào FDS). Kỹ sư xác nhận |
 | Người duyệt ký các quyết định | **Còn lại.** Người duyệt hiện ghi là bạn kèm chú thích chờ kỹ sư xác nhận |
