@@ -13,7 +13,16 @@ from ifc_to_fds.domain.validation.model import (
     ValidationContext,
 )
 
-from ifc_to_fds.fire.mesh_metrics import calculate_d_star, ev_peak_hrr_evidence
+from ifc_to_fds.domain.validation.plume import calculate_d_star, explicit_peak_hrr_evidence
+
+def _ev_hrr_evidence(ev: Any) -> Dict[str, Any]:
+    """Stated HRR, else what the selection resolves for itself (EVSelection reads its preset); never opens the library."""
+    explicit = explicit_peak_hrr_evidence(ev)
+    if explicit is not None:
+        return explicit
+    resolve = getattr(ev, "peak_hrr_evidence", None)
+    return resolve() if callable(resolve) else {"peak_hrr_kw": 0.0, "peak_hrr_basis": "UNAVAILABLE"}
+
 
 def _indicator_band(ratio: float) -> str:
     """Describe D*/dx without turning historical validation values into acceptance limits."""
@@ -140,7 +149,17 @@ def check_mesh_resolution(
             if not ev_id:
                 ev_id = f"vehicle_{idx}"
 
-            hrr_evidence = ev_peak_hrr_evidence(ev)
+            hrr_evidence = _ev_hrr_evidence(ev)
+            preset = getattr(ev, "preset_id", None) or (ev.get("preset_id") if isinstance(ev, dict) else None)
+            if hrr_evidence["peak_hrr_basis"] == "UNAVAILABLE" and preset:
+                return GateResult(
+                    status=GateStatus.INCONCLUSIVE,
+                    reason=(
+                        f"Peak HRR of vehicle '{ev_id}' is not resolved: preset '{preset}' must be resolved by "
+                        "the scenario entry or the selection must state its peak HRR"
+                    ),
+                    evidence={"vehicle": ev_id, "preset_id": str(preset), **hrr_evidence},
+                )
             hrr_kw = float(hrr_evidence["peak_hrr_kw"])
             if not math.isfinite(hrr_kw):
                 return GateResult(

@@ -276,3 +276,31 @@ def test_module_imports_first_in_a_fresh_process(module):
         env={**os.environ, "PYTHONIOENCODING": "utf-8", "IFCFDS_SOLVER_AUTODISCOVERY": "0"},
     )
     assert result.returncode == 0, f"cold import of {module} failed:\n{result.stderr[-2000:]}"
+
+
+FIRE_IMPORT_LINES = [
+    "from ifc_to_fds.fire.mesh_metrics import ev_peak_hrr_evidence",
+    "from ifc_to_fds import fire",
+    "import ifc_to_fds.fire.ev_library as library",
+    "from ...fire import mesh_metrics",  # relative form, three levels up from validation/checkers
+    "def f():\n    from ifc_to_fds.fire.ev_library import load_ev_preset",
+]
+
+
+def _fire_imports(py_file: Path) -> Set[str]:
+    return {i for i in get_imported_modules(py_file) if i == "ifc_to_fds.fire" or i.startswith("ifc_to_fds.fire.")}
+
+
+def test_validation_does_not_import_fire():
+    """ARCH-01: the gate must not reach the EV library through the fire package."""
+    for py_file in find_python_files(ROOT_DIR / "validation"):
+        assert not _fire_imports(py_file), f"{py_file} imports {_fire_imports(py_file)}"
+
+
+@pytest.mark.parametrize("line", FIRE_IMPORT_LINES)
+def test_the_fire_import_scan_sees_every_import_form(line, tmp_path, monkeypatch):
+    monkeypatch.setitem(globals(), "ROOT_DIR", tmp_path / "ifc_to_fds")
+    module = tmp_path / "ifc_to_fds" / "validation" / "checkers" / "probe.py"
+    module.parent.mkdir(parents=True)
+    module.write_text(line + "\n", encoding="utf-8")
+    assert _fire_imports(module)
