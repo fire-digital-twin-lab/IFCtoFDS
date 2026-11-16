@@ -71,10 +71,46 @@
     "structural_completeness": 1
    },
    "wall_s": 544.4
+  },
+  "C_8_basement_storeys": {
+   "status": "REJECTED",
+   "elements": {
+    "EXCLUDED_SCOPE": 3165,
+    "MATCHED": 697,
+    "INCONCLUSIVE": 1,
+    "REVIEW_REQUIRED": 183,
+    "UNSUPPORTED": 1,
+    "SEMANTIC_ONLY": 66,
+    "REFERENCE_PRESERVED": 1528
+   },
+   "findings_by_gate": {
+    "geometry": 1,
+    "openings": 3,
+    "structural_completeness": 2,
+    "geometry_preservation": 2
+   },
+   "nonpass_gates": {
+    "syntax": "INCONCLUSIVE",
+    "scope": "INCONCLUSIVE",
+    "geometry": "FAIL",
+    "structural_completeness": "INCONCLUSIVE",
+    "openings": "FAIL",
+    "mep": "INCONCLUSIVE",
+    "representation": "INCONCLUSIVE",
+    "domain": "INCONCLUSIVE",
+    "passage_resolution": "INCONCLUSIVE",
+    "solver": "NOT_RUN",
+    "effective_geometry": "NOT_RUN",
+    "geometry_preservation": "FAIL"
+   },
+   "wall_s": 619,
+   "control_fzk_wall_s": {
+    "before": 34,
+    "after": 33
+   },
+   "commit": "60fd3b0",
+   "solver": "NOT_RUN"
   }
- },
- "not_run": {
-  "C": "eight-basement-storey run not repeated in this pass (needs per-storey ids; last measured at e01e65d, see tolerance-A-C.json)"
  },
  "duplex_vs_e448e11": {
   "passage_resolution": "55 -> 56 findings: three elements retitled 'Thin solid collapses' -> 'Solid vanishes on the grid' (collapse on >= 2 axes, F4) and one element newly reported (F4 now covers every OBST); gate FAIL and verdict REJECTED unchanged",
@@ -85,5 +121,6 @@
   "Institute: element statuses, witnesses and findings identical",
   "B: MAPPING_VERIFIED, 218 MATCHED, 61 SEMANTIC_ONLY",
   "A: 546 MATCHED, 210 SEMANTIC_ONLY, 22 UNSUPPORTED, 15 REVIEW_REQUIRED, same as tolerance-A-C.json A_new"
- ]
+ ],
+ "C_vs_last_record": "Element counts and findings identical to tolerance-A-C.json C_fixed (697 MATCHED, 0 DEVIATED). New: passage_resolution INCONCLUSIVE (154 openings not estimated, 406 resolved), the intended F3 change; mapping verdict unchanged. Wall time not comparable: FZK control took 33-34 s against about 10 s at the earlier record."
 }
