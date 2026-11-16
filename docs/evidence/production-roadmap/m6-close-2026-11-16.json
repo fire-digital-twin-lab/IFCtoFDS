@@ -1,0 +1,89 @@
+{
+ "date": "2026-11-16",
+ "commit": "16efd48",
+ "note": "Aggregate only; no element names or keys. Measured on main 16efd48 after M6 (PR #119-#127) and audit follow-ups T1-T4 (#129-#132); #128 only adds docs. Cold geometry cache, sequential runs. Wall times carry no control run and are not comparable.",
+ "runs": {
+  "FZK": {
+   "status": "REJECTED",
+   "elements": {
+    "UNSUPPORTED": 1,
+    "MATCHED": 79,
+    "SEMANTIC_ONLY": 45,
+    "REVIEW_REQUIRED": 2
+   },
+   "findings_by_gate": {
+    "geometry": 1,
+    "geometry_preservation": 1
+   },
+   "wall_s": 33.0
+  },
+  "Duplex": {
+   "status": "REJECTED",
+   "elements": {
+    "MATCHED": 148,
+    "SEMANTIC_ONLY": 80,
+    "UNSUPPORTED": 43,
+    "REVIEW_REQUIRED": 24
+   },
+   "findings_by_gate": {
+    "geometry": 43,
+    "geometry_preservation": 43,
+    "openings": 1,
+    "passage_resolution": 56
+   },
+   "wall_s": 22.3
+  },
+  "Institute": {
+   "status": "REJECTED",
+   "elements": {
+    "MATCHED": 432,
+    "REVIEW_REQUIRED": 265,
+    "SEMANTIC_ONLY": 489,
+    "UNSUPPORTED": 4
+   },
+   "findings_by_gate": {
+    "geometry": 4,
+    "geometry_preservation": 4,
+    "passage_resolution": 6
+   },
+   "wall_s": 113.7
+  },
+  "B": {
+   "status": "MAPPING_VERIFIED",
+   "elements": {
+    "SEMANTIC_ONLY": 61,
+    "MATCHED": 218
+   },
+   "findings_by_gate": {},
+   "wall_s": 33.6
+  },
+  "A": {
+   "status": "REJECTED",
+   "elements": {
+    "MATCHED": 546,
+    "SEMANTIC_ONLY": 210,
+    "UNSUPPORTED": 22,
+    "REVIEW_REQUIRED": 15
+   },
+   "findings_by_gate": {
+    "geometry": 22,
+    "geometry_preservation": 22,
+    "structural_completeness": 1
+   },
+   "wall_s": 544.4
+  }
+ },
+ "not_run": {
+  "C": "eight-basement-storey run not repeated in this pass (needs per-storey ids; last measured at e01e65d, see tolerance-A-C.json)"
+ },
+ "duplex_vs_e448e11": {
+  "passage_resolution": "55 -> 56 findings: three elements retitled 'Thin solid collapses' -> 'Solid vanishes on the grid' (collapse on >= 2 axes, F4) and one element newly reported (F4 now covers every OBST); gate FAIL and verdict REJECTED unchanged",
+  "representation": "'Manifest openings differs from independent policy' absent in one run and present in the next on the same commit (known flake, roadmap A4.7)"
+ },
+ "unchanged_vs_e448e11": [
+  "FZK: 0 differences",
+  "Institute: element statuses, witnesses and findings identical",
+  "B: MAPPING_VERIFIED, 218 MATCHED, 61 SEMANTIC_ONLY",
+  "A: 546 MATCHED, 210 SEMANTIC_ONLY, 22 UNSUPPORTED, 15 REVIEW_REQUIRED, same as tolerance-A-C.json A_new"
+ ]
+}
