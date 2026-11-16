@@ -34,20 +34,67 @@ def compute_file_sha256(file_path: str) -> str:
     return hasher.hexdigest()
 
 
+def _unused_property_name(names, kind):
+    base = f"(unnamed {kind})"
+    name, suffix = base, 2
+    while name in names:
+        name = f"{base} ({suffix})"
+        suffix += 1
+    return name
+
+
+def _named_property_values(members, getter, names=None):
+    values = getter(members)
+    values.pop(None, None)
+    names = set() if names is None else names
+    names.update(values)
+    for member in members or ():
+        name = member.Name
+        if name is None:
+            name = _unused_property_name(names, "property")
+            names.add(name)
+            values[name] = getter([member])[None]
+        children = getattr(member, "HasProperties", None) or getattr(member, "HasQuantities", None)
+        if children:
+            values[name]["properties"] = _named_property_values(children, getter)
+    return values
+
+
 def extract_property_sets(element: Any) -> Dict[str, Dict[str, Any]]:
-    psets: Dict[str, Dict[str, Any]] = {}
-    for rel in getattr(element, "IsDefinedBy", []):
+    element_type = ifcopenshell.util.element.get_type(element)
+    definitions = list(getattr(element_type, "HasPropertySets", None) or ())
+    for rel in getattr(element, "IsDefinedBy", ()):
         if rel.is_a("IfcRelDefinesByProperties"):
-            prop_set = getattr(rel, "RelatingPropertyDefinition", None)
-            if prop_set and prop_set.is_a("IfcPropertySet"):
-                set_name = getattr(prop_set, "Name", "PropertySet")
-                props: Dict[str, Any] = {}
-                for prop in getattr(prop_set, "HasProperties", []):
-                    if prop.is_a("IfcPropertySingleValue"):
-                        val = getattr(prop, "NominalValue", None)
-                        props[prop.Name] = val.wrappedValue if val is not None else None
-                if props:
-                    psets[set_name] = props
+            definition = rel.RelatingPropertyDefinition
+            definitions.extend(
+                definition.wrappedValue
+                if definition.is_a("IfcPropertySetDefinitionSet") else (definition,)
+            )
+    # Reserve every real name before assigning placeholders, including inherited names.
+    names = {definition.Name for definition in definitions}
+    property_names = {}
+    for definition in definitions:
+        members = getattr(definition, "HasProperties", None) or getattr(definition, "Quantities", None) or ()
+        property_names.setdefault(definition.Name, set()).update(member.Name for member in members)
+    psets: Dict[str, Dict[str, Any]] = {}
+    for definition in definitions:
+        name = definition.Name
+        if name is None:
+            name = _unused_property_name(names, "property set")
+            names.add(name)
+        if definition.is_a("IfcPropertySet"):
+            props = _named_property_values(
+                definition.HasProperties, ifcopenshell.util.element.get_properties, property_names[definition.Name]
+            )
+            props["id"] = definition.id()
+        elif definition.is_a("IfcElementQuantity"):
+            props = _named_property_values(
+                definition.Quantities, ifcopenshell.util.element.get_quantities, property_names[definition.Name]
+            )
+            props["id"] = definition.id()
+        else:
+            props = ifcopenshell.util.element.get_property_definition(definition)
+        psets.setdefault(name, {}).update(props)
     return psets
 
 
@@ -281,7 +328,7 @@ def extract_inventory(file_path: str) -> Tuple[CanonicalModel, Any]:
         name = prod.Name or f"{ifc_type}_{step_id}"
         tag = getattr(prod, "Tag", None)
         storey = find_containing_storey(prod)
-        psets = ifcopenshell.util.element.get_psets(prod_any)
+        psets = extract_property_sets(prod_any)
         container = ifcopenshell.util.element.get_container(prod_any)
         if container is None:
             for ancestor in ancestry(prod):

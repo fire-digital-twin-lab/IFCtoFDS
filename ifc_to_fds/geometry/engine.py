@@ -33,6 +33,7 @@ rejects bounding box substitution for invalid or open geometries:
    rather than producing unverified or dangerously fabricated FDS geometries.
 """
 
+import math
 import os
 from typing import Any, List, Optional
 import numpy as np
@@ -63,6 +64,22 @@ def create_geom_settings(linear_deflection: float = 0.0001, local: bool = False)
     settings.set("convert-back-units", False)
     settings.set("mesher-linear-deflection", linear_deflection)
     return settings
+
+
+def check_kernel_length_scale(declared_scale, converted_size, original_size):
+    """Compare measured extents; an unavailable measurement establishes no mismatch."""
+    if not all(math.isfinite(x) and x > 0 for x in (declared_scale, converted_size, original_size)):
+        return
+    applied_scale = converted_size / original_size
+    if not math.isfinite(applied_scale):
+        return
+    # The two extents come from different tessellations (mesher deflection 0.1 mm), while a real unit error is at least 9%
+    # (yard against metre) and usually 10 times or more, so 5% separates them with a wide margin.
+    if not math.isclose(applied_scale, declared_scale, rel_tol=0.05, abs_tol=0.0):
+        raise ValueError(
+            f"IFC length scale mismatch: declared scale={declared_scale:g}, "
+            f"native applied scale={applied_scale:g}; model rejected to avoid a wrong-scale FDS deck"
+        )
 
 
 def instancing_enabled() -> bool:
@@ -220,6 +237,28 @@ def process_model_geometry(
     except Exception as exc:
         for item in canonical_model.elements:
             item.validation_notes.append(f"Iterator fallback: {exc}")
+
+    for elem in canonical_model.elements:
+        mesh = shapes.get(elem.step_id)
+        if not mesh or not mesh.vertices or not mesh.faces:
+            continue
+        converted_size = float(np.ptp(mesh.vertices, axis=0).max())
+        if not math.isfinite(converted_size) or converted_size <= 0:
+            continue
+        try:
+            original_settings = create_geom_settings()
+            original_settings.set("convert-back-units", True)
+            shape = ifcopenshell.geom.create_shape(original_settings, ifc_file.by_id(elem.step_id))
+            original_vertices = np.asarray(shape.geometry.verts).reshape(-1, 3)
+            original_size = float(np.ptp(original_vertices, axis=0).max())
+        except (RuntimeError, ValueError, AttributeError, TypeError) as exc:
+            # An unavailable kernel probe must not reject otherwise processable geometry.
+            elem.validation_notes.append(f"Kernel length scale check unavailable: {exc}")
+        else:
+            check_kernel_length_scale(
+                canonical_model.source.unit_scale_to_meters, converted_size, original_size
+            )
+        break
 
     for elem in canonical_model.elements:
         if not elem.has_3d_geometry:

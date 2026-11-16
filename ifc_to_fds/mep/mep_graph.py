@@ -4,6 +4,7 @@ import numpy as np
 import ifcopenshell.util.placement
 import ifcopenshell.util.element
 from ifc_to_fds.core.canonical import MEPGraph, MEPSystem, MEPConnection, PortReference
+from ifc_to_fds.core.inventory import extract_property_sets
 from .classifier import classify_mep_element, MEP_TYPES
 from ifc_to_fds.diagnostics import operation
 
@@ -38,7 +39,7 @@ def extract_mep_graph(model, file):
         name = group.Name or gid
         predefined = str(getattr(group, "PredefinedType", "") or "")
         object_type = str(getattr(group, "ObjectType", "") or "")
-        psets = ifcopenshell.util.element.get_psets(group)
+        psets = extract_property_sets(group)
         category, critical = classify_mep_element(
             group.is_a(),
             name,
