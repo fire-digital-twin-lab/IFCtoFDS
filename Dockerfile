@@ -35,6 +35,7 @@ COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN uv sync --frozen --no-install-project --no-editable
 
 COPY ifc_to_fds ./ifc_to_fds
+COPY reference-cases/ev-library/ ./reference-cases/ev-library/
 COPY js ./js
 COPY css ./css
 COPY index.html guide.html ./
