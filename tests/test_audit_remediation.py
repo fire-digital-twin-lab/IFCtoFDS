@@ -992,3 +992,25 @@ def test_check_opening_grid_alignment_tangent_outside_returns_inconclusive():
     assert "does not intersect host cross-section" in res["reason"]
 
 
+
+
+def test_a_quotient_within_float_noise_of_an_integer_does_not_add_a_cell():
+    """Audit F7: 0.07 / 0.01 is 7.000000000000001 in binary64; ceil used to give 8 cells and 80,000 in total."""
+    from ifc_to_fds.domain.bim import BoundingBox
+    from ifc_to_fds.mapping.exporter import compute_mesh_grid
+
+    ijk, _ = compute_mesh_grid(BoundingBox(xmin=0, xmax=0.07, ymin=0, ymax=1, zmin=0, zmax=1), 0.01, max_total_cells=70_000)
+    assert ijk == [7, 100, 100]
+    for length, cell, cells in ((0.3, 0.1, 3), (1.1, 0.1, 11), (0.29, 0.1, 3), (0.301, 0.1, 4), (0.04, 0.1, 1)):
+        got, _ = compute_mesh_grid(BoundingBox(xmin=0, xmax=length, ymin=0, ymax=1, zmin=0, zmax=1), cell)
+        assert got[0] == cells, (length, cell, got)
+
+
+def test_the_cell_limit_still_applies_to_a_real_excess():
+    import pytest
+
+    from ifc_to_fds.domain.bim import BoundingBox
+    from ifc_to_fds.mapping.exporter import compute_mesh_grid
+
+    with pytest.raises(ValueError, match="exceeds maximum"):
+        compute_mesh_grid(BoundingBox(xmin=0, xmax=0.071, ymin=0, ymax=1, zmin=0, zmax=1), 0.01, max_total_cells=70_000)
