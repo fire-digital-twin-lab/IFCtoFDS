@@ -443,3 +443,21 @@ def test_scenario_bundle_embeds_library_digest():
     assert len(bundle.ev_library_digest) == 64
 
 
+def test_a_damaged_library_file_stops_the_scenario_instead_of_dropping_the_digest(tmp_path, monkeypatch):
+    """The digest hashes every file of the library, so a broken file that no preset uses must still be seen."""
+    import shutil
+    from ifc_to_fds.fire.ev_library import library_dir
+
+    copy = tmp_path / "lib"
+    shutil.copytree(library_dir(), copy)
+    (copy / "zz-damaged.json").write_text("{not json", encoding="utf-8")
+    monkeypatch.setenv("IFCFDS_EV_LIBRARY_DIR", str(copy))
+    with pytest.raises(ValueError):
+        emit_fire_scenario(
+            mapping_plan=_sample_mapping_plan(),
+            bundle_sha256=_valid_bundle_hash(),
+            ev_selections=[EVSelection(preset_id="e-bike-lfp", position=(0.0, 0.0, 0.55))],
+            verification_status="MAPPING_VERIFIED",
+        )
+
+

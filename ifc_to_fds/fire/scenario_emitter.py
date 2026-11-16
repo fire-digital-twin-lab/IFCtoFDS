@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from ifc_to_fds.domain.mapping import MappingPlan
 from ifc_to_fds.mapping.exporter import clean_fds_id
 from ifc_to_fds.fire.base_geometry import VerifiedBaseGeometry
-from ifc_to_fds.fire.ev_library import EV_LIBRARY_VERSION, EVPreset, load_ev_preset
+from ifc_to_fds.fire.ev_library import EV_LIBRARY_VERSION, EVPreset, library_digest, load_ev_preset
 from ifc_to_fds.fire.mesh_metrics import ev_peak_hrr_evidence
 from ifc_to_fds.fire.vehicle_collision import (
     VehicleCollisionAssessment,
@@ -639,13 +639,8 @@ def emit_fire_scenario(
     scenario_hash = hashlib.sha256(fds_fragment.encode("utf-8")).hexdigest()[:12]
     scenario_id = f"ev_scenario_{scenario_hash}"
 
-    # Compute EV library content digest for reproducibility (M-14)
-    lib_digest = None
-    try:
-        from ifc_to_fds.fire.ev_library import library_digest
-        lib_digest = library_digest()
-    except Exception:
-        pass
+    # EV library digest (M-14): a damaged library file must stop the build, not leave the digest empty.
+    lib_digest = library_digest()
 
     return ScenarioBundle(
         scenario_id=scenario_id,

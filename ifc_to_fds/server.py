@@ -107,7 +107,6 @@ async def security_guard(request: Request, call_next):
         else:
             raw_host = host_header.split(":")[0].strip().lower()
         if not raw_host or raw_host not in allowed_hosts:
-            from fastapi.responses import JSONResponse
             return JSONResponse(status_code=400, content={"detail": f"Invalid Host header: {raw_host or 'missing'}"})
 
     # 2. API Key authentication for /api/* (excluding /api/health)
@@ -119,7 +118,6 @@ async def security_guard(request: Request, call_next):
             if auth_header.lower().startswith("bearer "):
                 provided_key = auth_header[7:].strip()
         if not provided_key or not hmac.compare_digest(provided_key.encode("utf-8"), api_key.encode("utf-8")):  # bytes: str with non-ASCII raises TypeError
-            from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid or missing API key"},
@@ -136,7 +134,6 @@ async def security_guard(request: Request, call_next):
         and origin.rstrip("/") != str(request.base_url).rstrip("/")
         and origin.rstrip("/") not in allowed_origins
     ):
-        from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=403,
             content={"detail": "Use the workbench served by this local backend"},
