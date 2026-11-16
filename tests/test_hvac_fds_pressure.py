@@ -100,11 +100,11 @@ def test_smooth_ducts_have_no_friction_in_fds(tmp_path):
     assert abs(drop) < 0.2  # Pa; a smooth-pipe friction factor would give about 2 Pa over 3.5 m
 
 
-def test_rectangular_duct_friction_uses_the_equivalent_round_diameter_not_the_hydraulic_one(tmp_path):
-    """FDS takes D = sqrt(4A/pi) from AREA and ignores PERIMETER for friction; textbook practice uses 4A/P.
+def test_rectangular_duct_friction_uses_the_hydraulic_diameter_with_round_false(tmp_path):
+    """The serializer writes ROUND=.FALSE. with AREA/PERIMETER, so FDS uses D = 4A/P like textbook practice.
 
-    For this 0.5 x 0.3 m duct that is a real difference, so a rectangular duct is under-resisted by FDS
-    unless the engineer compensates. This test records the behaviour; it does not endorse it.
+    Without the flag FDS takes D = sqrt(4A/pi) and ignores PERIMETER: 18% less friction for this 0.5 x 0.3 m duct
+    (audit F9; measured 1.20 Pa without the flag, 1.46 Pa with it, hand calculation 1.47 Pa).
     """
     flow, area, perimeter = 0.5, 0.15, 1.6
     section = dict(area_m2=area, perimeter_m=perimeter)
@@ -113,5 +113,5 @@ def test_rectangular_duct_friction_uses_the_equivalent_round_diameter_not_the_hy
     hydraulic = 4 * area / perimeter
     as_fds = sum(hand_drop(flow, equivalent, length, 5e-4, 0.0, area) for length in (3.0, 0.5))
     textbook = sum(hand_drop(flow, hydraulic, length, 5e-4, 0.0, area) for length in (3.0, 0.5))
-    assert drop == pytest.approx(as_fds, rel=0.05), (drop, as_fds)
-    assert abs(textbook - drop) / textbook > 0.05, (drop, textbook)
+    assert drop == pytest.approx(textbook, rel=0.05), (drop, textbook)
+    assert abs(as_fds - drop) / as_fds > 0.05, (drop, as_fds)  # the equivalent-round value is no longer what FDS uses

@@ -14,6 +14,7 @@ from .acceptance import (
 from .parser import parse_fds
 from ifc_to_fds.domain.validation.model import MAPPING_GATE_ORDER
 
+from .domain_coverage import mesh_coverage_problem
 from .passage_resolution import PassageResolutionChecker
 from .effective import check_opening_grid_alignment
 from .preflight import (
@@ -133,6 +134,8 @@ def run_independent_validation(
             for a, b in zip(union_xb, model.simulation_domain.to_xb())
         ):
             finding("domain", "Serialized MESH differs from declared simulation domain")
+        elif coverage_problem := mesh_coverage_problem(domains, model.simulation_domain.to_xb()):
+            finding("domain", coverage_problem)
         else:
             mesh_record = next(r for r in parsed.records if r.kind == "MESH")
             grid = mesh_record.values.get("IJK", [])
