@@ -58,6 +58,7 @@ def run_independent_validation(
     )
 
     def finding(gate, detail, key="", severity=Severity.P1):
+        # Fails the gate whatever the severity: for information that must not fail it, use note().
         report.gates[gate].status = GateStatus.FAIL
         if report.gates[gate].reason:
             report.gates[gate].reason += "; " + detail
@@ -76,6 +77,15 @@ def run_independent_validation(
                 title=detail[:100],
                 detail=detail,
                 element_id=key,
+            )
+        )
+
+    def note(gate, title, detail, key="", prefix="FND"):
+        """A P2 finding every reader sees; the gate keeps its status."""
+        report.findings.append(
+            Finding(
+                id=f"{prefix}-{len(report.findings) + 1:04}", severity=Severity.P2, category=gate,
+                title=title, detail=detail, element_id=key,
             )
         )
 
@@ -273,17 +283,14 @@ def run_independent_validation(
         for key, item in sorted(accepted.items()):
             # A waiver never changes the verdict, but every reader of the report must see it.
             review = item.get("review") or {}
-            report.findings.append(
-                Finding(
-                    id=f"ACC-{len(report.findings) + 1:04}",
-                    severity=Severity.P2,
-                    category="geometry",
-                    title="Source defect accepted by review",
-                    detail=f"{item.get('kind') or 'defect'} accepted by {review.get('reviewer', '?')} "
-                    f"(policy {review.get('policy_version', '?')}): {review.get('rationale', '')}; "
-                    f"mesh {str(item.get('mesh_sha256') or '')[:16]}",
-                    element_id=key,
-                )
+            note(
+                "geometry",
+                "Source defect accepted by review",
+                f"{item.get('kind') or 'defect'} accepted by {review.get('reviewer', '?')} "
+                f"(policy {review.get('policy_version', '?')}): {review.get('rationale', '')}; "
+                f"mesh {str(item.get('mesh_sha256') or '')[:16]}",
+                key,
+                prefix="ACC",
             )
     topology_blockers = source_topology_blockers(source_topology)
     confirmed_invalid = sorted(
@@ -485,13 +492,7 @@ def run_independent_validation(
                 f"Excluded from the deck by reviewed decision (reviewer: {decision.get('reviewer', 'unknown')}): "
                 f"{decision.get('rationale', 'no rationale recorded')}"
             )
-            # Information, not a failure: appended directly so the scope gate keeps its status.
-            report.findings.append(
-                Finding(
-                    id=f"FND-{len(report.findings) + 1:04}", severity=Severity.P2, category="scope",
-                    title=detail[:100], detail=detail, element_id=key,
-                )
-            )
+            note("scope", detail[:100], detail, key)  # information, not a failure
             continue
         if strategy == MappingStrategy.SEMANTIC_ONLY.value:
             report.semantic_only_count += 1
