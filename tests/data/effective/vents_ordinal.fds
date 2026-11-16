@@ -1,0 +1,12 @@
+&HEAD CHID='vents_ordinal' /
+&TIME T_END=0 /
+&SURF ID='A' /
+&SURF ID='B' /
+&SURF ID='C' /
+&SURF ID='S', COLOR='RED' /
+&SURF ID='T', COLOR='BLUE' /
+&MESH IJK=20,20,20, XB=0,2,0,2,0,2 /
+&VENT ID='V1', XB=0.2,0.6,0.2,0.6,0,0, SURF_ID='S' /
+&VENT ID='V2', XB=1.0,1.4,0.2,0.6,0,0, SURF_ID='T' /
+&VENT ID='V3', XB=0.2,0.6,1.0,1.4,0,0, SURF_ID='S' /
+&TAIL /
