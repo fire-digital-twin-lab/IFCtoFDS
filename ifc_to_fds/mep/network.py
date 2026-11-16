@@ -5,6 +5,7 @@ import math
 from ifc_to_fds.domain.mep.hvac import HvacDuct, HvacNetworkPlan, HvacNode, JunctionSpec, hvac_spec
 from ifc_to_fds.domain.mapping.enums import MappingStrategy
 from ifc_to_fds.domain.scope import ScopeDecision
+from ifc_to_fds.mapping.obst_boxes import emitted_obst_boxes, vent_rests_on_solid_face
 
 PORT_POSITION_TOLERANCE_M = 0.001
 SEGMENT_TYPES = ("IFCDUCTSEGMENT", "IFCFLOWSEGMENT")
@@ -110,8 +111,16 @@ def build_hvac_network(model):
                 box = bounds.to_xb()
                 return (any(abs(xb[2*axis] - box[j]) < 1e-8 for j in (2*axis, 2*axis+1))
                         and all(box[2*i] <= xb[2*i] + 1e-8 and box[2*i+1] >= xb[2*i+1] - 1e-8 for i in range(3) if i != axis))
-            if not on_face(domain) and not any(e.mapping_strategy == MappingStrategy.OBST and e.bounding_box and on_face(e.representation_bounds or e.bounding_box) for e in model.elements):
-                raise ValueError("HVAC vent must lie on a supported OBST or mesh boundary face; GEOM vent coupling is not yet supported")
+            if not on_face(domain):
+                # The boxes FDS receives, not the host's bounding box: a vent over a doorway cut into a wall
+                # sits inside the box but on no face, and FDS stops with ERROR 818 (audit F2).
+                boxes = [b for e in model.elements if e.scope_decision in (ScopeDecision.IN_SCOPE, ScopeDecision.BOUNDARY_RETAINED)
+                         for b in emitted_obst_boxes(e)]
+                if not vent_rests_on_solid_face(xb, boxes):
+                    raise ValueError(
+                        f"HVAC vent of ports {', '.join(keys)} must lie entirely on a solid/gas face of the OBST boxes written to FDS "
+                        "or on a mesh boundary face; this rectangle covers open space or the inside of a solid. "
+                        "GEOM vent coupling is not yet supported")
         nodes.append(node)
         for key in keys:
             port_node[key] = node_id

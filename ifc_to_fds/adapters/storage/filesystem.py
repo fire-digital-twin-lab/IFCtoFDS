@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from ifc_to_fds.domain.mapping import MappingManifest
 from ifc_to_fds.geometry.storage import archive_package, copy_package, file_hash
+from .path_budget import BACKUP_PREFIX, STAGING_PREFIX, UNIQUE_HEX, check_output_path_budget
 
 
 class LocalFilesystemArtifactRepository:
@@ -16,13 +17,14 @@ class LocalFilesystemArtifactRepository:
     def save_run_artifacts(
         self, result: Dict[str, Any], output: Union[str, Path]
     ) -> Dict[str, str]:
+        check_output_path_budget(output)
         target_path = Path(output).resolve()
         target_dir = target_path.parent
         target_dir.mkdir(parents=True, exist_ok=True)
         base_stem = target_path.stem
 
         # Use an isolated staging directory in the same filesystem for atomic publication
-        staging_dir = target_dir / f".staging-{uuid4().hex}"
+        staging_dir = target_dir / f"{STAGING_PREFIX}{uuid4().hex[:UNIQUE_HEX]}"
         staging_dir.mkdir(parents=True, exist_ok=True)
 
         emitted_filenames: List[str] = [target_path.name]
@@ -82,7 +84,7 @@ class LocalFilesystemArtifactRepository:
             emitted_filenames.append(checksums_name)
 
             # 6. Transactional atomic publication with rollback protection
-            backup_dir = target_dir / f".backup-{uuid4().hex}"
+            backup_dir = target_dir / f"{BACKUP_PREFIX}{uuid4().hex[:UNIQUE_HEX]}"
             existing_backed_up: List[str] = []
             target_payloads = target_dir / f"{base_stem}_geometry.payloads"
             backup_payloads = backup_dir / f"{base_stem}_geometry.payloads"
