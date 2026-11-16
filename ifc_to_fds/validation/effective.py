@@ -197,12 +197,14 @@ def _effective_vents(mesh, lines, vents, domain, labels):
     table = next((i for i, line in enumerate(lines) if line.strip() == "VENT"), None)
     rows = {}
     if grids and table is not None:
-        count = int(lines[table + 1].split()[0])
-        for n in range(count):
+        count, exterior = (int(v) for v in lines[table + 1].split()[:2])
+        # FDS 6.11.1 dump.f90 row: x1..z2 ORDINAL SURF_INDEX. The last `exterior` rows are solver-made patches whose
+        # ordinals overlap the input vents', so only the leading rows can be matched to VENTORIG labels.
+        for n in range(count - exterior):
             head = lines[table + 2 + n].split()
             indices = [int(v) for v in lines[table + 2 + count + n].split()[:6]]
-            if len(head) >= 8 and int(head[7]) > 0 and int(head[7]) <= len(labels):
-                rows[labels[int(head[7]) - 1]] = indices
+            if len(head) >= 7 and 0 < int(head[6]) <= len(labels):
+                rows[labels[int(head[6]) - 1]] = indices
     for vent in vents:
         xb = vent.values.get("XB", [])
         flat = [a for a in range(3) if len(xb) == 6 and xb[2 * a] == xb[2 * a + 1]]

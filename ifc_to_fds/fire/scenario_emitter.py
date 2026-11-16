@@ -16,6 +16,7 @@ from ifc_to_fds.domain.mapping import MappingPlan
 from ifc_to_fds.mapping.exporter import clean_fds_id
 from ifc_to_fds.fire.base_geometry import VerifiedBaseGeometry
 from ifc_to_fds.fire.ev_library import EV_LIBRARY_VERSION, EVPreset, load_ev_preset
+from ifc_to_fds.fire.mesh_metrics import ev_peak_hrr_evidence
 from ifc_to_fds.fire.vehicle_collision import (
     VehicleCollisionAssessment,
     assess_vehicle_base_collisions,
@@ -58,6 +59,10 @@ class EVSelection(BaseModel):
     # Measured heat release (time after ignition s, HRR kW) replayed as the RAMP instead of a t-squared curve.
     hrr_curve_kw: Optional[List[Tuple[float, float]]] = None
     hrr_curve_source: Optional[str] = None
+
+    def peak_hrr_evidence(self) -> Dict[str, Any]:
+        """Stated peak HRR, else the preset's range midpoint with its basis and citations; the mesh gate calls this."""
+        return ev_peak_hrr_evidence(self)
 
     @field_validator("dimensions")
     @classmethod

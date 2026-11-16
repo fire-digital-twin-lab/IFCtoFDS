@@ -26,11 +26,11 @@ def emitted_obst_boxes(element):
     return list(box_set_for(element.mesh) or [])
 
 
-def vent_rests_on_solid_face(vent_xb, boxes) -> bool:
-    """True when the whole VENT rectangle lies on a face with solid on exactly one side.
+def vent_unsupported_area(vent_xb, boxes) -> tuple[float, float]:
+    """(m² of the VENT without a solid/gas face under it, VENT m²).
 
     Consider the solid on each side of the plane, including any box that crosses it.
-    Require the same gas-facing side across the entire rectangle.
+    The face counts only where the same side faces the gas across the entire rectangle.
     """
     axis = next(a for a in range(3) if vent_xb[2 * a] == vent_xb[2 * a + 1])
     plane = vent_xb[2 * axis]
@@ -48,4 +48,10 @@ def vent_rests_on_solid_face(vent_xb, boxes) -> bool:
         rectangle.difference(below.difference(above)).area,
         rectangle.difference(above.difference(below)).area,
     )
-    return unexposed_area <= COVERAGE_RELATIVE_TOLERANCE * rectangle.area
+    return unexposed_area, rectangle.area
+
+
+def vent_rests_on_solid_face(vent_xb, boxes) -> bool:
+    """True when the whole VENT rectangle lies on a face with solid on exactly one side."""
+    unsupported, area = vent_unsupported_area(vent_xb, boxes)
+    return unsupported <= COVERAGE_RELATIVE_TOLERANCE * area

@@ -28,6 +28,15 @@ def test_vents_and_controlled_obstruction_are_verified_from_the_smv():
     assert set(result.evidence["effective_bounds"]) == {"O1", "O2"}
 
 
+def test_vents_are_matched_by_ordinal_not_by_surface_index():
+    """F2-SMV: the SMV row is `x1..z2 ORDINAL SURF_INDEX`. Two vents share SURF_INDEX 4 and 5 exceeds the vent count."""
+    result = effective_obstructions(*load("vents_ordinal"))
+    assert result.status == "PASS", result.reason
+    assert {k: v["status"] for k, v in result.evidence["elements"].items()} == {
+        "V1": "PASS", "V2": "PASS", "V3": "PASS",
+    }
+
+
 def test_a_vent_the_solver_dropped_fails_by_name():
     result = effective_obstructions(*load("vent_thin"))
     assert result.status == "FAIL" and "V_THIN" in result.reason
