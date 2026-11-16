@@ -174,6 +174,7 @@ def plan_mapping(
     boundary_policy=None,
     geometry_fidelity=False,
     system_decisions=None,
+    compile_hvac=True,
 ):
     if include_review_solids:
         raise ValueError(
@@ -357,6 +358,7 @@ def plan_mapping(
                 "; valid IFC host solid retained, including kernel-applied voids; "
                 "opening evidence incomplete, opening verification INCONCLUSIVE"
             )
-    from ifc_to_fds.mep.network import build_hvac_network
-    model.hvac_network = build_hvac_network(model)  # Validated independently of serialization.
+    if compile_hvac:  # the audit path skips it: HvacNetworkChecker compiles again and reports a refusal as hvac=FAIL
+        from ifc_to_fds.mep.network import build_hvac_network
+        model.hvac_network = build_hvac_network(model)  # Validated independently of serialization.
     return model
