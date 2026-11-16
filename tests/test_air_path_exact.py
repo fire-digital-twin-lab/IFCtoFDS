@@ -58,9 +58,16 @@ class _Unreadable:
         raise RuntimeError("mesh could not be built")
 
 
-def _with_unreadable(context, monkeypatch, source):
+class _NoMesh(_Unreadable):
+    """An emitted primitive that returns no mesh instead of raising."""
+
+    def mesh(self):
+        return None
+
+
+def _with_unreadable(context, monkeypatch, source, primitive=_Unreadable):
     parsed = context.parsed
-    emitted = list(parsed.primitives) + [_Unreadable(source)]
+    emitted = list(parsed.primitives) + [primitive(source)]
     monkeypatch.setattr(type(parsed), "primitives", property(lambda self: emitted))  # `primitives` is computed
     return context
 
@@ -94,3 +101,17 @@ def test_equal_source_wall_does_not_claim_source_airtightness(box_model):
     assert outcome.result.evidence == evidence
     assert outcome.metrics == {"air_path": evidence}
     assert outcome.findings == []
+
+
+def test_an_emitted_solid_without_a_mesh_is_not_skipped_silently(box_model, monkeypatch):
+    keys = frozenset(e.entity_key for e in box_model.elements)
+    context = _with_unreadable(_context(box_model, keys), monkeypatch, source={}, primitive=_NoMesh)
+    outcome = AirPathTopologyChecker().check(context)
+    assert outcome.result.status == GateStatus.INCONCLUSIVE
+    assert "BAD" in outcome.result.reason and outcome.metrics["air_path"]["unreadable_count"] == 1
+
+
+def test_a_missing_mesh_of_an_unrelated_source_is_not_held_against_the_enclosure(box_model, monkeypatch):
+    keys = frozenset(e.entity_key for e in box_model.elements)
+    context = _with_unreadable(_context(box_model, keys), monkeypatch, source={"entity_key": "elsewhere:999"}, primitive=_NoMesh)
+    assert AirPathTopologyChecker().check(context).result.status == GateStatus.PASS

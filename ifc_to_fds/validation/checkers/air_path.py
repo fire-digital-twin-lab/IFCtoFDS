@@ -72,16 +72,14 @@ class AirPathTopologyChecker:
             for p in context.parsed.primitives:
                 if getattr(p, "kind", None) in ("OBST", "GEOM") and hasattr(p, "mesh"):
                     source_key = p.source.get("entity_key") if getattr(p, "source", None) else None
-                    m = None
                     try:
                         raw_m = p.mesh()
-                        if raw_m and valid_solid(raw_m):
-                            m = as_trimesh(raw_m)
+                        m = as_trimesh(raw_m) if raw_m and valid_solid(raw_m) else None
                     except Exception:
+                        m = None
+                    if not m:  # raised, no mesh, or not a valid solid: never skipped silently
                         if not source_key or source_key in enclosure_keys:  # may be the enclosure or a blocker
                             unreadable.append(str(getattr(p, "id", None) or "primitive"))
-                        continue
-                    if not m:
                         continue
 
                     if not source_key:
