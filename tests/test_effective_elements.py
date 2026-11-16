@@ -99,3 +99,42 @@ def test_grid_that_is_not_a_round_multiple_is_read_within_the_smv_print_precisio
     result = effective_obstructions(fds, smv)
     assert result.status == "PASS", result.reason
     assert result.evidence["elements"]["V_TOP"]["status"] == "PASS"
+
+
+# --- obstructions FDS drops: wholly inside obstructions declared before them (fixtures written by FDS 6.11.1) ---------
+
+def test_an_obstruction_inside_an_earlier_one_is_not_expected_in_the_solver_inventory():
+    result = effective_obstructions(*load("redundant_obst"))
+    assert result.status == "PASS", result.reason
+    assert result.evidence["redundant_obstructions"] == ["INNER"]
+    assert set(result.evidence["effective_bounds"]) == {"OUTER", "APART"}
+
+
+def test_declared_before_its_cover_the_same_obstruction_is_listed_and_checked():
+    result = effective_obstructions(*load("redundant_reversed"))
+    assert result.status == "PASS", result.reason
+    assert result.evidence["redundant_obstructions"] == []
+    assert set(result.evidence["effective_bounds"]) == {"INNER", "OUTER", "APART"}
+
+
+def test_an_obstruction_sticking_out_of_its_cover_must_still_be_in_the_inventory():
+    fds, smv = load("redundant_obst")  # this SMV lacks INNER
+    sticking = fds.replace("XB=0.6,1.0,0.6,1.0,0.6,1.0", "XB=1.4,1.8,0.6,1.0,0.6,1.0")  # x 1.6..1.8 lies outside OUTER
+    assert sticking != fds
+    result = effective_obstructions(sticking, smv)
+    assert result.status == "FAIL" and "inventory differs" in result.reason
+
+
+def test_a_controlled_obstruction_is_never_treated_as_redundant():
+    fds, smv = load("redundant_obst")
+    controlled = fds.replace("XB=0.6,1.0,0.6,1.0,0.6,1.0, SURF_ID='S'", "XB=0.6,1.0,0.6,1.0,0.6,1.0, SURF_ID='S', DEVC_ID='dv'")
+    controlled = controlled.replace("&TAIL /", "&DEVC ID='dv', QUANTITY='TIME', SETPOINT=5, XYZ=1,1,1 /\n&TAIL /")
+    assert controlled != fds
+    result = effective_obstructions(controlled, smv)
+    assert result.status == "FAIL" and "inventory differs" in result.reason
+
+
+def test_a_sheet_thinner_than_half_a_cell_inside_an_earlier_obstruction_is_dropped_too():
+    result = effective_obstructions(*load("redundant_thin"))  # INNER is 0.04 m thick on a 0.2 m grid: it collapses
+    assert result.status == "PASS", result.reason
+    assert result.evidence["redundant_obstructions"] == ["INNER"]

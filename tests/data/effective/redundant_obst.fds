@@ -1,0 +1,8 @@
+&HEAD CHID='redundant_obst' /
+&MESH IJK=10,10,10, XB=0,2,0,2,0,2 /
+&TIME T_END=0 /
+&SURF ID='S', COLOR='RED' /
+&OBST ID='OUTER', XB=0.4,1.6,0.4,1.6,0.4,1.6, SURF_ID='S' /
+&OBST ID='INNER', XB=0.6,1.0,0.6,1.0,0.6,1.0, SURF_ID='S' /
+&OBST ID='APART', XB=1.6,2.0,1.6,2.0,0.4,0.8, SURF_ID='S' /
+&TAIL /
