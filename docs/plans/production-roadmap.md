@@ -87,6 +87,14 @@ A và B lệch nhau > 1.000 km trên trục Y sau khi đọc: không tự ghép 
 - Solver: `python scripts/install-fds.py` (FDS 6.11.1 vào `.deps/`), rồi `IFCFDS_SOLVER=<.deps/.../fds_openmp.exe> python -m pytest -q -m solver`.
 - Kết quả chạy file thật ghi ra ngoài repo.
 
+## A7. Giả định mô hình đã chốt (ghi trước khi áp dụng)
+Mỗi giả định nêu nguồn, phạm vi và cách thay đổi. Giả định không thay cho xác nhận của kỹ sư.
+
+| Ngày | Giả định | Nguồn | Phạm vi | Ghi chú |
+| --- | --- | --- | --- | --- |
+| 2026-11-16 | **Cửa thang máy mặc định ĐÓNG** | Chỉ dẫn của người dùng trong phiên làm việc | 6 phần tử thang máy của A, hầm 2: 3 cánh cửa (`IfcBuildingElementProxy`, vật rắn kín 0,056 m³, dày cỡ 10 mm) và 3 khung ô mở (0,093 m³). Quyết định `PASSIVE_OBSTACLE` thay cho `REFERENCE_GEOMETRY` | Đóng là rào chắn khói, nên bảo thủ cho bài toán kiểm soát khói. Đổi khi có thông tin vận hành (ví dụ thang về tầng hầm khi cháy). Cần kỹ sư xác nhận |
+| 2026-11-16 | **Dung sai cut-cell tạm thời** cho `effective_geometry` của phần tử GEOM: sai số khối khí so với thể tích phần tử ≤ 1% thì đạt, trên 1% thì `FAIL`; diện tích mặt mở chỉ báo cáo, chưa chặn | Tôi đề xuất, người dùng cho phép chốt nếu hợp lý; căn cứ ở thí điểm 19 GEOM của A (phần tử dày: sai tối đa 0,12%; phần tử mỏng bị FDS làm dày: sai 85% đến 300%) | `effective_geometry` cho GEOM | **Tạm thời:** mẫu nhỏ, chưa có tường và sàn lớn. Xem lại sau khi mở rộng mẫu. Chưa nối vào cổng nào |
+
 ---
 
 # Phần B — Kế hoạch
