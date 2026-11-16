@@ -49,6 +49,28 @@ Chỉ 6 trong 21 cửa lấp một lỗ mở (`IfcRelFillsElement`) của một 
 
 **Khuyến nghị:** phương án 1 cho 21 cửa. Dùng phương án 2 chỉ như bước tạm nếu chưa sửa được nguồn, và chỉ khi kỹ sư tuyên bố rõ trạng thái cửa. Phương án 3 chỉ khi kỹ sư muốn mô phỏng cửa đóng mà không sửa được nguồn.
 
+### Có thật sự phải sửa file Revit không? (đo 2026-11-16)
+**Không bắt buộc cho cả 21 cửa.** Đo bằng cách lấy mẫu 2.000 điểm trên bề mặt từng cửa và hỏi điểm đó nằm trong vật rắn nào của deck A (tường đã cắt lỗ). Tỷ lệ điểm nằm trong vật rắn cho biết tại chỗ đó deck có lối đi trống hay tường đặc:
+
+| Nhóm | Số cửa | Tỷ lệ điểm cửa nằm trong vật rắn | Khi loại cửa khỏi deck |
+| --- | ---: | --- | --- |
+| Lấp một ô mở (`IfcOpeningElement`) của tường | 6 | 0,01 đến 0,02 (lối đi trống) | **Lối đi mở thật** |
+| Không có quan hệ lấp, nhưng đứng trong khoảng trống | 2 | 0,01 và 0,02 | **Lối đi mở thật** |
+| Không có quan hệ lấp, nằm trong tường đặc | 8 | 0,81 đến 0,83 | **Không đổi gì**: tường đặc đã chắn, tức mặc định là đóng |
+| Không có quan hệ lấp, nửa trong tường | 5 | 0,26 đến 0,27 | Chưa rõ (có thể khung cửa nằm trong bề dày tường); cần xem từng cái |
+
+Hệ quả:
+- **8 cửa nằm trong tường đặc không cần sửa Revit.** Loại chúng bằng quyết định `EXCLUDE` không làm đổi mô phỏng.
+- **8 cửa đứng trong lối đi trống (6 + 2)** là nơi việc thiếu cửa tạo ra lối đi mở. Nếu cửa thép được xem là mặc định đóng như cửa thang máy, loại cửa là **không bảo thủ**; muốn đóng thì cần có hình học cửa.
+- **5 cửa nửa trong tường** cần xem từng cái trước khi kết luận.
+
+Vì sao sửa Revit là cách ưu tiên (không phải duy nhất) cho nhóm 8 cửa trống:
+1. Pipeline không tự sinh hình học. Dữ liệu cửa hiện không dựng lại được một solid hợp lệ (xem trên).
+2. **Phương án thay bằng tấm mỏng dựng từ thuộc tính IFC** (`OverallWidth`, `OverallHeight`, vị trí đặt) là tính năng mới: quyết định mới trong mapping, dựng tấm xoay theo cửa (GEOM, vì mô hình bị xoay), cách xác minh khi không có solid nguồn để so, và dung sai được duyệt. Ước tính nhiều ngày công và cần duyệt thiết kế.
+3. Sửa hai họ cửa trong Revit là một thay đổi nhỏ giải quyết cả nhóm, và dữ liệu đúng ở nguồn cũng có lợi cho mọi công cụ khác dùng cùng IFC.
+
+Nếu không sửa được Revit, hai lựa chọn còn lại: loại cửa và **ghi rõ lối đi được mô hình hóa là mở** (đã có finding P2 cho từng cửa), hoặc làm tính năng tấm mỏng.
+
 ### Tường (1 phần tử)
 Đã đo trên IFC nguồn: lưới chỉ 51 đỉnh, 88 mặt. 26 cạnh hở gom thành **hai cụm giống hệt nhau**, mỗi cụm khoảng 0,39 × 0,30 × 0,06 m (11 đỉnh, tổng chiều dài cạnh 1,14 m), ở hai cao độ gần nhau (z ≈ −5,64 và −5,44 m). Tức là hai lỗ xuyên nhỏ thiếu mặt bên, không phải tường hỏng cả khối. Nhưng khối bao của tường là 18,4 × 15,4 × 3,3 m, nên **loại cả tường vì hai lỗ nhỏ sẽ mở cả một vùng lớn** trong mô phỏng. **Khuyến nghị: sửa ở nguồn** (đóng hai lỗ trong Revit), không loại tường.
 
@@ -65,6 +87,8 @@ Hai điều cần lưu ý:
 1. **Báo cáo hết finding dù 22 phần tử vắng khỏi deck** (21 cửa, 1 tường lớn): người đọc chỉ thấy số đếm `EXCLUDED_APPROVED`. Nên hiển thị mỗi phần tử bị loại thành một finding P2 để không thể bỏ sót. Chưa làm.
 2. `MAPPING_VERIFIED` ở đây chỉ nói các quyết định loại trừ đã được ghi và duyệt, không nói loại trừ đó đúng về vật lý (cửa vắng nghĩa là lối đi mở; loại tường mở cả một vùng).
 
+**Cập nhật dry-run (cửa thang máy mặc định đóng, roadmap A7):** 6 phần tử thang máy chuyển từ `REFERENCE_GEOMETRY` sang `PASSIVE_OBSTACLE`. Chạy lại A với mã đã có finding loại trừ cho kết quả: `MAPPING_VERIFIED`, **552 MATCHED** (546 cũ và 6 phần tử thang máy nay được xuất thành vật rắn mỏng và đối chiếu khớp nguồn), 9 `REFERENCE_PRESERVED`, 210 `SEMANTIC_ONLY`, 22 `EXCLUDED_APPROVED`, và **đúng 22 finding P2** loại `scope` (mỗi phần tử bị loại một finding, nêu người duyệt và lý do). Chỉ còn ba cổng mô phỏng `INCONCLUSIVE` (`passage_resolution`, `solver` chưa chạy trong lượt này, `effective_geometry`).
+
 Tệp quyết định (có mã cấu kiện thật) và danh sách bàn giao 21 cửa để sửa trong Revit (mã, tầng, họ cửa, kích thước, chỉ số lưới) nằm **ngoài repo** trong thư mục sao lưu cục bộ.
 
 ## 3. M2.4: `effective_geometry` trên A (và B)
@@ -78,6 +102,9 @@ Tệp quyết định (có mã cấu kiện thật) và danh sách bàn giao 21 
 | C, 8 tầng hầm | `PASS` | **`FAIL`**: "Mesh M1: Solver obstruction inventory differs from input" | **`FAIL`**: 43 lối đi hẹp hơn 2 ô (ô 0,2 m) | `REJECTED`; miền chỉ định bằng `--domain` |
 
 Với C, miền (x từ −12 đến 89, y từ −1 đến 18, z từ −9 đến 1 m) được lấy từ deck PyroSim của C **chỉ cho phép thử này**, vì deck của ta không có `MESH` khi chưa khai báo miền. Cấu kiện của ta cao tới khoảng 38 m, nên có thể đã bị miền cắt; **chưa kiểm** xem đó có phải nguyên nhân của `effective_geometry` `FAIL` hay đó là lệch thật giữa deck và danh mục vật cản của solver. Lỗi này cần điều tra trước khi dùng kết luận cho C. 43 lối đi hẹp hơn 2 ô là kết quả hình học thật ở cỡ ô 0,2 m (cần cỡ ô mịn hơn hoặc xử lý lối đi).
+
+### C: `effective_geometry` `FAIL` là báo động giả của cổng (đã điều tra)
+Với C, cổng báo "danh mục vật cản của solver khác đầu vào" ở mesh M1: solver liệt kê 60 vật cản, đầu vào có 87 vật cản chạm M1. Cả 27 vật cản bị thiếu là lớp bọc và lót ống gió, và **cả 27 đều nằm trọn trong các `OBST` khai báo trước chúng**. Trong 54 `OBST` nằm trọn trong vật cản khác, 27 cái chỉ bị phủ bởi vật cản khai báo **trước** thì đều bị solver bỏ, còn 27 cái bị phủ bởi vật cản khai báo **sau** thì đều được liệt kê. Đã xác nhận bằng FDS 6.11.1 trên deck nhỏ (kể cả tấm mỏng hơn nửa ô lưới): FDS bỏ khỏi danh mục các vật cản nằm trọn trong vật cản đã khai báo. Đó là cách FDS xử lý vật cản thừa, không phải sai lệch hình học. Cổng đã được sửa (PR riêng, có fixture do FDS sinh ra và ca vẫn bị chặn); với dữ liệu thật của C kết quả chuyển từ `FAIL` sang `INCONCLUSIVE` vì một dầm có tọa độ rơi đúng giữa hai nút lưới (hòa nửa ô, chính sách hiện có coi là chưa chứng minh được). Lưu ý: kết quả mới chỉ khẳng định cổng không còn báo sai, chưa khẳng định hình học của C đúng.
 
 ### Phát hiện mới (đo 2026-11-16)
 `solver` `PASS` ở cả A và B (FDS 6.11.1 khởi tạo thành công). Nhưng `effective_geometry` `INCONCLUSIVE` ở **cả hai** vì mọi phần tử đều là `GEOM` (A: 546, B: 218) và "đầu ra cut-cell của GEOM chưa được đọc từ SMV". Vậy M2.4 không riêng của A: B vốn `MAPPING_VERIFIED` cũng không có kết luận hình học hiệu dụng ở cấp mô phỏng.
@@ -111,13 +138,17 @@ Cho đến khi xong, kết luận đúng là: mapping có thể `MAPPING_VERIFIE
 
 ## 4. Trạng thái duyệt
 
-**2026-11-16: đã duyệt toàn bộ các khuyến nghị ở mục 4 bản đầu.** Phần đã thực hiện và phần còn lại:
+**2026-11-16: đã duyệt toàn bộ các khuyến nghị ở mục 4 bản đầu**, kèm hai chỉ dẫn mới: cửa thang máy mặc định đóng (ghi ở roadmap A7 trước khi áp dụng) và cho phép chốt dung sai cut-cell nếu hợp lý.
 
 | Việc | Trạng thái |
 | --- | --- |
-| 21 cửa: sửa ở nguồn (phương án 1) | **Còn lại, phía người giữ mô hình.** Danh sách bàn giao (mã, tầng, họ cửa, kích thước, chỉ số lưới) đã lập, ngoài repo |
-| Tường: kiểm 26 cạnh hở | **Đã làm.** Hai lỗ nhỏ khoảng 0,39 × 0,30 × 0,06 m; khuyến nghị sửa ở nguồn, không loại tường |
-| 15 phần tử `REVIEW_REQUIRED` | **Đã thử** với `REFERENCE_GEOMETRY` cho cả 15 (A thành `MAPPING_VERIFIED` khi kèm 22 quyết định loại). Kỹ sư cần xác nhận, đặc biệt 6 phần tử thang máy |
-| Người duyệt ký các quyết định trên | **Còn lại.** Người duyệt hiện ghi là bạn kèm chú thích chờ kỹ sư xác nhận |
-| M2.4: hướng (a) | **Đã làm bước 1 và một phần bước 2** (mục 3). Cần mở rộng mẫu rồi mới chốt dung sai |
-| Hiển thị phần tử bị loại thành finding P2 | **Chưa làm** (nên làm trước khi dùng `EXCLUDE` cho kết luận thật) |
+| Có phải sửa Revit không | **Đã phân tích** (mục 2): không bắt buộc cho cả 21 cửa; chỉ cần cho 8 cửa đứng trong lối đi trống nếu muốn cửa đóng; 5 cửa nửa trong tường cần xem từng cái |
+| 21 cửa: sửa ở nguồn | **Còn lại, phía người giữ mô hình**, ưu tiên 8 cửa trong lối đi trống. Danh sách bàn giao đã lập, ngoài repo |
+| Tường: 26 cạnh hở | **Đã làm.** Hai lỗ nhỏ khoảng 0,39 × 0,30 × 0,06 m; khuyến nghị sửa ở nguồn, không loại tường |
+| Cửa thang máy mặc định đóng | **Đã ghi (A7) và áp dụng.** 6 phần tử thành `PASSIVE_OBSTACLE`, đã chạy A: 552 MATCHED, `MAPPING_VERIFIED`. Kỹ sư cần xác nhận |
+| 9 phần tử `REVIEW_REQUIRED` còn lại (giá đỡ mái, lan can) | **Đã thử** với `REFERENCE_GEOMETRY` (không xuất vào FDS). Kỹ sư xác nhận |
+| Người duyệt ký các quyết định | **Còn lại.** Người duyệt hiện ghi là bạn kèm chú thích chờ kỹ sư xác nhận |
+| Dung sai cut-cell | **Đã chốt tạm thời (A7):** khối khí sai ≤ 1% thể tích phần tử; diện tích mặt mở chỉ báo cáo. Xem lại sau khi mở rộng mẫu. Chưa nối vào cổng nào |
+| M2.4: hướng (a) | **Đã làm bước 1 và một phần bước 2** (mục 3); chờ mở rộng mẫu |
+| Hiển thị phần tử bị loại thành finding P2 | **Đã làm** (PR riêng): 22 finding trong lần chạy A |
+| `effective_geometry` của C báo `FAIL` | **Đã điều tra và sửa cổng** (mục 3): báo động giả do FDS bỏ vật cản thừa |

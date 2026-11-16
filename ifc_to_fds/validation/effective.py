@@ -125,6 +125,7 @@ def effective_obstructions(fds_text, smv_text):
                 return GateResult(status=GateStatus.INCONCLUSIVE, reason="Overlapping FDS meshes are unsupported", evidence=evidence)
 
     parts = {pid: [] for pid in expected}
+    redundant_in, seen_in = {}, {}
     evidence["mesh_obstructions"] = {}
     labels, vent_pieces = _vent_labels(lines), {}
     for i, (start, stop, mesh, domain) in enumerate(zip(starts, starts[1:] + [len(lines)], meshes, domains)):
@@ -133,6 +134,10 @@ def effective_obstructions(fds_text, smv_text):
         outcome = _effective_mesh(mesh, lines[start:stop], clipped, {}, dynamic)
         mesh_id = mesh.id or str(i + 1)
         evidence["mesh_obstructions"][mesh_id] = outcome.evidence.get("effective_bounds", {})
+        for pid in clipped:
+            seen_in[pid] = seen_in.get(pid, 0) + 1
+        for pid in outcome.evidence.get("redundant_obstructions", ()):
+            redundant_in[pid] = redundant_in.get(pid, 0) + 1
         if outcome.status != GateStatus.PASS:
             return GateResult(status=outcome.status, reason=f"Mesh {mesh_id}: {outcome.reason}", evidence=evidence)
         for vid, result in _effective_vents(mesh, lines[start:stop], vents, domain, labels).items():
@@ -141,7 +146,13 @@ def effective_obstructions(fds_text, smv_text):
             parts[pid].append(xb)
 
     actual = {}
+    dropped = sorted(pid for pid in redundant_in if redundant_in[pid] == seen_in.get(pid))
+    evidence["redundant_obstructions"] = dropped
     for pid, boxes in parts.items():
+        if pid in dropped:
+            continue
+        if pid in redundant_in:
+            return GateResult(status=GateStatus.INCONCLUSIVE, reason=f"Input solid is redundant in some solver meshes only: {pid}", evidence=evidence)
         original_volume = _box_volume(expected[pid])
         covered_volume = math.fsum(_box_volume(_intersection(expected[pid], d)) for d in domains)
         if not boxes or not math.isclose(covered_volume, original_volume, rel_tol=1e-9, abs_tol=1e-12):
@@ -161,7 +172,7 @@ def effective_obstructions(fds_text, smv_text):
         elements[vid] = dict(kind="VENT", status=worst[0] if worst else "PASS", reason=worst[1] if worst else "Snapped vent bounds verified")
     evidence["elements"] = elements
     evidence["dynamic_obstructions"] = sorted(dynamic)
-    clearance = _check_clearances(expected, actual, evidence, dynamic)
+    clearance = _check_clearances({pid: xb for pid, xb in expected.items() if pid in actual}, actual, evidence, dynamic)
     if clearance.status != GateStatus.PASS:
         return clearance
     failed = [f"{i}: {e['reason']}" for i, e in elements.items() if e["status"] == "FAIL"]
@@ -315,12 +326,15 @@ def _effective_mesh(mesh, lines, expected, evidence, dynamic=frozenset()):
         return GateResult(
             status=GateStatus.INCONCLUSIVE, reason=str(exc), evidence=evidence
         )
-    if set(actual) != set(expected):
+    absent = set(expected) - set(actual)
+    if set(actual) - set(expected) or absent - _redundant_obstructions(expected, grids, dynamic):
         return GateResult(
             status=GateStatus.FAIL,
             reason="Solver obstruction inventory differs from input",
             evidence=evidence,
         )
+    evidence["redundant_obstructions"] = sorted(absent)  # wholly inside earlier obstructions: FDS drops them
+    expected = {pid: xb for pid, xb in expected.items() if pid in actual}
     for pid, bounds in actual.items():
         for axis in range(3):
             low, high = bounds[2 * axis : 2 * axis + 2]
@@ -358,6 +372,52 @@ def _effective_mesh(mesh, lines, expected, evidence, dynamic=frozenset()):
                     evidence=evidence,
                 )
     return _check_clearances(expected, actual, evidence, dynamic)
+
+
+def _snapped(box, grids):
+    """The box on the mesh nodes (nearest node per side), or None where a side is a half-cell tie."""
+    out = []
+    for axis in range(3):
+        for side in (0, 1):
+            distances = np.abs(np.asarray(grids[axis]) - box[2 * axis + side])
+            nearest = np.flatnonzero(np.abs(distances - distances.min()) < SMV_PRECISION_M)
+            if len(nearest) != 1:
+                return None
+            out.append(float(grids[axis][nearest[0]]))
+    return out
+
+
+def _covered_by(box, others):
+    """True when every point of `box` lies inside at least one of `others` (all axis-aligned boxes)."""
+    near = [o for o in others if all(min(box[2 * a + 1], o[2 * a + 1]) > max(box[2 * a], o[2 * a]) for a in range(3))]
+    cuts = [sorted({box[2 * a], box[2 * a + 1], *(v for o in near for v in o[2 * a : 2 * a + 2] if box[2 * a] < v < box[2 * a + 1])}) for a in range(3)]
+    for x0, x1 in zip(cuts[0], cuts[0][1:]):
+        for y0, y1 in zip(cuts[1], cuts[1][1:]):
+            for z0, z1 in zip(cuts[2], cuts[2][1:]):
+                centre = ((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)
+                if not any(all(o[2 * a] <= centre[a] <= o[2 * a + 1] for a in range(3)) for o in near):
+                    return False
+    return True
+
+
+def _redundant_obstructions(expected, grids, dynamic):
+    """Ids FDS 6.11.1 drops from its obstruction inventory: a static obstruction lying wholly inside the static
+    obstructions declared before it (measured with the pinned solver: fixtures redundant_obst, redundant_reversed,
+    redundant_thin; on a real deck all 27 such obstructions were dropped and none that only later ones covered).
+    Wholly inside is judged on the input boxes, which also covers a sheet thinner than half a cell and a coordinate
+    on a half-cell tie, and on the boxes snapped to the mesh nodes. A controlled obstruction is never redundant."""
+    earlier, earlier_snapped, redundant = [], [], set()
+    for pid, xb in expected.items():
+        if pid in dynamic:
+            continue
+        snapped = _snapped(xb, grids)
+        snapped = snapped if snapped is not None and _box_volume(snapped) > 0 else None
+        if _covered_by(xb, earlier) or (snapped is not None and _covered_by(snapped, earlier_snapped)):
+            redundant.add(pid)
+        earlier.append(xb)
+        if snapped is not None:
+            earlier_snapped.append(snapped)
+    return redundant
 
 
 def _check_clearances(expected, actual, evidence, dynamic=frozenset()):

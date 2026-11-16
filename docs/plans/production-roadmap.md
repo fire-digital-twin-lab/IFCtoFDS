@@ -38,7 +38,7 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 | Mục | Chặn bởi | Cần gì | Đã chuẩn bị sẵn |
 |---|---|---|---|
 | M1.7 tốc độ A | validation 73 s | không cần đầu vào; làm khi ưu tiên | A 170 s (mục tiêu 120); C đã đạt 293 s |
-| M2.4 `effective_geometry` PASS trên A | quyết định kỹ thuật | chọn: đọc cut-cell GEOM từ SMV, hoặc quay mô hình theo từng cánh, hoặc chấp nhận xấp xỉ bậc thang | A 0% OBST vì mọi tường/sàn không thẳng trục; gate đã liệt kê 546 GEOM theo tên |
+| M2.4 `effective_geometry` cho phần tử GEOM (A: 546, B: 218) | hướng đã duyệt 2026-11-16: kiểm cut-cell bằng probe DEVC (không quay mô hình, không bậc thang) | mở rộng thí điểm sang tường và sàn lớn, rồi nối cổng theo dung sai tạm thời ở A7 | mô-đun probe (PR #141), `scripts/cutcell-pilot.py`, thí điểm 19 GEOM: phần tử dày khớp, phần tử mỏng bị FDS làm dày gấp 1,9 đến 4 lần (A4.14). Chi tiết: `a-readiness-source-defects-and-m2-4.md` |
 | M3.1 phân loại phụ kiện | người dùng duyệt bảng họ → loại | xác nhận 7 họ của C: cút 182, chuyển tiết diện vuông–tròn 100, côn 78, gót giày 60, đầu bịt 34, Y 16, tê 8 | phụ kiện hai cổng đã biên dịch được khi có K và chiều dài |
 | M3.2 phạm vi hệ thống | B-ext 2 | nghĩa PAD/CEAD/OAD-FAD/RAD/TEAD; hệ nào hút khói, cấp bù | cơ chế `decisions` đã có |
 | M3.5 đầu cuối → biên | B-ext 3 | lưu lượng thiết kế từng miệng, K, đường cong quạt (C không có đối tượng quạt) | VENT/AMBIENT đã hỗ trợ |
@@ -64,6 +64,10 @@ Phạm vi đã chốt: mapping + HVAC vận hành + cháy xe điện; chạy qua
 11. Smoke EV-PACK-01 gọi loader trực tiếp trên image; chưa kiểm qua `compose.production.yml` và `serve` thực chạy.
 12. **ĐÃ SỬA:** `scripts/verdict-snapshot.py --compare` đọc được các mốc tổng hợp `real-{A,B,C}.json`; `real-B.json` đã cập nhật (B `MAPPING_VERIFIED`, 218 MATCHED, 61 SEMANTIC_ONLY). Lượt đo A ngày 2026-11-16 mất 544 s nhưng không có phép đối chứng cùng phiên, không dùng để kết luận hiệu năng.
 13. **Đối chiếu với deck PyroSim (2026-11-16, `main` `60fd3b0`; số tổng hợp ở `pyrosim-compare-2026-11-16.json`).** Deck PyroSim không phải chuẩn đối chứng: **77% (C), 82,6% (B) và 97% (A) số `OBST` của nó là hộp dày bằng 0** (thể tích 0, vẫn chắn dòng trong FDS), nên đo thể tích bỏ qua phần lớn. Hệ tọa độ: A = deck của ta + vector rebase `(578753, 2318413, 0)`, C trùng khung, B PyroSim tự dời về gốc nên chưa so thể tích được. Trong miền MESH của PyroSim: C IoU 0,48 (2.640 m³ ta so với 2.143 m³ PyroSim), A IoU 0,29 (1.688 so với 916 m³). Theo từng cấu kiện (ghép mã Revit cuối ID): giữa các cấu kiện khớp, tỷ lệ thể tích PyroSim/ta có trung vị 1,03 đến 1,07, nhưng IoU trung vị chỉ 0,62 (C) và 0,17 (A; nhiều khả năng do tường xiên khoảng 40° bị xấp xỉ bậc thang theo lưới 0,2 m, chưa kiểm riêng). Cấu kiện của ta không có `OBST` có thể tích trong PyroSim hầu hết có mặt dưới dạng `OBST` mỏng (A 345/352, B 111/113, C 144/152); chỉ A 7, B 2, C 8 không thấy ở đâu. PyroSim thêm ống gió, bọc ống, ống nước dưới dạng `OBST` (C: ống gió chữ nhật 224 bản ghi 173 m³, bọc ống 58 bản ghi 43 m³), thứ ta cố ý xuất thành HVAC/tham chiếu, nên đó là khác biệt về quyết định mô hình hóa, không phải lỗi chuyển đổi. Kết luận sơ bộ: chưa thấy dấu hiệu sai lệch hệ thống về vị trí hay mất cấu kiện (chưa kiểm từng cấu kiện); không thể dùng IoU với PyroSim làm tiêu chí nghiệm thu. `scripts/compare-fds-decks.py` nay có sẵn các bước đó (làm sạch ID trùng, thống kê `thin_obst`, `--clip-to-mesh`, `--inventory`) và tái hiện đúng các số trên C. Còn lại: so lại khi có deck PyroSim lưu lại (B/`tee.fds`).
+14. **Solver trên deck thật (2026-11-16, FDS 6.11.1, `T_END=0`):** `solver` `PASS` ở B (24 s), A (248 s) và C 8 tầng hầm. `effective_geometry` `INCONCLUSIVE` ở B (218 GEOM) và A (546 GEOM). Thí điểm cut-cell trên 19 GEOM của A (`scripts/cutcell-pilot.py`): khối khí khớp giá trị chính xác với phần tử dày (sai số tương đối tối đa 1,2e-3), còn 6 trong 12 phần tử mỏng bị FDS làm dày gấp 1,9 đến 4 lần; chỉ 17/514 phần tử (đều là sàn) thẳng trục lưới. Mẫu chưa có tường và sàn lớn. Dung sai tạm thời ở A7.
+15. **ĐÃ SỬA:** `effective_geometry` báo `FAIL` sai trên C ("danh mục vật cản của solver khác đầu vào") vì FDS bỏ khỏi danh mục các vật cản nằm trọn trong vật cản khai báo trước nó (đã xác nhận bằng FDS thật, kể cả tấm mỏng hơn nửa ô). Với C, kết quả nay là `INCONCLUSIVE` do một dầm có tọa độ hòa nửa ô lưới. Còn mở trên C: `passage_resolution` `FAIL` (43 lối đi hẹp hơn 2 ô, ô 0,2 m).
+16. **ĐÃ SỬA:** phần tử bị loại có duyệt (`EXCLUDED_APPROVED`) trước đây không để lại finding nào nên báo cáo trông sạch dù phần tử vắng khỏi deck; nay mỗi phần tử có một finding P2 loại `scope`. A với 22 quyết định `EXCLUDE`, 9 `REFERENCE_GEOMETRY`, 6 `PASSIVE_OBSTACLE` (thang máy đóng): `MAPPING_VERIFIED`, 552 MATCHED, 22 finding P2. Các quyết định chờ kỹ sư xác nhận.
+17. **ĐÃ SỬA:** lệnh `pytest -m solver` lỗi trên CI do một test mới nạp `scripts/verdict-snapshot.py` lúc thu thập, mà script đặt `IFCFDS_SOLVER_AUTODISCOVERY=0` ở mức module, làm test lưới mất khả năng tự dò solver. Test nay khôi phục biến sau khi nạp. Cần chú ý khi thêm test nạp script có tác dụng phụ lúc import.
 
 ## A5. Dữ liệu thật (ngoài repo, không commit; trong repo chỉ dùng bí danh và số tổng hợp)
 Thư mục `D:\User\HUCE\NCKH\Resources\IFC_Tòa nhà\`. Cả ba IFC2X3, placement hợp lệ 100%, không có CRS; vị trí Site là mặc định phần mềm dựng.
@@ -86,6 +90,14 @@ A và B lệch nhau > 1.000 km trên trục Y sau khi đọc: không tự ghép 
 - Profile: `scripts/stage-profile.py <ifc> -o <out.json>`.
 - Solver: `python scripts/install-fds.py` (FDS 6.11.1 vào `.deps/`), rồi `IFCFDS_SOLVER=<.deps/.../fds_openmp.exe> python -m pytest -q -m solver`.
 - Kết quả chạy file thật ghi ra ngoài repo.
+
+## A7. Giả định mô hình đã chốt (ghi trước khi áp dụng)
+Mỗi giả định nêu nguồn, phạm vi và cách thay đổi. Giả định không thay cho xác nhận của kỹ sư.
+
+| Ngày | Giả định | Nguồn | Phạm vi | Ghi chú |
+| --- | --- | --- | --- | --- |
+| 2026-11-16 | **Cửa thang máy mặc định ĐÓNG** | Chỉ dẫn của người dùng trong phiên làm việc | 6 phần tử thang máy của A, hầm 2: 3 cánh cửa (`IfcBuildingElementProxy`, vật rắn kín 0,056 m³, dày cỡ 10 mm) và 3 khung ô mở (0,093 m³). Quyết định `PASSIVE_OBSTACLE` thay cho `REFERENCE_GEOMETRY` | Đóng là rào chắn khói, nên bảo thủ cho bài toán kiểm soát khói. Đổi khi có thông tin vận hành (ví dụ thang về tầng hầm khi cháy). Cần kỹ sư xác nhận |
+| 2026-11-16 | **Dung sai cut-cell tạm thời** cho `effective_geometry` của phần tử GEOM: sai số khối khí so với thể tích phần tử ≤ 1% thì đạt, trên 1% thì `FAIL`; diện tích mặt mở chỉ báo cáo, chưa chặn | Tôi đề xuất, người dùng cho phép chốt nếu hợp lý; căn cứ ở thí điểm 19 GEOM của A (phần tử dày: sai tối đa 0,12%; phần tử mỏng bị FDS làm dày: sai 85% đến 300%) | `effective_geometry` cho GEOM | **Tạm thời:** mẫu nhỏ, chưa có tường và sàn lớn. Xem lại sau khi mở rộng mẫu. Chưa nối vào cổng nào |
 
 ---
 
