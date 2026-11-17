@@ -61,6 +61,14 @@ Chưa có mô hình IFC4.3 nào chạy tới báo cáo, nhưng cả chín lần 
 
 Chậm nhưng hoàn tất: `geometrygym_great_court_roof` (3,6 MB, mái BRep phức tạp) 730 s; hầm TU Wien (7 MB) 572 s; `1807_EP_AR_v18` 400 s (1,1 GB); `Molio` 388 s (2,4 GB); `Schependomlaan` 335 s (1,6 GB); `Clinic_Architectural` 334 s; `Clinic_HVAC` 279 s; `BasicHouse` (50 MB) 155 s và **3,0 GB RAM**; `IfcReinforcingBar` (0,7 MB) 96 s và 1 GB.
 
+### 3.1 Đợt 2: ifc-bench và gói ghép nhiều IFC
+
+25 tệp lẻ (nhóm `hfbench`) và 7 gói ghép cùng dự án. Không có sập tiến trình hay traceback.
+
+- Tệp lẻ: 20 ra báo cáo (14 `REJECTED`, 6 `INCONCLUSIVE`, không có `MAPPING_VERIFIED`); 5 bị từ chối có kiểm soát (2 tệp kết cấu bệnh viện vượt 50 triệu ô lưới ở 0,2 m; 2 tệp nhiều `IfcSite`).
+- Gói ghép: không có `--common-coordinates` cả 7 gói bị từ chối ngay ('cần xác nhận hệ tọa độ chung'), đúng thiết kế. Chạy lại với `--common-coordinates --cell-size 0.5` (đây là phép thử, cờ là xác nhận của người dùng): 6 gói `REJECTED`, 1 gói (bệnh viện IFC2X3) `INCONCLUSIVE`; không gói nào sai đơn vị hay tọa độ. Lý do từ chối là lỗi hình học nguồn, lỗ mở và `passage_resolution`, không phải ghép.
+- Bệnh viện IFC2X3 so với IFC4 (cùng nội dung): số phần tử `MATCHED` 2.823 so với 3.054; bản IFC4 có 5 phần tử `DEVIATED` và lỗi tự giao cắt, bản IFC2X3 thì không. Chưa phân tích nguyên nhân chênh lệch.
+
 ## 4. Phát hiện
 
 | ID | Mức | Nội dung | Trạng thái |
@@ -73,6 +81,7 @@ Chậm nhưng hoàn tất: `geometrygym_great_court_roof` (3,6 MB, mái BRep ph�
 | F6 | Quan sát | Hầm TU Wien: `REJECTED`; `passage_resolution` `FAIL` với 2.327 vật rắn mỏng (3.154 `IfcBuildingElementPart` là các lớp cấu tạo), `effective_geometry` `FAIL` ("danh mục vật cản của solver khác đầu vào"). Chưa phân tích xem đó là sai khác thật hay báo động giả như ca C đã sửa ở A4.15. | Chưa phân tích |
 | F8 | Thấp | Nếu thư mục tạm dùng tiền tố đường dẫn dài `\?\` thì `offline_backup.py:38` đổi qua `as_uri()` và SQLite báo `invalid uri authority: %3F`; năm test sao lưu và khôi phục hỏng trong môi trường đó (Codex gặp trong sandbox của nó). Đường dẫn Windows thường không bị. | Chưa sửa |
 | F7 | Hiệu năng | Thời gian và RAM không tỷ lệ theo kích thước tệp: mái BRep, mô hình nhiều lớp cấu tạo, thanh cốt thép. `BasicHouse` dùng 3 GB. | Ghi nhận cho M1.7 |
+| F9 | P1 | Bộ lặp hình học native của IfcOpenShell chạy nhiều luồng trả tập tam giác khác nhau giữa các lần chạy: ở `wbdg_office__str` (IFC2X3) 69/499 shape đổi số mặt giữa 6 lần với 4 luồng, 75/499 với 2 luồng, 0 với 1 luồng. Lượt chuyển đổi coi dầm là vật rắn hợp lệ và xuất `GEOM`, lượt kiểm độc lập đọc lại thì dầm hở và đánh `UNSUPPORTED`, nên `traceability` và `representation` báo FAIL ('xuất đối tượng không được phép'). | Sửa: mặc định 1 luồng, đổi bằng `IFCFDS_GEOMETRY_THREADS`. Hai lần chạy cùng tệp cho kết quả giống hệt (194 khớp, cùng các cổng). Đổi lại bước trích hình học chậm khoảng 1,7 đến 2 lần (Institute 76 s lên 149 s). `preview.py` vẫn 4 luồng. |
 
 Sau khi sửa F1 và F2 (#151), chạy lại các tệp bị ảnh hưởng: nhóm `IfcOpenShell/files` (40 tệp, hạn 120 s) có 32 tệp ra báo cáo (14 `MAPPING_VERIFIED`, 15 `REJECTED`, 3 `INCONCLUSIVE`), 4 tệp bị từ chối vì chính sách và 4 tệp quá hạn (các ca F3 cùng `geometrygym_great_court_roof`, vốn cần khoảng 730 s); tệp ISO sai tỷ lệ bị từ chối với `declared scale=0.001, native applied scale=1`.
 

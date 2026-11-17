@@ -87,6 +87,15 @@ def instancing_enabled() -> bool:
     return os.environ.get("IFCFDS_GEOMETRY_INSTANCING", "1") != "0"
 
 
+def geometry_threads() -> int:
+    """Native iterator threads. One by default: with 2 or more, IfcOpenShell returned different triangle sets for the
+    same product between runs (69 of 499 shapes in one IFC2X3 file), so validity and verdicts were not reproducible."""
+    try:
+        return max(1, int(os.environ.get("IFCFDS_GEOMETRY_THREADS", "1")))
+    except ValueError:
+        return 1
+
+
 def _iteration_settings_and_converter():
     if instancing_enabled():
         cache = {}
@@ -214,16 +223,14 @@ def process_model_geometry(
 
     all_verts: List[List[float]] = []
 
-    # Iterator supports shared geometry and multiple CPU cores. Missing items are
+    # Iterator supports shared geometry. Missing items are
     # retried individually so a failed iterator item remains visible in diagnostics.
-    import os
-
     shapes = {}
     iteration_settings, to_mesh = _iteration_settings_and_converter()
     try:
         products = [e for e in canonical_model.elements if e.has_3d_geometry]
         iterator = ifcopenshell.geom.iterator(
-            iteration_settings, ifc_file, min(4, os.cpu_count() or 1),
+            iteration_settings, ifc_file, geometry_threads(),
             include=[ifc_file.by_id(e.step_id) for e in products],
         ) if products else None
         if iterator and iterator.initialize():
@@ -330,8 +337,6 @@ def process_reference_geometry(model, ifc_file):
     substitutes. Numerical normalization is independently recomputed from a
     fresh native iterator; missing native outputs receive create_shape calls.
     """
-    import os
-
     settings = create_geom_settings()
     pending = {e.step_id: e for e in model.elements if e.has_3d_geometry}
     total = len(pending)
@@ -354,7 +359,7 @@ def process_reference_geometry(model, ifc_file):
     try:
         iterator = (
             ifcopenshell.geom.iterator(
-                iteration_settings, ifc_file, min(4, os.cpu_count() or 1),
+                iteration_settings, ifc_file, geometry_threads(),
                 include=[ifc_file.by_id(step) for step in pending],
             ) if pending else None
         )
